@@ -1,0 +1,842 @@
+:root {
+    --primary: #bae6fd;
+    /* 파스텔 블루 라이트 */
+    --primary-solid: #0ea5e9;
+    /* 포인트 블루 */
+    --primary-dark: #0284c7;
+    --background: #f0f9ff;
+    /* 아주 옅은 블루 배경 */
+    --card-bg: #ffffff;
+    --text-main: #334155;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --success: #10b981;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Pretendard', sans-serif;
+    background-color: var(--background);
+    color: var(--text-main);
+    line-height: 1.6;
+    padding: 0;
+}
+
+/* 최상단 컨트롤 바 */
+.control-bar {
+    background-color: white;
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+}
+
+.control-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* 1. 헤더 (로고, 학원명, 타이틀) */
+.report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 32px;
+    background-color: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    margin-bottom: 24px;
+    border-left: 6px solid var(--primary-solid);
+}
+
+.logo-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.logo-wrapper {
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    transition: 0.2s;
+}
+
+.logo-wrapper:hover {
+    border-color: var(--primary-solid);
+    transform: scale(1.05);
+}
+
+.logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.academy-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--primary-solid);
+    letter-spacing: -0.02em;
+}
+
+.title-box {
+    text-align: right;
+}
+
+.title-box h1 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--primary-dark);
+    margin-bottom: 4px;
+}
+
+.student-name {
+    font-size: 1.15rem;
+    color: var(--text-muted);
+}
+
+.student-name .highlight {
+    font-weight: 700;
+    color: var(--primary-solid);
+    font-size: 1.25rem;
+}
+
+.student-select-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 600;
+}
+
+.student-select-box select {
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 1rem;
+    outline: none;
+    cursor: pointer;
+    background-color: #f8fafc;
+}
+
+.add-btn {
+    background-color: #e0f2fe;
+    color: var(--primary-dark);
+    border: 1px dashed var(--primary-solid);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: 0.2s;
+    white-space: nowrap;
+}
+
+.add-btn:hover {
+    background-color: var(--primary-dark);
+}
+
+.btn-danger {
+    padding: 8px 16px;
+    background-color: #ef4444;
+    color: white;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: 0.2s;
+    white-space: nowrap;
+}
+
+.btn-danger:hover {
+    background-color: #dc2626;
+}
+
+.download-btn {
+    background-color: var(--primary-solid);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.2s;
+}
+
+.download-btn:hover {
+    background-color: var(--primary-dark);
+}
+
+/* 이미지 다운로드 버튼 영역 (캡처 시 자동 숨김) */
+.floating-actions {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 100;
+}
+
+.report-footer {
+    text-align: center;
+    padding: 24px 0 12px 0;
+    font-size: 0.85rem;
+    color: #94a3b8;
+    /* Tailwind slate-400 대비 부드러운 회색 */
+    font-weight: 500;
+    letter-spacing: 0.05em;
+}
+
+.capture-mode .no-print {
+    display: none !important;
+}
+
+.capture-mode .report-container {
+    box-shadow: none;
+    background: #f0f9ff;
+    /* 배경색 동일 유지 */
+    padding: 20px;
+}
+
+/* 레이아웃 컨테이너 */
+.report-container {
+    max-width: 1100px;
+    /* 전체 너비를 더욱 늘려서 양옆 찌그러짐 방지 */
+    margin: 0 auto;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 30px;
+}
+
+/* 공통 카드 스타일 */
+.card {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 28px;
+    box-shadow: 0 4px 24px rgba(14, 165, 233, 0.05);
+    border: 1px solid rgba(186, 230, 253, 0.4);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    box-shadow: 0 8px 32px rgba(14, 165, 233, 0.1);
+    transform: translateY(-2px);
+}
+
+.card h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+}
+
+.card h2::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 20px;
+    background-color: var(--primary-solid);
+    border-radius: 4px;
+    margin-right: 12px;
+}
+
+/* 그리드 래퍼 (그래프 + 표) */
+.grid-wrap {
+    display: grid;
+    grid-template-columns: 1.15fr 0.95fr;
+    /* 우측 간격을 넓게 유지하며 비율 일치화 */
+    gap: 32px;
+    /* 좌우 사이 여백 증가 */
+    margin-bottom: 24px;
+}
+
+/* 12개월 테이블 입력 영역 */
+.trend-table-container {
+    width: 100%;
+    margin-bottom: 24px;
+    overflow-x: auto;
+}
+
+.trend-table {
+    margin-bottom: 0;
+    min-width: 600px;
+    /* PC 환경 기준 최소 너비 */
+}
+
+.trend-table th,
+.trend-table td {
+    padding: 8px 6px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.trend-table td .editable-text {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 4px;
+}
+
+/* 차트 컨테이너 */
+.chart-container {
+    position: relative;
+    height: 220px;
+    width: 100%;
+    margin-bottom: 24px;
+}
+
+/* 하단 서브 차트 영역 (오답노트, 습관) */
+.sub-chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    border-top: 1px dashed var(--border-color);
+    padding-top: 24px;
+}
+
+.sub-card {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+.sub-card h3 {
+    font-size: 0.95rem;
+    color: var(--text-main);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sub-card h3 .badge {
+    background: #e0e7ff;
+    color: #4f46e5;
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 800;
+}
+
+.pie-container {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin: 0 auto;
+}
+
+.pie-center-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-align: center;
+}
+
+.pie-label {
+    text-align: center;
+    font-size: 0.9rem;
+    margin-top: 12px;
+    color: var(--text-main);
+}
+
+.pie-label strong {
+    font-size: 1.1rem;
+}
+
+.habit-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 0;
+    margin: 0;
+}
+
+.habit-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    border-bottom: 1px dashed var(--border-color);
+    padding-bottom: 6px;
+    gap: 8px;
+}
+
+.habit-list li span {
+    word-break: keep-all;
+    line-height: 1.3;
+}
+
+.habit-list li:last-child {
+    border-bottom: none;
+}
+
+.habit-list li strong {
+    color: var(--text-main);
+}
+
+/* 공통 테이블 스타일 */
+.table-container {
+    overflow-x: auto;
+    width: 100%;
+}
+
+/* 이미지 다운로드 시 숨길 요소들 */
+
+/* 텍스트 수정 가능 영역 시각적 표시 */
+.editable-text {
+    transition: background-color 0.2s, outline 0.2s;
+    border-radius: 4px;
+    outline: 1px dashed transparent;
+}
+
+.editable-text:hover {
+    outline: 1px dashed var(--primary-solid);
+    background-color: rgba(14, 165, 233, 0.05);
+    cursor: text;
+}
+
+.editable-text:focus {
+    outline: 2px solid var(--primary-solid);
+    background-color: white;
+}
+
+/* html2canvas 캡처 중 적용할 클래스 */
+.capture-mode {
+    padding: 40px !important;
+    background-color: var(--background) !important;
+}
+
+.capture-mode .control-bar,
+.capture-mode .hidden-capture {
+    display: none !important;
+}
+
+.capture-mode .editable-text {
+    outline: none !important;
+    background-color: transparent !important;
+}
+
+/* 수학의 언어(서술형) 미니 바 차트 세로 커스텀 */
+.mini-bar-wrap {
+    display: flex;
+    gap: 16px;
+    /* 바 사이 간격 넓힘 */
+    align-items: flex-end;
+    height: 80px;
+    /* 세로 막대 최대 높이 증가 */
+    padding-left: 8px;
+    justify-content: center;
+}
+
+.mini-bar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    height: 100%;
+    justify-content: flex-end;
+}
+
+.mini-bar-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.mini-bar-bg {
+    width: 24px;
+    /* 막대 너비 증가 */
+    background: #e2e8f0;
+    height: 100%;
+    /* 전체 높이 */
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    /* 아래에서부터 차오르도록 */
+}
+
+.mini-bar-fill {
+    width: 100%;
+    border-radius: 6px;
+    transition: height 0.5s ease;
+}
+
+.fill-this {
+    background-color: var(--primary-solid);
+}
+
+.fill-last {
+    background-color: #cbd5e1;
+}
+
+/* 달력 스타일 (크기 확대 및 안정화) */
+.calendar-wrapper {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 24px;
+    background: #f8fafc;
+    margin-bottom: 24px;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: var(--primary-solid);
+}
+
+.month-btn {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--text-main);
+    transition: 0.2s;
+}
+
+.month-btn:hover {
+    background: #e2e8f0;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 12px 6px;
+    /* 위아래 간격 12px, 좌우 간격 6px로 오밀조밀하게 채우도록 변경 */
+    text-align: center;
+}
+
+.cal-day-header {
+    font-weight: 600;
+    font-size: 1rem;
+    padding-bottom: 8px;
+    color: var(--text-muted);
+}
+
+.cal-day {
+    min-height: 80px;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 8px 0;
+    transition: 0.2s;
+    width: 100%;
+}
+
+.cal-day:hover {
+    background-color: #f1f5f9;
+    border-color: var(--primary-light);
+}
+
+.cal-date {
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+
+.cal-status {
+    font-size: 0.8rem;
+    padding: 4px;
+    width: 36px;
+    /* 고정 너비 지정하여 글씨가 넘치지 않도록 */
+    text-align: center;
+    border-radius: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    /* 뱃지 글씨 줄바꿈 방지 */
+}
+
+/* 일요일(0), 토요일(6) 색상 구분을 위한 스타일 추가용 클래스 */
+.day-sun {
+    color: var(--danger);
+}
+
+.day-sat {
+    color: var(--primary-dark);
+}
+
+.cal-day {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    min-height: 54px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4px;
+    font-size: 0.9rem;
+}
+
+.cal-day.empty {
+    background: transparent;
+    border-color: transparent;
+}
+
+.cal-day.today {
+    border: 2px solid var(--primary-solid);
+}
+
+.cal-date {
+    margin-bottom: auto;
+    font-weight: 500;
+}
+
+.cal-status {
+    font-size: 0.7rem;
+    padding: 2px 4px;
+    border-radius: 6px;
+    font-weight: 700;
+    margin-top: 4px;
+    width: 90%;
+}
+
+.status-present {
+    background: #d1fae5;
+    color: #047857;
+}
+
+/* 출석 */
+.status-absent {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+/* 결석 */
+.status-late {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+/* 지각 */
+.status-makeup {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+
+/* 보강 */
+
+.styled-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1rem;
+    text-align: center;
+}
+
+.styled-table thead tr {
+    background-color: var(--background);
+    color: var(--text-main);
+    border-bottom: 2px solid var(--primary);
+}
+
+.styled-table th {
+    font-weight: 700;
+}
+
+.styled-table th,
+.styled-table td {
+    padding: 16px 12px;
+}
+
+.styled-table tbody tr {
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s;
+}
+
+.styled-table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+.styled-table td.unit-name {
+    font-weight: 600;
+    text-align: left;
+}
+
+.styled-table td .score-badge {
+    background-color: var(--primary);
+    color: var(--primary-dark);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.styled-table td .wrong-q {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+/* 텍스트 색상 */
+.text-success {
+    color: var(--success);
+    font-weight: 700;
+}
+
+.text-warning {
+    color: var(--warning);
+    font-weight: 700;
+}
+
+.text-danger {
+    color: var(--danger);
+    font-weight: 700;
+}
+
+.text-primary {
+    color: var(--primary-dark);
+    font-weight: 700;
+}
+
+/* 취약점 분석 영역 */
+.analysis-card {
+    background: linear-gradient(135deg, var(--background) 0%, #e0f2fe 100%);
+    border: 1px solid var(--primary);
+}
+
+.analysis-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.analysis-header h2 {
+    margin: 0;
+    font-size: 1.4rem;
+    color: var(--primary-dark);
+}
+
+.analysis-header h2::before {
+    display: none;
+}
+
+.analysis-header .icon {
+    font-size: 1.6rem;
+}
+
+.analysis-content {
+    background: rgba(255, 255, 255, 0.85);
+    padding: 24px;
+    border-radius: 14px;
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: var(--primary-dark);
+    font-weight: 500;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+}
+
+.analysis-content strong {
+    color: var(--danger);
+}
+
+.analysis-content .highlight-unit {
+    color: var(--primary-solid);
+    font-weight: 700;
+}
+
+/* 선생님 코멘트 */
+.comment-box {
+    background-color: var(--background);
+    padding: 24px;
+    border-radius: 14px;
+    border-left: 5px solid var(--primary-solid);
+    font-size: 1.05rem;
+    color: var(--text-main);
+    line-height: 1.7;
+}
+
+/* 반응형 모바일 */
+@media (max-width: 768px) {
+    body {
+        padding: 12px;
+    }
+
+    .grid-wrap {
+        grid-template-columns: 1fr;
+    }
+
+    .sub-chart-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .header-content {
+        flex-direction: column;
+        text-align: center;
+        gap: 16px;
+    }
+
+    .habit-list li {
+        font-size: 0.85rem;
+    }
+
+    .styled-table {
+        font-size: 0.85rem;
+    }
+
+    .styled-table th,
+    .styled-table td {
+        padding: 10px 4px;
+    }
+
+    .title-box h1 {
+        font-size: 1.5rem;
+    }
+
+    .cal-day {
+        min-height: 48px;
+        font-size: 0.85rem;
+    }
+
+    .cal-status {
+        font-size: 0.65rem;
+        padding: 2px;
+    }
+}

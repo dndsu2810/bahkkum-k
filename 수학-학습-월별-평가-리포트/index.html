@@ -1,13 +1,228 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+<!DOCTYPE html>
+<html lang="ko">
 
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>월별 학생 종합 학습 리포트</title>
+  <!-- 폰트: 프리텐다드 -->
+  <link rel="stylesheet" as="style" crossorigin
+    href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="stylesheet" href="./styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- 이미지 저장 기능을 위한 html2canvas 라이브러리 추가 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="./script.js" defer></script>
+</head>
+
+<body>
+  <!-- 최상단 컨트롤 바 (학생 선택 및 이미지 저장 버튼) -->
+  <div class="control-bar no-print">
+    <div class="control-inner">
+      <div class="student-select-box">
+        <label for="studentSelect">학생 선택:</label>
+        <select id="studentSelect">
+          <option value="kim">김철수</option>
+          <option value="lee">이영희</option>
+          <option value="park">박민준</option>
+        </select>
+        <button id="addStudentBtn" class="add-btn no-print">+ 학생 추가</button>
+        <button id="deleteStudentBtn" class="btn btn-danger">학생 삭제</button>
+      </div>
+      <button id="downloadBtn" class="download-btn">
+        <span class="icon">📷</span> 이미지로 저장하기
+      </button>
+    </div>
+  </div>
+
+  <div class="report-container" id="reportCaptureArea">
+    <!-- 1. 헤더 영역 -->
+    <header class="report-header">
+      <div class="logo-area">
+        <div class="logo-wrapper" id="logoContainer" title="클릭하여 로고 이미지 변경">
+          <img
+            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Crect width='80' height='80' fill='%23e2e8f0'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='12' fill='%2364748b'%3E로고 영역%3C/text%3E%3C/svg%3E"
+            alt="학원 로고" class="logo-img" id="academyLogo">
+        </div>
+        <span class="academy-name">바꿈영수학원</span>
+        <input type="file" id="logoInput" accept="image/*" style="display: none;">
+      </div>
+      <div class="title-box">
+        <h1 contenteditable="true" spellcheck="false" class="editable-text">3월 수학 종합 리포트</h1>
+        <p class="student-name">이름: <span class="highlight editable-text" id="displayStudentName" contenteditable="true"
+            spellcheck="false">김철수</span> 학생</p>
+      </div>
+    </header>
+
+    <div class="grid-wrap">
+      <!-- 2. 성적 변화 및 학습 습관 분석 -->
+      <section class="card chart-card">
+        <h2>성적 변화 추이 (누적)</h2>
+
+        <!-- 성적 데이터 수정 영역: 1~12월 표 형태 (인쇄 시 숨김) -->
+        <div class="trend-table-container no-print">
+          <table class="styled-table trend-table" id="trendTable">
+            <thead>
+              <tr>
+                <th>1월</th>
+                <th>2월</th>
+                <th>3월</th>
+                <th>4월</th>
+                <th>5월</th>
+                <th>6월</th>
+                <th>7월</th>
+                <th>8월</th>
+                <th>9월</th>
+                <th>10월</th>
+                <th>11월</th>
+                <th>12월</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="trendInputs">
+                <!-- JS로 렌더링 -->
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="chart-container">
+          <canvas id="scoreChart"></canvas>
+        </div>
+
+        <!-- 하단 추가 분석 차트 영역 (오답노트 & 습관) -->
+        <div class="sub-chart-grid">
+          <div class="sub-card">
+            <h3>오답노트 <span class="badge">+</span></h3>
+            <div class="pie-container">
+              <canvas id="wrongNoteChart"></canvas>
+              <div class="pie-center-text" id="wrongNoteTotal"></div>
+            </div>
+            <p class="pie-label">
+              완료 <strong class="editable-text" contenteditable="true" spellcheck="false"
+                id="editWrongCompleted">19</strong>개
+              <span class="no-print" style="font-size: 0.8rem; color: #64748b; margin-left: 4px;">/ 전체 <span
+                  class="editable-text" contenteditable="true" spellcheck="false" id="editWrongTotal">22</span>개</span>
+            </p>
+          </div>
+
+          <div class="sub-card">
+            <h3>문제풀이 습관 <span class="badge">+</span></h3>
+            <ul class="habit-list">
+              <li>
+                <span>건너뛴 문제</span>
+                <strong>6개</strong>
+              </li>
+              <li>
+                <span>급하게 풀어 틀린 문제</span>
+                <strong>0개</strong>
+              </li>
+              <li>
+                <span>읽지 않고 푼 문제</span>
+                <strong>10개</strong>
+              </li>
+              <li>
+                <span>실수한 문제</span>
+                <strong>12개</strong>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. 출결 현황 (달력 및 표) -->
+      <section class="card attendance-card">
+        <h2>출결 현황 (3월)</h2>
+        <div class="calendar-wrapper">
+          <div class="calendar-header">
+            <button class="month-btn" id="prevMonth">&lt;</button>
+            <h3 id="currentMonthYear">2026년 3월</h3>
+            <button class="month-btn" id="nextMonth">&gt;</button>
+          </div>
+          <div class="calendar-grid" id="calendarGrid">
+            <!-- 요일 헤더 및 날짜 채워짐 -->
+          </div>
+        </div>
+
+        <div class="table-container attendance-summary">
+          <table class="styled-table">
+            <thead>
+              <tr>
+                <th>총 수업일</th>
+                <th>출석</th>
+                <th>결석</th>
+                <th>지각</th>
+                <th>보강</th>
+              </tr>
+            </thead>
+            <tbody id="attendanceSummaryBody">
+              <!-- JS 렌더링 -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- 3. 주간 평가 상세 기록 (표) -->
+    <section class="card table-card">
+      <h2>주간 평가 상세 기록</h2>
+      <div class="table-container">
+        <table class="styled-table" id="evaluationTable">
+          <thead>
+            <tr>
+              <th>주차</th>
+              <th>평가 단원명</th>
+              <th>점수</th>
+              <th>틀린 문항 번호</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- 자바스크립트에서 리스트가 렌더링됩니다 -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 수학의 언어(서술형) 평가 -->
+    <section class="card table-card">
+      <h2>수학의 언어 (서술형) 기록</h2>
+      <div class="table-container">
+        <table class="styled-table" id="descriptiveTable">
+          <thead>
+            <tr>
+              <th style="width: 25%;">단원</th>
+              <th style="width: 15%;">이번 달<br>(정답/전체)</th>
+              <th style="width: 15%;">지난 달<br>(정답/전체)</th>
+              <th style="width: 45%;">성취도 비교</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- JS 렌더링 -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4. 취약점 자동 분석 영역 (핵심 기능) -->
+    <section class="card analysis-card">
+      <div class="analysis-header">
+        <span class="icon">✨</span>
+        <h2><span id="analysisTitleName" class="editable-text" contenteditable="true" spellcheck="false">김철수</span>의 학습
+          분석</h2>
+      </div>
+      <div class="analysis-content editable-text" id="analysisResult" contenteditable="true" spellcheck="false">
+        <!-- 자바스크립트로 분석 텍스트가 렌더링 됩니다. -->
+      </div>
+    </section>
+
+    <!-- 6. 선생님 코멘트 영역 -->
+    <section class="card comment-card">
+      <h2 contenteditable="true" spellcheck="false" class="editable-text">담당 선생님 종합 코멘트</h2>
+      <div class="comment-box editable-text" id="teacherComment" contenteditable="true" spellcheck="false">
+        <!-- JS 렌더링 -->
+      </div>
+    </section>
+  </div>
+</body>
+
+</html>
