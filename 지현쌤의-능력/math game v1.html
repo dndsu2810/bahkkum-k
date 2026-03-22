@@ -236,6 +236,7 @@
     }
     .card:hover { transform: translateY(-3px) scale(1.05); box-shadow: 0 6px 15px rgba(0,0,0,1); filter: brightness(1.2); }
     .card.solved { opacity: 0.3; pointer-events: none; filter: grayscale(100%); transform: scale(0.9); }
+    .card.solved.failed { filter: grayscale(100%) sepia(50%) hue-rotate(320deg) saturate(300%) !important; opacity: 0.5 !important; border-color: transparent !important; pointer-events: none; }
 
     .card-number { font-size: 1.8rem; color: #dcdde1; font-family: 'Impact', sans-serif; text-shadow: 0 2px 4px rgba(0,0,0,0.9); }
     .card-reward { font-size: 0.8rem; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 2px 6px; border-radius: 4px; margin-top: 5px; display: inline-block; font-family: 'Malgun Gothic', sans-serif;}
@@ -248,6 +249,15 @@
     .card.hard .card-reward { color: #e84118; border-color: #e84118;}
     .card.expert { border: 2px solid #9c88ff; box-shadow: 0 0 10px rgba(156,136,255,0.3); }
     .card.expert .card-reward { color: #9c88ff; border-color: #9c88ff;}
+    .card.bonus, .card.bonus3, .card.bonus4, .card.bonus5 { border: 2px solid #ff4757; box-shadow: 0 0 15px rgba(255, 71, 87, 0.5); background: linear-gradient(135deg, #ff6b81, #ff4757); }
+    .card.bonus .card-number, .card.bonus3 .card-number, .card.bonus4 .card-number, .card.bonus5 .card-number { color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+    .card.bonus .card-reward, .card.bonus3 .card-reward, .card.bonus4 .card-reward, .card.bonus5 .card-reward { color: #fff; border-color: #fff; background: rgba(0,0,0,0.3); }
+
+    @keyframes titlePulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); color: #ffeb3b; }
+      100% { transform: scale(1); }
+    }
 
     /* Modals */
     .modal-overlay {
@@ -527,18 +537,13 @@
   <!-- Editor Screen -->
   <div id="edit-screen" class="screen">
     <div class="editor-header">
-      <h2>문제 편집기</h2>
+      <h2>문제 편집기 <span id="q-total-count" style="font-size: 1.5rem; color: #4cd137; text-shadow: 0 0 5px #4cd137; font-family:'Malgun Gothic'; margin-left: 10px;"></span></h2>
       <div>
         <button class="btn btn-sm btn-secondary" onclick="resetDefaultQuestions()">기본 문제로 초기화</button>
         <button class="btn btn-sm btn-success" onclick="saveAndExitEditor()">저장 및 나가기</button>
       </div>
     </div>
-    <div class="tabs">
-      <div class="tab active" onclick="switchTab('easy')">쉬움 (+2칸, 15초)</div>
-      <div class="tab" onclick="switchTab('normal')">보통 (+3칸, 10초)</div>
-      <div class="tab" onclick="switchTab('hard')">어려움 (+4칸, 시간무제한)</div>
-      <div class="tab" onclick="switchTab('expert')">전문가 (+5칸, 시간무제한)</div>
-    </div>
+    <p style="color: #4cd137; font-weight: bold; margin-bottom: 20px;">💡 정답 칸에 쉼표(,)로 구분해서 적으면 여러 개의 정답(유사 정답)을 인정할 수 있습니다. (예: 3, 삼, 셋)</p>
     <div id="q-list-container" class="q-list">
       <!-- Question items injected here -->
     </div>
@@ -553,14 +558,15 @@
       <div class="hud">
         <div class="hud-left">
           <div class="team-name" id="hud-team-name">팀 이름</div>
-          <div class="score">점수: <span id="hud-score">0</span></div>
+          <div class="score">점수: <span id="hud-score">0</span> &nbsp;|&nbsp; 💡 남은 힌트: <span id="hud-hints">5</span>회</div>
           <div class="gauge-label" style="text-align: left; margin-top: 10px; font-weight: bold; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">상어 추격 게이지 🦈</div>
           <div class="gauge-container" style="box-shadow: 0 2px 5px rgba(0,0,0,0.5);">
             <div class="gauge-fill" id="hud-danger-gauge"></div>
           </div>
         </div>
-        <div class="hud-right">
-          <div class="steps-info">탈출까지: <span id="hud-steps-left">50</span>칸</div>
+        <div class="hud-right" style="display:flex; flex-direction:column; align-items:flex-end;">
+          <div class="steps-info">목표: <strong style="color:#ff4757">50</strong>칸 &nbsp;|&nbsp; 탈출까지: <span id="hud-steps-left">50</span>칸</div>
+          <button class="btn btn-sm btn-danger" style="margin-top: 10px;" onclick="if(confirm('정말 모험을 포기하고 처음으로 돌아가시겠습니까?')) quitToHome();">포기하기 🏃</button>
         </div>
       </div>
       <div id="card-grid">
@@ -577,11 +583,13 @@
         <div class="timer-bar" id="timer-bar"></div>
       </div>
       <div class="question-text" id="q-modal-text">문제 내용</div>
+      <div id="q-modal-equation" style="font-size: 2.2rem; font-family: 'Cambria Math', 'Times New Roman', serif; margin-bottom: 20px; color: #f1c40f; display: none; text-shadow: 0 2px 4px rgba(0,0,0,0.8);"></div>
       <div id="q-modal-img-container" style="display: none; margin-bottom: 20px;"></div>
       <div id="q-modal-choices"
         style="display: none; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px;"></div>
       <input type="text" id="q-modal-input" class="answer-input" placeholder="정답 입력" autocomplete="off" />
-      <p id="q-modal-hint" style="color: #aaa; font-size: 1.1rem; margin-top: 5px; display: none;"></p>
+      <p id="q-modal-hint" style="color: #aaa; font-size: 1.1rem; margin-top: 10px; display: none;"></p>
+      <button id="q-modal-hint-btn" class="btn btn-sm btn-secondary" style="margin-top: 10px; display: none;" onclick="useHint()">💡 힌트 보기</button>
       <br>
       <button id="q-modal-submit" class="btn btn-primary" onclick="submitAnswer()">정답 확인</button>
     </div>
@@ -596,7 +604,7 @@
         최종 점수: <span id="r-modal-score">0</span><br>
         전진한 칸: <span id="r-modal-steps">0</span> / 50
       </div>
-      <button class="btn btn-primary" onclick="location.reload()">처음으로 돌아가기</button>
+      <button class="btn btn-primary" onclick="quitToHome()">처음으로 돌아가기</button>
     </div>
   </div>
 
@@ -642,6 +650,10 @@
         <label style="font-size: 1.4rem; color: #ff4757; font-weight: bold; display: block; margin-bottom: 15px; text-shadow: 0 0 5px #ff4757;">효과음 (SFX) 볼륨</label>
         <input type="range" id="sfx-slider" min="0" max="2" step="0.1" value="1.0" style="width: 100%; cursor: pointer; accent-color: #ff4757;" oninput="updateSFXVolume(this.value)">
       </div>
+      <div style="margin-bottom: 30px;">
+        <label style="font-size: 1.4rem; color: #fbc531; font-weight: bold; display: block; margin-bottom: 15px; text-shadow: 0 0 5px #fbc531;">기본 제공 힌트 횟수 (번)</label>
+        <input type="number" id="hint-limit-input" min="0" max="99" style="width: 100%; padding: 10px; font-size: 1.2rem; cursor: pointer; border-radius: 5px; background: rgba(0,0,0,0.7); color: #fff; border: 1px solid #fbc531; text-align: center;" onchange="updateHintLimit(this.value)">
+      </div>
       <div style="text-align: center; margin-top: 30px;">
         <button class="cinematic-btn active-neon" onclick="closeOptions()">[ 확인 ]</button>
       </div>
@@ -649,6 +661,18 @@
   </div>
 
   <script>
+    let mathEscapeSettings = JSON.parse(localStorage.getItem('mathEscapeSettings')) || { maxHints: 5 };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const hintInput = document.getElementById('hint-limit-input');
+      if (hintInput) hintInput.value = mathEscapeSettings.maxHints;
+    });
+
+    function updateHintLimit(val) {
+      mathEscapeSettings.maxHints = parseInt(val) || 0;
+      localStorage.setItem('mathEscapeSettings', JSON.stringify(mathEscapeSettings));
+    }
+
     const bgImage = new Image();
     bgImage.src = 'deep_sea_bg.png';
 
@@ -674,6 +698,21 @@
         bgm.volume = bgmSlider ? parseFloat(bgmSlider.value) : 0.4;
         bgm.play().catch(e => console.log("BGM play failed:", e));
       }
+    }
+    
+    function quitToHome() {
+      // Modals
+      document.getElementById('result-modal').style.display = 'none';
+      document.getElementById('question-modal').style.display = 'none';
+      
+      // Screens
+      document.getElementById('game-screen').classList.remove('active');
+      document.getElementById('edit-screen').classList.remove('active');
+      document.getElementById('start-screen').classList.add('active');
+      
+      // State reset
+      state.gameOver = true;
+      clearInterval(state.timer);
     }
 
     function showPrologue() {
@@ -827,42 +866,75 @@
       ]
     };
 
-    let questionsData = JSON.parse(localStorage.getItem('mathEscapeQuestionsV2')) || JSON.parse(JSON.stringify(defaultQuestions));
+    let questionsData = [];
+    let savedData = JSON.parse(localStorage.getItem('mathEscapeQuestionsV3'));
+    if (savedData) {
+      questionsData = savedData;
+    } else {
+      let legacyData = JSON.parse(localStorage.getItem('mathEscapeQuestionsV2')) || defaultQuestions;
+      if (Array.isArray(legacyData)) {
+        questionsData = legacyData;
+      } else {
+        ['easy', 'normal', 'hard', 'expert'].forEach(diff => {
+          if(legacyData[diff]) {
+            legacyData[diff].forEach(q => {
+              q.diff = diff;
+              q.timeLimit = (diff === 'easy') ? 15 : (diff === 'normal' ? 10 : 0);
+              questionsData.push(q);
+            });
+          }
+        });
+      }
+    }
+
     let gameCards = [];
 
     // --- Editor Logic ---
-    let currentTab = 'easy';
-
     function showEditor() {
       document.getElementById('start-screen').classList.remove('active');
       document.getElementById('edit-screen').classList.add('active');
       renderEditorList();
     }
 
-    function switchTab(tab) {
-      currentTab = tab;
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      event.target.classList.add('active');
-      renderEditorList();
-    }
-
     function renderEditorList() {
       const container = document.getElementById('q-list-container');
       container.innerHTML = '';
-      questionsData[currentTab].forEach((item, index) => {
+      
+      const countSpan = document.getElementById('q-total-count');
+      if (countSpan) countSpan.innerText = `(총 ${questionsData.length}문제)`;
+
+      questionsData.forEach((item, index) => {
         const div = document.createElement('div');
         div.className = 'q-item';
 
         let hasChoices = item.c && item.c.length > 0;
+        let diff = item.diff || 'easy';
+        let timeLimit = item.timeLimit !== undefined ? item.timeLimit : (diff === 'easy' ? 15 : (diff === 'normal' ? 10 : 0));
 
         div.innerHTML = `
       <div style="display:flex; gap:10px; align-items:center; width:100%;">
+        <select onchange="updateQ(${index}, 'diff', this.value)" style="padding: 10px; border-radius: 4px; border: 1px solid #487eb0; background: rgba(0,0,0,0.6); color: #00d2d3; font-weight: bold;">
+          <option value="easy" ${diff === 'easy' ? 'selected' : ''}>쉬움 (+2칸)</option>
+          <option value="normal" ${diff === 'normal' ? 'selected' : ''}>보통 (+3칸)</option>
+          <option value="hard" ${diff === 'hard' ? 'selected' : ''}>어려움 (+4칸)</option>
+          <option value="expert" ${diff === 'expert' ? 'selected' : ''}>전문가 (+5칸)</option>
+          <option value="bonus3" ${diff === 'bonus3' ? 'selected' : ''}>🎁 보너스 (+3칸)</option>
+          <option value="bonus4" ${diff === 'bonus4' ? 'selected' : ''}>🎁 보너스 (+4칸)</option>
+          <option value="bonus5" ${diff === 'bonus5' || diff === 'bonus' ? 'selected' : ''}>🎁 보너스 (+5칸)</option>
+        </select>
         <input type="text" class="q-text" value="${item.q || ''}" onchange="updateQ(${index}, 'q', this.value)" placeholder="문제 내용">
-        <input type="text" class="q-ans" value="${item.a !== undefined ? item.a : ''}" onchange="updateQ(${index}, 'a', this.value)" placeholder="정답">
+        <input type="text" class="q-ans" value="${item.a !== undefined ? item.a : ''}" onchange="updateQ(${index}, 'a', this.value)" placeholder="정답 (여러개일 경우 쉼표로 구분)">
         <button class="btn-sm btn-danger" onclick="deleteQ(${index})">삭제</button>
       </div>
       <div style="display:flex; gap:10px; align-items:center; width:100%;">
-        <input type="text" style="flex:1" value="${item.img || ''}" onchange="updateQ(${index}, 'img', this.value)" placeholder="게시할 이미지 URL 주소 (선택사항, 안넣으려면 비워두세요)">
+        <div style="background: rgba(0,0,0,0.4); padding: 5px 10px; border-radius: 4px; color: #fff; font-size: 0.9rem;">
+          제한시간(초): <input type="number" style="width: 60px; padding: 5px; border-radius: 4px; border: 1px solid #487eb0; background: rgba(0,0,0,0.6); color: #00d2d3; font-weight: bold; text-align: center;" value="${timeLimit}" onchange="updateQ(${index}, 'timeLimit', this.value)"> 초 (0은 무제한)
+        </div>
+        <input type="text" style="flex:1" value="${item.equation || ''}" onchange="updateQ(${index}, 'equation', this.value)" placeholder="문제 아래에 보여줄 수식 (선택사항)">
+      </div>
+      <div style="display:flex; gap:10px; align-items:center; width:100%;">
+        <input type="text" style="flex:1" value="${item.img || ''}" onchange="updateQ(${index}, 'img', this.value)" placeholder="게시할 이미지 URL">
+        <input type="file" accept="image/*" onchange="handleImageUpload(${index}, this)" style="width: 200px; color: #fff; font-size: 0.9rem;">
       </div>
       <div style="display:flex; gap:10px; align-items:center; width:100%;">
         <label style="cursor:pointer; display:flex; align-items:center; gap:5px;">
@@ -883,42 +955,66 @@
       });
     }
 
+    function handleImageUpload(index, input) {
+      if (input.files && input.files[0]) {
+        const file = input.files[0];
+        if (file.size > 2 * 1024 * 1024) { // 2MB restriction
+          alert('이미지 용량이 너무 큽니다. 2MB 이하의 이미지를 사용해주세요.');
+          input.value = '';
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          questionsData[index].img = e.target.result;
+          renderEditorList(); // Re-render to show updated image
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
     function toggleChoices(index, checked) {
       if (checked) {
-        questionsData[currentTab][index].c = ["", "", "", ""];
+        questionsData[index].c = ["", "", "", ""];
       } else {
-        delete questionsData[currentTab][index].c;
+        delete questionsData[index].c;
       }
       renderEditorList();
     }
 
     function updateChoice(index, choiceIndex, value) {
-      questionsData[currentTab][index].c[choiceIndex] = value;
+      questionsData[index].c[choiceIndex] = value;
     }
 
     function updateQ(index, field, value) {
-      questionsData[currentTab][index][field] = value;
+      questionsData[index][field] = value;
     }
 
     function deleteQ(index) {
-      questionsData[currentTab].splice(index, 1);
+      questionsData.splice(index, 1);
       renderEditorList();
     }
 
     function addQuestionRow() {
-      questionsData[currentTab].push({ q: "", a: 0 });
+      questionsData.unshift({ q: "", a: "", diff: "easy", timeLimit: 15 });
       renderEditorList();
     }
 
     function resetDefaultQuestions() {
       if (confirm("모든 문제가 기본값으로 초기화됩니다. 계속하시겠습니까?")) {
-        questionsData = JSON.parse(JSON.stringify(defaultQuestions));
+        questionsData = [];
+        ['easy', 'normal', 'hard', 'expert'].forEach(diff => {
+          defaultQuestions[diff].forEach(q => {
+            q.diff = diff;
+            q.timeLimit = (diff === 'easy') ? 15 : (diff === 'normal' ? 10 : 0);
+            questionsData.push(JSON.parse(JSON.stringify(q)));
+          });
+        });
         renderEditorList();
       }
     }
 
     function saveAndExitEditor() {
-      localStorage.setItem('mathEscapeQuestionsV2', JSON.stringify(questionsData));
+      localStorage.setItem('mathEscapeQuestionsV3', JSON.stringify(questionsData));
       document.getElementById('edit-screen').classList.remove('active');
       document.getElementById('start-screen').classList.add('active');
     }
@@ -940,25 +1036,44 @@
       state.teamName = nameInput || "바다 탐험대";
       document.getElementById('hud-team-name').innerText = state.teamName;
 
-      // Prepare cards (60 total)
-      gameCards = [];
-      const diffs = ['easy', 'normal', 'hard', 'expert'];
-      const counts = { easy: 20, normal: 20, hard: 10, expert: 10 };
+      // Full reset of state to avoid glitches on retry
+      state.score = 0;
+      state.combo = 0;
+      state.fishStep = 0;
+      state.sharkStep = -6;
+      state.gameOver = false;
+      state.gameStatus = 'playing';
+      state.speedBoost = 0;
+      state.shakeIntensity = 0;
+      state.vignetteAlpha = 0;
+      state.activeCardIndex = -1;
+      clearInterval(state.timer);
+      particles = [];
+      bubbles = [];
+      floatingTexts = [];
+      state.hintsLeft = mathEscapeSettings.maxHints;
 
-      diffs.forEach(diff => {
-        let pool = [...questionsData[diff]];
-        // Shuffle pool
-        pool.sort(() => Math.random() - 0.5);
-        for (let i = 0; i < counts[diff]; i++) {
-          if (pool.length > 0) {
-            let q = pool.pop();
-            gameCards.push({ ...q, diff: diff, solved: false });
-          } else {
-            // Fallback if not enough questions
-            gameCards.push({ q: "1+1=?", a: 2, diff: diff, solved: false });
-          }
+      const canvas = document.getElementById('game-canvas');
+      visualFishY = canvas.height * 0.3;
+      visualSharkY = visualFishY + (-6 * canvas.height * 0.05);
+      lastTime = performance.now();
+      
+      // Prepare cards (60 total without duplicates)
+      gameCards = [];
+      let pool = [...questionsData];
+      // Shuffle pool
+      pool.sort(() => Math.random() - 0.5);
+      
+      for (let i = 0; i < 60; i++) {
+        if (i < pool.length) {
+          gameCards.push({ ...pool[i], solved: false });
+        } else {
+          // Fallback if not enough unique questions. Generating random ones.
+          let n1 = Math.floor(Math.random() * 9) + 1;
+          let n2 = Math.floor(Math.random() * 9) + 1;
+          gameCards.push({ q: `보충 랜덤 문제: ${n1} x ${n2} = ?`, a: String(n1*n2), diff: "easy", solved: false, timeLimit: 15 });
         }
-      });
+      }
 
       // Shuffle all cards
       gameCards.sort(() => Math.random() - 0.5);
@@ -977,7 +1092,7 @@
     function renderCardGrid() {
       const grid = document.getElementById('card-grid');
       grid.innerHTML = '';
-      const stepLabels = { easy: '+2칸', normal: '+3칸', hard: '+4칸', expert: '+5칸' };
+      const stepLabels = { easy: '+2칸', normal: '+3칸', hard: '+4칸', expert: '+5칸', bonus: '🎁+5칸', bonus3: '🎁+3칸', bonus4: '🎁+4칸', bonus5: '🎁+5칸' };
       gameCards.forEach((card, index) => {
         const el = document.createElement('div');
         el.className = `card ${card.diff}`;
@@ -993,10 +1108,29 @@
       state.activeCardIndex = index;
       const card = gameCards[index];
 
-      const diffNames = { easy: "쉬움 (+2칸)", normal: "보통 (+3칸)", hard: "어려움 (+4칸)", expert: "전문가 (+5칸)" };
-      document.getElementById('q-modal-diff').innerText = diffNames[card.diff];
-      document.getElementById('q-modal-diff').style.color = `var(--${card.diff})`;
+      const diffNames = { easy: "쉬움 (+2칸)", normal: "보통 (+3칸)", hard: "어려움 (+4칸)", expert: "전문가 (+5칸)", bonus: "🎁 보너스 문제 🎁", bonus3: "🎁 보너스 문제 🎁", bonus4: "🎁 보너스 문제 🎁", bonus5: "🎁 보너스 문제 🎁" };
+      
+      const diffEl = document.getElementById('q-modal-diff');
+      diffEl.innerText = diffNames[card.diff] || diffNames.easy;
+      let isBonus = card.diff && card.diff.startsWith('bonus');
+      diffEl.style.color = isBonus ? '#ff4757' : `var(--${card.diff})`;
+      
+      if (isBonus) {
+        diffEl.style.animation = "titlePulse 0.5s infinite";
+        showExplosion();
+      } else {
+        diffEl.style.animation = "none";
+      }
+
       document.getElementById('q-modal-text').innerText = card.q;
+
+      const eqDiv = document.getElementById('q-modal-equation');
+      if (card.equation) {
+        eqDiv.innerText = card.equation;
+        eqDiv.style.display = 'block';
+      } else {
+        eqDiv.style.display = 'none';
+      }
 
       const imgContainer = document.getElementById('q-modal-img-container');
       if (card.img) {
@@ -1010,14 +1144,15 @@
       const inputEl = document.getElementById('q-modal-input');
       const submitBtn = document.getElementById('q-modal-submit');
       const hintEl = document.getElementById('q-modal-hint');
+      const hintBtn = document.getElementById('q-modal-hint-btn');
 
       inputEl.value = '';
 
-      if (card.h) {
-        hintEl.innerText = "💡 힌트: " + card.h;
-        hintEl.style.display = 'block';
+      hintEl.style.display = 'none';
+      if (card.h && state.hintsLeft > 0) {
+        hintBtn.style.display = 'inline-block';
       } else {
-        hintEl.style.display = 'none';
+        hintBtn.style.display = 'none';
       }
 
       if (card.c && card.c.length > 0) {
@@ -1045,10 +1180,12 @@
 
       const timerContainer = document.getElementById('timer-container');
       const timerBar = document.getElementById('timer-bar');
+      
+      let tLimit = card.timeLimit !== undefined ? parseInt(card.timeLimit) : (card.diff === 'easy' ? 15 : (card.diff === 'normal' ? 10 : 0));
 
-      if (card.diff === 'easy' || card.diff === 'normal') {
+      if (tLimit > 0) {
         timerContainer.style.display = 'block';
-        state.maxTime = card.diff === 'easy' ? 15 : 10;
+        state.maxTime = tLimit;
         state.timeLeft = state.maxTime;
         timerBar.style.width = '100%';
         timerBar.style.backgroundColor = 'var(--success)';
@@ -1091,7 +1228,11 @@
 
       clearInterval(state.timer);
 
-      if (String(userAns).trim() === String(card.a).trim()) {
+      // Support multiple correct answers
+      let correctAnswers = String(card.a).split(',').map(s => s.trim().toLowerCase());
+      let userAnswerStr = String(userAns).trim().toLowerCase();
+
+      if (correctAnswers.includes(userAnswerStr)) {
         handleCorrectAnswer(card);
       } else {
         handleWrongAnswer("오답입니다!");
@@ -1107,8 +1248,8 @@
       if (isCombo) playSound('combo');
       else playSound('correct');
 
-      const rewards = { easy: { pts: 10, steps: 2 }, normal: { pts: 20, steps: 3 }, hard: { pts: 30, steps: 4 }, expert: { pts: 50, steps: 5 } };
-      const r = rewards[card.diff];
+      const rewards = { easy: { pts: 10, steps: 2 }, normal: { pts: 20, steps: 3 }, hard: { pts: 30, steps: 4 }, expert: { pts: 50, steps: 5 }, bonus: { pts: 100, steps: 5 }, bonus3: { pts: 100, steps: 3 }, bonus4: { pts: 100, steps: 4 }, bonus5: { pts: 100, steps: 5 } };
+      const r = rewards[card.diff] || rewards.easy;
 
       let comboBonusPts = (state.combo - 1) * 5;
       state.score += r.pts + comboBonusPts;
@@ -1138,6 +1279,15 @@
       state.sharkStep += 4; // Shark approaches FASTER!
       state.shakeIntensity = 60; // Stronger shake
 
+      if (state.activeCardIndex !== -1) {
+        const card = gameCards[state.activeCardIndex];
+        card.solved = true;
+        const cardEl = document.getElementById('card-grid').children[state.activeCardIndex];
+        if (cardEl) {
+          cardEl.classList.add('solved', 'failed');
+        }
+      }
+
       // Visual feedback
       document.getElementById('game-screen').classList.add('shake', 'flash-red');
       setTimeout(() => {
@@ -1152,14 +1302,57 @@
       checkGameEnd();
     }
 
+    function showExplosion() {
+      for(let i=0; i<30; i++) {
+        const el = document.createElement('div');
+        el.innerText = ['🎉', '🎊', '✨', '🎁', '🎈'][Math.floor(Math.random()*5)];
+        el.style.position = 'absolute';
+        el.style.left = '50%';
+        el.style.top = '50%';
+        el.style.fontSize = (Math.random() * 2 + 1) + 'rem';
+        el.style.pointerEvents = 'none';
+        el.style.zIndex = '1000';
+        el.style.transition = 'all 1s cubic-bezier(0.25, 1, 0.5, 1)';
+        document.getElementById('question-modal').appendChild(el);
+        
+        setTimeout(() => {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = Math.random() * 300 + 100;
+          el.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px) rotate(${Math.random()*360}deg)`;
+          el.style.opacity = '0';
+        }, 10);
+        
+        setTimeout(() => el.remove(), 1050);
+      }
+      playSound('combo');
+    }
+
     function closeModal() {
       document.getElementById('question-modal').style.display = 'none';
       state.activeCardIndex = -1;
       clearInterval(state.timer);
     }
 
+    function useHint() {
+      if (state.activeCardIndex === -1 || state.hintsLeft <= 0) return;
+      const card = gameCards[state.activeCardIndex];
+      state.hintsLeft--;
+      playSound('click');
+      updateHUD(); // to update hints on HUD
+
+      const hintEl = document.getElementById('q-modal-hint');
+      const hintBtn = document.getElementById('q-modal-hint-btn');
+      
+      hintEl.innerText = "💡 힌트: " + card.h;
+      hintEl.style.display = 'block';
+      hintBtn.style.display = 'none';
+      document.getElementById('q-modal-input').focus();
+    }
+
     function updateHUD() {
       document.getElementById('hud-score').innerText = state.score;
+      const hudHints = document.getElementById('hud-hints');
+      if(hudHints) hudHints.innerText = state.hintsLeft !== undefined ? state.hintsLeft : 5;
       document.getElementById('hud-steps-left').innerText = Math.max(0, TOTAL_STEPS - state.fishStep);
       document.getElementById('hud-team-name').innerHTML = `${state.teamName} <span style="color:#f1c40f;font-size:1.2rem;margin-left:10px;text-shadow:0 0 10px rgba(241,196,15,0.8);">${state.combo >= 2 ? state.combo + ' 콤보 🔥' : ''}</span>`;
 
