@@ -1,5 +1,21 @@
 import { Space } from './types';
 
+export interface Character {
+  id: number;
+  name: string;
+  color: string;
+  emoji: string;
+}
+
+export const CHARACTERS: Character[] = [
+  { id: 1, name: '지우', color: 'bg-red-500', emoji: '🧑' },
+  { id: 2, name: '민수', color: 'bg-blue-500', emoji: '👦' },
+  { id: 3, name: '수아', color: 'bg-green-500', emoji: '👧' },
+  { id: 4, name: '동현', color: 'bg-yellow-500', emoji: '🤓' },
+  { id: 5, name: '유나', color: 'bg-purple-500', emoji: '👩' },
+  { id: 6, name: '승민', color: 'bg-orange-500', emoji: '😎' },
+  { id: 7, name: '하은', color: 'bg-pink-500', emoji: '👱‍♀️' },
+];
 export const BOARD_SPACES: Space[] = [
   { id: 0, type: 'start', name: '출발' },
   { id: 1, type: 'land', name: '덧셈 마을', price: 100, rent: 20, colorGroup: 'bg-pink-400' },
