@@ -33,7 +33,38 @@ const sanitizeData = (rawData: any) => {
       }
       return { "날짜": "", "상태": "알수없음", "메모": line };
     });
+  } else if (Array.isArray(newData["출석부"])) {
+    newData["출석부"] = newData["출석부"].map((att: any) => ({
+      ...att,
+      "상태": typeof att?.["상태"] === 'string' ? att["상태"].trim() : att?.["상태"],
+      "메모": typeof att?.["메모"] === 'string' ? att["메모"].trim() : att?.["메모"]
+    }));
   }
+
+  if (typeof newData["시험성적"] === 'string') {
+    const entryPattern = /(\d{4}-\d{2}-\d{2}):\s*([\s\S]*?)(?=\s*\d{4}-\d{2}-\d{2}:|$)/g;
+    const parsed: any[] = [];
+    let m;
+    while ((m = entryPattern.exec(newData["시험성적"])) !== null) {
+      const date = m[1];
+      const content = m[2].trim();
+      const typeMatch = content.match(/시험\s*유형\s+([\s\S]+?)(?=\s+회차|$)/);
+      const roundMatch = content.match(/회차\s+([\s\S]+?)(?=\s+시험\s*범위|$)/);
+      const rangeMatch = content.match(/시험\s*범위\s+([\s\S]+?)(?=\s+점수|$)/);
+      const scoreMatch = content.match(/점수\s+([\s\S]+?)(?=\s+평가|$)/);
+      const statusMatch = content.match(/평가\s+([\s\S]+)$/);
+      parsed.push({
+        "날짜": date,
+        "시험유형": typeMatch ? typeMatch[1].trim() : "",
+        "회차": roundMatch ? roundMatch[1].trim() : "",
+        "범위": rangeMatch ? rangeMatch[1].trim() : "",
+        "점수": scoreMatch ? scoreMatch[1].trim() : "",
+        "상태": statusMatch ? statusMatch[1].trim() : ""
+      });
+    }
+    newData["시험성적"] = parsed;
+  }
+
   return newData;
 };
 
@@ -376,7 +407,7 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-2 gap-8">
-                {data["시험성적"]?.map((test: any, idx: number) => (
+                {Array.isArray(data["시험성적"]) && data["시험성적"]?.map((test: any, idx: number) => (
                   <div key={idx} className="bg-white rounded-[2rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-bl-full -mr-6 -mt-6 transition-transform group-hover:scale-110"></div>
                     <div className="relative z-10 flex flex-col h-full justify-between gap-8">
