@@ -48,11 +48,11 @@ const sanitizeData = (rawData: any) => {
     while ((m = entryPattern.exec(newData["시험성적"])) !== null) {
       const date = m[1];
       const content = m[2].trim();
-      const typeMatch = content.match(/시험\s*유형\s+([\s\S]+?)(?=\s+회차|$)/);
-      const roundMatch = content.match(/회차\s+([\s\S]+?)(?=\s+시험\s*범위|$)/);
-      const rangeMatch = content.match(/시험\s*범위\s+([\s\S]+?)(?=\s+점수|$)/);
-      const scoreMatch = content.match(/점수\s+([\s\S]+?)(?=\s+평가|$)/);
-      const statusMatch = content.match(/평가\s+([\s\S]+)$/);
+      const typeMatch = content.match(/(?:^|\s)시험\s*유형\s+([\s\S]+?)(?=\s+회차\s|$)/);
+      const roundMatch = content.match(/(?:^|\s)회차\s+([\s\S]+?)(?=\s+시험\s*범위\s|$)/);
+      const rangeMatch = content.match(/(?:^|\s)시험\s*범위\s+([\s\S]+?)(?=\s+점수\s|$)/);
+      const scoreMatch = content.match(/(?:^|\s)점수\s+([\s\S]+?)(?=\s+평가\s|$)/);
+      const statusMatch = content.match(/(?:^|\s)평가\s+([\s\S]+)$/);
       parsed.push({
         "날짜": date,
         "시험유형": typeMatch ? typeMatch[1].trim() : "",
