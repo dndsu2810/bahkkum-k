@@ -1,0 +1,38 @@
+[
+  {
+    "id": "yaksu-balloon",
+    "name": "약수·배수 풍선 사냥",
+    "shortDesc": "미션 풍선만 손으로 잡기",
+    "grades": ["5학년"],
+    "units": ["약수와 배수"],
+    "scoreType": "점수",
+    "emoji": "🎈",
+    "gradient": "from-sky-400 to-blue-500",
+    "route": "/game/yaksu-balloon",
+    "tags": ["신작"]
+  },
+  {
+    "id": "bunsu-tilt",
+    "name": "분수 비교 점프",
+    "shortDesc": "큰 쪽으로 몸 기울이기",
+    "grades": ["5학년"],
+    "units": ["분수"],
+    "scoreType": "라운드",
+    "emoji": "⚖️",
+    "gradient": "from-emerald-400 to-teal-500",
+    "route": "/game/bunsu-tilt",
+    "tags": []
+  },
+  {
+    "id": "math-pungdeong",
+    "name": "수학 풍덩!",
+    "shortDesc": "포즈 따라하고 벽 통과하기",
+    "grades": ["5학년", "6학년"],
+    "units": ["혼합계산", "곱셈"],
+    "scoreType": "초",
+    "emoji": "🌊",
+    "gradient": "from-amber-400 to-orange-500",
+    "route": "/game/math-pungdeong",
+    "tags": ["신작", "인기"]
+  }
+]

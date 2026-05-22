@@ -1,0 +1,12 @@
+# Cloudflare Pages config for ezssam 게임 허브.
+# 1단계는 localStorage만 사용 → D1 바인딩은 나중(2단계+)에 추가.
+name = "ezssam-games"
+compatibility_date = "2025-05-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".vercel/output/static"
+
+# 나중에 D1 연동 시 아래 형태로 추가 (지금은 비활성):
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "ezssam-games-prod"
+# database_id = "..."
