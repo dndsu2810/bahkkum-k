@@ -62,19 +62,6 @@
     "external": true
   },
   {
-    "id": "dodge",
-    "name": "피하기 챌린지",
-    "shortDesc": "떨어지는 위기를 피하는 생존 게임",
-    "grades": [],
-    "units": ["순발력"],
-    "scoreType": "점수",
-    "emoji": "☂️",
-    "gradient": "from-indigo-400 to-purple-500",
-    "route": "https://dndsu2810.github.io/bahkkum-k/dodge/",
-    "tags": ["미니게임"],
-    "external": true
-  },
-  {
     "id": "ddong-dodge",
     "name": "똥 피하기 게임",
     "shortDesc": "떨어지는 똥을 요리조리 피하기",
