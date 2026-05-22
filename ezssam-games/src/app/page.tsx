@@ -100,8 +100,11 @@ export default function HubPage() {
 
       {/* 푸터 */}
       <footer className="border-t border-gray-100 bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-6 text-sm text-gray-400 sm:px-6">
-          ezssam — 수학을 몸으로 배우다 · 만든 사람: 지현
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6 text-sm text-gray-400 sm:px-6">
+          <span>ezssam — 수학을 몸으로 배우다 · 만든 사람: 지현</span>
+          <a href="/admin" className="hover:text-brand">
+            마법 거울 설정
+          </a>
         </div>
       </footer>
     </>
