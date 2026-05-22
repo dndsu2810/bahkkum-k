@@ -34,5 +34,57 @@
     "gradient": "from-amber-400 to-orange-500",
     "route": "/game/math-pungdeong",
     "tags": ["신작", "인기"]
+  },
+  {
+    "id": "mathpoly",
+    "name": "수학 땅따먹기",
+    "shortDesc": "MATHPOLY 수학 보드게임",
+    "grades": [],
+    "units": ["보드게임"],
+    "scoreType": "점수",
+    "emoji": "🎲",
+    "gradient": "from-rose-400 to-pink-500",
+    "route": "https://dndsu2810.github.io/bahkkum-k/mathpoly/",
+    "tags": ["미니게임"],
+    "external": true
+  },
+  {
+    "id": "sea-escape",
+    "name": "바닷속 수학 대탈출",
+    "shortDesc": "바닷속에서 수학으로 탈출!",
+    "grades": [],
+    "units": ["수학 탈출"],
+    "scoreType": "점수",
+    "emoji": "🐠",
+    "gradient": "from-cyan-400 to-blue-500",
+    "route": "https://dndsu2810.github.io/bahkkum-k/%EC%A7%80%ED%98%84%EC%8C%A4%EC%9D%98-%EB%8A%A5%EB%A0%A5/",
+    "tags": ["미니게임"],
+    "external": true
+  },
+  {
+    "id": "dodge",
+    "name": "피하기 챌린지",
+    "shortDesc": "떨어지는 위기를 피하는 생존 게임",
+    "grades": [],
+    "units": ["순발력"],
+    "scoreType": "점수",
+    "emoji": "☂️",
+    "gradient": "from-indigo-400 to-purple-500",
+    "route": "https://dndsu2810.github.io/bahkkum-k/dodge/",
+    "tags": ["미니게임"],
+    "external": true
+  },
+  {
+    "id": "ddong-dodge",
+    "name": "똥 피하기 게임",
+    "shortDesc": "떨어지는 똥을 요리조리 피하기",
+    "grades": [],
+    "units": ["순발력"],
+    "scoreType": "점수",
+    "emoji": "💩",
+    "gradient": "from-yellow-400 to-amber-600",
+    "route": "https://dndsu2810.github.io/bahkkum-k/%EB%98%A5-%ED%94%BC%ED%95%98%EA%B8%B0-%EA%B2%8C%EC%9E%84/",
+    "tags": ["미니게임"],
+    "external": true
   }
 ]

@@ -12,6 +12,7 @@ export type Game = {
   gradient: string;
   route: string;
   tags: string[];
+  external?: boolean; // true면 기존에 만든 외부 게임 (새 탭으로 열림)
 };
 
 export const games: Game[] = gamesData as Game[];
