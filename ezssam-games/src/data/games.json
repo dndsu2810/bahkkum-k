@@ -36,6 +36,18 @@
     "tags": ["신작", "인기"]
   },
   {
+    "id": "laser-math",
+    "name": "레이저 수학 대결",
+    "shortDesc": "공중에 답을 그리는 레이저 수학",
+    "grades": ["5학년", "6학년"],
+    "units": ["곱셈", "나눗셈"],
+    "scoreType": "점수",
+    "emoji": "✨",
+    "gradient": "from-fuchsia-500 to-violet-700",
+    "route": "/game/laser-math",
+    "tags": ["신작"]
+  },
+  {
     "id": "mathpoly",
     "name": "수학 땅따먹기",
     "shortDesc": "MATHPOLY 수학 보드게임",

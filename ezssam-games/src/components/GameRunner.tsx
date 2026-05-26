@@ -31,6 +31,10 @@ const REAL_GAMES: Record<string, ComponentType<{ game: Game }>> = {
     ssr: false,
     loading: GameLoading,
   }),
+  "laser-math": dynamic(() => import("./games/LaserMathGame"), {
+    ssr: false,
+    loading: GameLoading,
+  }),
 };
 
 export default function GameRunner({ game }: { game: Game }) {

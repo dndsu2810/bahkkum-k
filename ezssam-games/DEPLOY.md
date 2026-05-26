@@ -48,10 +48,13 @@ dash.cloudflare.com → **Workers & Pages** → **Create** → **Pages** → **C
 수정이 끝나면 그 내용을 `~/Desktop/bahkkum-k/ezssam-games/` 로 복사 후 커밋·push:
 
 ```bash
-rsync -a --exclude '.git' --exclude 'node_modules' --exclude '.next' \
-  --exclude '.vercel' --exclude '.wrangler' --exclude 'files' \
+rsync -a --exclude '.git' --exclude 'node_modules' --exclude '.next' --exclude 'out' \
+  --exclude '.vercel' --exclude '.wrangler' --exclude 'files' --exclude '.DS_Store' \
+  --include '/README.md' --include '/DEPLOY.md' --exclude '/*.md' \
   ~/Desktop/ezssam-games/ ~/Desktop/bahkkum-k/ezssam-games/
 cd ~/Desktop/bahkkum-k && git add ezssam-games && git commit -m "ezssam 게임 업데이트" && git push origin main
 ```
+
+(루트의 README.md / DEPLOY.md 만 포함하고, 그 외 루트의 .md 계획서들은 공개 저장소에 들어가지 않도록 차단)
 
 push하면 Cloudflare가 자동으로 다시 배포함.
