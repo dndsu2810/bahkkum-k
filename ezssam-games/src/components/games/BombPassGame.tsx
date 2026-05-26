@@ -17,10 +17,9 @@ import { generateBombProblem, type BombProblem } from "@/lib/bomb";
 
 const CW = 960;
 const CH = 540;
-const BOMB_MIN_SEC = 3; // 랜덤 폭발 시간 최소
-const BOMB_MAX_SEC = 7; // 랜덤 폭발 시간 최대 (언제 터질지 모르게)
-const GAME_SECONDS = 60;
-const LIVES_START = 3;
+// 한 게임 = 폭탄 한 번. 20초 ~ 2분 30초(150초) 사이 랜덤으로 터짐.
+const BOMB_MIN_SEC = 20;
+const BOMB_MAX_SEC = 150;
 
 function randomBombTime(): number {
   return BOMB_MIN_SEC + Math.random() * (BOMB_MAX_SEC - BOMB_MIN_SEC);
@@ -84,7 +83,7 @@ function roundRect(
   ctx.quadraticCurveTo(x, y, x + r, y);
 }
 
-type PlayerStats = { name: string; lives: number; passed: number };
+type PlayerStats = { name: string; passed: number };
 
 export default function BombPassGame({ game }: { game: Game }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -95,7 +94,7 @@ export default function BombPassGame({ game }: { game: Game }) {
   // 게임 설정
   const modeRef = useRef<Mode>("solo");
   const playersRef = useRef<PlayerStats[]>([
-    { name: "나", lives: LIVES_START, passed: 0 },
+    { name: "나", passed: 0 },
   ]);
   const currentIdxRef = useRef(0);
 
@@ -120,6 +119,7 @@ export default function BombPassGame({ game }: { game: Game }) {
     until: number;
   } | null>(null);
   const lastTickSoundRef = useRef(0);
+  const gameOverPendingRef = useRef<number | null>(null); // 폭발 후 결과 화면까지 잠깐 BOOM 보여주기 위해
 
   // UI 입력
   const [mode, setMode] = useState<Mode>("solo");
@@ -136,30 +136,35 @@ export default function BombPassGame({ game }: { game: Game }) {
   const [view, setView] = useState({
     score: 0,
     combo: 0,
-    timeLeft: GAME_SECONDS,
     currentName: "나",
     players: playersRef.current,
   });
   const [result, setResult] = useState<
-    | { kind: "solo"; score: number; isNewRecord: boolean; passed: number; maxCombo: number }
-    | { kind: "multi"; score: number; isNewRecord: boolean; ranked: PlayerStats[] }
+    | {
+        kind: "solo";
+        score: number;
+        isNewRecord: boolean;
+        passed: number;
+        maxCombo: number;
+        elapsedSec: number;
+      }
+    | {
+        kind: "multi";
+        score: number;
+        isNewRecord: boolean;
+        loserName: string;
+        ranked: PlayerStats[];
+        elapsedSec: number;
+      }
     | null
   >(null);
   const viewKeyRef = useRef("");
 
-  // ── 다음 살아있는 플레이어 ─────────────────────────
-  const advanceToNextAlive = useCallback(() => {
+  // ── 다음 플레이어 ──────────────────────────────────
+  const advanceToNext = useCallback(() => {
     if (modeRef.current === "solo") return;
-    const ps = playersRef.current;
-    const n = ps.length;
-    let next = currentIdxRef.current;
-    for (let i = 0; i < n; i++) {
-      next = (next + 1) % n;
-      if (ps[next].lives > 0) {
-        currentIdxRef.current = next;
-        return;
-      }
-    }
+    const n = playersRef.current.length;
+    currentIdxRef.current = (currentIdxRef.current + 1) % n;
   }, []);
 
   // ── 새 문제 ────────────────────────────────────────
@@ -191,6 +196,8 @@ export default function BombPassGame({ game }: { game: Game }) {
         maxCombo: maxComboRef.current,
       },
     });
+    const elapsedSec =
+      Math.round(((performance.now() - gameStartRef.current) / 1000) * 10) / 10;
     if (modeRef.current === "solo") {
       setResult({
         kind: "solo",
@@ -198,34 +205,29 @@ export default function BombPassGame({ game }: { game: Game }) {
         isNewRecord,
         passed: playersRef.current[0].passed,
         maxCombo: maxComboRef.current,
+        elapsedSec,
       });
     } else {
+      const loserName = playersRef.current[currentIdxRef.current]?.name ?? "?";
+      // 폭탄 안 맞은 사람들 → 통과 수 내림차순, 폭탄 맞은 사람은 맨 끝
       const ranked = playersRef.current
         .slice()
-        .sort((a, b) =>
-          a.lives !== b.lives ? b.lives - a.lives : b.passed - a.passed
-        );
-      setResult({ kind: "multi", score, isNewRecord, ranked });
+        .sort((a, b) => {
+          if (a.name === loserName) return 1;
+          if (b.name === loserName) return -1;
+          return b.passed - a.passed;
+        });
+      setResult({
+        kind: "multi",
+        score,
+        isNewRecord,
+        loserName,
+        ranked,
+        elapsedSec,
+      });
     }
     setPhase("result");
   }, [game.id]);
-
-  const checkGameOver = useCallback((): boolean => {
-    const ps = playersRef.current;
-    if (modeRef.current === "solo") {
-      if (ps[0].lives <= 0) {
-        endGame();
-        return true;
-      }
-      return false;
-    }
-    const alive = ps.filter((p) => p.lives > 0).length;
-    if (alive <= 1) {
-      endGame();
-      return true;
-    }
-    return false;
-  }, [endGame]);
 
   // ── 정답 제출 ───────────────────────────────────────
   const submit = useCallback(
@@ -243,7 +245,7 @@ export default function BombPassGame({ game }: { game: Game }) {
         else playCorrect();
         flashRef.current = { kind: "correct", until: now + 350 };
         if (modeRef.current === "multi") {
-          advanceToNextAlive();
+          advanceToNext();
           flashRef.current = { kind: "turn", until: now + 700 };
         }
         // 정답=폭탄 패스. 새 문제만, 폭탄 타이머는 계속 째깍.
@@ -255,24 +257,15 @@ export default function BombPassGame({ game }: { game: Game }) {
         hoverIdxRef.current = -1;
       }
     },
-    [advanceToNextAlive, nextProblem]
+    [advanceToNext, nextProblem]
   );
 
-  const explode = useCallback(
-    (now: number) => {
-      const p = playersRef.current[currentIdxRef.current];
-      p.lives -= 1;
-      comboRef.current = 0;
-      playBoom();
-      flashRef.current = { kind: "boom", until: now + 700 };
-      if (checkGameOver()) return;
-      if (modeRef.current === "multi") advanceToNextAlive();
-      // 폭발 후 새 폭탄 장전 + 새 문제
-      resetBomb(now);
-      nextProblem();
-    },
-    [advanceToNextAlive, checkGameOver, nextProblem, resetBomb]
-  );
+  // 폭탄 폭발 → 한 게임 끝 (현재 차례 학생이 패배)
+  const explode = useCallback((now: number) => {
+    playBoom();
+    flashRef.current = { kind: "boom", until: now + 1300 };
+    gameOverPendingRef.current = now;
+  }, []);
 
   // ── 그리기 ─────────────────────────────────────────
   const draw = useCallback((now: number) => {
@@ -361,8 +354,16 @@ export default function BombPassGame({ game }: { game: Game }) {
   const tick = useCallback(
     (now: number) => {
       if (!runningRef.current) return;
-      const survival = (now - gameStartRef.current) / 1000;
-      const timeLeft = Math.max(0, GAME_SECONDS - survival);
+      // 폭발 후 BOOM 연출 → 1.2초 뒤 결과 화면
+      if (gameOverPendingRef.current !== null) {
+        draw(now);
+        if (now - gameOverPendingRef.current >= 1200) {
+          endGame();
+          return;
+        }
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
 
       const bombElapsed = (now - bombStartRef.current) / 1000;
       const bombLeft = Math.max(0, bombDurationRef.current - bombElapsed);
@@ -375,31 +376,25 @@ export default function BombPassGame({ game }: { game: Game }) {
       }
       lastTickSoundRef.current = bombElapsed;
 
-      if (bombLeft <= 0 && (!flashRef.current || now >= flashRef.current.until)) {
+      if (bombLeft <= 0) {
         explode(now);
       }
 
       draw(now);
 
-      const tF = Math.ceil(timeLeft);
       const cur = playersRef.current[currentIdxRef.current];
-      const livesKey = playersRef.current.map((p) => p.lives).join(",");
-      const key = `${tF}|${scoreRef.current}|${comboRef.current}|${livesKey}|${currentIdxRef.current}`;
+      const passedKey = playersRef.current.map((p) => p.passed).join(",");
+      const key = `${scoreRef.current}|${comboRef.current}|${passedKey}|${currentIdxRef.current}`;
       if (key !== viewKeyRef.current) {
         viewKeyRef.current = key;
         setView({
           score: scoreRef.current,
           combo: comboRef.current,
-          timeLeft: tF,
           currentName: cur.name,
           players: playersRef.current.map((p) => ({ ...p })),
         });
       }
 
-      if (timeLeft <= 0) {
-        endGame();
-        return;
-      }
       rafRef.current = requestAnimationFrame(tick);
     },
     [draw, endGame, explode, muted]
@@ -450,13 +445,12 @@ export default function BombPassGame({ game }: { game: Game }) {
   const beginGame = useCallback(() => {
     modeRef.current = mode;
     if (mode === "solo") {
-      playersRef.current = [{ name: "나", lives: LIVES_START, passed: 0 }];
+      playersRef.current = [{ name: "나", passed: 0 }];
     } else {
       playersRef.current = playerNames
         .slice(0, numPlayers)
         .map((n) => ({
           name: n.trim() || "이름없음",
-          lives: LIVES_START,
           passed: 0,
         }));
     }
@@ -533,7 +527,7 @@ export default function BombPassGame({ game }: { game: Game }) {
                     {m === "solo" ? "혼자 도전" : "여러 명 (돌리기)"}
                   </div>
                   <div className="text-xs">
-                    {m === "solo" ? "1인, 생명 3개" : "2~4명, 돌아가며"}
+                    {m === "solo" ? "1인 도전" : "2~4명, 돌아가며"}
                   </div>
                 </button>
               ))}
@@ -581,22 +575,22 @@ export default function BombPassGame({ game }: { game: Game }) {
 
             <ul className="mt-6 space-y-1.5 text-sm text-gray-600">
               <li>
-                · 🚨 <b>러시안 룰렛 폭탄!</b> 폭탄은 한 번 시작되면 <b>계속 째깍</b>,
-                언제 터질지 몰라요
+                · 🚨 <b>러시안 룰렛 폭탄!</b> 폭탄은 한 번 시작되면 <b>계속 째깍</b>
+                (20초~2분 30초 사이 랜덤으로 폭발)
               </li>
-              <li>· 정답을 빨리 클릭해서 다음 사람에게 폭탄을 떠넘기는 게 핵심</li>
+              <li>· 정답을 빨리 클릭해서 폭탄을 다음으로 떠넘기는 게 핵심</li>
               {mode === "solo" ? (
                 <>
                   <li>· 정답 +10점, 콤보 3+면 +5</li>
-                  <li>· 폭탄이 터지면 생명 -1, 새 폭탄 장전 → 생명 0이거나 60초면 끝</li>
+                  <li>· 폭탄이 터지면 <b>한 게임 끝</b> — 결과 보고 다시 시작</li>
                 </>
               ) : (
                 <>
                   <li>· 정답이면 폭탄이 <b>다음 사람</b>에게 패스! (마우스도 옆 사람에게)</li>
                   <li>
-                    · 자기 차례에 폭탄이 터지면 <b>그 사람만</b> 생명 -1, 새 폭탄으로 게임 계속
+                    · 폭탄이 자기 차례에 펑 터지면 그 사람 <b>패배</b>, 나머지는 승리
                   </li>
-                  <li>· 끝까지 생존한 사람이 승리 (또는 60초 후 생명·통과 수 순위)</li>
+                  <li>· 통과 수 많은 사람부터 순위 (패배자는 마지막)</li>
                 </>
               )}
               <li>· 문제: 한 자리 덧셈·뺄셈 / 구구단 / 작은 나눗셈</li>
@@ -624,42 +618,34 @@ export default function BombPassGame({ game }: { game: Game }) {
         <main className="mx-auto max-w-5xl px-3 py-4 sm:py-6">
           <div className="mb-3 flex items-center justify-between gap-3">
             {modeRef.current === "solo" ? (
-              <div className="text-lg">
-                {"❤️".repeat(view.players[0]?.lives ?? 0)}
-                <span className="text-gray-300">
-                  {"♡".repeat(LIVES_START - (view.players[0]?.lives ?? 0))}
+              <div className="text-sm text-gray-400">
+                통과:{" "}
+                <span className="font-num font-bold text-navy">
+                  {view.players[0]?.passed ?? 0}
                 </span>
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {view.players.map((p, i) => {
                   const isCur = i === currentIdxRef.current;
-                  const dead = p.lives <= 0;
                   return (
                     <div
                       key={i}
                       className={
                         "rounded-lg px-2 py-1 text-xs " +
-                        (dead
-                          ? "bg-gray-100 text-gray-400 line-through"
-                          : isCur
-                            ? "bg-amber-100 text-amber-700 font-bold ring-2 ring-amber-400"
-                            : "bg-gray-100 text-gray-600")
+                        (isCur
+                          ? "bg-amber-100 text-amber-700 font-bold ring-2 ring-amber-400"
+                          : "bg-gray-100 text-gray-600")
                       }
                     >
-                      <span>{p.name}</span> <span>{"❤️".repeat(p.lives)}</span>
+                      <span>{p.name}</span>{" "}
+                      <span className="font-num">({p.passed})</span>
                     </div>
                   );
                 })}
               </div>
             )}
             <div className="flex items-center gap-4">
-              <div className="text-right">
-                <div className="text-xs text-gray-400">남은</div>
-                <div className="font-num text-2xl font-extrabold text-brand">
-                  {view.timeLeft}초
-                </div>
-              </div>
               <div className="text-right">
                 <div className="text-xs text-gray-400">점수</div>
                 <div className="font-num text-2xl font-extrabold text-amber-500">
@@ -707,9 +693,11 @@ export default function BombPassGame({ game }: { game: Game }) {
           score={result.score}
           isNewRecord={result.isNewRecord}
           stats={[
+            { label: "버틴 시간", value: `${result.elapsedSec}초` },
             { label: "통과한 문제", value: `${result.passed}` },
             { label: "최대 콤보", value: `${result.maxCombo}` },
           ]}
+          note="폭탄이 터졌어요!"
           onRetry={handleRetry}
         />
       )}
@@ -717,10 +705,15 @@ export default function BombPassGame({ game }: { game: Game }) {
       {phase === "result" && result && result.kind === "multi" && (
         <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-4 py-10">
           <div className="rounded-card bg-white p-8 shadow-card">
-            <p className="text-sm text-gray-400">최종 순위</p>
-            <h2 className="text-2xl font-extrabold text-navy">
-              🏆 {result.ranked[0].name} 우승!
+            <p className="text-sm text-gray-400">
+              {result.elapsedSec}초 만에 폭탄 폭발!
+            </p>
+            <h2 className="text-2xl font-extrabold text-red-500">
+              💥 {result.loserName} 패배!
             </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              나머지는 모두 승리 — 통과 수 순위는 아래.
+            </p>
             {result.isNewRecord && (
               <p className="mt-1 text-sm font-bold text-amber-500">
                 팀 통과 신기록!
@@ -728,28 +721,39 @@ export default function BombPassGame({ game }: { game: Game }) {
             )}
 
             <div className="mt-5 space-y-2">
-              {result.ranked.map((p, i) => (
-                <div
-                  key={i}
-                  className={
-                    "flex items-center justify-between rounded-xl border px-4 py-3 " +
-                    (i === 0
-                      ? "border-amber-300 bg-amber-50"
-                      : "border-gray-200 bg-white")
-                  }
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="font-num text-xl font-extrabold text-navy">
-                      {i + 1}위
-                    </span>
-                    <span className="text-lg font-bold">{p.name}</span>
+              {result.ranked.map((p, i) => {
+                const isLoser = p.name === result.loserName;
+                return (
+                  <div
+                    key={i}
+                    className={
+                      "flex items-center justify-between rounded-xl border px-4 py-3 " +
+                      (isLoser
+                        ? "border-red-300 bg-red-50"
+                        : i === 0
+                          ? "border-amber-300 bg-amber-50"
+                          : "border-gray-200 bg-white")
+                    }
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-num text-xl font-extrabold text-navy">
+                        {isLoser ? "💥" : `${i + 1}위`}
+                      </span>
+                      <span
+                        className={
+                          "text-lg font-bold " +
+                          (isLoser ? "text-red-600 line-through" : "")
+                        }
+                      >
+                        {p.name}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {p.passed}문제 통과
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span>{p.lives > 0 ? "❤️".repeat(p.lives) : "💀"}</span>
-                    <span className="text-gray-500">{p.passed}문제 통과</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="mt-6 flex gap-2">
