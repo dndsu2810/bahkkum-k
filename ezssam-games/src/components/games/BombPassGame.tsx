@@ -7,8 +7,9 @@ import { saveGameResult } from "@/lib/records";
 import {
   playCorrect,
   playWrong,
-  playBeep,
   playCombo,
+  playTick,
+  playBoom,
   setMuted as setSoundMuted,
 } from "@/lib/sound";
 import ResultScreen from "@/components/ResultScreen";
@@ -262,7 +263,7 @@ export default function BombPassGame({ game }: { game: Game }) {
       const p = playersRef.current[currentIdxRef.current];
       p.lives -= 1;
       comboRef.current = 0;
-      playWrong();
+      playBoom();
       flashRef.current = { kind: "boom", until: now + 700 };
       if (checkGameOver()) return;
       if (modeRef.current === "multi") advanceToNextAlive();
@@ -370,7 +371,7 @@ export default function BombPassGame({ game }: { game: Game }) {
         Math.floor(bombElapsed) !== Math.floor(lastTickSoundRef.current) &&
         bombElapsed > 0.2
       ) {
-        if (!muted) playBeep();
+        if (!muted) playTick();
       }
       lastTickSoundRef.current = bombElapsed;
 
