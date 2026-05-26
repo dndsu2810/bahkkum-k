@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>역사다다 - 조선시대 인물 이모지 퀴즈</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cream: #FFF8E7;
+    --paper: #FFFDF5;
+    --ink: #2A2118;
+    --red: #C8102E;
+    --blue: #1E4D8B;
+    --green: #2E8B57;
+    --gold: #E8A93C;
+    --soft: #F4E4BC;
+    --correct: #4CAF50;
+    --wrong: #E57373;
+    --pink: #FF6B9D;
+  }
+
+  body {
+    font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    background: linear-gradient(135deg, #FFF8E7 0%, #F4E4BC 50%, #FFE4B5 100%);
+    background-size: 200% 200%;
+    animation: bg-shift 15s ease infinite;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: var(--ink);
+    overflow-x: hidden;
+  }
+
+  @keyframes bg-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  /* 사운드 토글 */
+  .sound-toggle {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    background: white;
+    border: 3px solid var(--gold);
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    font-size: 22px;
+    cursor: pointer;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .sound-toggle:hover { transform: scale(1.1) rotate(10deg); }
+  .sound-toggle:active { transform: scale(0.95); }
+
+  /* 컨페티 */
+  .confetti-container {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1000;
+    overflow: hidden;
+  }
+  .confetti-piece {
+    position: absolute;
+    top: -20px;
+    width: 10px;
+    height: 16px;
+    border-radius: 2px;
+    animation: confetti-fall linear forwards;
+  }
+  @keyframes confetti-fall {
+    to {
+      transform: translateY(110vh) rotate(1080deg);
+      opacity: 0.5;
+    }
+  }
+
+  /* 카드 */
+  .card {
+    background: var(--paper);
+    border-radius: 28px;
+    box-shadow: 0 24px 70px rgba(42, 33, 24, 0.18), 0 0 0 1px rgba(232, 169, 60, 0.2);
+    padding: 36px 28px;
+    max-width: 540px;
+    width: 100%;
+    border: 3px solid var(--gold);
+    position: relative;
+    overflow: hidden;
+    animation: card-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes card-appear {
+    from { opacity: 0; transform: scale(0.9) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 10px;
+    background: linear-gradient(90deg, var(--red), var(--blue), var(--gold), var(--green), var(--red));
+    background-size: 200% 100%;
+    animation: rainbow-slide 8s linear infinite;
+  }
+  @keyframes rainbow-slide {
+    to { background-position: 200% 0; }
+  }
+
+  /* 화면 전환 */
+  .screen { display: none; }
+  .screen.active {
+    display: block;
+    animation: screen-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes screen-in {
+    from { opacity: 0; transform: translateY(15px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* 시작 화면 */
+  .start-screen { text-align: center; padding: 10px 0; }
+  .title-emoji {
+    font-size: 64px;
+    animation: bounce-emoji 2s ease infinite;
+    margin-bottom: 4px;
+  }
+  @keyframes bounce-emoji {
+    0%, 100% { transform: translateY(0) rotate(-3deg); }
+    50% { transform: translateY(-12px) rotate(3deg); }
+  }
+
+  .game-title {
+    font-size: 52px;
+    font-weight: 900;
+    text-align: center;
+    margin-bottom: 8px;
+    letter-spacing: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .game-title span {
+    display: inline-block;
+    text-shadow: 3px 3px 0 rgba(0,0,0,0.08);
+    animation: title-drop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+  }
+  .game-title span:nth-child(1) { color: var(--red); animation-delay: 0.1s; }
+  .game-title span:nth-child(2) { color: var(--blue); animation-delay: 0.2s; }
+  .game-title span:nth-child(3) { color: var(--gold); animation-delay: 0.3s; }
+  .game-title span:nth-child(4) { color: var(--green); animation-delay: 0.4s; }
+
+  @keyframes title-drop {
+    0% { transform: translateY(-80px) rotate(-20deg); opacity: 0; }
+    100% { transform: translateY(0) rotate(0); opacity: 1; }
+  }
+
+  .game-title:hover span { animation: title-wave 0.6s ease; }
+  .game-title:hover span:nth-child(1) { animation-delay: 0s; }
+  .game-title:hover span:nth-child(2) { animation-delay: 0.08s; }
+  .game-title:hover span:nth-child(3) { animation-delay: 0.16s; }
+  .game-title:hover span:nth-child(4) { animation-delay: 0.24s; }
+
+  @keyframes title-wave {
+    50% { transform: translateY(-16px) scale(1.15) rotate(-5deg); }
+  }
+
+  .subtitle {
+    font-size: 16px;
+    color: var(--blue);
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+  .description {
+    font-size: 14px;
+    color: var(--ink);
+    opacity: 0.65;
+    margin-bottom: 28px;
+  }
+
+  .mode-select { display: flex; flex-direction: column; gap: 12px; }
+  .mode-label {
+    font-size: 15px;
+    color: var(--ink);
+    margin-bottom: 4px;
+    font-weight: 700;
+  }
+  .mode-btn {
+    background: white;
+    border: 3px solid var(--soft);
+    padding: 16px 20px;
+    border-radius: 16px;
+    font-size: 17px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    font-family: inherit;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+  }
+  .mode-btn:hover {
+    border-color: var(--red);
+    background: #FFF5F0;
+    transform: translateX(6px) scale(1.02);
+    box-shadow: -6px 6px 0 rgba(200, 16, 46, 0.15);
+  }
+  .mode-btn:active { transform: scale(0.98); }
+  .mode-btn .best {
+    font-size: 13px;
+    color: var(--blue);
+    font-weight: 600;
+    background: var(--soft);
+    padding: 4px 10px;
+    border-radius: 10px;
+  }
+
+  /* 버튼 공통 */
+  .btn {
+    background: var(--red);
+    color: white;
+    border: none;
+    padding: 16px 32px;
+    font-size: 18px;
+    font-weight: 700;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+    box-shadow: 0 4px 0 #8B0A20;
+  }
+  .btn:hover { transform: translateY(-3px); box-shadow: 0 7px 0 #8B0A20; }
+  .btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #8B0A20; }
+  .btn-blue { background: var(--blue); box-shadow: 0 4px 0 #133560; }
+  .btn-blue:hover { box-shadow: 0 7px 0 #133560; }
+  .btn-blue:active { box-shadow: 0 2px 0 #133560; }
+
+  /* 퀴즈 화면 */
+  .quiz-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .progress { color: var(--blue); }
+  .score { color: var(--red); font-size: 16px; }
+  .score-num { display: inline-block; transition: transform 0.3s; }
+  .score-num.pop { animation: score-pop 0.4s ease; }
+  @keyframes score-pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.5); color: var(--gold); }
+    100% { transform: scale(1); }
+  }
+
+  .progress-bar {
+    height: 10px;
+    background: var(--soft);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 24px;
+    position: relative;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold), var(--red), var(--pink));
+    background-size: 200% 100%;
+    animation: progress-shine 2s linear infinite;
+    transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    border-radius: 6px;
+  }
+  @keyframes progress-shine {
+    to { background-position: 200% 0; }
+  }
+
+  .emoji-box {
+    background: linear-gradient(135deg, var(--soft) 0%, #FFE8B0 100%);
+    border-radius: 24px;
+    padding: 32px 20px;
+    text-align: center;
+    margin-bottom: 18px;
+    border: 3px dashed var(--gold);
+    position: relative;
+    overflow: hidden;
+  }
+  .emoji-box .label {
+    font-size: 13px;
+    color: var(--ink);
+    opacity: 0.55;
+    margin-bottom: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .emoji-box .emojis {
+    font-size: 60px;
+    letter-spacing: 12px;
+    line-height: 1.2;
+  }
+  .emoji-pop {
+    display: inline-block;
+    animation: emoji-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+  }
+  @keyframes emoji-pop {
+    0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+    60% { transform: scale(1.3) rotate(15deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+  .emoji-pop:hover {
+    animation: emoji-wiggle 0.5s ease;
+  }
+  @keyframes emoji-wiggle {
+    0%, 100% { transform: rotate(0); }
+    25% { transform: rotate(-15deg) scale(1.2); }
+    75% { transform: rotate(15deg) scale(1.2); }
+  }
+
+  .question-text {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: var(--ink);
+  }
+
+  .options {
+    display: grid;
+    gap: 11px;
+    margin-bottom: 14px;
+  }
+  .option {
+    background: white;
+    border: 2.5px solid var(--soft);
+    border-radius: 14px;
+    padding: 15px 18px;
+    font-size: 17px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    text-align: left;
+    font-family: inherit;
+    color: var(--ink);
+    animation: option-slide 0.4s ease backwards;
+    position: relative;
+  }
+  .option:nth-child(1) { animation-delay: 0.1s; }
+  .option:nth-child(2) { animation-delay: 0.2s; }
+  .option:nth-child(3) { animation-delay: 0.3s; }
+  .option:nth-child(4) { animation-delay: 0.4s; }
+  @keyframes option-slide {
+    from { opacity: 0; transform: translateX(-30px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .option:hover:not(:disabled) {
+    border-color: var(--blue);
+    background: #F0F6FF;
+    transform: translateX(6px) scale(1.02);
+    box-shadow: -4px 4px 0 rgba(30, 77, 139, 0.15);
+  }
+  .option:disabled { cursor: default; }
+  .option.correct {
+    background: linear-gradient(90deg, #E8F5E9, #C8E6C9);
+    border-color: var(--correct);
+    color: #2E7D32;
+    animation: correct-pulse 0.6s ease;
+  }
+  @keyframes correct-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(76, 175, 80, 0.4); }
+  }
+  .option.wrong {
+    background: linear-gradient(90deg, #FFEBEE, #FFCDD2);
+    border-color: var(--wrong);
+    color: #C62828;
+    animation: shake 0.4s ease;
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-10px); }
+    40% { transform: translateX(10px); }
+    60% { transform: translateX(-8px); }
+    80% { transform: translateX(8px); }
+  }
+  .option.correct::after { content: " ⭕"; display: inline-block; animation: bounce-mark 0.5s ease 0.2s backwards; }
+  .option.wrong::after { content: " ❌"; display: inline-block; animation: bounce-mark 0.5s ease 0.2s backwards; }
+  @keyframes bounce-mark {
+    0% { transform: scale(0); opacity: 0; }
+    60% { transform: scale(1.4); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .feedback {
+    display: none;
+    background: linear-gradient(135deg, var(--soft), #FFF0CC);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+    line-height: 1.6;
+    font-size: 15px;
+    border: 2px solid transparent;
+  }
+  .feedback.show {
+    display: block;
+    animation: feedback-in 0.4s ease;
+  }
+  @keyframes feedback-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .feedback .verdict {
+    font-size: 19px;
+    font-weight: 800;
+    margin-bottom: 6px;
+  }
+  .feedback.correct .verdict { color: var(--correct); }
+  .feedback.wrong .verdict { color: var(--wrong); }
+  .feedback.correct { border-color: var(--correct); }
+  .feedback.wrong { border-color: var(--wrong); }
+  .feedback .answer { font-weight: 800; color: var(--blue); }
+
+  .next-btn { display: none; width: 100%; }
+  .next-btn.show {
+    display: block;
+    animation: btn-appear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes btn-appear {
+    from { opacity: 0; transform: translateY(20px) scale(0.9); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* 결과 화면 */
+  .result-screen { text-align: center; padding: 10px 0; }
+  .trophy {
+    font-size: 90px;
+    margin-bottom: 10px;
+    animation: trophy-bounce 1.5s ease infinite;
+  }
+  @keyframes trophy-bounce {
+    0%, 100% { transform: translateY(0) rotate(-5deg); }
+    50% { transform: translateY(-15px) rotate(5deg); }
+  }
+  .result-title {
+    font-size: 28px;
+    color: var(--blue);
+    margin-bottom: 12px;
+    font-weight: 800;
+  }
+  .stars {
+    font-size: 40px;
+    letter-spacing: 6px;
+    margin: 16px 0 20px;
+    min-height: 50px;
+  }
+  .stars span {
+    display: inline-block;
+    animation: star-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+  }
+  @keyframes star-pop {
+    0% { transform: scale(0) rotate(-180deg); }
+    60% { transform: scale(1.4) rotate(20deg); }
+    100% { transform: scale(1) rotate(0); }
+  }
+  .final-score {
+    font-size: 22px;
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .final-score strong {
+    color: var(--red);
+    font-size: 34px;
+    display: inline-block;
+  }
+  .grade {
+    font-size: 16px;
+    color: var(--ink);
+    margin-bottom: 22px;
+    opacity: 0.85;
+    line-height: 1.5;
+  }
+  .new-best {
+    display: inline-block;
+    background: var(--gold);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-weight: 800;
+    font-size: 14px;
+    margin-bottom: 16px;
+    animation: bestPulse 1s ease infinite;
+  }
+  @keyframes bestPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+  }
+
+  @media (max-width: 480px) {
+    .card { padding: 24px 18px; }
+    .game-title { font-size: 40px; letter-spacing: 4px; }
+    .title-emoji { font-size: 52px; }
+    .emoji-box .emojis { font-size: 44px; letter-spacing: 8px; }
+    .question-text { font-size: 16px; }
+    .option { padding: 13px 16px; font-size: 16px; }
+    .trophy { font-size: 72px; }
+    .result-title { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="sound-toggle" id="soundToggle" aria-label="소리 켜기/끄기">🔊</button>
+<div class="confetti-container" id="confettiContainer"></div>
+
+<div class="card">
+
+  <!-- 시작 화면 -->
+  <div id="startScreen" class="screen active start-screen">
+    <div class="title-emoji">📜</div>
+    <h1 class="game-title" id="gameTitle">
+      <span>역</span><span>사</span><span>다</span><span>다</span>
+    </h1>
+    <p class="subtitle">조선시대 인물 이모지 퀴즈</p>
+    <p class="description">🎯 이모지 힌트로 인물을 맞춰봐요! · 총 100명 출제</p>
+
+    <div class="mode-select">
+      <p class="mode-label">📋 몇 문제 도전할까요?</p>
+      <button class="mode-btn" data-count="10">
+        <span>⚡ 빠른 도전 (10문제)</span>
+        <span class="best" id="best10">최고: -</span>
+      </button>
+      <button class="mode-btn" data-count="30">
+        <span>📚 보통 도전 (30문제)</span>
+        <span class="best" id="best30">최고: -</span>
+      </button>
+      <button class="mode-btn" data-count="100">
+        <span>🏆 끝장 도전 (100문제)</span>
+        <span class="best" id="best100">최고: -</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 퀴즈 화면 -->
+  <div id="quizScreen" class="screen">
+    <div class="quiz-header">
+      <div class="progress">문제 <span id="currentNum">1</span> / <span id="totalNum">10</span></div>
+      <div class="score">⭐ <span id="scoreNum" class="score-num">0</span>점</div>
+    </div>
+    <div class="progress-bar">
+      <div id="progressFill" class="progress-fill" style="width: 10%"></div>
+    </div>
+
+    <div class="emoji-box">
+      <div class="label">🔍 이모지 힌트</div>
+      <div id="emojis" class="emojis"></div>
+    </div>
+
+    <div class="question-text">이 사람은 누구일까요? 🤔</div>
+
+    <div id="options" class="options"></div>
+
+    <div id="feedback" class="feedback">
+      <div class="verdict"></div>
+      <div class="detail"></div>
+    </div>
+
+    <button id="nextBtn" class="btn btn-blue next-btn">다음 문제 ➡️</button>
+  </div>
+
+  <!-- 결과 화면 -->
+  <div id="resultScreen" class="screen result-screen">
+    <div id="trophy" class="trophy">🏆</div>
+    <h2 class="result-title" id="resultTitle">잘했어요!</h2>
+    <div id="newBest" class="new-best" style="display:none">🎉 최고 기록 갱신!</div>
+    <div class="stars" id="stars"></div>
+    <div class="final-score"><strong id="finalScore">0</strong> / <span id="finalTotal">10</span> 문제 정답!</div>
+    <div class="grade" id="gradeMsg"></div>
+    <button class="btn" id="restartBtn">다시 도전하기 🔄</button>
+  </div>
+
+</div>
+
+<script>
+// ============================================
+// 조선시대 인물 100명 데이터
+// ============================================
+const QUESTIONS = [
+  // ===== 왕 (16명) =====
+  {n:"태조 이성계",c:"king",e:["🏹","👑","🌳"],f:"조선을 세운 첫 임금이에요. 활을 잘 쏘기로 유명했고, 1392년에 조선을 만들었어요."},
+  {n:"태종",c:"king",e:["👑","⚔️","👬"],f:"이방원이라고도 해요. 왕자의 난을 일으켜 왕이 되었고, 강한 왕권을 만들었어요."},
+  {n:"세종대왕",c:"king",e:["👑","📜","🔤"],f:"한글(훈민정음)을 만든 조선의 4대 임금이에요. 백성을 사랑한 위대한 왕이에요."},
+  {n:"문종",c:"king",e:["👑","📚","💊"],f:"세종대왕의 큰아들이에요. 학문에 뛰어났지만 몸이 약해서 일찍 세상을 떠났어요."},
+  {n:"단종",c:"king",e:["👦","👑","😢"],f:"12살에 임금이 되었지만 작은아버지 세조에게 왕위를 빼앗긴 비운의 어린 왕이에요."},
+  {n:"세조",c:"king",e:["👑","🗡️","👦"],f:"수양대군이라고도 해요. 조카 단종에게서 왕위를 빼앗았어요."},
+  {n:"성종",c:"king",e:["👑","📕","⚖️"],f:"조선의 기본 법전 '경국대전'을 완성한 임금이에요."},
+  {n:"연산군",c:"king",e:["👑","😡","🌪️"],f:"포악한 정치를 펼치다 신하들에게 쫓겨난 임금이에요."},
+  {n:"중종",c:"king",e:["👑","🔄","🌱"],f:"연산군을 쫓아낸 중종반정으로 왕이 되었어요. 조광조를 등용해 개혁을 시도했어요."},
+  {n:"선조",c:"king",e:["👑","🔥","🚢"],f:"임진왜란이 일어났을 때의 임금이에요. 이순신 장군이 활약한 시대예요."},
+  {n:"광해군",c:"king",e:["👑","🤝","🌏"],f:"명나라와 후금 사이에서 중립 외교를 펼친 임금이에요."},
+  {n:"인조",c:"king",e:["👑","❄️","🙇"],f:"병자호란 때 청나라에 항복한 임금이에요. 남한산성 이야기로 유명해요."},
+  {n:"효종",c:"king",e:["👑","🐎","⚔️"],f:"청나라에 복수하기 위해 북벌을 계획한 임금이에요."},
+  {n:"영조",c:"king",e:["👑","🍲","⚖️"],f:"당파 싸움을 막기 위해 '탕평책'을 펼친 임금이에요. 조선에서 가장 오래 산 왕이에요."},
+  {n:"정조",c:"king",e:["👑","🏰","📚"],f:"수원화성을 짓고 규장각을 세운 개혁의 임금이에요. 정약용을 아꼈어요."},
+  {n:"고종",c:"king",e:["👑","🇰🇷","📜"],f:"대한제국을 선포한 임금이에요. 어려운 시대를 살았어요."},
+
+  // ===== 학자/관료 (35명) =====
+  {n:"정도전",c:"scholar",e:["📐","🏯","🤝"],f:"이성계를 도와 조선을 세운 일등 공신이에요. 한양의 도시 계획을 세웠어요."},
+  {n:"정몽주",c:"scholar",e:["📜","🌉","💔"],f:"고려에 끝까지 충성하다 선죽교에서 죽임을 당한 학자예요."},
+  {n:"황희",c:"scholar",e:["👴","⚖️","🏛️"],f:"세종대왕 시대 18년간 영의정을 지낸 명재상이에요. 청렴하기로 유명했어요."},
+  {n:"맹사성",c:"scholar",e:["👴","🐮","🎵"],f:"황희와 함께 세종 시대를 빛낸 청렴한 정승이에요. 검은 소를 타고 다녔다고 해요."},
+  {n:"신숙주",c:"scholar",e:["📚","🔤","🗣️"],f:"세종대왕을 도와 한글을 만든 학자예요. 8개 국어에 능통했다고 해요."},
+  {n:"정인지",c:"scholar",e:["📜","🔤","✍️"],f:"세종대왕을 도와 훈민정음 해례본을 쓴 학자예요."},
+  {n:"성삼문",c:"scholar",e:["💀","👑","6️⃣"],f:"단종을 다시 왕으로 모시려다 죽임을 당한 '사육신' 중 한 명이에요."},
+  {n:"박팽년",c:"scholar",e:["💀","👑","✍️"],f:"사육신 중 한 명이에요. 단종에게 끝까지 충성을 지켰어요."},
+  {n:"한명회",c:"scholar",e:["🎲","👑","🗝️"],f:"세조가 왕이 되도록 도운 신하예요. 두 명의 임금(예종, 성종)의 장인이 되었어요."},
+  {n:"김종서",c:"scholar",e:["⚔️","❄️","🐯"],f:"북쪽 변경을 지킨 '백두산 호랑이'예요. 4군 6진을 개척했어요."},
+  {n:"조광조",c:"scholar",e:["📜","🌱","💔"],f:"젊은 나이에 개혁을 펼친 학자예요. 안타깝게 일찍 죽임을 당했어요."},
+  {n:"이황",c:"scholar",e:["📚","🌸","1️⃣"],f:"천원 지폐에 그려진 위대한 성리학자예요. 도산서원을 세웠어요. 호는 퇴계."},
+  {n:"이이",c:"scholar",e:["👶","📖","🎓"],f:"오천원 지폐의 주인공이에요. 9번이나 장원급제한 천재 학자예요. 호는 율곡."},
+  {n:"서경덕",c:"scholar",e:["📚","🌸","🧘"],f:"황진이와의 일화로 유명한 학자예요. 호는 화담."},
+  {n:"조식",c:"scholar",e:["📚","🗡️","⛰️"],f:"벼슬을 마다하고 학문에만 힘쓴 학자예요. 호는 남명."},
+  {n:"유성룡",c:"scholar",e:["📕","🔥","🤝"],f:"임진왜란을 기록한 '징비록'을 쓴 학자예요. 이순신을 추천한 사람이에요."},
+  {n:"이수광",c:"scholar",e:["📚","🌏","🔍"],f:"조선 최초의 백과사전 '지봉유설'을 쓴 학자예요."},
+  {n:"이항복",c:"scholar",e:["👬","🤡","📜"],f:"이덕형과의 우정으로 유명한 '오성과 한음'의 오성이에요."},
+  {n:"이덕형",c:"scholar",e:["👬","👶","📜"],f:"이항복과 절친했던 '오성과 한음'의 한음이에요."},
+  {n:"송시열",c:"scholar",e:["👴","📜","⚔️"],f:"조선 후기를 대표하는 학자예요. 강한 성격으로 유명했어요. 호는 우암."},
+  {n:"김장생",c:"scholar",e:["📚","🙇","📜"],f:"예학(예절의 학문)의 대가로 유명한 학자예요."},
+  {n:"박지원",c:"scholar",e:["📖","🐎","🇨🇳"],f:"'열하일기'를 쓴 실학자예요. 청나라 여행 이야기를 재미있게 썼어요. 호는 연암."},
+  {n:"박제가",c:"scholar",e:["📕","🛍️","🇨🇳"],f:"'북학의'를 쓴 실학자예요. 청나라의 좋은 점을 배우자고 주장했어요."},
+  {n:"정약용",c:"scholar",e:["📚","🏰","🔧"],f:"수원화성을 설계하고 거중기를 만든 위대한 실학자예요. '목민심서'를 썼어요. 호는 다산."},
+  {n:"정약전",c:"scholar",e:["🐟","📖","🌊"],f:"정약용의 형이에요. 흑산도 유배지에서 물고기 책 '자산어보'를 썼어요."},
+  {n:"김정희",c:"scholar",e:["✍️","🖼️","🗿"],f:"독특한 글씨체 '추사체'로 유명한 학자예요. 호는 추사."},
+  {n:"유형원",c:"scholar",e:["📕","🌾","🏡"],f:"'반계수록'을 쓴 실학자예요. 토지 제도를 고치자고 주장했어요."},
+  {n:"이익",c:"scholar",e:["📚","🌾","🍀"],f:"'성호사설'을 쓴 실학자예요. 농업을 중요하게 여겼어요. 호는 성호."},
+  {n:"홍대용",c:"scholar",e:["🌏","🔭","🌀"],f:"지구가 둥글고 빙글빙글 돈다고 주장한 실학자예요."},
+  {n:"안정복",c:"scholar",e:["📕","🇰🇷","⏳"],f:"우리나라 역사책 '동사강목'을 쓴 학자예요."},
+  {n:"이언적",c:"scholar",e:["📜","📚","🏞️"],f:"조선 중기의 성리학자예요. 호는 회재."},
+  {n:"김굉필",c:"scholar",e:["📜","🏛️","✍️"],f:"조선 초기의 성리학자예요. 조광조의 스승이기도 해요."},
+  {n:"이순지",c:"scholar",e:["🔢","⭐","☀️"],f:"세종 시대에 천문학과 수학에 뛰어났던 학자예요. 우리만의 달력 '칠정산'을 만들었어요."},
+  {n:"최만리",c:"scholar",e:["📜","🔤","🙅"],f:"세종대왕의 한글 창제에 반대 상소를 올린 학자예요."},
+  {n:"박세당",c:"scholar",e:["📚","🌳","👴"],f:"조선 후기 실학에 영향을 준 학자예요."},
+
+  // ===== 장군/무신 (12명) =====
+  {n:"이순신",c:"general",e:["⚔️","🚢","🐢"],f:"거북선을 만들어 일본군을 무찌른 위대한 장군이에요. '나의 죽음을 알리지 말라'는 말로 유명해요."},
+  {n:"권율",c:"general",e:["⚔️","🏔️","🪨"],f:"행주대첩에서 일본군을 크게 무찌른 장군이에요."},
+  {n:"김시민",c:"general",e:["⚔️","🏯","🔥"],f:"진주성에서 일본군을 막아낸 장군이에요."},
+  {n:"곽재우",c:"general",e:["🔴","🌾","⚔️"],f:"임진왜란 때 붉은 옷을 입고 의병을 이끈 '홍의장군'이에요."},
+  {n:"사명대사",c:"general",e:["🧘","⚔️","🇯🇵"],f:"임진왜란 때 승병을 이끌고 싸운 스님이에요."},
+  {n:"서산대사",c:"general",e:["🧘","⛰️","✊"],f:"사명대사의 스승이에요. 임진왜란 때 승병을 이끌었어요."},
+  {n:"임경업",c:"general",e:["⚔️","❄️","🐎"],f:"청나라와 맞서 싸운 장군이에요."},
+  {n:"이종무",c:"general",e:["⚔️","🏝️","🚢"],f:"세종 때 대마도(쓰시마)를 정벌한 장군이에요."},
+  {n:"신립",c:"general",e:["⚔️","🐎","🌊"],f:"임진왜란 때 탄금대에서 일본군과 싸운 장군이에요."},
+  {n:"남이",c:"general",e:["⚔️","🐎","👦"],f:"조선 초기의 젊고 용감한 장군이에요. 17살에 무과에 장원급제했어요."},
+  {n:"원균",c:"general",e:["⚔️","🚢","💔"],f:"임진왜란 때 이순신과 같은 시대 수군 장수예요."},
+  {n:"정문부",c:"general",e:["⚔️","🌾","🇰🇷"],f:"임진왜란 때 함경도에서 의병을 이끈 장군이에요."},
+
+  // ===== 화가/예술가 (8명) =====
+  {n:"안견",c:"artist",e:["🎨","⛰️","💭"],f:"세종 시대의 화가예요. 꿈을 그린 '몽유도원도'로 유명해요."},
+  {n:"정선",c:"artist",e:["🎨","⛰️","🇰🇷"],f:"우리나라 산수를 그린 '진경산수화'의 대가예요. 호는 겸재."},
+  {n:"김홍도",c:"artist",e:["🎨","🤼","👨‍🌾"],f:"조선 최고의 풍속화가예요. 호는 단원. 씨름하는 그림이 유명해요."},
+  {n:"신윤복",c:"artist",e:["🎨","👘","🌙"],f:"여인들의 모습을 아름답게 그린 풍속화가예요. 호는 혜원."},
+  {n:"장승업",c:"artist",e:["🎨","🍶","🦅"],f:"조선 말기의 천재 화가예요. 술을 좋아한 자유로운 영혼이었어요."},
+  {n:"강세황",c:"artist",e:["🎨","✍️","👴"],f:"김홍도의 스승이에요. 그림과 글씨에 모두 뛰어났어요."},
+  {n:"윤두서",c:"artist",e:["🎨","👀","🪞"],f:"자기 얼굴을 그린 자화상으로 유명한 화가예요."},
+  {n:"김명국",c:"artist",e:["🎨","🍶","🐉"],f:"거침없는 붓놀림으로 유명한 화가예요."},
+
+  // ===== 여성 인물 (6명) =====
+  {n:"신사임당",c:"woman",e:["👩‍🎨","🌸","5️⃣"],f:"5만원 지폐에 그려진 화가예요. 율곡 이이의 어머니이기도 해요."},
+  {n:"허난설헌",c:"woman",e:["👩","📜","😢"],f:"조선 최고의 여류 시인이에요. 짧은 생을 살았지만 아름다운 시를 많이 남겼어요."},
+  {n:"황진이",c:"woman",e:["👩","🎵","🌙"],f:"노래와 시, 춤에 뛰어난 조선의 기생이에요."},
+  {n:"김만덕",c:"woman",e:["👩","🏝️","🍚"],f:"제주도의 큰 부자였던 여성이에요. 흉년 때 굶주리는 사람들에게 쌀을 나눠줬어요."},
+  {n:"명성황후",c:"woman",e:["👸","🇰🇷","💔"],f:"고종의 왕비예요. 일본인들에게 시해당하는 비극을 겪었어요."},
+  {n:"인수대비",c:"woman",e:["👸","📚","👑"],f:"성종의 어머니예요. 여성을 위한 책 '내훈'을 썼어요."},
+
+  // ===== 과학/의술/지리 (4명) =====
+  {n:"장영실",c:"scientist",e:["⏰","☔","🔭"],f:"세종대왕 시대의 천재 과학자예요. '자격루'와 '측우기'를 만들었어요."},
+  {n:"허준",c:"scientist",e:["👨‍⚕️","📖","🌿"],f:"조선 최고의 의원이에요. 의학책 '동의보감'을 썼어요."},
+  {n:"이제마",c:"scientist",e:["👨‍⚕️","4️⃣","🧬"],f:"사람을 네 가지 체질로 나누는 '사상의학'을 만든 의사예요."},
+  {n:"김정호",c:"scientist",e:["🗺️","🚶","🇰🇷"],f:"전국을 걸으며 '대동여지도'를 만든 지리학자예요."},
+
+  // ===== 문학가 (5명) =====
+  {n:"정철",c:"writer",e:["📜","🍶","🏞️"],f:"'관동별곡' 같은 아름다운 가사를 쓴 문학가예요. 호는 송강."},
+  {n:"윤선도",c:"writer",e:["📜","🌊","🎣"],f:"'어부사시사'를 쓴 시인이에요. 보길도에서 자연을 노래했어요. 호는 고산."},
+  {n:"김시습",c:"writer",e:["📚","👻","☁️"],f:"우리나라 최초의 한문소설 '금오신화'를 쓴 학자예요."},
+  {n:"허균",c:"writer",e:["📖","🦹","🌟"],f:"한글 소설 '홍길동전'을 쓴 작가예요. 허난설헌의 동생이에요."},
+  {n:"박인로",c:"writer",e:["📜","🌾","⚔️"],f:"임진왜란에서 활약한 무인이자 가사 문학가예요."},
+
+  // ===== 의병/민중/종교 (9명) =====
+  {n:"임꺽정",c:"resistance",e:["⚔️","🏔️","🦹"],f:"조선 명종 때 활약한 의적이에요. 가난한 사람들을 도왔어요."},
+  {n:"홍경래",c:"resistance",e:["⚔️","✊","🌾"],f:"조선 후기 평안도에서 농민 반란을 이끈 인물이에요."},
+  {n:"전봉준",c:"resistance",e:["🌾","⚔️","🟢"],f:"동학농민운동을 이끈 농민 지도자예요. '녹두장군'이라 불렸어요."},
+  {n:"최제우",c:"resistance",e:["☯️","📖","🌾"],f:"동학을 만든 사람이에요. '사람이 곧 하늘'이라고 가르쳤어요."},
+  {n:"최시형",c:"resistance",e:["☯️","📚","🚶"],f:"최제우의 뒤를 이어 동학을 널리 전한 사람이에요."},
+  {n:"최익현",c:"resistance",e:["👴","⚔️","🇯🇵"],f:"조선 말기 일본에 맞서 싸운 의병장이에요."},
+  {n:"조헌",c:"resistance",e:["📚","⚔️","💀"],f:"임진왜란 때 의병을 이끌고 금산에서 싸우다 전사한 학자예요."},
+  {n:"고경명",c:"resistance",e:["📜","⚔️","🌾"],f:"임진왜란 때 의병장으로 활약한 학자예요."},
+  {n:"신돌석",c:"resistance",e:["⚔️","🐯","⛰️"],f:"조선 말기 평민 의병장이에요. '태백산 호랑이'라 불렸어요."},
+
+  // ===== 개화기 인물 (5명) =====
+  {n:"김옥균",c:"enlightenment",e:["📜","3️⃣","🇯🇵"],f:"갑신정변을 일으킨 개화파 인물이에요."},
+  {n:"서재필",c:"enlightenment",e:["📰","🇺🇸","🔔"],f:"'독립신문'을 만든 사람이에요. 미국에서 의사가 되었어요."},
+  {n:"유길준",c:"enlightenment",e:["📖","🌏","🇺🇸"],f:"'서유견문'을 쓴 개화파 학자예요. 서양 문물을 소개했어요."},
+  {n:"박영효",c:"enlightenment",e:["🇰🇷","🚩","📜"],f:"태극기를 처음 만든 것으로 알려진 개화파 인물이에요."},
+  {n:"김홍집",c:"enlightenment",e:["📜","🤝","🇯🇵"],f:"조선 말기 총리대신을 지낸 인물이에요."}
+];
+
+// ============================================
+// 사운드 시스템 (Web Audio API)
+// ============================================
+const Sound = {
+  ctx: null,
+  enabled: true,
+  init() {
+    if (!this.ctx) {
+      try {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch(e) { this.enabled = false; }
+    }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  play(notes) {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+    let t = this.ctx.currentTime;
+    notes.forEach(note => {
+      const [freq, dur, vol = 0.12, type = 'sine'] = note;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      osc.connect(gain).connect(this.ctx.destination);
+      osc.start(t);
+      osc.stop(t + dur);
+      t += dur;
+    });
+  },
+  click() { this.play([[700, 0.04, 0.06, 'square']]); },
+  pop() { this.play([[900, 0.05, 0.07, 'triangle']]); },
+  correct() {
+    this.play([
+      [523.25, 0.1, 0.12],
+      [659.25, 0.1, 0.12],
+      [783.99, 0.15, 0.14],
+      [1046.5, 0.25, 0.14]
+    ]);
+  },
+  wrong() {
+    this.play([
+      [349.23, 0.15, 0.12, 'sawtooth'],
+      [261.63, 0.3, 0.12, 'sawtooth']
+    ]);
+  },
+  start() {
+    this.play([
+      [392, 0.1, 0.1],
+      [523.25, 0.1, 0.1],
+      [659.25, 0.1, 0.1],
+      [783.99, 0.25, 0.13]
+    ]);
+  },
+  end() {
+    this.play([
+      [523.25, 0.12, 0.12],
+      [659.25, 0.12, 0.12],
+      [783.99, 0.12, 0.12],
+      [1046.5, 0.12, 0.12],
+      [1318.5, 0.4, 0.16]
+    ]);
+  },
+  toggle() {
+    this.enabled = !this.enabled;
+    if (this.enabled) { this.init(); this.click(); }
+    return this.enabled;
+  }
+};
+
+// ============================================
+// 컨페티 (정답 축하용)
+// ============================================
+function spawnConfetti(count) {
+  const colors = ['#C8102E', '#1E4D8B', '#E8A93C', '#2E8B57', '#FF6B9D', '#9C27B0'];
+  const container = document.getElementById('confettiContainer');
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.left = Math.random() * 100 + '%';
+    piece.style.animationDelay = (Math.random() * 0.3) + 's';
+    piece.style.animationDuration = (1.4 + Math.random() * 0.8) + 's';
+    piece.style.transform = `rotate(${Math.random() * 360}deg)`;
+    container.appendChild(piece);
+    setTimeout(() => piece.remove(), 3000);
+  }
+}
+
+// ============================================
+// 게임 로직
+// ============================================
+const state = {
+  pool: [],
+  current: 0,
+  total: 10,
+  score: 0,
+  answered: false
+};
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function getDistractors(question) {
+  const sameCategory = QUESTIONS.filter(q => q.c === question.c && q.n !== question.n);
+  return shuffle(sameCategory).slice(0, 3).map(q => q.n);
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function startGame(count) {
+  Sound.start();
+  state.total = count;
+  state.current = 0;
+  state.score = 0;
+  state.answered = false;
+
+  const picked = shuffle(QUESTIONS).slice(0, count);
+  state.pool = picked.map(q => {
+    const distractors = getDistractors(q);
+    return { ...q, options: shuffle([q.n, ...distractors]) };
+  });
+
+  document.getElementById('totalNum').textContent = count;
+  document.getElementById('finalTotal').textContent = count;
+  showScreen('quizScreen');
+  showQuestion();
+}
+
+function showQuestion() {
+  const q = state.pool[state.current];
+  state.answered = false;
+
+  document.getElementById('currentNum').textContent = state.current + 1;
+  document.getElementById('scoreNum').textContent = state.score;
+  const pct = ((state.current + 1) / state.total) * 100;
+  document.getElementById('progressFill').style.width = pct + '%';
+
+  const emojiEl = document.getElementById('emojis');
+  emojiEl.innerHTML = q.e.map((emoji, i) =>
+    `<span class="emoji-pop" style="animation-delay: ${i * 0.18}s">${emoji}</span>`
+  ).join(' ');
+
+  q.e.forEach((_, i) => {
+    setTimeout(() => Sound.pop(), i * 180 + 50);
+  });
+
+  const optionsEl = document.getElementById('options');
+  optionsEl.innerHTML = '';
+  q.options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'option';
+    btn.textContent = opt;
+    btn.onclick = () => checkAnswer(opt, btn);
+    optionsEl.appendChild(btn);
+  });
+
+  const feedback = document.getElementById('feedback');
+  feedback.classList.remove('show', 'correct', 'wrong');
+  document.getElementById('nextBtn').classList.remove('show');
+}
+
+function checkAnswer(selected, btnEl) {
+  if (state.answered) return;
+  state.answered = true;
+
+  const q = state.pool[state.current];
+  const correct = selected === q.n;
+  const allBtns = document.querySelectorAll('.option');
+
+  allBtns.forEach(btn => {
+    btn.disabled = true;
+    if (btn.textContent === q.n) btn.classList.add('correct');
+    else if (btn === btnEl) btn.classList.add('wrong');
+  });
+
+  if (correct) {
+    state.score++;
+    Sound.correct();
+    spawnConfetti(30);
+    const scoreEl = document.getElementById('scoreNum');
+    scoreEl.textContent = state.score;
+    scoreEl.classList.remove('pop');
+    void scoreEl.offsetWidth;
+    scoreEl.classList.add('pop');
+  } else {
+    Sound.wrong();
+  }
+
+  const feedback = document.getElementById('feedback');
+  feedback.classList.add('show', correct ? 'correct' : 'wrong');
+  feedback.querySelector('.verdict').textContent = correct ? '🎉 정답이에요!' : '😢 아쉬워요!';
+  feedback.querySelector('.detail').innerHTML =
+    `정답은 <span class="answer">${q.n}</span> 이에요.<br />${q.f}`;
+
+  const nextBtn = document.getElementById('nextBtn');
+  nextBtn.textContent = state.current === state.total - 1 ? '결과 보기 🏆' : '다음 문제 ➡️';
+  nextBtn.classList.add('show');
+}
+
+function nextQuestion() {
+  Sound.click();
+  if (state.current >= state.total - 1) {
+    showResult();
+    return;
+  }
+  state.current++;
+  showQuestion();
+}
+
+function showResult() {
+  Sound.end();
+  showScreen('resultScreen');
+
+  document.getElementById('finalScore').textContent = state.score;
+  const ratio = state.score / state.total;
+
+  let trophy, title, grade, starCount;
+  if (ratio === 1) {
+    trophy = '👑'; title = '완벽해요! 역사 박사님!';
+    grade = '모든 문제를 다 맞췄어요! 정말 대단해요!';
+    starCount = 5;
+  } else if (ratio >= 0.8) {
+    trophy = '🏆'; title = '훌륭해요!';
+    grade = '조선시대 인물을 정말 잘 알고 있군요!';
+    starCount = 4;
+  } else if (ratio >= 0.6) {
+    trophy = '🎖️'; title = '잘했어요!';
+    grade = '조금만 더 공부하면 역사 박사님이 될 수 있어요!';
+    starCount = 3;
+  } else if (ratio >= 0.4) {
+    trophy = '🌱'; title = '좋아요!';
+    grade = '조선시대 인물에 대해 더 알아볼까요?';
+    starCount = 2;
+  } else {
+    trophy = '📚'; title = '도전!';
+    grade = '괜찮아요! 다시 도전해서 더 많이 맞춰봐요!';
+    starCount = 1;
+  }
+
+  document.getElementById('trophy').textContent = trophy;
+  document.getElementById('resultTitle').textContent = title;
+  document.getElementById('gradeMsg').textContent = grade;
+
+  const starsEl = document.getElementById('stars');
+  starsEl.innerHTML = '';
+  for (let i = 0; i < 5; i++) {
+    const span = document.createElement('span');
+    span.textContent = i < starCount ? '⭐' : '☆';
+    span.style.animationDelay = (i * 0.15) + 's';
+    if (i < starCount) span.style.color = 'inherit';
+    else span.style.opacity = '0.3';
+    starsEl.appendChild(span);
+  }
+
+  // 최고 기록 갱신
+  const isNew = saveBest(state.total, state.score);
+  document.getElementById('newBest').style.display = isNew ? 'inline-block' : 'none';
+  if (isNew) setTimeout(() => spawnConfetti(60), 300);
+
+  if (ratio >= 0.8) setTimeout(() => spawnConfetti(50), 200);
+
+  updateBestDisplay();
+}
+
+function restart() {
+  Sound.click();
+  showScreen('startScreen');
+}
+
+// ============================================
+// 최고 기록 (localStorage)
+// ============================================
+function getBest(count) {
+  try {
+    return parseInt(localStorage.getItem('yeoksadada_best_' + count) || '0', 10);
+  } catch(e) { return 0; }
+}
+function saveBest(count, score) {
+  try {
+    const prev = getBest(count);
+    if (score > prev) {
+      localStorage.setItem('yeoksadada_best_' + count, score);
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+function updateBestDisplay() {
+  [10, 30, 100].forEach(c => {
+    const el = document.getElementById('best' + c);
+    const best = getBest(c);
+    el.textContent = best > 0 ? `최고: ${best}점` : '최고: -';
+  });
+}
+
+// ============================================
+// 이벤트 바인딩
+// ============================================
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    Sound.click();
+    startGame(parseInt(btn.dataset.count, 10));
+  });
+});
+
+document.getElementById('nextBtn').addEventListener('click', nextQuestion);
+document.getElementById('restartBtn').addEventListener('click', restart);
+
+document.getElementById('soundToggle').addEventListener('click', (e) => {
+  const enabled = Sound.toggle();
+  e.currentTarget.textContent = enabled ? '🔊' : '🔇';
+});
+
+document.getElementById('gameTitle').addEventListener('click', () => {
+  Sound.pop();
+});
+
+// 초기화
+updateBestDisplay();
+</script>
+</body>
+</html>
