@@ -48,6 +48,30 @@
     "tags": ["신작"]
   },
   {
+    "id": "angle-hunter",
+    "name": "각도 사냥",
+    "shortDesc": "양팔 V자로 미션 각도 만들기",
+    "grades": ["5학년"],
+    "units": ["각도"],
+    "scoreType": "점수",
+    "emoji": "📐",
+    "gradient": "from-violet-500 to-indigo-700",
+    "route": "/game/angle-hunter",
+    "tags": ["신작"]
+  },
+  {
+    "id": "shape-draw",
+    "name": "도형 그리기",
+    "shortDesc": "손가락으로 그려서 도형 맞추기",
+    "grades": ["5학년"],
+    "units": ["도형"],
+    "scoreType": "점수",
+    "emoji": "🔺",
+    "gradient": "from-lime-400 to-emerald-600",
+    "route": "/game/shape-draw",
+    "tags": ["신작"]
+  },
+  {
     "id": "mathpoly",
     "name": "수학 땅따먹기",
     "shortDesc": "MATHPOLY 수학 보드게임",
