@@ -162,12 +162,17 @@ export default function BombPassGame({ game }: { game: Game }) {
   }, []);
 
   // ── 새 문제 ────────────────────────────────────────
-  const nextProblem = useCallback((now: number) => {
+  // 새 문제만 — 폭탄 타이머는 안 건드림 (러시안 룰렛: 폭탄은 계속 째깍)
+  const nextProblem = useCallback(() => {
     problemRef.current = generateBombProblem();
     choicesRef.current = makeChoiceRects(problemRef.current.choices);
+    hoverIdxRef.current = -1;
+  }, []);
+
+  // 폭탄 새로 장전 — 폭발 직후 또는 게임 시작 시에만
+  const resetBomb = useCallback((now: number) => {
     bombStartRef.current = now;
     bombDurationRef.current = randomBombTime();
-    hoverIdxRef.current = -1;
   }, []);
 
   // ── 끝내기 ─────────────────────────────────────────
@@ -240,7 +245,8 @@ export default function BombPassGame({ game }: { game: Game }) {
           advanceToNextAlive();
           flashRef.current = { kind: "turn", until: now + 700 };
         }
-        nextProblem(now);
+        // 정답=폭탄 패스. 새 문제만, 폭탄 타이머는 계속 째깍.
+        nextProblem();
       } else {
         comboRef.current = 0;
         playWrong();
@@ -260,9 +266,11 @@ export default function BombPassGame({ game }: { game: Game }) {
       flashRef.current = { kind: "boom", until: now + 700 };
       if (checkGameOver()) return;
       if (modeRef.current === "multi") advanceToNextAlive();
-      nextProblem(now);
+      // 폭발 후 새 폭탄 장전 + 새 문제
+      resetBomb(now);
+      nextProblem();
     },
-    [advanceToNextAlive, checkGameOver, nextProblem]
+    [advanceToNextAlive, checkGameOver, nextProblem, resetBomb]
   );
 
   // ── 그리기 ─────────────────────────────────────────
@@ -461,10 +469,11 @@ export default function BombPassGame({ game }: { game: Game }) {
     setPhase("playing");
     const now = performance.now();
     gameStartRef.current = now;
-    nextProblem(now);
+    resetBomb(now);
+    nextProblem();
     lastTickSoundRef.current = 0;
     rafRef.current = requestAnimationFrame(tick);
-  }, [mode, numPlayers, playerNames, nextProblem, tick]);
+  }, [mode, numPlayers, playerNames, nextProblem, resetBomb, tick]);
 
   const handleStart = () => beginGame();
 
@@ -570,16 +579,22 @@ export default function BombPassGame({ game }: { game: Game }) {
             )}
 
             <ul className="mt-6 space-y-1.5 text-sm text-gray-600">
-              <li>· 폭탄이 <b>언제 터질지 몰라요</b>! 4개 선택지에서 빨리 정답을 <b>클릭</b></li>
+              <li>
+                · 🚨 <b>러시안 룰렛 폭탄!</b> 폭탄은 한 번 시작되면 <b>계속 째깍</b>,
+                언제 터질지 몰라요
+              </li>
+              <li>· 정답을 빨리 클릭해서 다음 사람에게 폭탄을 떠넘기는 게 핵심</li>
               {mode === "solo" ? (
                 <>
                   <li>· 정답 +10점, 콤보 3+면 +5</li>
-                  <li>· 못 풀면 펑! 생명 -1, 생명 0이거나 60초 다 되면 끝</li>
+                  <li>· 폭탄이 터지면 생명 -1, 새 폭탄 장전 → 생명 0이거나 60초면 끝</li>
                 </>
               ) : (
                 <>
-                  <li>· 정답이면 폭탄이 <b>다음 사람</b>에게 패스! (마우스도 옆 사람에게 넘기기)</li>
-                  <li>· 못 풀면 펑! 현재 차례인 사람 생명 -1, 다음 사람으로 폭탄 전달</li>
+                  <li>· 정답이면 폭탄이 <b>다음 사람</b>에게 패스! (마우스도 옆 사람에게)</li>
+                  <li>
+                    · 자기 차례에 폭탄이 터지면 <b>그 사람만</b> 생명 -1, 새 폭탄으로 게임 계속
+                  </li>
                   <li>· 끝까지 생존한 사람이 승리 (또는 60초 후 생명·통과 수 순위)</li>
                 </>
               )}
