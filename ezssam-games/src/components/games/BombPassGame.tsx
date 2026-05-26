@@ -16,9 +16,14 @@ import { generateBombProblem, type BombProblem } from "@/lib/bomb";
 
 const CW = 960;
 const CH = 540;
-const BOMB_SEC = 5;
+const BOMB_MIN_SEC = 3; // 랜덤 폭발 시간 최소
+const BOMB_MAX_SEC = 7; // 랜덤 폭발 시간 최대 (언제 터질지 모르게)
 const GAME_SECONDS = 60;
 const LIVES_START = 3;
+
+function randomBombTime(): number {
+  return BOMB_MIN_SEC + Math.random() * (BOMB_MAX_SEC - BOMB_MIN_SEC);
+}
 
 type Phase = "intro" | "playing" | "result";
 type Mode = "solo" | "multi";
@@ -100,6 +105,7 @@ export default function BombPassGame({ game }: { game: Game }) {
     makeChoiceRects(problemRef.current.choices)
   );
   const bombStartRef = useRef(0);
+  const bombDurationRef = useRef(randomBombTime()); // 이번 라운드 폭발 시간 (숨김)
   const scoreRef = useRef(0);
   const comboRef = useRef(0);
   const maxComboRef = useRef(0);
@@ -160,6 +166,7 @@ export default function BombPassGame({ game }: { game: Game }) {
     problemRef.current = generateBombProblem();
     choicesRef.current = makeChoiceRects(problemRef.current.choices);
     bombStartRef.current = now;
+    bombDurationRef.current = randomBombTime();
     hoverIdxRef.current = -1;
   }, []);
 
@@ -259,13 +266,12 @@ export default function BombPassGame({ game }: { game: Game }) {
   );
 
   // ── 그리기 ─────────────────────────────────────────
-  const draw = useCallback((now: number, bombLeft: number) => {
+  const draw = useCallback((now: number) => {
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
-    const urgent = bombLeft < 2;
     const bg = ctx.createLinearGradient(0, 0, 0, CH);
-    bg.addColorStop(0, urgent ? "#7F1D1D" : "#1E1B4B");
-    bg.addColorStop(1, urgent ? "#450A0A" : "#0F172A");
+    bg.addColorStop(0, "#1E1B4B");
+    bg.addColorStop(1, "#0F172A");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, CW, CH);
 
@@ -295,8 +301,9 @@ export default function BombPassGame({ game }: { game: Game }) {
 
     const cx = CW / 2;
     const cy = CH / 2;
-    const shake = urgent ? Math.sin(now / 40) * 8 : 0;
-    const bombSize = 96;
+    // 폭탄에 살짝 일정한 흔들림 (남은 시간 정보는 노출 X — 언제 터질지 모르게)
+    const shake = Math.sin(now / 180) * 2.5;
+    const bombSize = 110;
     ctx.save();
     ctx.translate(cx + shake, cy);
     ctx.font = `${bombSize}px sans-serif`;
@@ -305,21 +312,10 @@ export default function BombPassGame({ game }: { game: Game }) {
     ctx.fillText("💣", 0, 0);
     ctx.restore();
 
-    const fuseR = bombSize * 0.85;
-    const prog = Math.max(0, bombLeft / BOMB_SEC);
-    ctx.strokeStyle = urgent ? "#FCA5A5" : "#FCD34D";
-    ctx.lineWidth = 8;
-    ctx.lineCap = "round";
-    ctx.shadowColor = urgent ? "#EF4444" : "#F59E0B";
-    ctx.shadowBlur = 18;
-    ctx.beginPath();
-    ctx.arc(cx + shake, cy, fuseR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * prog);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    ctx.fillStyle = urgent ? "#FCA5A5" : "#FCD34D";
-    ctx.font = "bold 28px Inter, sans-serif";
-    ctx.fillText(`${bombLeft.toFixed(1)}초`, cx + shake, cy + bombSize + 14);
+    // 아래에 안내문 (시간 숫자 대신)
+    ctx.fillStyle = "rgba(252,211,77,0.7)";
+    ctx.font = "bold 22px Inter, sans-serif";
+    ctx.fillText("째깍… 째깍…", cx + shake, cy + bombSize * 0.7 + 14);
 
     choicesRef.current.forEach((r, i) => {
       const hovered = hoverIdxRef.current === i;
@@ -360,7 +356,7 @@ export default function BombPassGame({ game }: { game: Game }) {
       const timeLeft = Math.max(0, GAME_SECONDS - survival);
 
       const bombElapsed = (now - bombStartRef.current) / 1000;
-      const bombLeft = Math.max(0, BOMB_SEC - bombElapsed);
+      const bombLeft = Math.max(0, bombDurationRef.current - bombElapsed);
 
       if (
         Math.floor(bombElapsed) !== Math.floor(lastTickSoundRef.current) &&
@@ -374,7 +370,7 @@ export default function BombPassGame({ game }: { game: Game }) {
         explode(now);
       }
 
-      draw(now, bombLeft);
+      draw(now);
 
       const tF = Math.ceil(timeLeft);
       const cur = playersRef.current[currentIdxRef.current];
@@ -574,7 +570,7 @@ export default function BombPassGame({ game }: { game: Game }) {
             )}
 
             <ul className="mt-6 space-y-1.5 text-sm text-gray-600">
-              <li>· 문제마다 <b>5초</b> 안에 4개 선택지 중 정답을 <b>클릭</b></li>
+              <li>· 폭탄이 <b>언제 터질지 몰라요</b>! 4개 선택지에서 빨리 정답을 <b>클릭</b></li>
               {mode === "solo" ? (
                 <>
                   <li>· 정답 +10점, 콤보 3+면 +5</li>
