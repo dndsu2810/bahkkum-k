@@ -26,13 +26,13 @@ import {
 const CW = 960;
 const CH = 540;
 const TRAIL_LIFE_MS = 1000; // 손끝 잔상 1초
-const IDLE_AUTO_SUBMIT_SEC = 1.6; // 손가락 1.6초 멈춤 → 자동 인식
+const IDLE_AUTO_SUBMIT_SEC = 1.4; // 손가락 1.4초 멈춤 → 자동 인식 (좀 더 빠르게)
 const PICK_HOLD_SEC = 0.7; // 후보 위 손가락 0.7초 머무름 → 선택 확정
 const GAME_SECONDS = 60;
 const MIN_STROKE_POINTS = 4;
-const SIGNIFICANT_MOVE_PX = 4;
+const SIGNIFICANT_MOVE_PX = 2.5; // 작은 움직임도 잡도록 더 민감하게
 const FAST_BONUS_SEC = 5; // 5초 안에 풀면 +5 보너스
-const FINGER_LOST_MS = 400; // 손가락 사라지면 0.4초 뒤 stroke 종료
+const FINGER_LOST_MS = 700; // 손가락 일시 끊겨도 stroke 안 끊기게 (인식 불안정 대비)
 
 const WASM_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";

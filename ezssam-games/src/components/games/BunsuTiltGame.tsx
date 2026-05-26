@@ -20,13 +20,14 @@ import ResultScreen from "@/components/ResultScreen";
 
 const WASM_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
+// `_full` 모델: 정확도 향상
 const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
 
 const MINI_W = 320;
 const MINI_H = 180;
-const LEFT_ZONE = 0.42; // 화면 표시 기준 코 x < 0.42 → 왼쪽
-const RIGHT_ZONE = 0.58;
+const LEFT_ZONE = 0.46; // 화면 표시 기준 코 x < 0.46 → 왼쪽 (살짝만 기울여도 인식)
+const RIGHT_ZONE = 0.54;
 const HOLD_SEC = 0.5; // 그쪽에 0.5초 머물러야 인정
 const GRACE_SEC = 0.5; // 카운트다운 직후 0.5초 판정 보류
 const MAX_LIVES = 3;

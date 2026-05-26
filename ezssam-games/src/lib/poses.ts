@@ -38,14 +38,14 @@ export function computeFeatures(lm: LM[]): Features | null {
   const SW = Math.abs(lsh.x - rsh.x) || 0.001;
   const TH = Math.abs(hipY - shoulderY) || 0.001;
 
-  // 관용도 완화 (이전 ±35도 수준 → ±50도 수준 / 손 위치 15% → 25%)
+  // 관용도 추가 완화 (실제 사용자 피드백 반영: 동작 인식이 잘 안 됨 → 더 너그럽게)
   const classify = (w: LM, hip: LM): ArmPos => {
-    if (w.y < shoulderY - 0.28 * TH) return "up";
-    if (w.y > hipY - 0.05 * TH) {
-      if (Math.abs(w.x - hip.x) < 0.6 * SW) return "hip";
+    if (w.y < shoulderY - 0.18 * TH) return "up"; // 손목이 어깨보다 살짝만 위여도 '위'
+    if (w.y > hipY - 0.02 * TH) {
+      if (Math.abs(w.x - hip.x) < 0.7 * SW) return "hip";
       return "down";
     }
-    if (Math.abs(w.x - centerX) < 0.55 * SW) return "chest";
+    if (Math.abs(w.x - centerX) < 0.65 * SW) return "chest";
     return "side";
   };
 
@@ -59,10 +59,10 @@ export function computeFeatures(lm: LM[]): Features | null {
   arms[classify(lw, lhip)]++;
   arms[classify(rw, rhip)]++;
 
-  // 관용도 완화: 더 잘 잡히게
-  const wristsTogether = Math.abs(lw.x - rw.x) < 0.7 * SW;
+  // 관용도 추가 완화
+  const wristsTogether = Math.abs(lw.x - rw.x) < 0.8 * SW;
   const spreadWide =
-    Math.abs(lw.x - centerX) > 0.75 * SW && Math.abs(rw.x - centerX) > 0.75 * SW;
+    Math.abs(lw.x - centerX) > 0.65 * SW && Math.abs(rw.x - centerX) > 0.65 * SW;
 
   let kneeUp: "left" | "right" | null = null;
   const lkn = lm[25];

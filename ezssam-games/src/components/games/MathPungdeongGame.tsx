@@ -23,8 +23,9 @@ const CW = 960;
 const CH = 540;
 const WASM_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
+// `_full` 모델: 정확도 향상 (lite보다 다소 무거우나 인식률 ↑)
 const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
 
 type Phase =
   | "intro"
@@ -327,6 +328,16 @@ export default function MathPungdeongGame({ game }: { game: Game }) {
         const pass = round.golden
           ? true
           : matchedInWindowRef.current || matchedNow;
+        // 디버그: 판정 시점 정보 콘솔 출력 (인식 상태 진단용)
+        const detectedNow = findMatchingPose(f);
+        console.log(
+          `[풍덩 판정] 목표=${target.name}(id:${target.id}) | ` +
+            `윈도우매칭=${matchedInWindowRef.current} | ` +
+            `도착매칭=${matchedNow} | ` +
+            `현재 인식=${detectedNow?.name ?? "—"} | ` +
+            `features=`,
+          f
+        );
         if (pass) {
           passedRef.current += 1;
           comboRef.current += 1;
