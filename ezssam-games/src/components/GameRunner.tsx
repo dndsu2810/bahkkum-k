@@ -43,6 +43,10 @@ const REAL_GAMES: Record<string, ComponentType<{ game: Game }>> = {
     ssr: false,
     loading: GameLoading,
   }),
+  "bomb-pass": dynamic(() => import("./games/BombPassGame"), {
+    ssr: false,
+    loading: GameLoading,
+  }),
 };
 
 export default function GameRunner({ game }: { game: Game }) {

@@ -21,6 +21,7 @@ import {
   type Problem,
   type Stroke,
 } from "@/lib/laser";
+import { isPinching, type HandLM } from "@/lib/hands";
 
 // ── 상수 ──────────────────────────────────────────────
 const CW = 960;
@@ -82,6 +83,7 @@ export default function LaserMathGame({ game }: { game: Game }) {
   const fingerPosRef = useRef<{ x: number; y: number } | null>(null);
   const lastFingerSeenRef = useRef(0);
   const lastSignificantMoveRef = useRef(0);
+  const penDownRef = useRef(false); // 핀치 = 펜 다운(그리기), 아니면 펜 업(이동만)
 
   // 후보 + 호버
   const candidatesRef = useRef<CandidateRect[]>([]);
@@ -279,20 +281,30 @@ export default function LaserMathGame({ game }: { game: Game }) {
       ctx.shadowBlur = 0;
     }
 
-    // 손끝 레이저 점
+    // 손끝 레이저 점 (펜 다운: 채움+큰 글로우 / 펜 업: 외곽선만)
     if (fingerPosRef.current) {
       const fp = fingerPosRef.current;
+      const isDown = penDownRef.current;
       ctx.shadowColor = LASER_GLOW;
-      ctx.shadowBlur = 30;
-      ctx.fillStyle = "rgba(93,173,226,0.5)";
+      ctx.shadowBlur = isDown ? 30 : 10;
+      ctx.fillStyle = isDown ? "rgba(93,173,226,0.5)" : "rgba(93,173,226,0.2)";
       ctx.beginPath();
-      ctx.arc(fp.x, fp.y, 22, 0, Math.PI * 2);
+      ctx.arc(fp.x, fp.y, isDown ? 22 : 16, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
-      ctx.fillStyle = LASER_COLOR;
-      ctx.beginPath();
-      ctx.arc(fp.x, fp.y, 9, 0, Math.PI * 2);
-      ctx.fill();
+      if (isDown) {
+        ctx.fillStyle = LASER_COLOR;
+        ctx.beginPath();
+        ctx.arc(fp.x, fp.y, 9, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // 펜 업: 빈 원 (외곽선)
+        ctx.strokeStyle = LASER_COLOR;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(fp.x, fp.y, 9, 0, Math.PI * 2);
+        ctx.stroke();
+      }
 
       // 인식 임박 표시 (1.6초 카운트다운 링, 후보가 없을 때만)
       if (candidatesRef.current.length === 0) {
@@ -320,7 +332,9 @@ export default function LaserMathGame({ game }: { game: Game }) {
     ctx.fillText(
       candidatesRef.current.length > 0
         ? "맞는 숫자에 손가락을 0.7초 머무르세요"
-        : "공중에 손가락으로 답을 그리세요 (1.6초 멈추면 인식)",
+        : penDownRef.current
+          ? "✏️ 그리는 중… (엄지+검지 떼면 펜이 떨어져요)"
+          : "✋ 이동 중 — 엄지와 검지를 모아 펜을 잡으세요",
       CW / 2,
       100
     );
@@ -409,7 +423,7 @@ export default function LaserMathGame({ game }: { game: Game }) {
       const survival = (now - gameStartRef.current) / 1000;
       const timeLeft = Math.max(0, GAME_SECONDS - survival);
 
-      // 손 인식
+      // 손 인식 + 핀치 상태
       const video = videoRef.current;
       const lm = landmarkerRef.current;
       let fingerNow: { x: number; y: number } | null = null;
@@ -419,15 +433,16 @@ export default function LaserMathGame({ game }: { game: Game }) {
           try {
             const res = lm.detectForVideo(video, now);
             const hand = res.landmarks?.[0];
-            const tip = hand?.[8];
-            if (tip) {
-              fingerNow = { x: (1 - tip.x) * CW, y: tip.y * CH };
+            if (hand && hand[8]) {
+              fingerNow = { x: (1 - hand[8].x) * CW, y: hand[8].y * CH };
+              penDownRef.current = isPinching(hand as HandLM[]);
+            } else {
+              penDownRef.current = false;
             }
           } catch {
             // 무시
           }
         } else if (fingerPosRef.current) {
-          // 이번 프레임 새 인식 결과 없음: 직전 위치 유지
           fingerNow = fingerPosRef.current;
         }
       }
@@ -437,9 +452,11 @@ export default function LaserMathGame({ game }: { game: Game }) {
         const prev = fingerPosRef.current;
         fingerPosRef.current = fingerNow;
         lastFingerSeenRef.current = now;
-        trailRef.current.push({ x: fingerNow.x, y: fingerNow.y, t: now });
+        // 잔상은 펜 다운일 때만 (이동 중일 땐 안 남기기)
+        if (penDownRef.current && candidatesRef.current.length === 0)
+          trailRef.current.push({ x: fingerNow.x, y: fingerNow.y, t: now });
 
-        // 후보가 떠 있으면 호버 처리 (그리기 안 함)
+        // 후보가 떠 있으면 호버 처리 (그리기 안 함, 핀치 불필요)
         if (candidatesRef.current.length > 0) {
           let hit = -1;
           candidatesRef.current.forEach((r, i) => {
@@ -481,18 +498,29 @@ export default function LaserMathGame({ game }: { game: Game }) {
             }
           }
         } else {
-          // 그리기 모드
-          const moveDist = prev
-            ? Math.hypot(fingerNow.x - prev.x, fingerNow.y - prev.y)
-            : 0;
-          if (!currentStrokeRef.current) {
-            currentStrokeRef.current = [{ x: fingerNow.x, y: fingerNow.y }];
-            lastSignificantMoveRef.current = now;
-          } else if (moveDist >= SIGNIFICANT_MOVE_PX) {
-            currentStrokeRef.current.push({ x: fingerNow.x, y: fingerNow.y });
-            lastSignificantMoveRef.current = now;
+          // 그리기 모드 (핀치할 때만 그림)
+          if (penDownRef.current) {
+            const moveDist = prev
+              ? Math.hypot(fingerNow.x - prev.x, fingerNow.y - prev.y)
+              : 0;
+            if (!currentStrokeRef.current) {
+              currentStrokeRef.current = [{ x: fingerNow.x, y: fingerNow.y }];
+              lastSignificantMoveRef.current = now;
+            } else if (moveDist >= SIGNIFICANT_MOVE_PX) {
+              currentStrokeRef.current.push({ x: fingerNow.x, y: fingerNow.y });
+              lastSignificantMoveRef.current = now;
+            }
+          } else {
+            // 펜 업: 현재 stroke 종료 → 다음 핀치 때 새 stroke 시작
+            if (
+              currentStrokeRef.current &&
+              currentStrokeRef.current.length >= 2
+            ) {
+              strokesRef.current.push(currentStrokeRef.current);
+            }
+            currentStrokeRef.current = null;
           }
-          // 멈춤 누적 → 자동 인식
+          // 멈춤 누적 → 자동 인식 (펜 업 + 충분한 점 있으면 카운트다운)
           const totalPts =
             strokesRef.current.reduce((a, s) => a + s.length, 0) +
             (currentStrokeRef.current?.length ?? 0);
@@ -670,8 +698,11 @@ export default function LaserMathGame({ game }: { game: Game }) {
 
             <ul className="mt-6 space-y-1.5 text-sm text-gray-600">
               <li>· 60초 동안 한 자리 답 문제를 풀어요 (구구단·나눗셈)</li>
-              <li>· 검지 손가락을 들고 공중에 답을 크게 그려요</li>
-              <li>· 1.6초 멈추면 자동 인식 → 후보 3개 중 맞는 걸 손가락으로 고르기</li>
+              <li>
+                · <b>엄지 + 검지를 모아 펜을 잡듯</b> 공중에 답을 그려요.
+                떼면 펜이 떨어져 이동만 돼요.
+              </li>
+              <li>· 1.4초 멈추면 자동 인식 → 후보 3개 중 맞는 걸 손가락으로 고르기</li>
               <li>· 정답 +10점, 콤보 3+면 +5, 5초 안 풀면 +5 보너스</li>
             </ul>
 

@@ -72,6 +72,18 @@
     "tags": ["신작"]
   },
   {
+    "id": "bomb-pass",
+    "name": "수학 폭탄 돌리기",
+    "shortDesc": "터지기 전에 답 골라 폭탄을 넘기기",
+    "grades": ["5학년", "6학년"],
+    "units": ["덧셈·뺄셈", "곱셈·나눗셈"],
+    "scoreType": "점수",
+    "emoji": "💣",
+    "gradient": "from-red-500 to-orange-600",
+    "route": "/game/bomb-pass",
+    "tags": ["신작", "인기"]
+  },
+  {
     "id": "mathpoly",
     "name": "수학 땅따먹기",
     "shortDesc": "MATHPOLY 수학 보드게임",
@@ -108,6 +120,19 @@
     "gradient": "from-yellow-400 to-amber-600",
     "route": "https://dndsu2810.github.io/bahkkum-k/%EB%98%A5-%ED%94%BC%ED%95%98%EA%B8%B0-%EA%B2%8C%EC%9E%84/",
     "tags": ["미니게임"],
+    "external": true
+  },
+  {
+    "id": "yeoksadada",
+    "name": "역사다다",
+    "shortDesc": "이모지 힌트로 조선시대 인물 맞히기",
+    "grades": [],
+    "units": ["역사", "조선"],
+    "scoreType": "점수",
+    "emoji": "👑",
+    "gradient": "from-red-500 to-amber-500",
+    "route": "https://dndsu2810.github.io/bahkkum-k/%EC%97%AD%EC%82%AC%EB%8B%A4%EB%8B%A4/",
+    "tags": ["미니게임", "신작"],
     "external": true
   }
 ]

@@ -13,24 +13,14 @@ import {
   setMuted as setSoundMuted,
 } from "@/lib/sound";
 import ResultScreen from "@/components/ResultScreen";
-import type { Stroke } from "@/lib/laser";
-import {
-  classifyShape,
-  pickMission,
-  type ShapeLabel,
-  type ShapeMission,
-} from "@/lib/shapeRec";
-import { isPinching, type HandLM } from "@/lib/hands";
+import { generateBombProblem, type BombProblem } from "@/lib/bomb";
 
 const CW = 960;
 const CH = 540;
-const TRAIL_LIFE_MS = 1000;
-const IDLE_AUTO_SUBMIT_SEC = 1.4;
+const BOMB_SEC = 5; // 한 문제당 시간
+const PICK_HOLD_SEC = 0.4;
 const GAME_SECONDS = 60;
-const MIN_POINTS = 12;
-const SIGNIFICANT_MOVE_PX = 2.5;
-const FINGER_LOST_MS = 700;
-const JUDGE_DELAY_MS = 1100; // 인식 결과 표시 후 다음 미션까지
+const LIVES_START = 3;
 
 const WASM_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
@@ -38,9 +28,65 @@ const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
 
 type Phase = "intro" | "setup" | "playing" | "result" | "error";
-type TimedPoint = { x: number; y: number; t: number };
 
-export default function ShapeDrawGame({ game }: { game: Game }) {
+type ChoiceRect = {
+  value: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+const CHOICE_W = 180;
+const CHOICE_H = 130;
+const CHOICE_PAD = 24;
+
+// 4 모서리 위치
+function makeChoiceRects(values: number[]): ChoiceRect[] {
+  // 위쪽 두 개는 문제 영역 아래, 아래쪽 두 개는 캔버스 하단
+  const topY = 140;
+  const botY = CH - CHOICE_H - CHOICE_PAD;
+  return [
+    { value: values[0], x: CHOICE_PAD, y: topY, w: CHOICE_W, h: CHOICE_H },
+    {
+      value: values[1],
+      x: CW - CHOICE_W - CHOICE_PAD,
+      y: topY,
+      w: CHOICE_W,
+      h: CHOICE_H,
+    },
+    { value: values[2], x: CHOICE_PAD, y: botY, w: CHOICE_W, h: CHOICE_H },
+    {
+      value: values[3],
+      x: CW - CHOICE_W - CHOICE_PAD,
+      y: botY,
+      w: CHOICE_W,
+      h: CHOICE_H,
+    },
+  ];
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+}
+
+export default function BombPassGame({ game }: { game: Game }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -51,41 +97,33 @@ export default function ShapeDrawGame({ game }: { game: Game }) {
 
   // 게임 상태
   const gameStartRef = useRef(0);
-  const missionRef = useRef<ShapeMission>(pickMission());
-  const missionStartRef = useRef(0);
+  const problemRef = useRef<BombProblem>(generateBombProblem());
+  const choicesRef = useRef<ChoiceRect[]>(
+    makeChoiceRects(problemRef.current.choices)
+  );
+  const bombStartRef = useRef(0);
+  const livesRef = useRef(LIVES_START);
   const scoreRef = useRef(0);
   const comboRef = useRef(0);
   const maxComboRef = useRef(0);
   const passedRef = useRef(0);
+
+  const fingerPosRef = useRef<{ x: number; y: number } | null>(null);
+  const hoverIdxRef = useRef<number>(-1);
+  const hoverStartRef = useRef<number>(0);
   const lastVideoTimeRef = useRef(-1);
 
-  // 그리기 상태
-  const trailRef = useRef<TimedPoint[]>([]);
-  const strokesRef = useRef<Stroke[]>([]);
-  const currentStrokeRef = useRef<Stroke | null>(null);
-  const fingerPosRef = useRef<{ x: number; y: number } | null>(null);
-  const lastFingerSeenRef = useRef(0);
-  const lastSignificantMoveRef = useRef(0);
-  const penDownRef = useRef(false); // 핀치 = 펜 다운
-
-  // 결과
-  const judgeRef = useRef<{
-    result: { label: ShapeLabel; correct: boolean };
-    until: number;
-  } | null>(null);
+  const flashRef = useRef<{ kind: "boom" | "correct" | "wrong"; until: number } | null>(null);
+  const lastTickSoundRef = useRef(0);
 
   const [phase, setPhase] = useState<Phase>("intro");
   const [muted, setMuted] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [view, setView] = useState({
-    timeLeft: GAME_SECONDS,
     score: 0,
     combo: 0,
-    missionText: "",
-    missionHint: "",
-    judgeLabel: "" as string,
-    judgeCorrect: false,
-    judging: false,
+    lives: LIVES_START,
+    timeLeft: GAME_SECONDS,
     detected: true,
   });
   const [result, setResult] = useState<{
@@ -96,15 +134,13 @@ export default function ShapeDrawGame({ game }: { game: Game }) {
   } | null>(null);
   const viewKeyRef = useRef("");
 
-  // ── 새 미션 ────────────────────────────────────────
-  const startMission = useCallback((now: number, prev?: ShapeLabel) => {
-    missionRef.current = pickMission(prev);
-    missionStartRef.current = now;
-    strokesRef.current = [];
-    currentStrokeRef.current = null;
-    trailRef.current = [];
-    judgeRef.current = null;
-    lastSignificantMoveRef.current = now;
+  // ── 새 문제 ────────────────────────────────────────
+  const nextProblem = useCallback((now: number) => {
+    problemRef.current = generateBombProblem();
+    choicesRef.current = makeChoiceRects(problemRef.current.choices);
+    bombStartRef.current = now;
+    hoverIdxRef.current = -1;
+    hoverStartRef.current = 0;
   }, []);
 
   // ── 끝내기 ─────────────────────────────────────────
@@ -127,24 +163,10 @@ export default function ShapeDrawGame({ game }: { game: Game }) {
     setPhase("result");
   }, [game.id]);
 
-  // ── 인식 + 판정 ─────────────────────────────────────
-  const triggerJudge = useCallback(
-    (now: number) => {
-      // current stroke 닫기
-      if (currentStrokeRef.current && currentStrokeRef.current.length >= 2) {
-        strokesRef.current.push(currentStrokeRef.current);
-        currentStrokeRef.current = null;
-      }
-      const res = classifyShape(strokesRef.current);
-      const target = missionRef.current.label;
-      const correct = res.label === target;
-      console.log(
-        `[도형] 목표=${target} | 인식=${res.label} | corners=${res.corners} closed=${res.closed} star=${res.starScore.toFixed(2)} circ=${res.circScore.toFixed(2)} → ${correct ? "정답" : "오답"}`
-      );
-      judgeRef.current = {
-        result: { label: res.label, correct },
-        until: now + JUDGE_DELAY_MS,
-      };
+  // ── 정답 제출 ───────────────────────────────────────
+  const submit = useCallback(
+    (value: number, now: number) => {
+      const correct = value === problemRef.current.answer;
       if (correct) {
         let gain = 10;
         if (comboRef.current >= 3) gain += 5;
@@ -154,142 +176,177 @@ export default function ShapeDrawGame({ game }: { game: Game }) {
         maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
         if (comboRef.current === 3 || comboRef.current % 5 === 0) playCombo();
         else playCorrect();
+        flashRef.current = { kind: "correct", until: now + 350 };
+        nextProblem(now);
       } else {
         comboRef.current = 0;
         playWrong();
+        flashRef.current = { kind: "wrong", until: now + 350 };
+        // 오답: 호버 리셋만, 폭탄은 계속 카운트다운
+        hoverIdxRef.current = -1;
+        hoverStartRef.current = 0;
+      }
+    },
+    [nextProblem]
+  );
+
+  // ── 폭탄 폭발 ───────────────────────────────────────
+  const explode = useCallback(
+    (now: number) => {
+      livesRef.current -= 1;
+      comboRef.current = 0;
+      playWrong();
+      flashRef.current = { kind: "boom", until: now + 600 };
+      if (livesRef.current <= 0) {
+        endGame();
+        return;
+      }
+      nextProblem(now);
+    },
+    [endGame, nextProblem]
+  );
+
+  // ── 그리기 ─────────────────────────────────────────
+  const draw = useCallback(
+    (now: number, bombLeft: number) => {
+      const ctx = canvasRef.current?.getContext("2d");
+      if (!ctx) return;
+
+      const urgent = bombLeft < 2;
+      // 배경 (시간 짧을수록 빨갛게)
+      const bg = ctx.createLinearGradient(0, 0, 0, CH);
+      bg.addColorStop(0, urgent ? "#7F1D1D" : "#1E1B4B");
+      bg.addColorStop(1, urgent ? "#450A0A" : "#0F172A");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, CW, CH);
+
+      // 플래시
+      const fl = flashRef.current;
+      if (fl && now < fl.until) {
+        if (fl.kind === "boom")
+          ctx.fillStyle = "rgba(239,68,68,0.35)";
+        else if (fl.kind === "correct")
+          ctx.fillStyle = "rgba(16,185,129,0.25)";
+        else ctx.fillStyle = "rgba(239,68,68,0.18)";
+        ctx.fillRect(0, 0, CW, CH);
+      }
+
+      // 문제 (상단 중앙)
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "bold 60px Inter, Pretendard, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${problemRef.current.text} = ?`, CW / 2, 74);
+
+      // 폭탄 (가운데, 흔들림 + 도화선)
+      const cx = CW / 2;
+      const cy = CH / 2;
+      const shake = urgent
+        ? (Math.sin(now / 40) * (urgent ? 8 : 0))
+        : 0;
+      const bombSize = 96;
+      ctx.save();
+      ctx.translate(cx + shake, cy);
+      ctx.font = `${bombSize}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("💣", 0, 0);
+      ctx.restore();
+
+      // 도화선 (남은 시간 호)
+      const fuseR = bombSize * 0.85;
+      const prog = Math.max(0, bombLeft / BOMB_SEC);
+      ctx.strokeStyle = urgent ? "#FCA5A5" : "#FCD34D";
+      ctx.lineWidth = 8;
+      ctx.lineCap = "round";
+      ctx.shadowColor = urgent ? "#EF4444" : "#F59E0B";
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.arc(
+        cx + shake,
+        cy,
+        fuseR,
+        -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * prog
+      );
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // 남은 초
+      ctx.fillStyle = urgent ? "#FCA5A5" : "#FCD34D";
+      ctx.font = "bold 28px Inter, sans-serif";
+      ctx.fillText(`${bombLeft.toFixed(1)}초`, cx + shake, cy + bombSize + 14);
+
+      // 4개 선택지
+      choicesRef.current.forEach((r, i) => {
+        const hovered = hoverIdxRef.current === i;
+        const hoverProg = hovered
+          ? Math.min(1, (now - hoverStartRef.current) / 1000 / PICK_HOLD_SEC)
+          : 0;
+        // 카드 배경
+        ctx.fillStyle = hovered ? "rgba(252,211,77,0.35)" : "rgba(255,255,255,0.10)";
+        ctx.strokeStyle = hovered ? "#FCD34D" : "rgba(255,255,255,0.4)";
+        ctx.lineWidth = 3;
+        roundRect(ctx, r.x, r.y, r.w, r.h, 18);
+        ctx.fill();
+        ctx.stroke();
+        // 숫자
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = "bold 64px Inter, Pretendard, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(r.value), r.x + r.w / 2, r.y + r.h / 2);
+        // 호버 진행 링
+        if (hoverProg > 0) {
+          ctx.strokeStyle = "#10B981";
+          ctx.lineWidth = 5;
+          ctx.beginPath();
+          ctx.arc(
+            r.x + r.w / 2,
+            r.y + r.h / 2,
+            r.w / 2 - 6,
+            -Math.PI / 2,
+            -Math.PI / 2 + Math.PI * 2 * hoverProg
+          );
+          ctx.stroke();
+        }
+      });
+
+      // 손끝
+      if (fingerPosRef.current) {
+        const fp = fingerPosRef.current;
+        ctx.shadowColor = "#FCD34D";
+        ctx.shadowBlur = 22;
+        ctx.fillStyle = "rgba(252,211,77,0.55)";
+        ctx.beginPath();
+        ctx.arc(fp.x, fp.y, 22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#FFFFFF";
+        ctx.beginPath();
+        ctx.arc(fp.x, fp.y, 10, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // BOOM 텍스트
+      if (fl && fl.kind === "boom" && now < fl.until) {
+        ctx.fillStyle = "#FCA5A5";
+        ctx.font = "bold 96px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("쾅!", CW / 2, CH / 2 - 30);
       }
     },
     []
   );
 
-  // ── 캔버스 그리기 ───────────────────────────────────
-  const draw = useCallback((now: number) => {
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    // 배경 (어두운 청록)
-    const bg = ctx.createLinearGradient(0, 0, 0, CH);
-    bg.addColorStop(0, "#064E3B");
-    bg.addColorStop(1, "#022C22");
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, CW, CH);
-
-    // 정답/오답 플래시
-    const j = judgeRef.current;
-    if (j && now < j.until) {
-      ctx.fillStyle = j.result.correct
-        ? "rgba(16,185,129,0.20)"
-        : "rgba(239,68,68,0.18)";
-      ctx.fillRect(0, 0, CW, CH);
-    }
-
-    // 그린 stroke들 (형광 연두)
-    ctx.strokeStyle = "rgba(190,242,100,0.95)";
-    ctx.lineWidth = 5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.shadowColor = "#84CC16";
-    ctx.shadowBlur = 14;
-    for (const s of strokesRef.current) {
-      if (s.length < 2) continue;
-      ctx.beginPath();
-      ctx.moveTo(s[0].x, s[0].y);
-      for (let i = 1; i < s.length; i++) ctx.lineTo(s[i].x, s[i].y);
-      ctx.stroke();
-    }
-    if (currentStrokeRef.current && currentStrokeRef.current.length >= 2) {
-      const s = currentStrokeRef.current;
-      ctx.beginPath();
-      ctx.moveTo(s[0].x, s[0].y);
-      for (let i = 1; i < s.length; i++) ctx.lineTo(s[i].x, s[i].y);
-      ctx.stroke();
-    }
-    ctx.shadowBlur = 0;
-
-    // 손끝 잔상
-    for (let i = 1; i < trailRef.current.length; i++) {
-      const a = trailRef.current[i - 1];
-      const b = trailRef.current[i];
-      const age = now - b.t;
-      if (age > TRAIL_LIFE_MS) continue;
-      const alpha = 1 - age / TRAIL_LIFE_MS;
-      ctx.strokeStyle = `rgba(190,242,100,${alpha * 0.6})`;
-      ctx.lineWidth = 3;
-      ctx.shadowColor = "#84CC16";
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-
-    // 손끝 점 (펜 다운: 채움 / 펜 업: 외곽선)
-    if (fingerPosRef.current) {
-      const fp = fingerPosRef.current;
-      const isDown = penDownRef.current;
-      ctx.fillStyle = isDown ? "rgba(190,242,100,0.55)" : "rgba(190,242,100,0.18)";
-      ctx.beginPath();
-      ctx.arc(fp.x, fp.y, isDown ? 20 : 14, 0, Math.PI * 2);
-      ctx.fill();
-      if (isDown) {
-        ctx.fillStyle = "#ECFCCB";
-        ctx.beginPath();
-        ctx.arc(fp.x, fp.y, 8, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.strokeStyle = "#ECFCCB";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(fp.x, fp.y, 8, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      // 자동 인식 임박 링
-      if (!judgeRef.current) {
-        const idle = (now - lastSignificantMoveRef.current) / 1000;
-        const totalPts =
-          strokesRef.current.reduce((a, s) => a + s.length, 0) +
-          (currentStrokeRef.current?.length ?? 0);
-        if (idle > 0.4 && totalPts >= MIN_POINTS) {
-          const prog = Math.min(1, idle / IDLE_AUTO_SUBMIT_SEC);
-          ctx.strokeStyle = "rgba(236,252,203,0.85)";
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.arc(fp.x, fp.y, 32, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * prog);
-          ctx.stroke();
-        }
-      }
-    }
-
-    // 미션 텍스트 (상단)
-    ctx.fillStyle = "rgba(255,255,255,0.95)";
-    ctx.font = "bold 44px Inter, Pretendard, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(missionRef.current.text, CW / 2, 50);
-    ctx.font = "16px Pretendard, sans-serif";
-    ctx.fillStyle = "rgba(255,255,255,0.55)";
-    ctx.fillText(`힌트: ${missionRef.current.hint}`, CW / 2, 84);
-
-    // 결과 표시
-    if (j && now < j.until) {
-      const text = j.result.correct
-        ? `정답! (${j.result.label})`
-        : `${j.result.label}으로 보였어요`;
-      ctx.fillStyle = j.result.correct ? "#10B981" : "#FCA5A5";
-      ctx.font = "bold 56px Inter, Pretendard, sans-serif";
-      ctx.fillText(text, CW / 2, CH / 2);
-    }
-  }, []);
-
-  // ── 메인 루프 ───────────────────────────────────────
+  // ── 루프 ────────────────────────────────────────────
   const tick = useCallback(
     (now: number) => {
       if (!runningRef.current) return;
       const survival = (now - gameStartRef.current) / 1000;
       const timeLeft = Math.max(0, GAME_SECONDS - survival);
 
-      // 손 인식 + 핀치 상태
+      // 손 인식
       const video = videoRef.current;
       const lm = landmarkerRef.current;
       let fingerNow: { x: number; y: number } | null = null;
@@ -299,12 +356,8 @@ export default function ShapeDrawGame({ game }: { game: Game }) {
           try {
             const res = lm.detectForVideo(video, now);
             const hand = res.landmarks?.[0];
-            if (hand && hand[8]) {
-              fingerNow = { x: (1 - hand[8].x) * CW, y: hand[8].y * CH };
-              penDownRef.current = isPinching(hand as HandLM[]);
-            } else {
-              penDownRef.current = false;
-            }
+            const tip = hand?.[8];
+            if (tip) fingerNow = { x: (1 - tip.x) * CW, y: tip.y * CH };
           } catch {
             // 무시
           }
@@ -312,90 +365,58 @@ export default function ShapeDrawGame({ game }: { game: Game }) {
           fingerNow = fingerPosRef.current;
         }
       }
+      if (fingerNow) fingerPosRef.current = fingerNow;
 
-      // 판정 표시 중이면 새 미션으로 전환
-      if (judgeRef.current && now >= judgeRef.current.until) {
-        const prev = missionRef.current.label;
-        startMission(now, prev);
+      // 폭탄 시계
+      const bombElapsed = (now - bombStartRef.current) / 1000;
+      const bombLeft = Math.max(0, BOMB_SEC - bombElapsed);
+
+      // 째깍 사운드 (1초마다)
+      if (Math.floor(bombElapsed) !== Math.floor(lastTickSoundRef.current) && bombElapsed > 0.2) {
+        // playBeep는 짧은 비프 → 째깍 느낌
+        if (!muted) playBeep();
       }
+      lastTickSoundRef.current = bombElapsed;
 
-      if (fingerNow) {
-        const prev = fingerPosRef.current;
-        fingerPosRef.current = fingerNow;
-        lastFingerSeenRef.current = now;
-        // 잔상은 핀치 시에만 (이동만 할 땐 안 남기기)
-        if (penDownRef.current && !judgeRef.current)
-          trailRef.current.push({ x: fingerNow.x, y: fingerNow.y, t: now });
-
-        // 판정 중이 아니면 그리기 (핀치할 때만)
-        if (!judgeRef.current) {
-          if (penDownRef.current) {
-            const moveDist = prev
-              ? Math.hypot(fingerNow.x - prev.x, fingerNow.y - prev.y)
-              : 0;
-            if (!currentStrokeRef.current) {
-              currentStrokeRef.current = [{ x: fingerNow.x, y: fingerNow.y }];
-              lastSignificantMoveRef.current = now;
-            } else if (moveDist >= SIGNIFICANT_MOVE_PX) {
-              currentStrokeRef.current.push({ x: fingerNow.x, y: fingerNow.y });
-              lastSignificantMoveRef.current = now;
-            }
-          } else {
-            // 펜 업: 현재 stroke 종료
-            if (
-              currentStrokeRef.current &&
-              currentStrokeRef.current.length >= 2
-            ) {
-              strokesRef.current.push(currentStrokeRef.current);
-            }
-            currentStrokeRef.current = null;
-          }
-          const totalPts =
-            strokesRef.current.reduce((a, s) => a + s.length, 0) +
-            (currentStrokeRef.current?.length ?? 0);
+      // 폭탄 폭발
+      if (bombLeft <= 0 && (!flashRef.current || now >= flashRef.current.until)) {
+        explode(now);
+      } else if (fingerNow) {
+        // 호버 처리
+        let hit = -1;
+        choicesRef.current.forEach((r, i) => {
           if (
-            totalPts >= MIN_POINTS &&
-            (now - lastSignificantMoveRef.current) / 1000 >= IDLE_AUTO_SUBMIT_SEC
-          ) {
-            triggerJudge(now);
+            fingerNow!.x >= r.x &&
+            fingerNow!.x <= r.x + r.w &&
+            fingerNow!.y >= r.y &&
+            fingerNow!.y <= r.y + r.h
+          )
+            hit = i;
+        });
+        if (hit !== hoverIdxRef.current) {
+          hoverIdxRef.current = hit;
+          hoverStartRef.current = now;
+        } else if (hit !== -1) {
+          const held = (now - hoverStartRef.current) / 1000;
+          if (held >= PICK_HOLD_SEC) {
+            submit(choicesRef.current[hit].value, now);
           }
-        }
-      } else {
-        if (now - lastFingerSeenRef.current > FINGER_LOST_MS) {
-          if (currentStrokeRef.current && currentStrokeRef.current.length >= 2) {
-            strokesRef.current.push(currentStrokeRef.current);
-          }
-          currentStrokeRef.current = null;
-          fingerPosRef.current = null;
         }
       }
 
-      // 잔상 만료 정리
-      while (
-        trailRef.current.length > 0 &&
-        now - trailRef.current[0].t > TRAIL_LIFE_MS
-      )
-        trailRef.current.shift();
-
-      draw(now);
+      draw(now, bombLeft);
 
       // HUD
       const tF = Math.ceil(timeLeft);
       const detected = !!fingerNow;
-      const j = judgeRef.current;
-      const judging = !!j && now < j.until;
-      const key = `${tF}|${scoreRef.current}|${comboRef.current}|${missionRef.current.text}|${detected}|${judging}|${j?.result.label ?? ""}|${j?.result.correct ?? false}`;
+      const key = `${tF}|${scoreRef.current}|${comboRef.current}|${livesRef.current}|${detected}`;
       if (key !== viewKeyRef.current) {
         viewKeyRef.current = key;
         setView({
-          timeLeft: tF,
           score: scoreRef.current,
           combo: comboRef.current,
-          missionText: missionRef.current.text,
-          missionHint: missionRef.current.hint,
-          judging,
-          judgeLabel: j?.result.label ?? "",
-          judgeCorrect: j?.result.correct ?? false,
+          lives: livesRef.current,
+          timeLeft: tF,
           detected,
         });
       }
@@ -406,7 +427,7 @@ export default function ShapeDrawGame({ game }: { game: Game }) {
       }
       rafRef.current = requestAnimationFrame(tick);
     },
-    [draw, endGame, startMission, triggerJudge]
+    [draw, endGame, explode, muted, submit]
   );
 
   // ── 준비 ───────────────────────────────────────────
@@ -450,15 +471,16 @@ export default function ShapeDrawGame({ game }: { game: Game }) {
     comboRef.current = 0;
     maxComboRef.current = 0;
     passedRef.current = 0;
+    livesRef.current = LIVES_START;
     viewKeyRef.current = "";
     runningRef.current = true;
     setPhase("playing");
     const now = performance.now();
     gameStartRef.current = now;
-    startMission(now);
-    playBeep();
+    nextProblem(now);
+    lastTickSoundRef.current = 0;
     rafRef.current = requestAnimationFrame(tick);
-  }, [startMission, tick]);
+  }, [nextProblem, tick]);
 
   const handleStart = useCallback(async () => {
     setPhase("setup");
@@ -521,19 +543,17 @@ export default function ShapeDrawGame({ game }: { game: Game }) {
                   {game.name}
                 </h1>
                 <p className="text-sm text-gray-500">
-                  공중에 손가락으로 도형을 그리면 자동 인식돼요
+                  폭탄이 터지기 전에 답을 골라요!
                 </p>
               </div>
             </div>
 
             <ul className="mt-6 space-y-1.5 text-sm text-gray-600">
-              <li>· 60초 동안 미션 도형(삼각형·사각형·원·별)을 그려요</li>
-              <li>
-                · <b>엄지 + 검지를 모아 펜을 잡듯</b> 공중에 도형을 그려요.
-                떼면 펜이 떨어져요 (별처럼 여러 선이 필요할 때 유용).
-              </li>
-              <li>· 1.4초 멈추면 자동 인식 → 맞으면 +10점 (콤보 3+이면 +5)</li>
-              <li>· 큼지막하게, 시작점과 끝점이 가깝게 그리면 잘 인식돼요</li>
+              <li>· 문제마다 <b>5초</b> 안에 답을 골라야 폭탄을 넘길 수 있어요</li>
+              <li>· 4개 선택지 중 정답에 손가락을 <b>0.4초</b> 머무르면 선택</li>
+              <li>· 정답 +10점, 콤보 3+면 +5</li>
+              <li>· 못 풀면 펑! 생명 -1 (생명 3개), 60초 또는 생명 0이면 끝</li>
+              <li>· 문제: 한 자리 덧셈·뺄셈 / 구구단 / 작은 나눗셈</li>
             </ul>
 
             <div className="mt-6 flex gap-2">
@@ -587,8 +607,9 @@ export default function ShapeDrawGame({ game }: { game: Game }) {
       {phase === "playing" && (
         <main className="mx-auto max-w-5xl px-3 py-4 sm:py-6">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="text-sm font-semibold text-gray-500">
-              {view.detected ? "손 인식 ✓" : "손이 보이지 않아요"}
+            <div className="text-lg">
+              {"❤️".repeat(view.lives)}
+              <span className="text-gray-300">{"♡".repeat(LIVES_START - view.lives)}</span>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right">
@@ -628,7 +649,10 @@ export default function ShapeDrawGame({ game }: { game: Game }) {
           </div>
 
           <p className="mt-3 text-center text-sm text-gray-400">
-            검지 손가락으로 도형을 크게 그려요. 1.4초 멈추면 자동 인식.
+            폭탄이 터지기 전에 정답에 손가락을 0.4초 머무르세요!
+            {!view.detected && (
+              <span className="ml-2 text-amber-600">(손이 안 보여요)</span>
+            )}
           </p>
         </main>
       )}
@@ -639,7 +663,7 @@ export default function ShapeDrawGame({ game }: { game: Game }) {
           score={result.score}
           isNewRecord={result.isNewRecord}
           stats={[
-            { label: "맞춘 도형", value: `${result.passed}` },
+            { label: "통과한 문제", value: `${result.passed}` },
             { label: "최대 콤보", value: `${result.maxCombo}` },
           ]}
           onRetry={handleRetry}
