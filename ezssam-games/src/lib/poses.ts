@@ -38,13 +38,14 @@ export function computeFeatures(lm: LM[]): Features | null {
   const SW = Math.abs(lsh.x - rsh.x) || 0.001;
   const TH = Math.abs(hipY - shoulderY) || 0.001;
 
+  // 관용도 완화 (이전 ±35도 수준 → ±50도 수준 / 손 위치 15% → 25%)
   const classify = (w: LM, hip: LM): ArmPos => {
-    if (w.y < shoulderY - 0.45 * TH) return "up";
-    if (w.y > hipY - 0.15 * TH) {
-      if (Math.abs(w.x - hip.x) < 0.5 * SW) return "hip";
+    if (w.y < shoulderY - 0.28 * TH) return "up";
+    if (w.y > hipY - 0.05 * TH) {
+      if (Math.abs(w.x - hip.x) < 0.6 * SW) return "hip";
       return "down";
     }
-    if (Math.abs(w.x - centerX) < 0.45 * SW) return "chest";
+    if (Math.abs(w.x - centerX) < 0.55 * SW) return "chest";
     return "side";
   };
 
@@ -58,9 +59,10 @@ export function computeFeatures(lm: LM[]): Features | null {
   arms[classify(lw, lhip)]++;
   arms[classify(rw, rhip)]++;
 
-  const wristsTogether = Math.abs(lw.x - rw.x) < 0.5 * SW;
+  // 관용도 완화: 더 잘 잡히게
+  const wristsTogether = Math.abs(lw.x - rw.x) < 0.7 * SW;
   const spreadWide =
-    Math.abs(lw.x - centerX) > 0.9 * SW && Math.abs(rw.x - centerX) > 0.9 * SW;
+    Math.abs(lw.x - centerX) > 0.75 * SW && Math.abs(rw.x - centerX) > 0.75 * SW;
 
   let kneeUp: "left" | "right" | null = null;
   const lkn = lm[25];
@@ -183,12 +185,25 @@ export const POSES: PoseSpec[] = [
 
 const BY_ID = Object.fromEntries(POSES.map((p) => [p.id, p]));
 
-/** 생존 시간에 따른 포즈 풀 */
-export function poolFor(survivalSec: number): PoseSpec[] {
-  if (survivalSec < 15) return POSES.filter((p) => p.category === "A");
-  if (survivalSec < 30)
+/** 생존 시간에 따른 포즈 풀.
+ * 디버그 단계: 일단 카테고리 A만 활성화하고 인식이 안정적으로 되는지 검증.
+ * A 100% 확인 → B 추가 → 그 다음 C 추가 (단계적 검증). */
+const DEBUG_POSE_LEVEL: "A" | "AB" | "ABC" = "A";
+
+export function poolFor(_survivalSec: number): PoseSpec[] {
+  if (DEBUG_POSE_LEVEL === "A") return POSES.filter((p) => p.category === "A");
+  if (DEBUG_POSE_LEVEL === "AB")
     return POSES.filter((p) => p.category === "A" || p.category === "B");
   return POSES;
+}
+
+/** 디버그: 현재 features 와 매칭되는 포즈 (전체 POSES 중) 찾기 — 자막용 */
+export function findMatchingPose(f: Features | null): PoseSpec | null {
+  if (!f) return null;
+  for (const p of POSES) {
+    if (p.match(f)) return p;
+  }
+  return null;
 }
 
 /** 같은 라운드에 서로 다른 포즈 2개 추첨 */

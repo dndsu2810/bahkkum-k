@@ -21,12 +21,6 @@ function ri(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function decideAnswer(l: Frac, r: Frac): Side {
-  const dv = fracValue(l) - fracValue(r);
-  if (Math.abs(dv) < EPS) return "center";
-  return dv > 0 ? "left" : "right";
-}
-
 // 1단계: 분모가 같은 분수 (분자 큰 게 큼)
 function genStage1(): [Frac, Frac] {
   const d = ri(3, 10);
@@ -127,24 +121,58 @@ export function generatePair(stage: number): Pair {
     const [l, r] = genEqual();
     return { left: l, right: r, answer: "center" };
   }
-  let pair: [Frac, Frac];
+  let raw: [Frac, Frac];
   switch (stage) {
     case 1:
-      pair = genStage1();
+      raw = genStage1();
       break;
     case 2:
-      pair = genStage2();
+      raw = genStage2();
       break;
     case 3:
-      pair = genStage3();
+      raw = genStage3();
       break;
     case 4:
-      pair = genStage4();
+      raw = genStage4();
       break;
     default:
-      pair = genStage5();
+      raw = genStage5();
   }
-  return { left: pair[0], right: pair[1], answer: decideAnswer(pair[0], pair[1]) };
+  // 두 분수의 큰 쪽/작은 쪽을 명시적으로 50:50으로 좌/우에 배치.
+  // (생성 자체는 대칭이지만, 정답 쏠림 의혹을 원천 차단)
+  const [a, b] = raw;
+  const aVal = fracValue(a);
+  const bVal = fracValue(b);
+  if (Math.abs(aVal - bVal) < EPS) {
+    return { left: a, right: b, answer: "center" };
+  }
+  const bigger = aVal > bVal ? a : b;
+  const smaller = aVal > bVal ? b : a;
+  const biggerOnLeft = Math.random() < 0.5;
+  return {
+    left: biggerOnLeft ? bigger : smaller,
+    right: biggerOnLeft ? smaller : bigger,
+    answer: biggerOnLeft ? "left" : "right",
+  };
+}
+
+/** 디버그: N라운드 출제 시뮬레이션 — 좌/우/가운데 분포 */
+export function simulateAnswerDistribution(
+  stage: number,
+  rounds: number
+): { left: number; right: number; center: number; pairs: Pair[] } {
+  const pairs: Pair[] = [];
+  let left = 0;
+  let right = 0;
+  let center = 0;
+  for (let i = 0; i < rounds; i++) {
+    const p = generatePair(stage);
+    pairs.push(p);
+    if (p.answer === "left") left++;
+    else if (p.answer === "right") right++;
+    else center++;
+  }
+  return { left, right, center, pairs };
 }
 
 export const STAGE_INFO: { stage: number; name: string; time: number }[] = [

@@ -9,6 +9,8 @@ import {
   generatePair,
   stageTime,
   stageName,
+  fracValue,
+  simulateAnswerDistribution,
   type Frac,
   type Pair,
   type Side,
@@ -71,6 +73,11 @@ export default function BunsuTiltGame({ game }: { game: Game }) {
   const stageRef = useRef(1);
   const maxStageRef = useRef(1);
   const pairRef = useRef<Pair>(generatePair(1));
+  // 디버그: 라운드 카운트 + 정답 좌/우 누적
+  const roundNumRef = useRef(0);
+  const leftCountRef = useRef(0);
+  const rightCountRef = useRef(0);
+  const centerCountRef = useRef(0);
   const roundPhaseRef = useRef<RoundPhase>("countdown");
   const roundStartRef = useRef(0);
   const answerStartRef = useRef(0);
@@ -106,6 +113,14 @@ export default function BunsuTiltGame({ game }: { game: Game }) {
     isNewRecord: boolean;
     maxStage: number;
   } | null>(null);
+  // 디버그 패널용 통계
+  const [debugStats, setDebugStats] = useState({
+    round: 0,
+    left: 0,
+    right: 0,
+    center: 0,
+    currentSide: "-" as string,
+  });
 
   const viewCacheRef = useRef("");
 
@@ -160,7 +175,34 @@ export default function BunsuTiltGame({ game }: { game: Game }) {
   }, [game.id]);
 
   const startRound = useCallback((now: number) => {
-    pairRef.current = generatePair(stageRef.current);
+    const pair = generatePair(stageRef.current);
+    pairRef.current = pair;
+    roundNumRef.current += 1;
+
+    // 통계 집계
+    if (pair.answer === "left") leftCountRef.current += 1;
+    else if (pair.answer === "right") rightCountRef.current += 1;
+    else centerCountRef.current += 1;
+
+    // 디버그 로그
+    const lv = fracValue(pair.left);
+    const rv = fracValue(pair.right);
+    const bigger =
+      Math.abs(lv - rv) < 1e-9 ? "equal" : lv > rv ? "left" : "right";
+    console.log(
+      `[분수] R${roundNumRef.current} stage=${stageRef.current} | ` +
+        `L=${lv.toFixed(3)} R=${rv.toFixed(3)} | bigger=${bigger} | ` +
+        `correctSide=${pair.answer} | 누적 L=${leftCountRef.current} R=${rightCountRef.current} C=${centerCountRef.current}`,
+      { left: pair.left, right: pair.right }
+    );
+    setDebugStats({
+      round: roundNumRef.current,
+      left: leftCountRef.current,
+      right: rightCountRef.current,
+      center: centerCountRef.current,
+      currentSide: pair.answer,
+    });
+
     roundPhaseRef.current = "countdown";
     roundStartRef.current = now;
     holdZoneRef.current = "center";
@@ -173,6 +215,9 @@ export default function BunsuTiltGame({ game }: { game: Game }) {
     (chosen: Side, now: number) => {
       const answer = pairRef.current.answer;
       const correct = chosen === answer;
+      console.log(
+        `[분수 판정] R${roundNumRef.current} chosen=${chosen} correctSide=${answer} → ${correct ? "정답" : "오답"}`
+      );
       roundPhaseRef.current = "judge";
       judgeStartRef.current = now;
       setFlash({ answer, correct });
@@ -337,11 +382,38 @@ export default function BunsuTiltGame({ game }: { game: Game }) {
     stageRef.current = startStageRef.current;
     maxStageRef.current = startStageRef.current;
     viewCacheRef.current = "";
+    // 디버그 카운터 리셋
+    roundNumRef.current = 0;
+    leftCountRef.current = 0;
+    rightCountRef.current = 0;
+    centerCountRef.current = 0;
+    setDebugStats({ round: 0, left: 0, right: 0, center: 0, currentSide: "-" });
     runningRef.current = true;
     setPhase("playing");
     startRound(performance.now());
     rafRef.current = requestAnimationFrame(tick);
   }, [startRound, tick]);
+
+  // 디버그: 자동 시뮬레이션 (실제 게임 없이 출제만)
+  const runSimulation = useCallback((rounds: number) => {
+    const stats = simulateAnswerDistribution(startStage, rounds);
+    console.group(`[분수] ${rounds}라운드 시뮬레이션 — stage ${startStage}`);
+    stats.pairs.forEach((p, i) => {
+      console.log(
+        `R${i + 1}: L=${fracValue(p.left).toFixed(3)} R=${fracValue(p.right).toFixed(3)} → correctSide=${p.answer}`
+      );
+    });
+    const total = stats.left + stats.right;
+    const lp = total > 0 ? ((stats.left / total) * 100).toFixed(1) : "0";
+    const rp = total > 0 ? ((stats.right / total) * 100).toFixed(1) : "0";
+    console.log(
+      `결과: 왼쪽=${stats.left}, 오른쪽=${stats.right}, 가운데=${stats.center} | L/R 비율 ${lp}% / ${rp}% (50:50에 가까워야 정상)`
+    );
+    console.groupEnd();
+    alert(
+      `${rounds}라운드 시뮬레이션 결과 (콘솔에 상세):\n왼쪽 정답 ${stats.left}회 / 오른쪽 정답 ${stats.right}회 / 가운데 ${stats.center}회\nL:R = ${lp}% : ${rp}%`
+    );
+  }, [startStage]);
 
   const handleStart = useCallback(async () => {
     startStageRef.current = startStage;
@@ -468,6 +540,28 @@ export default function BunsuTiltGame({ game }: { game: Game }) {
                 시작하기
               </button>
             </div>
+
+            {/* 디버그 도구: 정답 좌/우 분포 시뮬레이션 */}
+            <div className="mt-4 border-t border-gray-100 pt-3">
+              <p className="text-xs text-gray-400">디버그 도구</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  onClick={() => runSimulation(20)}
+                  className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200"
+                >
+                  20라운드 시뮬레이션
+                </button>
+                <button
+                  onClick={() => runSimulation(100)}
+                  className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200"
+                >
+                  100라운드 시뮬레이션
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-gray-400">
+                결과는 화면 알림 + 브라우저 콘솔(F12)에 자세히 찍혀요. 50:50에 가깝게 나와야 정상.
+              </p>
+            </div>
           </div>
         </main>
       )}
@@ -507,6 +601,17 @@ export default function BunsuTiltGame({ game }: { game: Game }) {
 
       {phase === "playing" && (
         <main className="mx-auto max-w-5xl px-3 py-4 sm:py-6">
+          {/* 디버그 패널 (정답 좌/우 누적) */}
+          <div className="pointer-events-none fixed left-2 top-2 z-50 rounded-lg bg-black/70 px-3 py-2 font-num text-xs text-white shadow-lg">
+            <div className="font-bold">디버그</div>
+            <div>
+              R{debugStats.round}: <b>{debugStats.currentSide}</b>
+            </div>
+            <div>
+              L:{debugStats.left} R:{debugStats.right} C:{debugStats.center}
+            </div>
+          </div>
+
           {/* HUD */}
           <div className="mb-3 flex items-center justify-between">
             <div className="text-sm font-semibold text-gray-500">

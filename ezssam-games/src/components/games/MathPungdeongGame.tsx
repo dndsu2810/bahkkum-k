@@ -10,6 +10,8 @@ import {
   computeFeatures,
   drawPoseFigure,
   pickTwoPoses,
+  findMatchingPose,
+  POSES,
   type Features,
   type LM,
   type PoseSpec,
@@ -24,7 +26,16 @@ const WASM_URL =
 const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 
-type Phase = "intro" | "setup" | "countdown" | "playing" | "result" | "error";
+type Phase =
+  | "intro"
+  | "setup"
+  | "calibration"
+  | "countdown"
+  | "playing"
+  | "result"
+  | "error";
+
+const JUDGMENT_WINDOW_START = 0.7; // 벽 도착 진행도 0.7부터 매칭 윈도우
 
 type Round = {
   problem: { text: string; answer: number };
@@ -87,6 +98,7 @@ export default function MathPungdeongGame({ game }: { game: Game }) {
   const lmRef = useRef<LM[] | null>(null);
   const detectedRef = useRef(false);
   const lastVideoTimeRef = useRef(-1);
+  const matchedInWindowRef = useRef(false); // 판정 윈도우 동안 한 번이라도 정답 포즈 매칭됐는지
 
   const [phase, setPhase] = useState<Phase>("intro");
   const [muted, setMuted] = useState(false);
@@ -100,6 +112,13 @@ export default function MathPungdeongGame({ game }: { game: Game }) {
     problem: "",
     detected: true,
     golden: false,
+    currentPose: "—",
+    matchedInWindow: false,
+  });
+  const [calib, setCalib] = useState({
+    elapsed: 0,
+    tHeld: 0,
+    isT: false,
   });
   const [result, setResult] = useState<{
     score: number;
@@ -134,6 +153,7 @@ export default function MathPungdeongGame({ game }: { game: Game }) {
       golden,
     };
     roundStartRef.current = now;
+    matchedInWindowRef.current = false; // 윈도우 매칭 플래그 리셋
   }, []);
 
   const endGame = useCallback(() => {
@@ -292,12 +312,21 @@ export default function MathPungdeongGame({ game }: { game: Game }) {
       const p = Math.min(1, (now - roundStartRef.current) / (round.wallTime * 1000));
       draw(p);
 
-      // 벽 도착 → 판정
-      if (p >= 1) {
-        const target =
-          round.correctSide === "left" ? round.leftPose : round.rightPose;
+      // 판정 윈도우: 벽이 가까이 오는 마지막 30%부터 매칭 누적 (자세 잡을 그레이스)
+      const target =
+        round.correctSide === "left" ? round.leftPose : round.rightPose;
+      if (p >= JUDGMENT_WINDOW_START && !matchedInWindowRef.current) {
         const f = featuresRef.current;
-        const pass = round.golden ? true : !!f && target.match(f);
+        if (f && target.match(f)) matchedInWindowRef.current = true;
+      }
+
+      // 벽 도착 → 최종 판정 (윈도우 동안 한 번이라도 맞았으면 통과)
+      if (p >= 1) {
+        const f = featuresRef.current;
+        const matchedNow = !!f && target.match(f);
+        const pass = round.golden
+          ? true
+          : matchedInWindowRef.current || matchedNow;
         if (pass) {
           passedRef.current += 1;
           comboRef.current += 1;
@@ -312,9 +341,11 @@ export default function MathPungdeongGame({ game }: { game: Game }) {
         }
       }
 
-      // HUD
+      // HUD + 디버그 자막 (현재 인식되는 포즈)
       const survival = (now - gameStartRef.current) / 1000;
-      const key = `${Math.floor(survival * 10)}|${comboRef.current}|${passedRef.current}|${detectedRef.current}|${round.golden}`;
+      const matched = findMatchingPose(featuresRef.current);
+      const currentPose = matched ? matched.name : "—";
+      const key = `${Math.floor(survival * 10)}|${comboRef.current}|${passedRef.current}|${detectedRef.current}|${round.golden}|${currentPose}|${matchedInWindowRef.current}`;
       if (key !== viewKeyRef.current) {
         viewKeyRef.current = key;
         setView({
@@ -325,6 +356,8 @@ export default function MathPungdeongGame({ game }: { game: Game }) {
           problem: round.problem.text,
           detected: detectedRef.current,
           golden: round.golden,
+          currentPose,
+          matchedInWindow: matchedInWindowRef.current,
         });
       }
 
@@ -400,7 +433,9 @@ export default function MathPungdeongGame({ game }: { game: Game }) {
     try {
       await ensurePose();
       await startCamera();
-      beginGame();
+      // 게임 전 T자 캘리브레이션 (1.5초 유지 또는 5초 자동 통과)
+      setCalib({ elapsed: 0, tHeld: 0, isT: false });
+      setPhase("calibration");
     } catch (e) {
       setErrorMsg(
         e instanceof DOMException && e.name === "NotAllowedError"
@@ -409,7 +444,59 @@ export default function MathPungdeongGame({ game }: { game: Game }) {
       );
       setPhase("error");
     }
-  }, [ensurePose, startCamera, beginGame]);
+  }, [ensurePose, startCamera]);
+
+  // 캘리브레이션 루프: T자 자세 감지 + 자동 진행
+  useEffect(() => {
+    if (phase !== "calibration") return;
+    const startTs = performance.now();
+    let tHoldStart: number | null = null;
+    const tSpec = POSES.find((p) => p.id === "t");
+    const iv = setInterval(() => {
+      const now = performance.now();
+      const video = videoRef.current;
+      const pose = poseRef.current;
+      if (video && pose && video.readyState >= 2 && video.videoWidth > 0) {
+        if (video.currentTime !== lastVideoTimeRef.current) {
+          lastVideoTimeRef.current = video.currentTime;
+          try {
+            const res = pose.detectForVideo(video, now);
+            const lm = res.landmarks?.[0];
+            if (lm) {
+              lmRef.current = lm as LM[];
+              featuresRef.current = computeFeatures(lm as LM[]);
+              detectedRef.current = true;
+            } else {
+              featuresRef.current = null;
+              lmRef.current = null;
+              detectedRef.current = false;
+            }
+          } catch {
+            // 무시
+          }
+        }
+      }
+      const f = featuresRef.current;
+      const isT = !!(f && tSpec && tSpec.match(f));
+      if (isT) {
+        if (tHoldStart === null) tHoldStart = now;
+      } else {
+        tHoldStart = null;
+      }
+      const elapsed = (now - startTs) / 1000;
+      const tHeld = tHoldStart ? (now - tHoldStart) / 1000 : 0;
+      setCalib({ elapsed, tHeld, isT });
+      // 1.5초 유지 or 5초 경과 → 자동 진행
+      if (tHeld >= 1.5 || elapsed >= 5) {
+        clearInterval(iv);
+        console.log(
+          `[풍덩 캘리브] T자 ${tHeld >= 1.5 ? "확인 ✓" : "타임아웃 — 그냥 시작"} (경과 ${elapsed.toFixed(1)}초)`
+        );
+        beginGame();
+      }
+    }, 100);
+    return () => clearInterval(iv);
+  }, [phase, beginGame]);
 
   const handleRetry = useCallback(() => {
     setResult(null);
@@ -498,6 +585,48 @@ export default function MathPungdeongGame({ game }: { game: Game }) {
         </main>
       )}
 
+      {phase === "calibration" && (
+        <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-4 text-center">
+          <h2 className="text-2xl font-extrabold text-navy">
+            T자 자세 캘리브레이션
+          </h2>
+          <p className="text-gray-500">
+            양팔을 옆으로 곧게 벌려주세요 (T자 모양)
+          </p>
+          <div
+            className={
+              "rounded-full px-6 py-3 text-lg font-bold " +
+              (calib.isT
+                ? "bg-mint/20 text-mint"
+                : "bg-gray-100 text-gray-500")
+            }
+          >
+            T자 인식: {calib.isT ? "✓ 잡혔어요" : "—"}
+          </div>
+          <div className="w-full max-w-xs">
+            <div className="mb-1 flex justify-between text-xs text-gray-400">
+              <span>유지</span>
+              <span>{calib.tHeld.toFixed(1)}초 / 1.5초</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-gray-200">
+              <div
+                className="h-full rounded-full bg-mint transition-[width] duration-150"
+                style={{
+                  width: `${Math.min(100, (calib.tHeld / 1.5) * 100)}%`,
+                }}
+              />
+            </div>
+            <div className="mt-2 flex justify-between text-xs text-gray-400">
+              <span>자동 진행</span>
+              <span>{calib.elapsed.toFixed(1)}초 / 5초</span>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-gray-400">
+            (1.5초 유지하면 바로 시작, 안 잡혀도 5초 뒤 자동 진행)
+          </p>
+        </main>
+      )}
+
       {phase === "error" && (
         <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center">
           <p className="text-4xl">📷</p>
@@ -582,6 +711,26 @@ export default function MathPungdeongGame({ game }: { game: Game }) {
               </span>
             )}
           </p>
+
+          {/* 디버그 자막: 현재 인식 포즈 + 윈도우 매칭 표시 */}
+          <div className="mt-2 flex items-center justify-center gap-2 text-xs">
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-600">
+              인식 중 포즈:{" "}
+              <b className={view.currentPose === "—" ? "text-gray-400" : "text-brand-dark"}>
+                {view.currentPose}
+              </b>
+            </span>
+            <span
+              className={
+                "rounded-full px-3 py-1 " +
+                (view.matchedInWindow
+                  ? "bg-mint/20 text-mint"
+                  : "bg-gray-100 text-gray-400")
+              }
+            >
+              {view.matchedInWindow ? "정답 포즈 매칭됨 ✓" : "정답 포즈 대기"}
+            </span>
+          </div>
         </main>
       )}
 
