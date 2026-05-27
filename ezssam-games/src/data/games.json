@@ -72,6 +72,18 @@
     "tags": ["신작"]
   },
   {
+    "id": "window-wash",
+    "name": "창문 닦기 대결",
+    "shortDesc": "2명이 손으로 창문 닦아 승부!",
+    "grades": [],
+    "units": ["순발력", "2인 대결"],
+    "scoreType": "점수",
+    "emoji": "🧽",
+    "gradient": "from-cyan-400 to-sky-600",
+    "route": "/game/window-wash",
+    "tags": ["신작"]
+  },
+  {
     "id": "bomb-pass",
     "name": "수학 폭탄 돌리기",
     "shortDesc": "터지기 전에 답 골라 폭탄을 넘기기",

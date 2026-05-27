@@ -21,8 +21,8 @@ import ResultScreen from "@/components/ResultScreen";
 // ── 상수 ──────────────────────────────────────────────
 const CW = 960;
 const CH = 540;
-const BALLOON_R = 46;
-const HIT_FACTOR = 0.62; // 풍선 중심부 62% 영역에 손끝이 들어오면 인식
+const BALLOON_R = 58; // 풍선을 좀 더 크게 (잡기 편하게)
+const HIT_FACTOR = 0.95; // 풍선 거의 전체 영역에서 인식 (인식 너그럽게)
 const GAME_SECONDS = 60;
 const MISSION_SWITCH_AT = 30; // 30초 지나면 미션 자동 전환
 const WARN_BEFORE = 2;
@@ -310,10 +310,12 @@ export default function YaksuBalloonGame({ game }: { game: Game }) {
           try {
             const res = lm.detectForVideo(video, now);
             const cursors: Cursor[] = [];
+            // 손마다 여러 손가락 끝을 모두 커서로 — 잡기 쉬워짐
+            const TIP_IDX = [4, 8, 12, 16, 20]; // 엄지·검지·중지·약지·새끼
             for (const hand of res.landmarks) {
-              const tip = hand[8]; // 검지 끝
-              if (tip) {
-                cursors.push({ x: (1 - tip.x) * CW, y: tip.y * CH });
+              for (const idx of TIP_IDX) {
+                const tip = hand[idx];
+                if (tip) cursors.push({ x: (1 - tip.x) * CW, y: tip.y * CH });
               }
             }
             cursorsRef.current = cursors;

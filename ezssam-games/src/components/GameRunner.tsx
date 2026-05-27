@@ -35,6 +35,10 @@ const REAL_GAMES: Record<string, ComponentType<{ game: Game }>> = {
     ssr: false,
     loading: GameLoading,
   }),
+  "window-wash": dynamic(() => import("./games/WindowWashGame"), {
+    ssr: false,
+    loading: GameLoading,
+  }),
   "angle-hunter": dynamic(() => import("./games/AngleHunterGame"), {
     ssr: false,
     loading: GameLoading,
