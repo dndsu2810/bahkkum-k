@@ -31,7 +31,7 @@ const REAL_GAMES: Record<string, ComponentType<{ game: Game }>> = {
     ssr: false,
     loading: GameLoading,
   }),
-  "laser-math": dynamic(() => import("./games/LaserMathGame"), {
+  "math-memory": dynamic(() => import("./games/MathMemoryGame"), {
     ssr: false,
     loading: GameLoading,
   }),

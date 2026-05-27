@@ -36,15 +36,15 @@
     "tags": ["신작", "인기"]
   },
   {
-    "id": "laser-math",
-    "name": "레이저 수학 대결",
-    "shortDesc": "공중에 답을 그리는 레이저 수학",
+    "id": "math-memory",
+    "name": "수학 짝 맞추기",
+    "shortDesc": "식과 답 카드의 짝을 찾는 메모리 게임",
     "grades": ["5학년", "6학년"],
     "units": ["곱셈", "나눗셈"],
     "scoreType": "점수",
-    "emoji": "✨",
+    "emoji": "🃏",
     "gradient": "from-fuchsia-500 to-violet-700",
-    "route": "/game/laser-math",
+    "route": "/game/math-memory",
     "tags": ["신작"]
   },
   {
