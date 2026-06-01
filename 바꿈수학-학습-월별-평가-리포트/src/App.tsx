@@ -139,12 +139,25 @@ export default function App() {
     if (!page1Ref.current || !page2Ref.current) return;
     setIsExporting(true);
     try {
+      // 폰트가 완전히 로드된 뒤 캡처해야 줄바꿈이 화면과 동일하게 나옵니다.
+      if ((document as any).fonts?.ready) {
+        await (document as any).fonts.ready;
+      }
       await new Promise(resolve => setTimeout(resolve, 300));
-      
+
       const captureAndDownload = async (element: HTMLElement, filename: string) => {
+        // 캡처 시 요소 크기를 고정해 텍스트가 다시 배치(reflow)되지 않도록 합니다.
+        const width = element.offsetWidth;
+        const height = element.offsetHeight;
         const dataUrl = await htmlToImage.toPng(element, {
           pixelRatio: 2,
-          backgroundColor: '#ffffff'
+          backgroundColor: '#ffffff',
+          width,
+          height,
+          style: {
+            width: `${width}px`,
+            height: `${height}px`,
+          },
         });
         download(dataUrl, filename);
       };
@@ -389,12 +402,12 @@ export default function App() {
                          <div key={idx} className={`flex flex-col gap-1 px-5 py-4 rounded-2xl border ring-inset ring-1 ${badgeColor} shadow-sm min-w-[130px] max-w-[260px]`}>
                            <div className="flex items-center gap-3 mb-1">
                              <div className={`w-3.5 h-3.5 rounded-full ${dotColor} shadow-inner shrink-0`}></div>
-                             <span className="text-xl font-bold break-keep">{dateLabel}</span>
+                             <span className="text-xl font-bold whitespace-nowrap">{dateLabel}</span>
                            </div>
                            <span className="text-sm font-extrabold opacity-75 uppercase tracking-wider">{att["상태"]}</span>
 
                            {att["메모"] && (
-                             <span className={`text-sm font-bold opacity-100 mt-2 px-2.5 py-1.5 rounded-lg block text-center shadow-sm break-keep whitespace-pre-wrap break-words ${isNoticeable ? 'bg-white text-inherit border border-inherit' : 'bg-white/70 text-slate-600 border border-white/50'}`}>
+                             <span className={`text-sm font-bold opacity-100 mt-2 px-2.5 py-1.5 rounded-lg block text-center shadow-sm break-keep whitespace-pre-wrap ${isNoticeable ? 'bg-white text-inherit border border-inherit' : 'bg-white/70 text-slate-600 border border-white/50'}`}>
                                💬 {att["메모"]}
                              </span>
                            )}
