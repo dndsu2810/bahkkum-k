@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+/* Ensure compatibility with html2canvas by avoiding oklch colors in critical areas */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+p {
+  line-height: 1.6;
+}
+
+/* Print Styles for Report Card */
+@media print {
+  /* Hide everything except the report card */
+  body * {
+    visibility: hidden;
+  }
+  
+  #export-area,
+  #export-area * {
+    visibility: visible;
+  }
+  
+  #export-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  /* Ensure backgrounds print */
+  #export-area {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-adjust: exact;
+  }
+  
+  /* Landscape orientation for better fit */
+  @page {
+    size: A4 landscape;
+    margin: 0.5cm;
+  }
+  
+  /* Prevent page breaks */
+  #export-area,
+  #export-area > * {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  
+  /* Ensure grid stays intact */
+  #export-area .grid {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  
+  /* Prevent orphans/widows */
+  #export-area * {
+    orphans: 3;
+    widows: 3;
+  }
+}
