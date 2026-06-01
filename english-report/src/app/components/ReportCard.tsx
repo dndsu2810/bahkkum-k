@@ -374,11 +374,11 @@ export function ReportCard({ student }: ReportCardProps) {
           </div>
 
           <div className="bg-gradient-to-br from-[#E3F2FD] to-[#BBDEFB] px-10 py-7 border-b-2 border-[#2196F3]">
-            <div className="grid grid-cols-2 gap-x-12 gap-y-4 text-2xl">
-              <div className="flex gap-3"><span className="text-[#1565C0] opacity-80">학생</span><span className="text-gray-900 font-semibold">{student.studentName}</span></div>
-              <div className="flex gap-3"><span className="text-[#1565C0] opacity-80">선생님</span><span className="text-gray-900">{student.teacherName}</span></div>
-              <div className="flex gap-3"><span className="text-[#1565C0] opacity-80">평가월</span><span className="text-gray-900">{formatEvaluationMonth(student.evaluationMonth)}</span></div>
-              <div className="flex gap-3"><span className="text-[#1565C0] opacity-80">학년</span><span className="text-gray-900">Grade {student.grade}</span></div>
+            <div className="grid grid-cols-1 gap-y-3 text-2xl">
+              <div className="flex items-baseline gap-3 whitespace-nowrap"><span className="text-[#1565C0] opacity-80 w-24 shrink-0">학생</span><span className="text-gray-900 font-semibold">{student.studentName}</span></div>
+              <div className="flex items-baseline gap-3 whitespace-nowrap"><span className="text-[#1565C0] opacity-80 w-24 shrink-0">선생님</span><span className="text-gray-900">{student.teacherName}</span></div>
+              <div className="flex items-baseline gap-3 whitespace-nowrap"><span className="text-[#1565C0] opacity-80 w-24 shrink-0">평가월</span><span className="text-gray-900">{formatEvaluationMonth(student.evaluationMonth)}</span></div>
+              <div className="flex items-baseline gap-3 whitespace-nowrap"><span className="text-[#1565C0] opacity-80 w-24 shrink-0">학년</span><span className="text-gray-900">Grade {student.grade}</span></div>
             </div>
           </div>
 
@@ -417,7 +417,7 @@ export function ReportCard({ student }: ReportCardProps) {
               <GraduationCap className="w-10 h-10" />
               <span className="text-3xl tracking-tight">바꿈영수학원</span>
             </div>
-            <span className="text-xl opacity-95">{student.studentName} · {formatEvaluationMonth(student.evaluationMonth)}</span>
+            <span className="text-xl opacity-95 whitespace-nowrap ml-4">{student.studentName} · {formatEvaluationMonth(student.evaluationMonth)}</span>
           </div>
 
           <div className="bg-gradient-to-r from-[#BBDEFB] to-[#90CAF9] px-6 py-5 border-b-2 border-[#2196F3]">
@@ -464,7 +464,7 @@ export function ReportCard({ student }: ReportCardProps) {
               <GraduationCap className="w-10 h-10" />
               <span className="text-3xl tracking-tight">바꿈영수학원</span>
             </div>
-            <span className="text-xl opacity-95">{student.studentName} · {formatEvaluationMonth(student.evaluationMonth)}</span>
+            <span className="text-xl opacity-95 whitespace-nowrap ml-4">{student.studentName} · {formatEvaluationMonth(student.evaluationMonth)}</span>
           </div>
 
           <div className="bg-gradient-to-r from-[#BBDEFB] to-[#90CAF9] px-6 py-5 border-b-2 border-[#2196F3]">
