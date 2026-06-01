@@ -12,6 +12,7 @@ export function ReportCard({ student }: ReportCardProps) {
   const reportRef = useRef<HTMLDivElement>(null);
   const page1Ref = useRef<HTMLDivElement>(null);
   const page2Ref = useRef<HTMLDivElement>(null);
+  const page3Ref = useRef<HTMLDivElement>(null);
   const [showPrintGuide, setShowPrintGuide] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -68,7 +69,7 @@ export function ReportCard({ student }: ReportCardProps) {
 
   // 핸드폰 전송용 분할 저장 - 세로 레이아웃을 2장으로 나눠 저장
   const handleSplitCapture = async () => {
-    const pages = [page1Ref.current, page2Ref.current].filter(Boolean) as HTMLElement[];
+    const pages = [page1Ref.current, page2Ref.current, page3Ref.current].filter(Boolean) as HTMLElement[];
     if (pages.length === 0) return;
 
     setIsSaving(true);
@@ -132,7 +133,7 @@ export function ReportCard({ student }: ReportCardProps) {
           onClick={handleSplitCapture}
           disabled={isSaving}
           className="flex items-center gap-2 bg-gradient-to-r from-[#FF9800] to-[#F57C00] hover:from-[#FB8C00] hover:to-[#EF6C00] text-white px-6 py-3 rounded-xl shadow-lg transition-all hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed"
-          title="핸드폰 전송용으로 글씨를 키워 2장으로 나눠 저장합니다"
+          title="핸드폰 전송용으로 글씨를 키워 3장(평가표 / 그래프·등급 / 코멘트)으로 나눠 저장합니다"
         >
           <Smartphone className="w-5 h-5" />
           {isSaving ? '저장 중...' : '분할 저장 (폰 전송용)'}
@@ -438,24 +439,40 @@ export function ReportCard({ student }: ReportCardProps) {
             </RadarChart>
           </div>
 
-          <div className="bg-gradient-to-r from-[#1976D2] to-[#2196F3] text-white px-8 py-6 border-t-2 border-[#1565C0]">
-            <div className="text-center mb-3 text-lg uppercase tracking-widest opacity-95">Grading Scale</div>
-            <div className="flex flex-wrap justify-center gap-3 text-2xl">
+          <div className="bg-gradient-to-r from-[#1976D2] to-[#2196F3] text-white px-10 py-8 border-t-2 border-[#1565C0]">
+            <div className="text-center mb-5 text-xl uppercase tracking-widest opacity-95">Grading Scale</div>
+            <div className="grid grid-cols-2 gap-4 text-2xl">
               {([['P', 'Perfect'], ['E', 'Excellent'], ['GR', 'Great'], ['G', 'Good'], ['VG', 'Very Good'], ['NI', 'Need Improvement']] as const).map(([k, label]) => (
-                <div key={k} className="flex items-center gap-2 bg-white/15 px-4 py-2 rounded-xl border border-white/20">
-                  <span className="w-11 h-11 bg-white/25 rounded-lg flex items-center justify-center text-lg">{k}</span>
+                <div key={k} className="flex items-center gap-3 bg-white/15 px-5 py-3 rounded-xl border border-white/20 whitespace-nowrap">
+                  <span className="w-12 h-12 bg-white/25 rounded-lg flex items-center justify-center text-xl shrink-0">{k}</span>
                   <span>{label}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-gradient-to-r from-[#BBDEFB] to-[#90CAF9] px-6 py-4 border-y-2 border-[#2196F3]">
-            <h3 className="text-center text-gray-800 text-3xl tracking-wide">Teacher's Comments</h3>
+          <div className="bg-gradient-to-r from-[#1565C0] to-[#1976D2] text-white px-8 py-4 flex items-center justify-between text-lg">
+            <span className="tracking-wide">Academic Assessment Report • Bakkum Academy</span>
+            <span>{new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
           </div>
-          <div className="bg-gradient-to-br from-[#E1F5FE] to-[#B3E5FC] px-8 py-7">
-            <div className="bg-white/80 rounded-2xl p-7 border-2 border-white shadow-lg min-h-[120px]">
-              <p className="text-gray-800 leading-relaxed text-2xl whitespace-pre-wrap">{student.comments}</p>
+        </div>
+
+        {/* --- 3장: 선생님 코멘트 (전용, 큰 글씨) --- */}
+        <div ref={page3Ref} style={{ width: '820px' }} className="bg-white border-2 border-gray-100 rounded-3xl overflow-hidden mt-12">
+          <div className="bg-gradient-to-r from-[#1976D2] to-[#42A5F5] text-white px-10 py-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <GraduationCap className="w-10 h-10" />
+              <span className="text-3xl tracking-tight">바꿈영수학원</span>
+            </div>
+            <span className="text-xl opacity-95">{student.studentName} · {formatEvaluationMonth(student.evaluationMonth)}</span>
+          </div>
+
+          <div className="bg-gradient-to-r from-[#BBDEFB] to-[#90CAF9] px-6 py-5 border-b-2 border-[#2196F3]">
+            <h3 className="text-center text-gray-800 text-3xl tracking-wide">Teacher's Comments · 선생님 코멘트</h3>
+          </div>
+          <div className="bg-gradient-to-br from-[#E1F5FE] to-[#B3E5FC] px-8 py-9">
+            <div className="bg-white/85 rounded-2xl px-9 py-8 border-2 border-white shadow-lg min-h-[200px]">
+              <p className="text-gray-900 leading-[1.85] text-[30px] whitespace-pre-wrap">{student.comments}</p>
             </div>
           </div>
 
