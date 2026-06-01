@@ -153,14 +153,10 @@ export function ReportCard({ student }: ReportCardProps) {
       <div id="export-area" ref={reportRef} className="bg-white shadow-2xl rounded-3xl overflow-hidden border-2 border-gray-100 print:rounded-lg print:shadow-none print:border-0">
         {/* Premium Header with Branding */}
         <div className="bg-gradient-to-r from-[#1976D2] via-[#2196F3] to-[#42A5F5] text-white px-8 py-4 print:px-3 print:py-1 relative overflow-hidden">
-          {/* Decorative Elements */}
-          <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full -mr-48 -mt-48 print:hidden"></div>
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/5 rounded-full -ml-32 -mb-32 print:hidden"></div>
-          
           <div className="relative flex items-center justify-between">
             <div className="flex items-center gap-4 print:gap-1.5">
               {/* Premium Logo */}
-              <div className="w-16 h-16 print:w-7 print:h-7 bg-white/15 backdrop-blur-md rounded-2xl print:rounded-lg flex items-center justify-center border-2 border-white/30 shadow-xl">
+              <div className="w-16 h-16 print:w-7 print:h-7 bg-white/15 rounded-2xl print:rounded-lg flex items-center justify-center border-2 border-white/30 shadow-xl">
                 <GraduationCap className="w-10 h-10 print:w-4 print:h-4 text-white drop-shadow-lg" />
               </div>
               <div>
@@ -172,7 +168,7 @@ export function ReportCard({ student }: ReportCardProps) {
                 </div>
               </div>
             </div>
-            <div className="text-right bg-white/10 backdrop-blur-sm rounded-2xl print:rounded-lg px-5 py-3 print:px-2 print:py-0.5 border border-white/20">
+            <div className="text-right bg-white/10 rounded-2xl print:rounded-lg px-5 py-3 print:px-2 print:py-0.5 border border-white/20">
               <div className="text-xs print:text-[7px] opacity-95 mb-1 print:mb-0 tracking-wide">Student Progress Report</div>
               <div className="text-2xl print:text-xs tracking-tight">성적표</div>
             </div>
@@ -296,27 +292,27 @@ export function ReportCard({ student }: ReportCardProps) {
         <div className="bg-gradient-to-r from-[#1976D2] to-[#2196F3] text-white px-6 py-3 print:px-2 print:py-1 border-t-2 border-[#1565C0]">
           <div className="text-center mb-2 print:mb-0.5 text-sm print:text-[7px] uppercase tracking-widest opacity-95">Grading Scale</div>
           <div className="flex flex-wrap justify-center gap-2 print:gap-1 text-sm print:text-[8px]">
-            <div className="flex items-center gap-1.5 print:gap-0.5 bg-white/15 px-2 py-1.5 print:px-1.5 print:py-0.5 rounded-lg print:rounded-md backdrop-blur-sm border border-white/20">
+            <div className="flex items-center gap-1.5 print:gap-0.5 bg-white/15 px-2 py-1.5 print:px-1.5 print:py-0.5 rounded-lg print:rounded-md border border-white/20">
               <span className="w-7 h-7 print:w-4 print:h-4 bg-white/25 rounded-lg print:rounded-md flex items-center justify-center text-sm print:text-[8px]">P</span>
               <span>Perfect</span>
             </div>
-            <div className="flex items-center gap-1.5 print:gap-0.5 bg-white/15 px-2 py-1.5 print:px-1.5 print:py-0.5 rounded-lg print:rounded-md backdrop-blur-sm border border-white/20">
+            <div className="flex items-center gap-1.5 print:gap-0.5 bg-white/15 px-2 py-1.5 print:px-1.5 print:py-0.5 rounded-lg print:rounded-md border border-white/20">
               <span className="w-7 h-7 print:w-4 print:h-4 bg-white/25 rounded-lg print:rounded-md flex items-center justify-center text-sm print:text-[8px]">E</span>
               <span>Excellent</span>
             </div>
-            <div className="flex items-center gap-1.5 print:gap-0.5 bg-white/15 px-2 py-1.5 print:px-1.5 print:py-0.5 rounded-lg print:rounded-md backdrop-blur-sm border border-white/20">
+            <div className="flex items-center gap-1.5 print:gap-0.5 bg-white/15 px-2 py-1.5 print:px-1.5 print:py-0.5 rounded-lg print:rounded-md border border-white/20">
               <span className="w-7 h-7 print:w-4 print:h-4 bg-white/25 rounded-lg print:rounded-md flex items-center justify-center text-sm print:text-[8px]">GR</span>
               <span>Great</span>
             </div>
-            <div className="flex items-center gap-1.5 print:gap-0.5 bg-white/15 px-2 py-1.5 print:px-1.5 print:py-0.5 rounded-lg print:rounded-md backdrop-blur-sm border border-white/20">
+            <div className="flex items-center gap-1.5 print:gap-0.5 bg-white/15 px-2 py-1.5 print:px-1.5 print:py-0.5 rounded-lg print:rounded-md border border-white/20">
               <span className="w-7 h-7 print:w-4 print:h-4 bg-white/25 rounded-lg print:rounded-md flex items-center justify-center text-sm print:text-[8px]">G</span>
               <span>Good</span>
             </div>
-            <div className="flex items-center gap-1.5 print:gap-0.5 bg-white/15 px-2 py-1.5 print:px-1.5 print:py-0.5 rounded-lg print:rounded-md backdrop-blur-sm border border-white/20">
+            <div className="flex items-center gap-1.5 print:gap-0.5 bg-white/15 px-2 py-1.5 print:px-1.5 print:py-0.5 rounded-lg print:rounded-md border border-white/20">
               <span className="w-7 h-7 print:w-4 print:h-4 bg-white/25 rounded-lg print:rounded-md flex items-center justify-center text-sm print:text-[8px]">VG</span>
               <span>Very Good</span>
             </div>
-            <div className="flex items-center gap-1.5 print:gap-0.5 bg-white/15 px-2 py-1.5 print:px-1.5 print:py-0.5 rounded-lg print:rounded-md backdrop-blur-sm border border-white/20">
+            <div className="flex items-center gap-1.5 print:gap-0.5 bg-white/15 px-2 py-1.5 print:px-1.5 print:py-0.5 rounded-lg print:rounded-md border border-white/20">
               <span className="w-7 h-7 print:w-4 print:h-4 bg-white/25 rounded-lg print:rounded-md flex items-center justify-center text-sm print:text-[8px]">NI</span>
               <span>Need Improvement</span>
             </div>
@@ -329,7 +325,7 @@ export function ReportCard({ student }: ReportCardProps) {
             <h3 className="text-center text-gray-800 text-base print:text-[9px] tracking-wide">Teacher's Comments</h3>
           </div>
           <div className="bg-gradient-to-br from-[#E1F5FE] to-[#B3E5FC] px-6 py-3 print:px-2 print:py-1 min-h-[60px] print:min-h-[30px]">
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl print:rounded-md p-3 print:p-1.5 border-2 border-white shadow-lg">
+            <div className="bg-white/80 rounded-xl print:rounded-md p-3 print:p-1.5 border-2 border-white shadow-lg">
               <p className="text-gray-800 leading-relaxed text-base print:text-[9px] print:leading-tight">{student.comments}</p>
             </div>
           </div>
@@ -337,7 +333,6 @@ export function ReportCard({ student }: ReportCardProps) {
 
         {/* Premium Footer */}
         <div className="bg-gradient-to-r from-[#1565C0] to-[#1976D2] text-white px-6 py-2 print:px-2 print:py-0.5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 print:hidden"></div>
           <div className="relative flex items-center justify-between text-xs print:text-[7px]">
             <div className="flex items-center gap-2 print:gap-1">
               <div className="w-2 h-2 print:w-1 print:h-1 bg-white rounded-full animate-pulse shadow-lg"></div>
