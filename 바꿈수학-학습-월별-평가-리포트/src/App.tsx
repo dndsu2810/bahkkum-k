@@ -376,17 +376,25 @@ export default function App() {
                          dotColor = "bg-amber-500"; badgeColor = "bg-amber-50 text-amber-800 ring-amber-200 border-amber-100 bg-gradient-to-br from-white to-amber-50";
                          isNoticeable = true;
                        }
-                       
+
+                       // 단일 날짜 또는 기간(시작~종료) 표기 처리
+                       const period = att["기간"];
+                       const dateLabel = att["날짜"]
+                         ? att["날짜"]
+                         : period
+                           ? `${period["시작"] ?? ""} ~ ${period["종료"] ?? ""}`
+                           : "";
+
                        return (
-                         <div key={idx} className={`flex flex-col gap-1 px-5 py-4 rounded-2xl border ring-inset ring-1 ${badgeColor} shadow-sm min-w-[130px]`}>
+                         <div key={idx} className={`flex flex-col gap-1 px-5 py-4 rounded-2xl border ring-inset ring-1 ${badgeColor} shadow-sm min-w-[130px] max-w-[260px]`}>
                            <div className="flex items-center gap-3 mb-1">
-                             <div className={`w-3.5 h-3.5 rounded-full ${dotColor} shadow-inner`}></div>
-                             <span className="text-xl font-bold whitespace-nowrap">{att["날짜"]}</span>
+                             <div className={`w-3.5 h-3.5 rounded-full ${dotColor} shadow-inner shrink-0`}></div>
+                             <span className="text-xl font-bold break-keep">{dateLabel}</span>
                            </div>
                            <span className="text-sm font-extrabold opacity-75 uppercase tracking-wider">{att["상태"]}</span>
-                           
+
                            {att["메모"] && (
-                             <span className={`text-sm font-bold opacity-100 mt-2 px-2.5 py-1.5 rounded-lg inline-block text-center shadow-sm ${isNoticeable ? 'bg-white text-inherit border border-inherit' : 'bg-white/70 text-slate-600 border border-white/50'}`}>
+                             <span className={`text-sm font-bold opacity-100 mt-2 px-2.5 py-1.5 rounded-lg block text-center shadow-sm break-keep whitespace-pre-wrap break-words ${isNoticeable ? 'bg-white text-inherit border border-inherit' : 'bg-white/70 text-slate-600 border border-white/50'}`}>
                                💬 {att["메모"]}
                              </span>
                            )}
