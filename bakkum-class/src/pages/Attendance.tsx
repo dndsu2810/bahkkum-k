@@ -105,7 +105,7 @@ export function Attendance() {
         const r = draft.attendance[key];
         if (r) r.pointsAwarded = res.matched;
       });
-      toast(res.matched ? "출석 · 포인트 +20" : "출석 처리 (모각공 미등록 학생 — 포인트 건너뜀)");
+      toast(res.matched ? "출석 처리 · 포인트 적립" : "출석 처리 (포인트 미적립 학생)");
     } else if (prevAwarded && !willAward) {
       await awardPoints(it.student.name, -20, "출석 취소");
       mutate((draft) => {
@@ -114,8 +114,8 @@ export function Attendance() {
       });
       toast(
         NEEDS_MAKEUP.includes(newStatus)
-          ? newStatus + " 처리 · 보강 대기 등록 · 포인트 -20 회수"
-          : newStatus + " 처리 · 포인트 -20 회수"
+          ? newStatus + " 처리 · 보강 대기 등록 · 포인트 회수"
+          : newStatus + " 처리 · 포인트 회수"
       );
     } else {
       toast(
