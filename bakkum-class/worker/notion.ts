@@ -18,12 +18,15 @@ export const NOTION_CFG = {
   // 학생 DB 읽기용 속성명 (이름은 title 속성에서 자동 추출)
   student: {
     status: "상태",
+    classSelect: "수업선택",
     school: "학교",
     birth: "생년월일",
     parentPhone: "학부모 연락처",
     studentPhone: "학생 연락처",
     start: "첫수업일",
   },
+  // 이 수업(수업선택)에 해당하는 학생만 동기화
+  studentClassFilter: ["초등수학", "중고등수학", "고백클래스"],
   // 출결 DB 쓰기용 속성명 + 타입
   attendance: { date: "날짜", student: "이름", status: "출결", teacher: "담당T" },
   // 숙제 DB
@@ -85,6 +88,17 @@ function findTitle(props: Record<string, Prop>): string {
   return "";
 }
 
+/** select/multi_select/status values as an array (for filtering). */
+function propValues(p: Prop | undefined): string[] {
+  if (!p || !p.type) return [];
+  const any = p as Record<string, any>;
+  if (p.type === "multi_select") return (any.multi_select || []).map((s: any) => s.name);
+  if (p.type === "select") return any.select ? [any.select.name] : [];
+  if (p.type === "status") return any.status ? [any.status.name] : [];
+  const t = propText(p);
+  return t ? [t] : [];
+}
+
 export interface NotionStudent {
   notionPageId: string;
   name: string;
@@ -114,6 +128,9 @@ export async function fetchNotionStudents(env: NotionEnv): Promise<NotionStudent
       if (!name) continue;
       const status = propText(props[NOTION_CFG.student.status]) || "재원";
       if (status !== "재원") continue; // 재원만 동기화
+      // 수업선택이 지정 수업(초등수학/중고등수학/고백클래스) 중 하나인 학생만
+      const classes = propValues(props[NOTION_CFG.student.classSelect]);
+      if (!classes.some((c) => NOTION_CFG.studentClassFilter.includes(c))) continue;
       out.push({
         notionPageId: pg.id,
         name,
