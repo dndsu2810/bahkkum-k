@@ -138,7 +138,7 @@ export function Attendance() {
       <div className="page-head">
         <div>
           <div className="page-title">출결 체크</div>
-          <div className="page-desc">{fmtFull(d)} · 출석 시 모각공 포인트 +20 자동 적립</div>
+          <div className="page-desc">{fmtFull(d)} · 출석 시 포인트 자동 적립</div>
         </div>
         <div className="head-actions">
           <input
