@@ -1,0 +1,29 @@
+{
+  "name": "bakkum-class",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "바꿈영수학원 수업 관리 도구 — Vite + React + TS + Cloudflare D1",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "wrangler:dev": "wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "db:local": "wrangler d1 execute bakuum-production --local --file=./schema.sql",
+    "db:remote": "wrangler d1 execute bakuum-production --remote --file=./schema.sql"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240620.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.4",
+    "wrangler": "^4.20.0"
+  }
+}

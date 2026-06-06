@@ -1,0 +1,18 @@
+name = "bakkum-class"
+main = "worker/index.ts"
+compatibility_date = "2024-09-23"
+account_id = "027f80eb39da9f27ed17a443a4b9093a"
+
+# The Worker serves the built SPA (dist/) and handles /api/* against D1.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# Shares the existing `bakuum-production` D1 (모각공/마법거울 라이브 DB).
+# This app ONLY touches `class_*` tables (see schema.sql) — mogakgong tables
+# are never read or written. No new database is created.
+[[d1_databases]]
+binding = "DB"
+database_name = "bakuum-production"
+database_id = "661eef60-81a2-43dd-affd-34460b077dfd"
