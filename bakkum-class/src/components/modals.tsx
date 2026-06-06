@@ -719,11 +719,10 @@ export function ProgressModal({ id, presetStudentId }: { id: string | null; pres
   const ex = id ? data.progressLog.find((p) => p.id === id) : null;
   const first = activeStudents(data.students)[0];
   const [studentId, setStudentId] = useState(ex?.studentId ?? presetStudentId ?? first?.id ?? "");
-  const [date, setDate] = useState(ex?.date ?? todayStr());
   const [unit, setUnit] = useState(ex?.unit ?? "");
   const [area, setArea] = useState(ex?.area ?? "");
   const [pct, setPct] = useState(ex?.pct ?? 0);
-  const [startDate, setStartDate] = useState(ex?.startDate ?? "");
+  const [startDate, setStartDate] = useState(ex?.startDate ?? todayStr());
   const [memo, setMemo] = useState(ex?.memo ?? "");
 
   function save() {
@@ -735,7 +734,7 @@ export function ProgressModal({ id, presetStudentId }: { id: string | null; pres
       toast("단원을 입력해 주세요.");
       return;
     }
-    const rec: ProgLog = { id: id || uid(), studentId, date, unit: unit.trim(), area: area.trim(), pct: +pct || 0, startDate, memo: memo.trim() };
+    const rec: ProgLog = { id: id || uid(), studentId, unit: unit.trim(), area: area.trim(), pct: +pct || 0, startDate, memo: memo.trim() };
     mutate((d) => {
       if (id) {
         const i = d.progressLog.findIndex((p) => p.id === id);
@@ -764,8 +763,8 @@ export function ProgressModal({ id, presetStudentId }: { id: string | null; pres
             <StudentSelect value={studentId} onChange={setStudentId} />
           </div>
           <div className="field">
-            <label>기록일</label>
-            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <label>학습 시작일</label>
+            <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </div>
         </div>
         <div className="field">
@@ -778,13 +777,9 @@ export function ProgressModal({ id, presetStudentId }: { id: string | null; pres
             <input className="input" placeholder="예: 개념" value={area} onChange={(e) => setArea(e.target.value)} />
           </div>
           <div className="field">
-            <label>달성률(%)</label>
+            <label>달성률(%) · 100이면 완료</label>
             <input className="input" type="number" min={0} max={100} value={pct} onChange={(e) => setPct(+e.target.value || 0)} />
           </div>
-        </div>
-        <div className="field">
-          <label>학습 시작일</label>
-          <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
           <label>메모</label>

@@ -66,12 +66,13 @@ export function Report() {
       .filter((h) => h.studentId === studentId && inMonth(h.date, ym))
       .sort((a, b) => (a.date < b.date ? -1 : 1))
       .map((h) => ({ id: h.id, date: h.date, book: h.book, tags: h.tags, completion: h.completion, status: h.status, memo: h.memo }));
+    // 진도는 날짜가 아니라 진행중/완료 기준 → 현재 진도(진행중 우선, 없으면 최신 시작일)
     const progList = data.progressLog
-      .filter((p) => p.studentId === studentId && inMonth(p.date, ym))
-      .sort((a, b) => (a.date < b.date ? 1 : -1));
-    const latest = progList[0];
-    const progress: ProgressInfo = latest
-      ? { pct: latest.pct, unit: latest.unit, area: latest.area, startDate: latest.startDate, weeks: "" }
+      .filter((p) => p.studentId === studentId)
+      .sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
+    const current = progList.find((p) => p.pct < 100) || progList[0];
+    const progress: ProgressInfo = current
+      ? { pct: current.pct, unit: current.unit, area: current.area, startDate: current.startDate, weeks: "" }
       : { ...emptyExtras().progress };
     return {
       studentId,

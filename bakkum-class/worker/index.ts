@@ -175,7 +175,6 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
     .map((r) => ({
       id: String(r.id),
       studentId: String(r.student_id),
-      date: String(r.date),
       unit: String(r.unit ?? ""),
       area: String(r.area ?? ""),
       pct: Number(r.pct),
@@ -212,7 +211,7 @@ async function putData(env: Env, request: Request): Promise<Response> {
         .prepare(
           "INSERT INTO class_progress(id,student_id,date,unit,area,pct,start_date,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?)"
         )
-        .bind(pr.id, pr.studentId, pr.date, pr.unit || "", pr.area || "", pr.pct || 0, pr.startDate || "", pr.memo || "", Date.now())
+        .bind(pr.id, pr.studentId, pr.startDate || "", pr.unit || "", pr.area || "", pr.pct || 0, pr.startDate || "", pr.memo || "", Date.now())
     );
   }
 
@@ -546,6 +545,16 @@ async function importRecords(env: Env, url: URL): Promise<Response> {
             )
             .bind(attKey, r.status, r.lateMinutes || null, r.attitude || "", r.note || "")
         );
+        // 출결='보강'은 보강 관리(makeups)에도 등록 (보강 진행/완료로 표시)
+        if (r.status === "보강") {
+          stmts.push(
+            env.DB
+              .prepare(
+                "INSERT OR REPLACE INTO class_makeups(id,student_id,absent_date,absent_time,absent_duration,att_key,status,makeup_date,makeup_time,makeup_duration,parent_contacted,memo,created_at) VALUES(?,?,'','',0,'','scheduled',?,'',0,0,?,?)"
+              )
+              .bind("nm_" + r.srcId, sid, r.date, r.note || "", Date.now())
+          );
+        }
         res.attendance++;
       }
       await runChunked(env, stmts);

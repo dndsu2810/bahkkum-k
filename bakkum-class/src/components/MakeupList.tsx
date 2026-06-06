@@ -57,15 +57,10 @@ function MkRow({
       </span>
     );
   } else {
-    meta =
-      "보강 " +
-      fmtMDDow(k.makeupDate) +
-      " " +
-      k.makeupTime +
-      " (" +
-      k.makeupDuration +
-      "분) · 결석 " +
-      fmtMDDow(k.absentDate);
+    meta = "보강 " + fmtMDDow(k.makeupDate);
+    if (k.makeupTime) meta += " " + k.makeupTime;
+    if (k.makeupDuration) meta += " (" + k.makeupDuration + "분)";
+    if (k.absentDate) meta += " · 결석 " + fmtMDDow(k.absentDate);
   }
 
   let actionsEl: React.ReactNode = null;

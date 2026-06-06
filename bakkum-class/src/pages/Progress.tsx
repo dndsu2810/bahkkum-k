@@ -1,16 +1,20 @@
 import { useState } from "react";
+import type { ProgLog } from "../types";
 import { useStore } from "../store";
 import { importRecords } from "../api";
-import { curMonthStr, inMonth, monthOptions, studentById } from "../lib/logic";
+import { studentById } from "../lib/logic";
 import { fmtMDDow } from "../lib/dates";
-import { Select, Empty } from "../components/ui";
+import { Empty } from "../components/ui";
 import { ProgressModal } from "../components/modals";
 import { Icon } from "../icons";
 
 export function Progress() {
   const { data, openModal, reload, toast } = useStore();
-  const [ym, setYm] = useState(curMonthStr());
   const [importing, setImporting] = useState(false);
+
+  const sorted = data.progressLog.slice().sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
+  const ongoing = sorted.filter((p) => p.pct < 100);
+  const done = sorted.filter((p) => p.pct >= 100);
 
   async function onImport() {
     setImporting(true);
@@ -26,19 +30,48 @@ export function Progress() {
     }
   }
 
-  const rows = data.progressLog
-    .filter((p) => inMonth(p.date, ym))
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  function Row({ p }: { p: ProgLog }) {
+    const s = studentById(data.students, p.studentId);
+    const complete = p.pct >= 100;
+    return (
+      <div className="mk-item">
+        <div className="mk-main">
+          <div className="mk-name">
+            {s ? s.name : "(삭제된 학생)"}{" "}
+            <span className={"badge " + (complete ? "b-green" : "b-blue")}>{complete ? "완료" : "진행중"}</span>
+          </div>
+          <div className="mk-meta">
+            <span>
+              {p.unit || "단원 미정"}
+              {p.area ? " · " + p.area : ""} · {p.pct}%
+              {p.startDate ? " · 시작 " + fmtMDDow(p.startDate) : ""}
+            </span>
+            {p.memo && (
+              <>
+                <span className="sep">·</span>
+                <span className="mk-memo">{p.memo}</span>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="mk-actions">
+          <button className="btn ghost sm" onClick={() => openModal(<ProgressModal id={p.id} />)}>
+            <Icon name="edit" />
+            수정
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <section className="page active">
       <div className="page-head">
         <div>
           <div className="page-title">진도 관리</div>
-          <div className="page-desc">기록한 진도는 월말리포트 ‘진도 달성 현황’에 자동 반영됩니다(해당 월 최신 기록).</div>
+          <div className="page-desc">진행중/완료(완성도 100) 기준. 월말리포트엔 학생의 현재 진도가 반영됩니다.</div>
         </div>
         <div className="head-actions">
-          <Select value={ym} onChange={setYm} options={monthOptions()} />
           <button className="btn" onClick={onImport} disabled={importing}>
             <Icon name="refresh" />
             {importing ? "가져오는 중…" : "노션에서 기록 가져오기"}
@@ -50,46 +83,19 @@ export function Progress() {
         </div>
       </div>
 
-      <div className="card">
-        {rows.length === 0 ? (
-          <Empty>이 달의 진도 기록이 없습니다.</Empty>
-        ) : (
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>기록일</th>
-                  <th>학생</th>
-                  <th>단원</th>
-                  <th>영역</th>
-                  <th>달성률</th>
-                  <th style={{ textAlign: "right" }}>수정</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((p) => {
-                  const s = studentById(data.students, p.studentId);
-                  return (
-                    <tr key={p.id}>
-                      <td className="muted">{fmtMDDow(p.date)}</td>
-                      <td style={{ fontWeight: 700, color: "var(--text)" }}>{s ? s.name : "(삭제된 학생)"}</td>
-                      <td>{p.unit || "—"}</td>
-                      <td className="muted">{p.area || "—"}</td>
-                      <td>{p.pct}%</td>
-                      <td className="t-actions">
-                        <button className="btn ghost sm" onClick={() => openModal(<ProgressModal id={p.id} />)}>
-                          <Icon name="edit" />
-                          수정
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+      <div className="mk-group">
+        <div className="mk-grouphead">진행중 <span className="gcnt">{ongoing.length}건</span></div>
+        <div className="card">
+          {ongoing.length ? ongoing.map((p) => <Row key={p.id} p={p} />) : <Empty>진행중인 진도가 없습니다.</Empty>}
+        </div>
       </div>
+
+      {done.length > 0 && (
+        <div className="mk-group">
+          <div className="mk-grouphead">완료 <span className="gcnt">{done.length}건</span></div>
+          <div className="card">{done.map((p) => <Row key={p.id} p={p} />)}</div>
+        </div>
+      )}
     </section>
   );
 }

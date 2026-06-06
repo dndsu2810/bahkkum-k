@@ -69,14 +69,13 @@ export interface HwLog {
   memo: string;
 }
 
-/** A progress record (진도 관리 페이지에서 기록 → 월말리포트에 누적). */
+/** A progress record (진도 관리). 날짜가 아니라 진행중/완료(완성도 100)가 기준. */
 export interface ProgLog {
   id: string;
   studentId: string;
-  date: string; // YYYY-MM-DD (기록일)
   unit: string;
   area: string;
-  pct: number; // 달성률 0..100
+  pct: number; // 달성률 0..100 (100 = 완료)
   startDate: string; // 학습 시작일
   memo: string;
 }
