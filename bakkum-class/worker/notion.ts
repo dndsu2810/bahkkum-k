@@ -147,6 +147,27 @@ export async function fetchNotionStudents(env: NotionEnv): Promise<NotionStudent
   return out;
 }
 
+/** TEMP debug: raw property names/types/values of the first few student rows. */
+export async function debugStudents(env: NotionEnv): Promise<unknown> {
+  if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
+  const res = await notionReq(env, "POST", `/v1/databases/${NOTION_CFG.studentDb}/query`, { page_size: 5 });
+  if (!res.ok) throw new Error(`query ${res.status}: ${await res.text()}`);
+  const j = (await res.json()) as { results: any[]; has_more: boolean };
+  return {
+    rawCount: j.results.length,
+    has_more: j.has_more,
+    samples: j.results.map((pg) => {
+      const props = (pg.properties || {}) as Record<string, Prop>;
+      const fields: Record<string, { type: string; value: string }> = {};
+      for (const k of Object.keys(props)) {
+        const v = propText(props[k]) || propValues(props[k]).join(" | ");
+        fields[k] = { type: props[k].type || "?", value: v };
+      }
+      return { title: findTitle(props), fields };
+    }),
+  };
+}
+
 /* ---------- write helpers (best-effort) ---------- */
 async function createPage(env: NotionEnv, databaseId: string, properties: Record<string, unknown>): Promise<boolean> {
   if (!env.NOTION_TOKEN) return false;
