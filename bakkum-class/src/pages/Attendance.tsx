@@ -98,16 +98,16 @@ export function Attendance() {
       applyMakeup(draft, key, it, newStatus);
     });
 
-    // mogakgong point side-effect (remote only; matched by name)
+    // point side-effect (remote only; awarded by roster id)
     if (!prevAwarded && willAward) {
-      const res = await awardPoints(it.student.name, 20, "출석");
+      const res = await awardPoints(it.student.id, 20, "출석");
       mutate((draft) => {
         const r = draft.attendance[key];
         if (r) r.pointsAwarded = res.matched;
       });
       toast(res.matched ? "출석 처리 · 포인트 적립" : "출석 처리 (포인트 미적립 학생)");
     } else if (prevAwarded && !willAward) {
-      await awardPoints(it.student.name, -20, "출석 취소");
+      await awardPoints(it.student.id, -20, "출석 취소");
       mutate((draft) => {
         const r = draft.attendance[key];
         if (r) r.pointsAwarded = false;

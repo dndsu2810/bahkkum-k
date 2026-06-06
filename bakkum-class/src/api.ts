@@ -1,4 +1,5 @@
-import type { DataSnapshot } from "./types";
+import type { DataSnapshot, Student } from "./types";
+import { uid } from "./lib/dates";
 
 /* ------------------------------------------------------------------
    Data layer — full-snapshot model.
@@ -82,12 +83,33 @@ export function saveData(snap: DataSnapshot): void {
 }
 
 /**
- * Award/revoke mogakgong points for a student (matched by name).
- * Remote only — in localStorage/dev mode there is no mogakgong DB, so it's a no-op.
- * Returns { matched } — false when no mogakgong student has that exact name.
+ * Create (or link by name to) a roster student in the shared `students` table
+ * and return its id. Remote only allocates the real roster id; in dev/local
+ * mode it returns a local uid so the app still works without a backend.
+ */
+export async function createStudent(fields: Partial<Student> & { name: string }): Promise<{ id: string }> {
+  if (mode === "remote") {
+    try {
+      const r = await fetch("/api/students", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(fields),
+      });
+      if (r.ok) return (await r.json()) as { id: string };
+    } catch {
+      /* fall through to local id */
+    }
+  }
+  return { id: uid() };
+}
+
+/**
+ * Award/revoke points for a roster student (by id) and keep students.points
+ * in sync. Remote only — a no-op in dev/local mode. Returns { matched:false }
+ * when the id isn't a roster student.
  */
 export async function awardPoints(
-  name: string,
+  studentId: string,
   delta: number,
   reason: string
 ): Promise<{ matched: boolean }> {
@@ -96,7 +118,7 @@ export async function awardPoints(
     const r = await fetch("/api/points", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, delta, reason }),
+      body: JSON.stringify({ studentId, delta, reason }),
     });
     if (r.ok) return (await r.json()) as { matched: boolean };
   } catch {

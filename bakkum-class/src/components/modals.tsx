@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Lesson, Makeup, StudentStatus } from "../types";
 import { useStore } from "../store";
+import { createStudent } from "../api";
 import { DOW_ORDER, fmtMDDow, todayStr, uid } from "../lib/dates";
 import { studentById } from "../lib/logic";
 import { Icon } from "../icons";
@@ -40,7 +41,7 @@ export function StudentModal({ id }: { id: string | null }) {
     setSlots((cur) => cur.filter((_, idx) => idx !== i));
   }
 
-  function save() {
+  async function save() {
     const nm = name.trim();
     if (!nm) {
       toast("이름을 입력해 주세요.");
@@ -63,26 +64,34 @@ export function StudentModal({ id }: { id: string | null }) {
       excluded,
       lessons,
     };
-    mutate((d) => {
-      if (id) {
+    if (id) {
+      mutate((d) => {
         const s = studentById(d.students, id);
         if (s) Object.assign(s, fields);
-      } else {
-        d.students.push({ id: uid(), ...fields });
-      }
-    });
-    closeModal();
-    toast(id ? "학생 정보를 저장했어요." : "학생을 추가했어요.");
+      });
+      closeModal();
+      toast("학생 정보를 저장했어요.");
+    } else {
+      // roster id is allocated by the shared `students` table (links by name if it exists)
+      const { id: newId } = await createStudent(fields);
+      mutate((d) => {
+        d.students.push({ id: newId, ...fields });
+      });
+      closeModal();
+      toast("학생을 추가했어요.");
+    }
   }
 
-  function remove() {
+  // The roster is shared with the mogakgong system, so we never hard-delete a
+  // student — we retire them (status 퇴원), which hides them from active views.
+  function retire() {
     if (!id) return;
     mutate((d) => {
-      d.students = d.students.filter((x) => x.id !== id);
-      d.makeups = d.makeups.filter((k) => k.studentId !== id);
+      const s = studentById(d.students, id);
+      if (s) s.status = "퇴원";
     });
     closeModal();
-    toast("학생을 삭제했어요.");
+    toast("퇴원 처리했어요. (명단에서 숨김)");
   }
 
   return (
@@ -248,10 +257,10 @@ export function StudentModal({ id }: { id: string | null }) {
         </div>
       </div>
       <div className="modal-foot">
-        {existing && (
-          <button className="btn danger" onClick={remove}>
-            <Icon name="trash" />
-            삭제
+        {existing && existing.status !== "퇴원" && (
+          <button className="btn danger" onClick={retire}>
+            <Icon name="ban" />
+            퇴원 처리
           </button>
         )}
         <button className="btn ghost" onClick={closeModal}>

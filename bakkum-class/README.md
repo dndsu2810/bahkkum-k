@@ -52,9 +52,18 @@ npm run wrangler:dev          # http://localhost:8787 — /api 가 로컬 D1로 
 
 ## 데이터 저장 (중요)
 
-기존 `bakuum-production`(모각공/마법거울 라이브 D1)을 **공유**하되, 이 앱은 충돌을 피하기 위해
-**`class_*` 테이블만** 사용합니다(`class_students`, `class_lessons`, `class_attendance`, `class_makeups`).
-모각공 기존 테이블은 절대 읽거나 쓰지 않습니다. 데모 시드 없음 — 빈 상태로 시작합니다.
+기존 `bakuum-production`(모각공/마법거울 라이브 D1)을 공유합니다.
+
+- **학생 명단은 모각공 `students` 테이블과 공유**합니다(단일 명단). 앱은 명단을
+  **읽고, 신규만 추가**(없는 이름이면 INSERT, 있으면 링크)하며 **절대 삭제/전체덮어쓰기 하지 않습니다.**
+  학생 제거는 하드 삭제 대신 **상태 '퇴원'**(숨김)으로 처리합니다.
+- 학년·등록일·상태·학교·생년월일·연락처·**시간표·출결·보강**은 모각공 students에 없으므로
+  앱 전용 **`class_*` 테이블**(`class_students` 학사정보 / `class_lessons` / `class_attendance` / `class_makeups`)에
+  학생 id로 매핑해 저장합니다. 풀스냅샷 저장은 `class_*`만 건드립니다.
+- **출석/지각 시 포인트 +20**은 모각공 `point_history`에 학생 id로 INSERT + `students.points` 동기화.
+- `attendance_log_v2`(선생님 출퇴근) · `student_schedules` · `consultations`는 사용/변경하지 않습니다.
+
+데모 시드 없음 — 명단은 모각공 students에서 옵니다.
 
 ## 배포
 
