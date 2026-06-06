@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { HwLog, Lesson, Makeup, ProgLog, StudentStatus } from "../types";
 import { useStore } from "../store";
-import { createStudent, pushHomeworkNotion, pushProgressNotion } from "../api";
+import { createStudent, hideStudent, pushHomeworkNotion, pushProgressNotion } from "../api";
 import { DOW_ORDER, fmtMDDow, todayStr, uid } from "../lib/dates";
 import { activeStudents, studentById } from "../lib/logic";
 import { Icon } from "../icons";
@@ -99,8 +99,7 @@ export function StudentModal({ id }: { id: string | null }) {
     }
   }
 
-  // The roster is shared with the mogakgong system, so we never hard-delete a
-  // student — we retire them (status 퇴원), which hides them from active views.
+  // 퇴원: status만 바꿔 활성 화면(대시보드/출결/시간표)에서 숨김. 학생관리엔 남음.
   function retire() {
     if (!id) return;
     mutate((d) => {
@@ -108,7 +107,25 @@ export function StudentModal({ id }: { id: string | null }) {
       if (s) s.status = "퇴원";
     });
     closeModal();
-    toast("퇴원 처리했어요. (명단에서 숨김)");
+    toast("퇴원 처리했어요.");
+  }
+
+  // 삭제: 앱 명단에서 완전히 제거(숨김). 노션/모각공은 건드리지 않음.
+  function remove() {
+    if (!id) return;
+    if (!confirm("이 학생을 앱 명단에서 삭제할까요?\n(노션에는 그대로 남고, 앱에서만 사라집니다)")) return;
+    hideStudent(id);
+    mutate((d) => {
+      d.students = d.students.filter((x) => x.id !== id);
+      d.makeups = d.makeups.filter((k) => k.studentId !== id);
+      d.homeworkLog = d.homeworkLog.filter((h) => h.studentId !== id);
+      d.progressLog = d.progressLog.filter((pr) => pr.studentId !== id);
+      Object.keys(d.attendance).forEach((key) => {
+        if (key.split("|")[1] === id) delete d.attendance[key];
+      });
+    });
+    closeModal();
+    toast("학생을 삭제했어요.");
   }
 
   return (
@@ -275,9 +292,15 @@ export function StudentModal({ id }: { id: string | null }) {
       </div>
       <div className="modal-foot">
         {existing && existing.status !== "퇴원" && (
-          <button className="btn danger" onClick={retire}>
+          <button className="btn ghost" onClick={retire}>
             <Icon name="ban" />
             퇴원 처리
+          </button>
+        )}
+        {existing && (
+          <button className="btn danger" onClick={remove}>
+            <Icon name="trash" />
+            삭제
           </button>
         )}
         <button className="btn ghost" onClick={closeModal}>

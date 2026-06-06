@@ -295,14 +295,15 @@ export function createProgressRecord(
   return createPage(env, NOTION_CFG.progressDb, props);
 }
 
-/* ---------- import: 노션 기록 → 앱 (read; 3월부터) ---------- */
-async function queryAll(env: NotionEnv, dbId: string): Promise<any[]> {
+/* ---------- import: 노션 기록 → 앱 (read; 3월부터, 서버 필터) ---------- */
+async function queryAll(env: NotionEnv, dbId: string, filter?: unknown): Promise<any[]> {
   const out: any[] = [];
   let cursor: string | undefined;
   do {
     const res = await notionReq(env, "POST", `/v1/databases/${dbId}/query`, {
       page_size: 100,
       ...(cursor ? { start_cursor: cursor } : {}),
+      ...(filter ? { filter } : {}),
     });
     if (!res.ok) throw new Error(`query ${res.status}: ${await res.text()}`);
     const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
@@ -311,6 +312,7 @@ async function queryAll(env: NotionEnv, dbId: string): Promise<any[]> {
   } while (cursor);
   return out;
 }
+const dateFilter = (prop: string, since: string) => ({ property: prop, date: { on_or_after: since } });
 const relFirst = (p: Prop | undefined) => relationIds(p)[0] || "";
 
 export interface ImportHw {
@@ -326,7 +328,7 @@ export interface ImportHw {
 export async function fetchHomeworkRecords(env: NotionEnv, since: string): Promise<ImportHw[]> {
   const H = NOTION_CFG.homework;
   const out: ImportHw[] = [];
-  for (const pg of await queryAll(env, NOTION_CFG.homeworkDb)) {
+  for (const pg of await queryAll(env, NOTION_CFG.homeworkDb, dateFilter(H.due, since))) {
     const p = (pg.properties || {}) as Record<string, Prop>;
     const studentPageId = relFirst(p[H.student]);
     const date = propText(p[H.due]);
@@ -358,7 +360,7 @@ export interface ImportProg {
 export async function fetchProgressRecords(env: NotionEnv, since: string): Promise<ImportProg[]> {
   const P = NOTION_CFG.progress;
   const out: ImportProg[] = [];
-  for (const pg of await queryAll(env, NOTION_CFG.progressDb)) {
+  for (const pg of await queryAll(env, NOTION_CFG.progressDb, dateFilter(P.start, since))) {
     const p = (pg.properties || {}) as Record<string, Prop>;
     const studentPageId = relFirst(p[P.student]);
     const start = propText(p[P.start]);
@@ -390,7 +392,7 @@ export interface ImportAtt {
 export async function fetchAttendanceRecords(env: NotionEnv, since: string): Promise<ImportAtt[]> {
   const A = NOTION_CFG.attendance;
   const out: ImportAtt[] = [];
-  for (const pg of await queryAll(env, NOTION_CFG.attendanceDb)) {
+  for (const pg of await queryAll(env, NOTION_CFG.attendanceDb, dateFilter(A.date, since))) {
     const p = (pg.properties || {}) as Record<string, Prop>;
     const studentPageId = relFirst(p[A.student]);
     const date = propText(p[A.date]);

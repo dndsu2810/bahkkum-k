@@ -105,7 +105,8 @@ CREATE TABLE IF NOT EXISTS students (
   student_phone  TEXT,
   start_date     TEXT,
   excluded       INTEGER DEFAULT 0,
-  notion_page_id TEXT
+  notion_page_id TEXT,
+  hidden         INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS point_history (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -209,6 +209,7 @@ export function Timetable() {
                       <div
                         className={"tt-evt evt-" + e.type}
                         key={i}
+                        title={`${e.time} · ${e.dur}분 (${e.names.length}명)\n${e.names.join(", ")}`}
                         style={{
                           top,
                           height: hgt,

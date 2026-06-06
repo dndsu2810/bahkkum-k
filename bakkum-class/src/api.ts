@@ -121,6 +121,21 @@ export async function createStudent(fields: Partial<Student> & { name: string })
   return { id: uid() };
 }
 
+/** App-only delete: hide a roster student (remote sets students.hidden=1).
+ *  Never touches Notion. No-op in dev/local (client just drops it from state). */
+export async function hideStudent(studentId: string): Promise<void> {
+  if (mode !== "remote") return;
+  try {
+    await fetch("/api/students/hide", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: studentId }),
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Award/revoke points for a roster student (by id) and keep students.points
  * in sync. Remote only — a no-op in dev/local mode. Returns { matched:false }
@@ -179,17 +194,27 @@ export function pushProgressNotion(
   notionPush("/api/notion/progress", { studentId, ...p });
 }
 
-/** Import 3월~ 노션 기록(숙제/진도/출결) into D1. Remote only. */
+/** Import 3월~ 노션 기록(숙제/진도/출결) into D1. Remote only.
+ *  타입별로 순차 호출 — 한 번에 다 하면 워커 타임아웃. */
 export async function importRecords(): Promise<{ homework: number; progress: number; attendance: number; error?: string }> {
   if (mode !== "remote") return { homework: 0, progress: 0, attendance: 0, error: "백엔드 없음" };
-  try {
-    const r = await fetch("/api/sync/records", { cache: "no-store" });
-    const j = (await r.json().catch(() => ({}))) as any;
-    if (r.ok) return j;
-    return { homework: 0, progress: 0, attendance: 0, error: j.error || "HTTP " + r.status };
-  } catch (e) {
-    return { homework: 0, progress: 0, attendance: 0, error: String(e) };
+  const totals = { homework: 0, progress: 0, attendance: 0 } as {
+    homework: number;
+    progress: number;
+    attendance: number;
+    error?: string;
+  };
+  for (const type of ["homework", "progress", "attendance"] as const) {
+    try {
+      const r = await fetch("/api/sync/records?type=" + type, { cache: "no-store" });
+      const j = (await r.json().catch(() => ({}))) as any;
+      if (!r.ok) return { ...totals, error: (j.error || "HTTP " + r.status) + " (" + type + ")" };
+      totals[type] = j[type] ?? 0;
+    } catch (e) {
+      return { ...totals, error: String(e) + " (" + type + ")" };
+    }
   }
+  return totals;
 }
 
 async function flush(): Promise<void> {

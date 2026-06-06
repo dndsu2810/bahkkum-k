@@ -49,6 +49,11 @@ export default {
         if (p === "/api/data" && request.method === "GET") return json(await readSnapshot(env));
         if (p === "/api/data" && request.method === "PUT") return await putData(env, request);
         if (p === "/api/students" && request.method === "POST") return await postStudents(env, request);
+        if (p === "/api/students/hide" && request.method === "POST") {
+          const b = (await request.json()) as { id?: string };
+          if (b.id && /^\d+$/.test(b.id)) await env.DB.prepare("UPDATE students SET hidden=1 WHERE id=?").bind(Number(b.id)).run();
+          return json({ ok: true });
+        }
         if (p === "/api/points" && request.method === "POST") return await postPoints(env, request);
         if (p === "/api/report" && request.method === "GET") return await getReport(env, url);
         if (p === "/api/sync/students" && request.method === "GET") return await syncStudents(env);
@@ -75,7 +80,7 @@ export default {
 async function readSnapshot(env: Env): Promise<DataSnapshot> {
   const [rosterRes, lRes, mRes, aRes, hRes, pRes] = await env.DB.batch([
     env.DB.prepare(
-      "SELECT id,name,grade,status,school,birth_date,parent_phone,student_phone,start_date,excluded FROM students"
+      "SELECT id,name,grade,status,school,birth_date,parent_phone,student_phone,start_date,excluded FROM students WHERE hidden IS NULL OR hidden = 0"
     ),
     env.DB.prepare("SELECT * FROM class_lessons ORDER BY student_id, sort_order"),
     env.DB.prepare("SELECT * FROM class_makeups"),
@@ -476,64 +481,79 @@ async function notionProgress(env: Env, request: Request): Promise<Response> {
   return json({ ok });
 }
 
-/* ---------------- Notion → 앱 기록 가져오기 (3월부터) ---------------- */
-async function importRecords(env: Env, url: URL): Promise<Response> {
-  const since = url.searchParams.get("since") || NOTION_CFG.importSince;
-  // notion_page_id → 우리 students.id 매핑
+/* ---------------- Notion → 앱 기록 가져오기 (3월부터; 타입별, 서버 필터) ----------------
+   ?type=homework|progress|attendance (분할 호출로 워커 시간/서브요청 한도 회피). */
+async function buildIdByPage(env: Env): Promise<Record<string, string>> {
   const rows = await env.DB.prepare(
     "SELECT id, notion_page_id FROM students WHERE notion_page_id IS NOT NULL AND notion_page_id <> ''"
   ).all<{ id: number; notion_page_id: string }>();
-  const idByPage: Record<string, string> = {};
-  for (const r of rows.results || []) idByPage[r.notion_page_id] = String(r.id);
+  const map: Record<string, string> = {};
+  for (const r of rows.results || []) map[r.notion_page_id] = String(r.id);
+  return map;
+}
+async function runChunked(env: Env, stmts: D1PreparedStatement[]) {
+  for (let i = 0; i < stmts.length; i += 50) await env.DB.batch(stmts.slice(i, i + 50));
+}
 
-  let hw = 0;
-  let prog = 0;
-  let att = 0;
+async function importRecords(env: Env, url: URL): Promise<Response> {
+  const since = url.searchParams.get("since") || NOTION_CFG.importSince;
+  const type = url.searchParams.get("type") || "all";
+  const res = { homework: 0, progress: 0, attendance: 0 };
   try {
-    const stmts: D1PreparedStatement[] = [];
-    for (const r of await fetchHomeworkRecords(env, since)) {
-      const sid = idByPage[r.studentPageId];
-      if (!sid) continue;
-      stmts.push(
-        env.DB
-          .prepare(
-            "INSERT OR REPLACE INTO class_homework(id,student_id,date,book,tags,completion,status,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?)"
-          )
-          .bind("nh_" + r.srcId, sid, r.date, r.book, r.tags.join(","), r.completion, r.done ? "done" : "done", r.memo, Date.now())
-      );
-      hw++;
+    const idByPage = await buildIdByPage(env);
+    if (type === "homework" || type === "all") {
+      const stmts: D1PreparedStatement[] = [];
+      for (const r of await fetchHomeworkRecords(env, since)) {
+        const sid = idByPage[r.studentPageId];
+        if (!sid) continue;
+        stmts.push(
+          env.DB
+            .prepare(
+              "INSERT OR REPLACE INTO class_homework(id,student_id,date,book,tags,completion,status,memo,created_at) VALUES(?,?,?,?,?,?,'done',?,?)"
+            )
+            .bind("nh_" + r.srcId, sid, r.date, r.book, r.tags.join(","), r.completion, r.memo, Date.now())
+        );
+        res.homework++;
+      }
+      await runChunked(env, stmts);
     }
-    for (const r of await fetchProgressRecords(env, since)) {
-      const sid = idByPage[r.studentPageId];
-      if (!sid) continue;
-      stmts.push(
-        env.DB
-          .prepare(
-            "INSERT OR REPLACE INTO class_progress(id,student_id,date,unit,area,pct,start_date,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?)"
-          )
-          .bind("np_" + r.srcId, sid, r.date || r.startDate, r.unit, r.area, r.pct, r.startDate, r.memo, Date.now())
-      );
-      prog++;
+    if (type === "progress" || type === "all") {
+      const stmts: D1PreparedStatement[] = [];
+      for (const r of await fetchProgressRecords(env, since)) {
+        const sid = idByPage[r.studentPageId];
+        if (!sid) continue;
+        stmts.push(
+          env.DB
+            .prepare(
+              "INSERT OR REPLACE INTO class_progress(id,student_id,date,unit,area,pct,start_date,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?)"
+            )
+            .bind("np_" + r.srcId, sid, r.date || r.startDate, r.unit, r.area, r.pct, r.startDate, r.memo, Date.now())
+        );
+        res.progress++;
+      }
+      await runChunked(env, stmts);
     }
-    for (const r of await fetchAttendanceRecords(env, since)) {
-      const sid = idByPage[r.studentPageId];
-      if (!sid) continue;
-      const attKey = `${r.date}|${sid}|n${r.srcId.replace(/-/g, "").slice(-8)}`;
-      stmts.push(
-        env.DB
-          .prepare(
-            "INSERT OR REPLACE INTO class_attendance(att_key,status,late_minutes,attitude,note,points_awarded) VALUES(?,?,?,?,?,0)"
-          )
-          .bind(attKey, r.status, r.lateMinutes || null, r.attitude || "", r.note || "")
-      );
-      att++;
+    if (type === "attendance" || type === "all") {
+      const stmts: D1PreparedStatement[] = [];
+      for (const r of await fetchAttendanceRecords(env, since)) {
+        const sid = idByPage[r.studentPageId];
+        if (!sid) continue;
+        const attKey = `${r.date}|${sid}|n${r.srcId.replace(/-/g, "").slice(-8)}`;
+        stmts.push(
+          env.DB
+            .prepare(
+              "INSERT OR REPLACE INTO class_attendance(att_key,status,late_minutes,attitude,note,points_awarded) VALUES(?,?,?,?,?,0)"
+            )
+            .bind(attKey, r.status, r.lateMinutes || null, r.attitude || "", r.note || "")
+        );
+        res.attendance++;
+      }
+      await runChunked(env, stmts);
     }
-    // run in chunks (D1 batch limit safety)
-    for (let i = 0; i < stmts.length; i += 50) await env.DB.batch(stmts.slice(i, i + 50));
   } catch (e) {
-    return json({ error: String(e), homework: hw, progress: prog, attendance: att }, 500);
+    return json({ ...res, error: String(e) }, 500);
   }
-  return json({ homework: hw, progress: prog, attendance: att });
+  return json(res);
 }
 
 function json(data: unknown, status = 200): Response {

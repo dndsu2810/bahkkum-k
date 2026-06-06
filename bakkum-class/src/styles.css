@@ -233,8 +233,11 @@ table.tbl tbody tr:last-child td{border-bottom:none}
   position:absolute;left:4px;right:4px;border-radius:7px;padding:5px 8px;overflow:hidden;
   font-size:11px;border:1px solid transparent;box-shadow:var(--sh-sm);
 }
-.tt-evt .e-name{font-weight:700;font-size:11.5px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:keep-all}
-.tt-evt .e-time{font-size:10px;font-weight:600;opacity:.8;margin-top:1px;word-break:keep-all;line-height:1.2}
+.tt-evt .e-name{font-weight:700;font-size:11.5px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:keep-all}
+.tt-evt .e-time{font-size:10px;font-weight:600;opacity:.8;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
+/* hover: reveal all names even if the block clips them */
+.tt-evt:hover{overflow:visible;z-index:8;box-shadow:var(--sh-lg)}
+.tt-evt:hover .e-name{overflow:visible}
 .evt-blue{background:var(--blue-bg);border-color:#cfe0fb;color:var(--blue-d)}
 .evt-purple{background:var(--purple-bg);border-color:#e6d8fc;color:#7c3aed}
 .evt-orange{background:var(--orange-bg);border-color:#ffd9b8;color:#ea7317}
