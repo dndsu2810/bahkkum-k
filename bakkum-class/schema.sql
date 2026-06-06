@@ -20,14 +20,15 @@ CREATE TABLE IF NOT EXISTS class_students (
 );
 
 -- Each regular weekly lesson slot for a student.
+-- student_id references the shared `students` roster id (no FK — roster lives
+-- in a different table and ids are managed by the app/Notion sync).
 CREATE TABLE IF NOT EXISTS class_lessons (
   id          TEXT PRIMARY KEY,
   student_id  TEXT NOT NULL,
   day         TEXT NOT NULL,              -- '월'..'일'
   time        TEXT NOT NULL,             -- HH:MM
   duration    INTEGER NOT NULL,          -- minutes
-  sort_order  INTEGER NOT NULL DEFAULT 0,
-  FOREIGN KEY (student_id) REFERENCES class_students(id) ON DELETE CASCADE
+  sort_order  INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_class_lessons_student ON class_lessons(student_id);
 
@@ -54,8 +55,7 @@ CREATE TABLE IF NOT EXISTS class_makeups (
   makeup_duration   INTEGER NOT NULL DEFAULT 0,
   parent_contacted  INTEGER NOT NULL DEFAULT 0,
   memo              TEXT NOT NULL DEFAULT '',
-  created_at        INTEGER NOT NULL,
-  FOREIGN KEY (student_id) REFERENCES class_students(id) ON DELETE CASCADE
+  created_at        INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_class_makeups_student ON class_makeups(student_id);
 CREATE INDEX IF NOT EXISTS idx_class_makeups_status ON class_makeups(status);

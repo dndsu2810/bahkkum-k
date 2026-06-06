@@ -164,12 +164,13 @@ async function flush(): Promise<void> {
   pending = null;
   saveTimer = null;
   try {
-    await fetch("/api/data", {
+    const r = await fetch("/api/data", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(snap),
     });
-  } catch {
-    /* best-effort; in-memory state remains authoritative for the session */
+    if (!r.ok) console.error("저장 실패(PUT /api/data):", r.status, await r.text().catch(() => ""));
+  } catch (e) {
+    console.error("저장 실패(PUT /api/data):", e);
   }
 }

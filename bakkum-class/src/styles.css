@@ -54,6 +54,7 @@ input,select{font-family:inherit}
   border-right:1px solid var(--border);
   display:flex;flex-direction:column;padding:18px 14px;
   position:sticky;top:60px;height:calc(100vh - 60px);
+  z-index:20; /* keep the sticky nav above scrolling page content (no overlap) */
 }
 .nav{display:flex;flex-direction:column;gap:3px}
 .nav-label{
