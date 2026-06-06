@@ -186,6 +186,42 @@ export async function fetchNotionStudents(env: NotionEnv): Promise<NotionStudent
   return out;
 }
 
+/** TEMP inspect: schema(속성명/타입) + 샘플 of a Notion DB (구현 점검용). */
+export async function inspectDb(env: NotionEnv, which: string): Promise<unknown> {
+  if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
+  const dbId =
+    which === "homework"
+      ? NOTION_CFG.homeworkDb
+      : which === "progress"
+        ? NOTION_CFG.progressDb
+        : which === "attendance"
+          ? NOTION_CFG.attendanceDb
+          : NOTION_CFG.studentDb;
+
+  const meta = await notionReq(env, "GET", `/v1/databases/${dbId}`);
+  if (!meta.ok) throw new Error(`db ${meta.status}: ${await meta.text()}`);
+  const mj = (await meta.json()) as { properties?: Record<string, any> };
+  const props = mj.properties || {};
+  const schema = Object.keys(props).map((k) => ({
+    name: k,
+    type: props[k].type,
+    ...(props[k].type === "relation" ? { relationDb: props[k].relation?.database_id } : {}),
+  }));
+
+  const q = await notionReq(env, "POST", `/v1/databases/${dbId}/query`, { page_size: 3 });
+  const qj = q.ok ? ((await q.json()) as { results: any[] }) : { results: [] };
+  const samples = (qj.results || []).map((pg) => {
+    const p = (pg.properties || {}) as Record<string, Prop>;
+    const f: Record<string, string> = {};
+    for (const k of Object.keys(p)) {
+      const t = p[k].type;
+      f[k] = t === "relation" ? `[rel:${((p[k] as any).relation || []).length}]` : propText(p[k]);
+    }
+    return { title: findTitle(p), fields: f };
+  });
+  return { which, dbId, schema, samples };
+}
+
 /* ---------- write helpers (best-effort) ---------- */
 async function createPage(env: NotionEnv, databaseId: string, properties: Record<string, unknown>): Promise<boolean> {
   if (!env.NOTION_TOKEN) return false;

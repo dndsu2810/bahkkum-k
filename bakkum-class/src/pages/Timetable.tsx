@@ -15,21 +15,48 @@ import {
 import { activeStudents, gradeColor, studentById } from "../lib/logic";
 import { Select } from "../components/ui";
 
-interface Evt {
+interface RawEvt {
   name: string;
   start: number;
   dur: number;
   type: "blue" | "purple" | "orange";
   time: string;
+}
+interface Grp {
+  names: string[];
+  start: number;
+  dur: number;
+  type: "blue" | "purple" | "orange";
+  time: string;
+}
+interface Evt extends Grp {
   end: number;
   _col: number;
   _cols: number;
   _span: number;
 }
 
-// Calendar-style packing: events only narrow for the classes they ACTUALLY
+// Merge students sharing the exact same slot (start+duration+grade) into ONE
+// block — so a busy time shows one wide block with the names listed, instead of
+// many squished columns.
+function groupSlots(list: RawEvt[]): Grp[] {
+  const map = new Map<string, Grp>();
+  for (const e of list) {
+    const key = e.start + "|" + e.dur + "|" + e.type;
+    let g = map.get(key);
+    if (!g) {
+      g = { names: [], start: e.start, dur: e.dur, type: e.type, time: e.time };
+      map.set(key, g);
+    }
+    g.names.push(e.name);
+  }
+  for (const g of map.values()) g.names.sort();
+  return [...map.values()];
+}
+
+// Calendar-style packing: blocks only narrow for the slots they ACTUALLY
 // overlap, and expand to fill any free space to their right.
-function laneEvents(list: Omit<Evt, "end" | "_col" | "_cols" | "_span">[]): Evt[] {
+function laneEvents(list: Grp[]): Evt[] {
   if (!list.length) return [];
   const evs = list.map((e) => ({ ...e, end: e.start + e.dur })) as Evt[];
   evs.sort((a, b) => a.start - b.start || a.end - b.end);
@@ -95,7 +122,7 @@ export function Timetable() {
   }
 
   // events per weekday index (0=월 ... 6=일)
-  const evtByDay: Omit<Evt, "end" | "_col" | "_cols" | "_span">[][] = [[], [], [], [], [], [], []];
+  const evtByDay: RawEvt[][] = [[], [], [], [], [], [], []];
   activeStudents(data.students).forEach((s) =>
     (s.lessons || []).forEach((l) => {
       const di = DOW_ORDER.indexOf(l.day);
@@ -165,7 +192,7 @@ export function Timetable() {
             </div>
             {dates.map((dt, ci) => {
               const todayCol = dt.getTime() === TODAY.getTime();
-              const events = laneEvents(evtByDay[ci]);
+              const events = laneEvents(groupSlots(evtByDay[ci]));
               return (
                 <div className={"tt-col" + (todayCol ? " today" : "")} key={ci}>
                   {hours.map((h) => (
@@ -173,7 +200,9 @@ export function Timetable() {
                   ))}
                   {events.map((e, i) => {
                     const top = ((e.start - TT_START * 60) / 60) * ROW_H;
-                    const hgt = Math.max((e.dur / 60) * ROW_H - 3, 24);
+                    // grow the block so all names fit (time line + one line per name)
+                    const need = 20 + e.names.length * 15;
+                    const hgt = Math.max((e.dur / 60) * ROW_H - 3, 24, need);
                     const w = (e._span / e._cols) * 100;
                     const left = (e._col / e._cols) * 100;
                     return (
@@ -187,10 +216,15 @@ export function Timetable() {
                           width: `calc(${w}% - 6px)`,
                         }}
                       >
-                        <div className="e-name">{e.name}</div>
                         <div className="e-time">
                           {e.time} · {e.dur}분
+                          {e.names.length > 1 ? ` · ${e.names.length}명` : ""}
                         </div>
+                        {e.names.map((nm, j) => (
+                          <div className="e-name" key={j}>
+                            {nm}
+                          </div>
+                        ))}
                       </div>
                     );
                   })}

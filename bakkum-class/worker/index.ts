@@ -21,6 +21,7 @@
 import type { AttRecord, DataSnapshot, Makeup, Student } from "../src/types";
 import {
   fetchNotionStudents,
+  inspectDb,
   createAttendanceRecord,
   createHomeworkRecord,
   createProgressRecord,
@@ -48,6 +49,13 @@ export default {
         if (p === "/api/points" && request.method === "POST") return await postPoints(env, request);
         if (p === "/api/report" && request.method === "GET") return await getReport(env, url);
         if (p === "/api/sync/students" && request.method === "GET") return await syncStudents(env);
+        if (p === "/api/notion/inspect" && request.method === "GET") {
+          try {
+            return json(await inspectDb(env, url.searchParams.get("db") || "student"));
+          } catch (e) {
+            return json({ error: String(e) }, 500);
+          }
+        }
         if (p === "/api/notion/attendance" && request.method === "POST") return await notionAttendance(env, request);
         if (p === "/api/notion/homework" && request.method === "POST") return await notionHomework(env, request);
         if (p === "/api/notion/progress" && request.method === "POST") return await notionProgress(env, request);
