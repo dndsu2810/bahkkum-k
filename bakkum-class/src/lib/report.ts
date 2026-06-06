@@ -1,5 +1,6 @@
 import type { DataSnapshot } from "../types";
 import { fmtMDDow } from "./dates";
+import { catIndex } from "./categories";
 import {
   enrolledStudents,
   freqLabel,
@@ -15,7 +16,7 @@ import {
 export function buildReport(data: DataSnapshot, ym: string): string {
   const enrolled = enrolledStudents(data.students, ym)
     .slice()
-    .sort((a, b) => (a.grade === b.grade ? 0 : a.grade === "초등" ? -1 : 1));
+    .sort((a, b) => catIndex(a.grade) - catIndex(b.grade));
   const fresh = newThisMonth(data.students, ym);
   const sched = monthScheduled(data.makeups, ym);
   const pend = monthPending(data.makeups, ym);

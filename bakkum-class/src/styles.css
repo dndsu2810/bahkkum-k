@@ -126,7 +126,7 @@ select.ctrl:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var
 .card-sub{font-size:11.5px;color:var(--text3);font-weight:500;margin-top:2px}
 
 /* KPI */
-.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:14px}
 .kpi{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:17px 18px;box-shadow:var(--sh-sm);position:relative;overflow:hidden}
 .kpi-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
 .kpi-label{font-size:12px;font-weight:600;color:var(--text2)}
@@ -139,6 +139,7 @@ select.ctrl:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var
 .ic-purple{background:var(--purple-bg);color:#7c3aed}
 .ic-pink{background:var(--pink-bg);color:#be3f72}
 .ic-orange{background:var(--orange-bg);color:#ea7317}
+.ic-green{background:var(--green-bg);color:#15803d}
 
 /* charts row */
 .chart-row{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px}
@@ -180,6 +181,9 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 .av{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;flex-shrink:0;letter-spacing:-.3px}
 .av-blue{background:var(--blue-bg);color:var(--blue-d)}
 .av-purple{background:var(--purple-bg);color:#7c3aed}
+.av-pink{background:var(--pink-bg);color:#be3f72}
+.av-green{background:var(--green-bg);color:#15803d}
+.av-orange{background:var(--orange-bg);color:#ea7317}
 .av-lg{width:38px;height:38px;border-radius:10px;font-size:14px}
 
 /* badge */
@@ -241,6 +245,8 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 .evt-blue{background:var(--blue-bg);border-color:#cfe0fb;color:var(--blue-d)}
 .evt-purple{background:var(--purple-bg);border-color:#e6d8fc;color:#7c3aed}
 .evt-orange{background:var(--orange-bg);border-color:#ffd9b8;color:#ea7317}
+.evt-pink{background:var(--pink-bg);border-color:#f6cfe0;color:#be3f72}
+.evt-green{background:var(--green-bg);border-color:#bbe8cf;color:#15803d}
 .tt-legend{display:flex;gap:16px;padding:13px 18px;border-top:1px solid var(--border);flex-wrap:wrap}
 .tt-leg{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text2)}
 .tt-leg .sw{width:13px;height:13px;border-radius:4px}

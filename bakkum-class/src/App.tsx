@@ -3,6 +3,7 @@ import { useStore } from "./store";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
 import { type PageId, type NavPrefs, loadNavPrefs, saveNavPrefs } from "./lib/nav";
+import { type Category, getCategories, setCategories } from "./lib/categories";
 import { ModalHost, ToastHost } from "./components/ModalHost";
 import { Dashboard } from "./pages/Dashboard";
 import { Attendance } from "./pages/Attendance";
@@ -19,12 +20,17 @@ export default function App() {
   const { data, loaded } = useStore();
   const [page, setPage] = useState<PageId>("today");
   const [navPrefs, setNavPrefs] = useState<NavPrefs>(loadNavPrefs());
+  const [cats, setCats] = useState<Category[]>(getCategories());
 
   const pendingCount = data.makeups.filter((k) => k.status === "pending").length;
 
   function updateNavPrefs(p: NavPrefs) {
     setNavPrefs(p);
     saveNavPrefs(p);
+  }
+  function updateCategories(c: Category[]) {
+    setCategories(c);
+    setCats(c);
   }
 
   return (
@@ -52,7 +58,14 @@ export default function App() {
               {page === "homework" && <Homework />}
               {page === "progress" && <Progress />}
               {page === "report" && <Report />}
-              {page === "settings" && <Settings navPrefs={navPrefs} onChange={updateNavPrefs} />}
+              {page === "settings" && (
+                <Settings
+                  navPrefs={navPrefs}
+                  onChange={updateNavPrefs}
+                  categories={cats}
+                  onCategoriesChange={updateCategories}
+                />
+              )}
             </>
           )}
         </main>

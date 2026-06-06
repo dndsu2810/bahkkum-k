@@ -13,6 +13,7 @@ import {
   pct,
 } from "../lib/logic";
 import { buildReport, copyText } from "../lib/report";
+import { getCategories, toneColorVar } from "../lib/categories";
 import { Kpi, WeekdayBars, Donut } from "../components/charts";
 import { StudentTable } from "../components/StudentTable";
 import { MakeupList } from "../components/MakeupList";
@@ -24,8 +25,8 @@ export function Dashboard() {
   const [curMonth, setCurMonth] = useState(curMonthStr());
 
   const enrolled = enrolledStudents(data.students, curMonth);
-  const ele = enrolled.filter((s) => s.grade === "초등");
-  const mid = enrolled.filter((s) => s.grade === "중등");
+  const cats = getCategories();
+  const catCounts = cats.map((c) => ({ c, n: enrolled.filter((s) => s.grade === c.name).length }));
   const pend = monthPending(data.makeups, curMonth);
   const sched = monthScheduled(data.makeups, curMonth);
   const act = monthActivity(data.makeups, curMonth);
@@ -60,22 +61,17 @@ export function Dashboard() {
           icon="users"
           foot={monthLabel(curMonth) + " 1일 기준" + (fresh.length ? " · 신규 " + fresh.length + "명" : "")}
         />
-        <Kpi
-          label="초등"
-          num={ele.length}
-          unit="명"
-          tone="pink"
-          icon="cap"
-          foot={"전체의 " + pct(ele.length, enrolled.length) + "%"}
-        />
-        <Kpi
-          label="중등"
-          num={mid.length}
-          unit="명"
-          tone="purple"
-          icon="book"
-          foot={"전체의 " + pct(mid.length, enrolled.length) + "%"}
-        />
+        {catCounts.map(({ c, n }) => (
+          <Kpi
+            key={c.name}
+            label={c.name}
+            num={n}
+            unit="명"
+            tone={c.tone}
+            icon="cap"
+            foot={"전체의 " + pct(n, enrolled.length) + "%"}
+          />
+        ))}
         <Kpi
           label="보강 대기"
           num={pend.length}
@@ -102,11 +98,11 @@ export function Dashboard() {
           <div className="card-head">
             <div>
               <div className="card-title">학생 구분</div>
-              <div className="card-sub">초등 · 중등 비율</div>
+              <div className="card-sub">{cats.map((c) => c.name).join(" · ")} 비율</div>
             </div>
           </div>
           <div className="chart-body">
-            <Donut ele={ele.length} mid={mid.length} />
+            <Donut segments={catCounts.map(({ c, n }) => ({ label: c.name, value: n, color: toneColorVar(c.tone) }))} />
           </div>
         </div>
       </div>

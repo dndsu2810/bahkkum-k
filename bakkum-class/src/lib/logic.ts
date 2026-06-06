@@ -1,5 +1,6 @@
-import type { Grade, Makeup, MakeupDisplay, Student, StudentStatus } from "../types";
+import type { Makeup, MakeupDisplay, Student, StudentStatus } from "../types";
 import { DOW_ORDER, TODAY, pad, parseD } from "./dates";
+import { toneOf, type Tone } from "./categories";
 
 /** Students actively attending — the only ones shown on dashboard/attendance/timetable. */
 export function isActive(s: Student): boolean {
@@ -13,8 +14,8 @@ export function statusTone(st: StudentStatus): string {
 }
 
 /* ---------- small helpers ---------- */
-export function gradeColor(g: Grade | string): "blue" | "purple" {
-  return g === "초등" ? "blue" : "purple";
+export function gradeColor(g: string): Tone {
+  return toneOf(g);
 }
 export function weekCount(st: Student): number {
   return st.lessons ? st.lessons.length : 0;

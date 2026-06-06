@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import { syncStudents } from "../api";
+import { catIndex } from "../lib/categories";
 import { StudentTable } from "../components/StudentTable";
 import { StudentModal } from "../components/modals";
 import { Icon } from "../icons";
@@ -11,7 +12,7 @@ export function Students() {
 
   const sorted = data.students
     .slice()
-    .sort((a, b) => (a.grade === b.grade ? (a.name < b.name ? -1 : 1) : a.grade === "초등" ? -1 : 1));
+    .sort((a, b) => (a.grade === b.grade ? (a.name < b.name ? -1 : 1) : catIndex(a.grade) - catIndex(b.grade)));
 
   async function onSync() {
     setSyncing(true);

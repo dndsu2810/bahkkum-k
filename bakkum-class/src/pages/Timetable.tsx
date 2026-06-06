@@ -13,20 +13,21 @@ import {
   timeToMin,
 } from "../lib/dates";
 import { activeStudents, gradeColor, studentById } from "../lib/logic";
+import { getCategories, type Tone } from "../lib/categories";
 import { Select } from "../components/ui";
 
 interface RawEvt {
   name: string;
   start: number;
   dur: number;
-  type: "blue" | "purple" | "orange";
+  type: Tone;
   time: string;
 }
 interface Grp {
   names: string[];
   start: number;
   dur: number;
-  type: "blue" | "purple" | "orange";
+  type: Tone;
   time: string;
 }
 interface Evt extends Grp {
@@ -235,14 +236,12 @@ export function Timetable() {
           </div>
         </div>
         <div className="tt-legend">
-          <div className="tt-leg">
-            <span className="sw" style={{ background: "var(--blue-bg)", border: "1px solid #cfe0fb" }} />
-            초등
-          </div>
-          <div className="tt-leg">
-            <span className="sw" style={{ background: "var(--purple-bg)", border: "1px solid #e6d8fc" }} />
-            중등
-          </div>
+          {getCategories().map((c) => (
+            <div className="tt-leg" key={c.name}>
+              <span className="sw" style={{ background: "var(--" + c.tone + "-bg)" }} />
+              {c.name}
+            </div>
+          ))}
           <div className="tt-leg">
             <span className="sw" style={{ background: "var(--orange-bg)", border: "1px solid #ffd9b8" }} />
             보강

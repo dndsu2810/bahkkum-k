@@ -9,7 +9,7 @@ export function Badge({ tone, children }: { tone: string; children: ReactNode })
 }
 
 export function GradeBadge({ grade }: { grade: Grade | string }) {
-  return <Badge tone={grade === "초등" ? "blue" : "purple"}>{grade}</Badge>;
+  return <Badge tone={gradeColor(grade)}>{grade}</Badge>;
 }
 
 export function StatusBadge({ status }: { status: StudentStatus }) {

@@ -3,6 +3,7 @@ import type { Student } from "../types";
 import { DOW, DOW_ORDER, TODAY } from "../lib/dates";
 import { pct } from "../lib/logic";
 import { Icon, type IconName } from "../icons";
+import type { Tone } from "../lib/categories";
 
 export function Kpi({
   label,
@@ -15,7 +16,7 @@ export function Kpi({
   label: string;
   num: number;
   unit: string;
-  tone: "blue" | "purple" | "pink" | "orange";
+  tone: Tone;
   icon: IconName;
   foot: ReactNode;
 }) {
@@ -68,12 +69,9 @@ export function WeekdayBars({ enrolled }: { enrolled: Student[] }) {
   );
 }
 
-export function Donut({ ele, mid }: { ele: number; mid: number }) {
-  const total = ele + mid;
-  const segs = [
-    { label: "초등", value: ele, color: "var(--blue)" },
-    { label: "중등", value: mid, color: "var(--purple)" },
-  ];
+export function Donut({ segments }: { segments: { label: string; value: number; color: string }[] }) {
+  const segs = segments;
+  const total = segs.reduce((a, s) => a + s.value, 0);
   const r = 52;
   const C = 2 * Math.PI * r;
   let off = 0;

@@ -8,6 +8,7 @@ import { loadExtras, saveExtras } from "../lib/reportExtras";
 import { saveReportAsImages } from "../lib/reportImage";
 import { curMonthStr, inMonth, monthOptions, studentById } from "../lib/logic";
 import { uid } from "../lib/dates";
+import { catIndex } from "../lib/categories";
 import { Select } from "../components/ui";
 import { Icon } from "../icons";
 import { ReportCard } from "../components/ReportCard";
@@ -44,7 +45,7 @@ export function Report() {
     () =>
       data.students
         .slice()
-        .sort((a, b) => (a.grade === b.grade ? (a.name < b.name ? -1 : 1) : a.grade === "초등" ? -1 : 1)),
+        .sort((a, b) => (a.grade === b.grade ? (a.name < b.name ? -1 : 1) : catIndex(a.grade) - catIndex(b.grade))),
     [data.students]
   );
 

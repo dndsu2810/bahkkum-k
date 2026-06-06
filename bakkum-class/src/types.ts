@@ -1,4 +1,5 @@
-export type Grade = "초등" | "중등";
+/** 수업 구분 이름 (설정에서 정의; 기본 초등/중등). */
+export type Grade = string;
 export type MakeupStatus = "pending" | "scheduled" | "skip";
 /** Derived display status (adds "done" once a scheduled makeup date has passed). */
 export type MakeupDisplay = "pending" | "scheduled" | "done" | "skip";

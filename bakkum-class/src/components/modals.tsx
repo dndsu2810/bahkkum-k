@@ -4,6 +4,7 @@ import { useStore } from "../store";
 import { createStudent, hideStudent, pushHomeworkNotion, pushProgressNotion } from "../api";
 import { DOW_ORDER, fmtMDDow, todayStr, uid } from "../lib/dates";
 import { activeStudents, studentById } from "../lib/logic";
+import { getCategories } from "../lib/categories";
 import { Icon } from "../icons";
 
 function StudentSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -28,8 +29,9 @@ export function StudentModal({ id }: { id: string | null }) {
   const { data, mutate, toast, closeModal } = useStore();
   const existing = id ? studentById(data.students, id) : null;
 
+  const cats = getCategories();
   const [name, setName] = useState(existing?.name ?? "");
-  const [grade, setGrade] = useState<"초등" | "중등">(existing?.grade ?? "초등");
+  const [grade, setGrade] = useState<string>(existing?.grade ?? cats[0]?.name ?? "초등");
   const [status, setStatus] = useState<StudentStatus>(existing?.status ?? "재원");
   const [startDate, setStartDate] = useState(existing?.startDate ?? todayStr());
   const [school, setSchool] = useState(existing?.school ?? "");
@@ -149,15 +151,15 @@ export function StudentModal({ id }: { id: string | null }) {
           </div>
           <div className="field">
             <label>구분</label>
-            <div className="seg">
-              {(["초등", "중등"] as const).map((g) => (
+            <div className="seg" style={{ flexWrap: "wrap" }}>
+              {cats.map((c) => (
                 <button
-                  key={g}
+                  key={c.name}
                   type="button"
-                  className={"seg-btn" + (grade === g ? " on" : "")}
-                  onClick={() => setGrade(g)}
+                  className={"seg-btn" + (grade === c.name ? " on" : "")}
+                  onClick={() => setGrade(c.name)}
                 >
-                  {g}
+                  {c.name}
                 </button>
               ))}
             </div>
