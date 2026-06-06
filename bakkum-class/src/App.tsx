@@ -8,6 +8,7 @@ import { Attendance } from "./pages/Attendance";
 import { Students } from "./pages/Students";
 import { Timetable } from "./pages/Timetable";
 import { MakeupPage } from "./pages/Makeup";
+import { Report } from "./pages/Report";
 
 export default function App() {
   const { data, loaded } = useStore();
@@ -35,6 +36,7 @@ export default function App() {
               {page === "students" && <Students />}
               {page === "timetable" && <Timetable />}
               {page === "makeup" && <MakeupPage />}
+              {page === "report" && <Report />}
             </>
           )}
         </main>

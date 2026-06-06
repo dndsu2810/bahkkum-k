@@ -1,0 +1,330 @@
+import type { ReactNode } from "react";
+import type { ReportData } from "../lib/reportTypes";
+import { pad } from "../lib/dates";
+import "../styles/reportCard.css";
+
+const LOGO = "/report-logo.png";
+
+function fmtYmd(s: string): string {
+  // "2026-04-01" -> "2026. 04. 01"; pass through if not a date
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  return m ? `${m[1]}. ${m[2]}. ${m[3]}` : s;
+}
+function scoreClass(n: number): string {
+  return n >= 80 ? "r-s-good" : n >= 60 ? "r-s-mid" : "r-s-low";
+}
+function compClasses(n: number): { bar: string; txt: string } {
+  if (n >= 100) return { bar: "r-c-full", txt: "r-t-full" };
+  if (n >= 70) return { bar: "r-c-mid", txt: "r-t-mid" };
+  return { bar: "r-c-low", txt: "r-t-low" };
+}
+
+function Ring({ pct }: { pct: number }) {
+  const r = 60.5;
+  const c = 2 * Math.PI * r;
+  const dash = (Math.max(0, Math.min(100, pct)) / 100) * c;
+  return (
+    <div className="r-ring">
+      <svg width="138" height="138" viewBox="0 0 138 138">
+        <circle cx="69" cy="69" r={r} fill="none" stroke="#E4EAEC" strokeWidth="17" />
+        <circle
+          cx="69"
+          cy="69"
+          r={r}
+          fill="none"
+          stroke="#16808F"
+          strokeWidth="17"
+          strokeLinecap="round"
+          strokeDasharray={`${dash} ${c - dash}`}
+          transform="rotate(-90 69 69)"
+        />
+      </svg>
+      <div className="r-rin">
+        <div className="r-rnum">
+          {pct}
+          <i>%</i>
+        </div>
+        <span className="r-rcap">달성률</span>
+      </div>
+    </div>
+  );
+}
+
+function Calendar({ data }: { data: ReportData }) {
+  const { year, month, att } = data;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstDow = new Date(year, month - 1, 1).getDay(); // 0 Sun
+  const cells: ReactNode[] = [];
+  for (let i = 0; i < firstDow; i++) cells.push(<div className="r-cell empty" key={"e" + i} />);
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dow = new Date(year, month - 1, day).getDay();
+    const dCls = dow === 0 ? "r-d sun" : dow === 6 ? "r-d sat" : "r-d";
+    const b = att.days[day];
+    const cls = b === "p" ? "r-cell att-p" : b === "m" ? "r-cell att-m" : b === "a" ? "r-cell att-a" : "r-cell";
+    const tag = b === "p" ? "출석" : b === "m" ? "보강" : b === "a" ? "결석" : null;
+    cells.push(
+      <div className={cls} key={day}>
+        <span className={dCls}>{day}</span>
+        {tag && <span className="r-celltag">{tag}</span>}
+      </div>
+    );
+  }
+  while (cells.length % 7 !== 0) cells.push(<div className="r-cell empty" key={"t" + cells.length} />);
+
+  return (
+    <div className="r-cal-card">
+      <div className="r-cal-legend">
+        <span><i className="r-lg g" />출석</span>
+        <span><i className="r-lg b" />보강</span>
+        <span><i className="r-lg r" />결석</span>
+        <span><i className="r-lg n" />수업 없음</span>
+      </div>
+      <div className="r-cal">
+        <div className="r-wd sun">일</div>
+        <div className="r-wd">월</div>
+        <div className="r-wd">화</div>
+        <div className="r-wd">수</div>
+        <div className="r-wd">목</div>
+        <div className="r-wd">금</div>
+        <div className="r-wd sat">토</div>
+        {cells}
+      </div>
+      {data.extras.notes.length > 0 && (
+        <div className="r-notes">
+          <h4>출결 특이사항</h4>
+          {data.extras.notes.map((n) => (
+            <div className="r-note" key={n.id}>
+              <span className={"r-ndate " + n.tone}>{n.dateLabel}</span>
+              <span className="r-ntext">{n.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ReportCard({ data }: { data: ReportData }) {
+  const { att, extras } = data;
+  const weekly = extras.evals.filter((e) => e.type === "주간평가");
+  const weeklyAvg = weekly.length
+    ? Math.round(weekly.reduce((s, e) => s + (e.score || 0), 0) / weekly.length)
+    : 0;
+  const hwAvg = extras.homeworks.length
+    ? Math.round(extras.homeworks.reduce((s, h) => s + (h.completion || 0), 0) / extras.homeworks.length)
+    : 0;
+
+  // section numbering (only count sections that render)
+  const showComment = !!extras.comment.trim();
+  const showProgress = !!extras.progress.unit.trim();
+  const showEvals = extras.evals.length > 0;
+  const showHw = extras.homeworks.length > 0;
+  let n = 0;
+  const no = () => pad(++n);
+
+  return (
+    <div id="report-card" className="r-sheet">
+      <header className="r-hd">
+        <div className="r-hd-top">
+          <img className="r-logo" src={LOGO} alt="바꿈영수학원" crossOrigin="anonymous" />
+          <div className="r-period">
+            <span className="r-pill">
+              {data.year}. {pad(data.month)}
+            </span>
+            <span className="r-sub">월간 학습 리포트</span>
+          </div>
+        </div>
+        <div className="r-eyebrow">MONTHLY LEARNING REPORT</div>
+        <h1 className="r-title">
+          <b>{data.studentName}</b> 학생
+        </h1>
+        <div className="r-meta">
+          <span className="r-chip">
+            학습 기간 <b>{data.year}. {pad(data.month)}. 01 – {pad(data.month)}. {new Date(data.year, data.month, 0).getDate()}</b>
+          </span>
+          <span className="r-chip">
+            담당 <b>{data.teacher}</b>
+          </span>
+        </div>
+      </header>
+
+      <div className="r-body">
+        {/* 01 요약 */}
+        <section className="r-sec">
+          <div className="r-sec-head">
+            <span className="r-sec-no">{no()}</span>
+            <span className="r-sec-title">이달의 학습 요약</span>
+          </div>
+          <div className="r-kpis">
+            <div className="r-kpi">
+              <div className="r-kpi-label">주간평가 평균</div>
+              <div className="r-kpi-val">{weeklyAvg}<i>점</i></div>
+              <div className="r-kpi-bar"><span style={{ width: weeklyAvg + "%" }} /></div>
+              <div className="r-kpi-foot">주간평가 {weekly.length}회 평균</div>
+            </div>
+            <div className="r-kpi">
+              <div className="r-kpi-label">출석 현황</div>
+              <div className="r-kpi-val">{att.total}<i>회 수업</i></div>
+              <div className="r-stack">
+                <i className="r-s-att" style={{ flex: att.present || 0.0001 }} />
+                <i className="r-s-mk" style={{ flex: att.makeup || 0.0001 }} />
+                <i className="r-s-ab" style={{ flex: att.absent || 0.0001 }} />
+              </div>
+              <div className="r-legend">
+                <span><i className="r-dot g" />출석 {att.present}</span>
+                <span><i className="r-dot b" />보강 {att.makeup}</span>
+                <span><i className="r-dot r" />결석 {att.absent}</span>
+              </div>
+            </div>
+            <div className="r-kpi">
+              <div className="r-kpi-label">숙제 평균 완성도</div>
+              <div className="r-kpi-val">{hwAvg}<i>%</i></div>
+              <div className="r-kpi-bar"><span style={{ width: hwAvg + "%", background: "var(--green)" }} /></div>
+              <div className="r-kpi-foot">총 {extras.homeworks.length}건 검사 · 평균 기준</div>
+            </div>
+          </div>
+        </section>
+
+        {/* 02 코멘트 */}
+        {showComment && (
+          <section className="r-sec">
+            <div className="r-sec-head">
+              <span className="r-sec-no">{no()}</span>
+              <span className="r-sec-title">선생님 종합 코멘트</span>
+            </div>
+            <div className="r-comment">
+              <div className="r-by">
+                <span className="r-nm">담임 선생님</span>
+                <span className="r-tg">종합 의견</span>
+              </div>
+              <p>{extras.comment}</p>
+            </div>
+          </section>
+        )}
+
+        {/* 03 진도 */}
+        {showProgress && (
+          <section className="r-sec">
+            <div className="r-sec-head">
+              <span className="r-sec-no">{no()}</span>
+              <span className="r-sec-title">진도 달성 현황</span>
+            </div>
+            <div className="r-progress">
+              <Ring pct={extras.progress.pct} />
+              <div className="r-prog-info">
+                <span className="r-tag">현재 학습 단원</span>
+                <div className="r-unit">{extras.progress.unit}</div>
+                <div className="r-prog-grid">
+                  <div className="r-it"><div className="r-l">학습 영역</div><div className="r-v">{extras.progress.area || "—"}</div></div>
+                  <div className="r-it"><div className="r-l">학습 시작일</div><div className="r-v">{fmtYmd(extras.progress.startDate) || "—"}</div></div>
+                  <div className="r-it"><div className="r-l">학습 기간</div><div className="r-v">{extras.progress.weeks || "—"}</div></div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* 04 출결 */}
+        <section className="r-sec">
+          <div className="r-sec-head">
+            <span className="r-sec-no">{no()}</span>
+            <span className="r-sec-title">월간 출결 현황</span>
+            <span className="r-sec-aside">{data.year}년 {data.month}월</span>
+          </div>
+          <Calendar data={data} />
+        </section>
+
+        {/* 05 평가 */}
+        {showEvals && (
+          <section className="r-sec">
+            <div className="r-sec-head">
+              <span className="r-sec-no">{no()}</span>
+              <span className="r-sec-title">평가 결과 상세</span>
+              {weekly.length > 0 && <span className="r-sec-aside">주간평가 평균 {weeklyAvg}점</span>}
+            </div>
+            <div className="r-evals">
+              {extras.evals.map((e) => (
+                <div className="r-ev" key={e.id}>
+                  <div className="r-ev-head">
+                    <span className={"r-ev-type " + (e.type === "주간평가" ? "wk" : "cp")}>{e.type}</span>
+                    <span className="r-ev-status">완료</span>
+                  </div>
+                  <div className="r-ev-name">{e.name}</div>
+                  <div className="r-ev-meta">{e.meta}</div>
+                  <div className="r-ev-bottom">
+                    <span className="r-ev-date">{fmtYmd(e.date)}</span>
+                    <span className={"r-ev-score " + scoreClass(e.score)}>
+                      {e.score}<small>점</small>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 06 숙제 */}
+        {showHw && (
+          <section className="r-sec">
+            <div className="r-sec-head">
+              <span className="r-sec-no">{no()}</span>
+              <span className="r-sec-title">숙제 및 수행 기록</span>
+              <span className="r-sec-aside">총 {extras.homeworks.length}건</span>
+            </div>
+            <div className="r-hw">
+              {extras.homeworks.map((h) => {
+                const cc = compClasses(h.completion);
+                const md = /^(\d{4})-(\d{2})-(\d{2})$/.exec(h.date);
+                return (
+                  <div className="r-hw-item" key={h.id}>
+                    <div className="r-hw-main">
+                      <div className="r-hw-date">
+                        {md ? md[2] : h.date}
+                        {md && <span>/ {md[3]}</span>}
+                      </div>
+                      <div className="r-hw-book">
+                        <div className="r-bk">{h.book}</div>
+                        {h.tags.length > 0 && (
+                          <div className="r-hw-tags">
+                            {h.tags.map((t, i) => (
+                              <i key={i}>{t}</i>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="r-hw-comp">
+                        <div className="r-ctop">
+                          <span className="r-cl">완성도</span>
+                          <span className={"r-cv " + cc.txt}>{h.completion}%</span>
+                        </div>
+                        <div className="r-cbar"><span className={cc.bar} style={{ width: h.completion + "%" }} /></div>
+                      </div>
+                      <div className={"r-badge " + (h.status === "late" ? "late" : "done")}>
+                        {h.status === "late" ? "지연" : "검사 완료"}
+                      </div>
+                    </div>
+                    {h.memo && (
+                      <div className="r-hw-cmt">
+                        <span className="r-ck">선생님 메모</span>
+                        <span className="r-ctxt">{h.memo}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+      </div>
+
+      <footer className="r-ft">
+        <img src={LOGO} alt="바꿈영수학원" crossOrigin="anonymous" />
+        <div className="r-ftmeta">
+          본 리포트는 {data.year}년 {data.month}월 학습 기록을 바탕으로 작성되었습니다.
+          <br />
+          바꿈영수학원 · 바라던 꿈을 이루다
+        </div>
+      </footer>
+    </div>
+  );
+}

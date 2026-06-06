@@ -1,0 +1,78 @@
+// Monthly report data model.
+// Attendance is computed from class_attendance (real data); everything else
+// (evaluations, homework, progress, comment, notes) is entered in the report
+// form and persisted to localStorage per student+month.
+
+export interface EvalItem {
+  id: string;
+  type: "주간평가" | "경시대회";
+  name: string;
+  meta: string; // 단원 등
+  date: string; // YYYY-MM-DD or free text
+  score: number;
+}
+
+export interface HwItem {
+  id: string;
+  date: string; // YYYY-MM-DD
+  book: string;
+  tags: string[];
+  completion: number; // 0..100
+  status: "done" | "late";
+  memo: string;
+}
+
+export interface NoteItem {
+  id: string;
+  dateLabel: string; // "05 / 04" or "05 / 12 – 21"
+  tone: "r" | "b" | "g";
+  text: string;
+}
+
+export interface ProgressInfo {
+  pct: number; // 달성률 0..100
+  unit: string; // 현재 학습 단원
+  area: string; // 학습 영역
+  startDate: string; // 학습 시작일
+  weeks: string; // 학습 기간 (예: 약 6주차)
+}
+
+export interface ReportExtras {
+  comment: string;
+  progress: ProgressInfo;
+  evals: EvalItem[];
+  homeworks: HwItem[];
+  notes: NoteItem[];
+}
+
+/** day-of-month → attendance bucket for the calendar */
+export type DayBucket = "p" | "m" | "a"; // 출석류 / 보강 / 결석류
+
+export interface AttSummary {
+  total: number;
+  present: number; // 출석+지각+조퇴 (calendar/legend 출석)
+  makeup: number; // 보강
+  absent: number; // 결석+무단결석
+  rate: number; // (출석+지각)/total*100
+  days: Record<number, DayBucket>;
+}
+
+export interface ReportData {
+  studentId: string;
+  studentName: string;
+  year: number;
+  month: number;
+  teacher: string;
+  att: AttSummary;
+  extras: ReportExtras;
+}
+
+export function emptyExtras(): ReportExtras {
+  return {
+    comment: "",
+    progress: { pct: 0, unit: "", area: "", startDate: "", weeks: "" },
+    evals: [],
+    homeworks: [],
+    notes: [],
+  };
+}

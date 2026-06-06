@@ -1,6 +1,6 @@
 import { Icon, type IconName } from "../icons";
 
-export type PageId = "dashboard" | "attendance" | "students" | "timetable" | "makeup";
+export type PageId = "dashboard" | "attendance" | "students" | "timetable" | "makeup" | "report";
 
 const NAV: { id: PageId; label: string; icon: IconName }[] = [
   { id: "dashboard", label: "대시보드", icon: "dashboard" },
@@ -8,6 +8,7 @@ const NAV: { id: PageId; label: string; icon: IconName }[] = [
   { id: "students", label: "학생 관리", icon: "students" },
   { id: "timetable", label: "시간표", icon: "cal" },
   { id: "makeup", label: "보강 관리", icon: "refresh" },
+  { id: "report", label: "월말리포트", icon: "fileText" },
 ];
 
 export function Sidebar({

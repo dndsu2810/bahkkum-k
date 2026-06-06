@@ -28,6 +28,7 @@ export default {
         if (p === "/api/data" && request.method === "GET") return json(await readSnapshot(env));
         if (p === "/api/data" && request.method === "PUT") return await putData(env, request);
         if (p === "/api/points" && request.method === "POST") return await postPoints(env, request);
+        if (p === "/api/report" && request.method === "GET") return await getReport(env, url);
         return json({ error: "not_found" }, 404);
       } catch (e) {
         return json({ error: "server_error", message: String(e) }, 500);
@@ -214,6 +215,53 @@ async function postPoints(env: Env, request: Request): Promise<Response> {
     env.DB.prepare("UPDATE students SET points = points + ? WHERE id = ?").bind(delta, row.id),
   ]);
   return json({ matched: true });
+}
+
+/* ---------------- monthly report aggregation ---------------- */
+// GET /api/report?student_id=XXX&year=2026&month=5&comment=...
+// Aggregates class_attendance for one student/month. (The SPA computes this
+// client-side from its in-memory snapshot; this endpoint mirrors that logic.)
+async function getReport(env: Env, url: URL): Promise<Response> {
+  const studentId = url.searchParams.get("student_id") || "";
+  const year = Number(url.searchParams.get("year")) || 0;
+  const month = Number(url.searchParams.get("month")) || 0;
+  const comment = url.searchParams.get("comment") || "";
+  const pad = (n: number) => (n < 10 ? "0" + n : "" + n);
+
+  const nameRow = await env.DB.prepare("SELECT name FROM class_students WHERE id = ?")
+    .bind(studentId)
+    .first<{ name: string }>();
+
+  const like = `${year}-${pad(month)}-%|${studentId}|%`;
+  const rows = await env.DB.prepare(
+    "SELECT status, COUNT(*) AS n FROM class_attendance WHERE att_key LIKE ? GROUP BY status"
+  )
+    .bind(like)
+    .all<{ status: string; n: number }>();
+
+  let total = 0;
+  let present = 0;
+  let late = 0;
+  let absent = 0;
+  let makeup = 0;
+  for (const r of rows.results || []) {
+    const n = Number(r.n);
+    total += n;
+    if (r.status === "출석") present += n;
+    else if (r.status === "지각") late += n;
+    else if (r.status === "결석" || r.status === "무단결석") absent += n;
+    else if (r.status === "보강") makeup += n;
+  }
+  const rate = total ? Math.round(((present + late) / total) * 100) : 0;
+
+  return json({
+    studentName: nameRow ? nameRow.name : "",
+    year,
+    month,
+    attendance: { total, present, late, absent, makeup, rate },
+    homework: { rate: 0 }, // class_attendance has no homework_status column
+    comment,
+  });
 }
 
 function json(data: unknown, status = 200): Response {
