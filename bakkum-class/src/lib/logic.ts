@@ -1,5 +1,16 @@
-import type { Grade, Makeup, MakeupDisplay, Student } from "../types";
+import type { Grade, Makeup, MakeupDisplay, Student, StudentStatus } from "../types";
 import { DOW_ORDER, TODAY, pad, parseD } from "./dates";
+
+/** Students actively attending — the only ones shown on dashboard/attendance/timetable. */
+export function isActive(s: Student): boolean {
+  return (s.status ?? "재원") === "재원";
+}
+export function activeStudents(students: Student[]): Student[] {
+  return students.filter(isActive);
+}
+export function statusTone(st: StudentStatus): string {
+  return st === "재원" ? "green" : st === "대기" ? "blue" : st === "휴원" ? "orange" : "gray";
+}
 
 /* ---------- small helpers ---------- */
 export function gradeColor(g: Grade | string): "blue" | "purple" {
@@ -33,7 +44,7 @@ export function firstOfMonth(ym: string): Date {
 }
 export function enrolledStudents(students: Student[], ym: string): Student[] {
   const first = firstOfMonth(ym);
-  return students.filter((s) => parseD(s.startDate) <= first);
+  return students.filter((s) => isActive(s) && parseD(s.startDate) <= first);
 }
 /** 이번 달 등록(2일 이후) → 다음 달부터 재적 */
 export function newThisMonth(students: Student[], ym: string): Student[] {
@@ -41,6 +52,7 @@ export function newThisMonth(students: Student[], ym: string): Student[] {
   const y = +p[0];
   const m = +p[1];
   return students.filter((s) => {
+    if (!isActive(s)) return false;
     const d = parseD(s.startDate);
     return d.getFullYear() === y && d.getMonth() + 1 === m && d.getDate() > 1;
   });

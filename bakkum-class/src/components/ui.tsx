@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import type { Grade } from "../types";
-import { avatarText, gradeColor } from "../lib/logic";
+import type { Grade, StudentStatus } from "../types";
+import { avatarText, gradeColor, statusTone } from "../lib/logic";
 import { Icon, type IconName } from "../icons";
 
 /* ---------- badge / avatar ---------- */
@@ -10,6 +10,10 @@ export function Badge({ tone, children }: { tone: string; children: ReactNode })
 
 export function GradeBadge({ grade }: { grade: Grade | string }) {
   return <Badge tone={grade === "초등" ? "blue" : "purple"}>{grade}</Badge>;
+}
+
+export function StatusBadge({ status }: { status: StudentStatus }) {
+  return <Badge tone={statusTone(status)}>{status}</Badge>;
 }
 
 export function Avatar({ name, grade, lg }: { name: string; grade: Grade | string; lg?: boolean }) {

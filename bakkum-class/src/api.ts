@@ -81,6 +81,30 @@ export function saveData(snap: DataSnapshot): void {
   saveTimer = setTimeout(flush, 250);
 }
 
+/**
+ * Award/revoke mogakgong points for a student (matched by name).
+ * Remote only — in localStorage/dev mode there is no mogakgong DB, so it's a no-op.
+ * Returns { matched } — false when no mogakgong student has that exact name.
+ */
+export async function awardPoints(
+  name: string,
+  delta: number,
+  reason: string
+): Promise<{ matched: boolean }> {
+  if (mode !== "remote") return { matched: false };
+  try {
+    const r = await fetch("/api/points", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, delta, reason }),
+    });
+    if (r.ok) return (await r.json()) as { matched: boolean };
+  } catch {
+    /* ignore */
+  }
+  return { matched: false };
+}
+
 async function flush(): Promise<void> {
   if (!pending) return;
   const snap = pending;

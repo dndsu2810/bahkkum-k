@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useStore } from "../store";
-import type { Student } from "../types";
+import type { AttStatus, Attitude, DataSnapshot, Student } from "../types";
 import { DOW, fmtFull, parseD, timeToMin, todayStr, uid } from "../lib/dates";
+import { activeStudents } from "../lib/logic";
+import { awardPoints } from "../api";
 import { Avatar, GradeBadge } from "../components/ui";
 
 interface LessonOnDate {
@@ -10,11 +12,24 @@ interface LessonOnDate {
   duration: number;
 }
 
+const ATT_OPTIONS: AttStatus[] = ["출석", "지각", "결석", "조퇴", "무단결석", "보강"];
+const TONE: Record<AttStatus, string> = {
+  출석: "green",
+  지각: "orange",
+  결석: "red",
+  조퇴: "orange",
+  무단결석: "red",
+  보강: "purple",
+};
+const ATTITUDES: Attitude[] = ["매우좋음", "보통", "미흡"];
+/** statuses that auto-register a 보강 대기 */
+const NEEDS_MAKEUP: AttStatus[] = ["결석", "무단결석", "조퇴"];
+
 function lessonsOnDate(students: Student[], dateStr: string): LessonOnDate[] {
   const d = parseD(dateStr);
   const dow = DOW[d.getDay()];
   const list: LessonOnDate[] = [];
-  students.forEach((s) =>
+  activeStudents(students).forEach((s) =>
     (s.lessons || []).forEach((l) => {
       if (l.day === dow) list.push({ student: s, time: l.time, duration: l.duration });
     })
@@ -23,52 +38,99 @@ function lessonsOnDate(students: Student[], dateStr: string): LessonOnDate[] {
   return list;
 }
 
+function applyMakeup(d: DataSnapshot, key: string, it: LessonOnDate, status: AttStatus) {
+  const [date, , time] = key.split("|");
+  const existing = d.makeups.find((m) => m.attKey === key);
+  if (NEEDS_MAKEUP.includes(status)) {
+    if (!existing) {
+      d.makeups.push({
+        id: uid(),
+        studentId: it.student.id,
+        absentDate: date,
+        absentTime: time,
+        absentDuration: it.duration,
+        attKey: key,
+        status: "pending",
+        makeupDate: "",
+        makeupTime: "",
+        makeupDuration: it.duration,
+        parentContacted: false,
+        memo: status === "결석" ? "" : status, // 무단결석/조퇴 reason carried into memo
+        createdAt: Date.now(),
+      });
+    }
+  } else if (existing && existing.status === "pending") {
+    d.makeups = d.makeups.filter((m) => m.attKey !== key);
+  }
+}
+
 export function Attendance() {
   const { data, mutate, toast } = useStore();
   const [attDate, setAttDate] = useState(todayStr());
 
   const d = parseD(attDate);
   const lessons = lessonsOnDate(data.students, attDate);
-  let present = 0;
-  let absent = 0;
-  lessons.forEach((it) => {
-    const st = data.attendance[attDate + "|" + it.student.id + "|" + it.time];
-    if (st === "present") present++;
-    else if (st === "absent") absent++;
-  });
-  const unchecked = lessons.length - present - absent;
 
-  function mark(key: string, status: "present" | "absent", dur: number) {
+  const counts = { 출석: 0, 지각: 0, 결석류: 0, checked: 0 };
+  lessons.forEach((it) => {
+    const r = data.attendance[attDate + "|" + it.student.id + "|" + it.time];
+    if (!r) return;
+    counts.checked++;
+    if (r.status === "출석") counts.출석++;
+    else if (r.status === "지각") counts.지각++;
+    else if (r.status === "결석" || r.status === "무단결석" || r.status === "조퇴") counts.결석류++;
+  });
+  const unchecked = lessons.length - counts.checked;
+
+  async function setStatus(it: LessonOnDate, key: string, newStatus: AttStatus) {
+    const prev = data.attendance[key];
+    const prevAwarded = prev?.pointsAwarded === true;
+    const willAward = newStatus === "출석";
+
+    // optimistic record + makeup update
     mutate((draft) => {
-      draft.attendance[key] = status;
-      const parts = key.split("|");
-      const date = parts[0];
-      const sid = parts[1];
-      const time = parts[2];
-      const existing = draft.makeups.find((m) => m.attKey === key);
-      if (status === "absent") {
-        if (!existing) {
-          draft.makeups.push({
-            id: uid(),
-            studentId: sid,
-            absentDate: date,
-            absentTime: time,
-            absentDuration: dur,
-            attKey: key,
-            status: "pending",
-            makeupDate: "",
-            makeupTime: "",
-            makeupDuration: dur,
-            parentContacted: false,
-            memo: "",
-            createdAt: Date.now(),
-          });
-        }
-      } else if (existing && existing.status === "pending") {
-        draft.makeups = draft.makeups.filter((m) => m.attKey !== key);
-      }
+      const cur = draft.attendance[key];
+      const rec = cur ? { ...cur } : { status: newStatus };
+      rec.status = newStatus;
+      if (newStatus !== "지각") rec.lateMinutes = undefined;
+      rec.pointsAwarded = prevAwarded;
+      draft.attendance[key] = rec;
+      applyMakeup(draft, key, it, newStatus);
     });
-    if (status === "absent") toast("결석 처리 · 보강 대기에 추가했어요.");
+
+    // mogakgong point side-effect (remote only; matched by name)
+    if (!prevAwarded && willAward) {
+      const res = await awardPoints(it.student.name, 20, "출석");
+      mutate((draft) => {
+        const r = draft.attendance[key];
+        if (r) r.pointsAwarded = res.matched;
+      });
+      toast(res.matched ? "출석 · 포인트 +20" : "출석 처리 (모각공 미등록 학생 — 포인트 건너뜀)");
+    } else if (prevAwarded && !willAward) {
+      await awardPoints(it.student.name, -20, "출석 취소");
+      mutate((draft) => {
+        const r = draft.attendance[key];
+        if (r) r.pointsAwarded = false;
+      });
+      toast(
+        NEEDS_MAKEUP.includes(newStatus)
+          ? newStatus + " 처리 · 보강 대기 등록 · 포인트 -20 회수"
+          : newStatus + " 처리 · 포인트 -20 회수"
+      );
+    } else {
+      toast(
+        NEEDS_MAKEUP.includes(newStatus)
+          ? newStatus + " 처리 · 보강 대기에 추가했어요."
+          : newStatus + " 처리했어요."
+      );
+    }
+  }
+
+  function patchRecord(key: string, patch: Partial<{ lateMinutes: number; attitude: Attitude; note: string }>) {
+    mutate((draft) => {
+      const r = draft.attendance[key];
+      if (r) Object.assign(r, patch);
+    });
   }
 
   return (
@@ -76,7 +138,7 @@ export function Attendance() {
       <div className="page-head">
         <div>
           <div className="page-title">출결 체크</div>
-          <div className="page-desc">{fmtFull(d)} · 결석 처리하면 보강 관리에 자동 등록됩니다</div>
+          <div className="page-desc">{fmtFull(d)} · 출석 시 모각공 포인트 +20 자동 적립</div>
         </div>
         <div className="head-actions">
           <input
@@ -99,7 +161,7 @@ export function Attendance() {
             <div>
               <div className="card-title">오늘 수업 {lessons.length}건</div>
               <div className="card-sub">
-                출석 {present} · 결석 {absent} · 미체크 {unchecked}
+                출석 {counts.출석} · 지각 {counts.지각} · 결석/조퇴 {counts.결석류} · 미체크 {unchecked}
               </div>
             </div>
           </div>
@@ -107,36 +169,81 @@ export function Attendance() {
             {lessons.map((it) => {
               const s = it.student;
               const key = attDate + "|" + s.id + "|" + it.time;
-              const st = data.attendance[key];
+              const rec = data.attendance[key];
+              const st = rec?.status;
+              const missing = st === "결석" || st === "무단결석";
               return (
-                <div className={"att-row" + (st === "absent" ? " is-absent" : "")} key={key}>
-                  <div className="att-time">{it.time}</div>
-                  <div className="att-stu">
-                    <Avatar name={s.name} grade={s.grade} />
-                    <div>
-                      <div style={{ fontWeight: 700 }}>
-                        {s.name} <GradeBadge grade={s.grade} />
+                <div key={key}>
+                  <div className={"att-row" + (missing ? " is-absent" : "")}>
+                    <div className="att-time">{it.time}</div>
+                    <div className="att-stu">
+                      <Avatar name={s.name} grade={s.grade} />
+                      <div>
+                        <div style={{ fontWeight: 700 }}>
+                          {s.name} <GradeBadge grade={s.grade} />
+                        </div>
+                        <div style={{ fontSize: "11.5px", color: "var(--text3)", fontWeight: 600 }}>
+                          {it.duration}분 수업
+                        </div>
+                        {NEEDS_MAKEUP.includes(st as AttStatus) && (
+                          <div className="att-note">{st} · 보강 대기로 등록됨</div>
+                        )}
                       </div>
-                      <div style={{ fontSize: "11.5px", color: "var(--text3)", fontWeight: 600 }}>
-                        {it.duration}분 수업
-                      </div>
-                      {st === "absent" && <div className="att-note">결석 · 보강 대기로 등록됨</div>}
+                    </div>
+                    <div className="att-seg">
+                      {ATT_OPTIONS.map((opt) => (
+                        <button
+                          key={opt}
+                          className={st === opt ? "on t-" + TONE[opt] : ""}
+                          onClick={() => setStatus(it, key, opt)}
+                        >
+                          {opt}
+                        </button>
+                      ))}
                     </div>
                   </div>
-                  <div className="att-seg">
-                    <button
-                      className={st === "present" ? "on-present" : ""}
-                      onClick={() => mark(key, "present", it.duration)}
-                    >
-                      출석
-                    </button>
-                    <button
-                      className={st === "absent" ? "on-absent" : ""}
-                      onClick={() => mark(key, "absent", it.duration)}
-                    >
-                      결석
-                    </button>
-                  </div>
+
+                  {rec && (
+                    <div className="att-extra">
+                      {st === "지각" && (
+                        <span className="att-extra-item">
+                          <span className="mini-label">지각</span>
+                          <input
+                            className="mini-num"
+                            type="number"
+                            min={0}
+                            step={5}
+                            placeholder="분"
+                            value={rec.lateMinutes ?? ""}
+                            onChange={(e) =>
+                              patchRecord(key, { lateMinutes: +e.target.value || 0 })
+                            }
+                          />
+                          <span className="mini-label">분</span>
+                        </span>
+                      )}
+                      <span className="att-extra-item">
+                        <span className="mini-label">수업태도</span>
+                        <span className="mini-seg">
+                          {ATTITUDES.map((a) => (
+                            <button
+                              key={a}
+                              className={rec.attitude === a ? "on" : ""}
+                              onClick={() => patchRecord(key, { attitude: a })}
+                            >
+                              {a}
+                            </button>
+                          ))}
+                        </span>
+                      </span>
+                      <input
+                        className="mini-note"
+                        placeholder="특이사항 (선택)"
+                        value={rec.note ?? ""}
+                        onChange={(e) => patchRecord(key, { note: e.target.value })}
+                      />
+                    </div>
+                  )}
                 </div>
               );
             })}

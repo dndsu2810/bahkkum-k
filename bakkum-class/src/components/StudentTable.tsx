@@ -1,6 +1,6 @@
 import type { Student } from "../types";
 import { durTotal, freqLabel, lessonDays, weekCount } from "../lib/logic";
-import { Avatar, GradeBadge, Empty } from "./ui";
+import { Avatar, GradeBadge, StatusBadge, Empty } from "./ui";
 import { Icon } from "../icons";
 
 export function StudentTable({
@@ -19,6 +19,8 @@ export function StudentTable({
         <tr>
           <th>이름</th>
           <th>구분</th>
+          {withActions && <th>상태</th>}
+          {withActions && <th>학교</th>}
           <th>등록일</th>
           <th>주 횟수</th>
           <th>요일</th>
@@ -39,6 +41,12 @@ export function StudentTable({
               <td>
                 <GradeBadge grade={s.grade} />
               </td>
+              {withActions && (
+                <td>
+                  <StatusBadge status={s.status ?? "재원"} />
+                </td>
+              )}
+              {withActions && <td className="muted">{s.school || "—"}</td>}
               <td className="muted">{s.startDate}</td>
               <td>
                 <span className="badge b-gray">{freqLabel(s)}</span>

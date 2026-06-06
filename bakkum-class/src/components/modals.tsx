@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Lesson, Makeup } from "../types";
+import type { Lesson, Makeup, StudentStatus } from "../types";
 import { useStore } from "../store";
 import { DOW_ORDER, fmtMDDow, todayStr, uid } from "../lib/dates";
 import { studentById } from "../lib/logic";
@@ -12,7 +12,12 @@ export function StudentModal({ id }: { id: string | null }) {
 
   const [name, setName] = useState(existing?.name ?? "");
   const [grade, setGrade] = useState<"초등" | "중등">(existing?.grade ?? "초등");
+  const [status, setStatus] = useState<StudentStatus>(existing?.status ?? "재원");
   const [startDate, setStartDate] = useState(existing?.startDate ?? todayStr());
+  const [school, setSchool] = useState(existing?.school ?? "");
+  const [birthdate, setBirthdate] = useState(existing?.birthdate ?? "");
+  const [parentPhone, setParentPhone] = useState(existing?.parentPhone ?? "");
+  const [studentPhone, setStudentPhone] = useState(existing?.studentPhone ?? "");
   const [excluded, setExcluded] = useState(existing?.excluded ?? false);
   const [slots, setSlots] = useState<Lesson[]>(
     existing
@@ -46,18 +51,24 @@ export function StudentModal({ id }: { id: string | null }) {
       return;
     }
     const lessons = slots.map((s) => ({ day: s.day, time: s.time, duration: +s.duration || 0 }));
+    const fields = {
+      name: nm,
+      grade,
+      status,
+      startDate,
+      school: school.trim(),
+      birthdate,
+      parentPhone: parentPhone.trim(),
+      studentPhone: studentPhone.trim(),
+      excluded,
+      lessons,
+    };
     mutate((d) => {
       if (id) {
         const s = studentById(d.students, id);
-        if (s) {
-          s.name = nm;
-          s.grade = grade;
-          s.startDate = startDate;
-          s.excluded = excluded;
-          s.lessons = lessons;
-        }
+        if (s) Object.assign(s, fields);
       } else {
-        d.students.push({ id: uid(), name: nm, grade, startDate, excluded, lessons });
+        d.students.push({ id: uid(), ...fields });
       }
     });
     closeModal();
@@ -110,14 +121,72 @@ export function StudentModal({ id }: { id: string | null }) {
           </div>
         </div>
         <div className="field">
-          <label>등록일</label>
+          <label>상태</label>
+          <div className="seg">
+            {(["재원", "휴원", "퇴원", "대기"] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                className={"seg-btn" + (status === st ? " on" : "")}
+                onClick={() => setStatus(st)}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+          <div className="hint">대시보드·출결·시간표에는 '재원' 학생만 표시됩니다.</div>
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <label>등록일</label>
+            <input
+              className="input"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+            <div className="hint">월 1일 이전(포함) 등록 시 그 달부터 재적.</div>
+          </div>
+          <div className="field">
+            <label>생년월일</label>
+            <input
+              className="input"
+              type="date"
+              value={birthdate}
+              onChange={(e) => setBirthdate(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="field">
+          <label>학교</label>
           <input
             className="input"
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            placeholder="예: 바꿈초등학교"
+            value={school}
+            onChange={(e) => setSchool(e.target.value)}
           />
-          <div className="hint">해당 월 1일 이전(포함) 등록 시 그 달부터 재적으로 집계됩니다.</div>
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <label>학부모 연락처</label>
+            <input
+              className="input"
+              type="tel"
+              placeholder="010-0000-0000"
+              value={parentPhone}
+              onChange={(e) => setParentPhone(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label>학생 연락처</label>
+            <input
+              className="input"
+              type="tel"
+              placeholder="010-0000-0000"
+              value={studentPhone}
+              onChange={(e) => setStudentPhone(e.target.value)}
+            />
+          </div>
         </div>
         <div className="field">
           <label>수업 스케줄</label>

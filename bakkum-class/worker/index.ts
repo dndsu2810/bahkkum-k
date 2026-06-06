@@ -10,7 +10,7 @@
 //   GET  /api/data    -> DataSnapshot
 //   PUT  /api/data    -> replaces all class_* data with the posted DataSnapshot
 
-import type { DataSnapshot, Makeup, Student } from "../src/types";
+import type { AttRecord, DataSnapshot, Makeup, Student } from "../src/types";
 
 export interface Env {
   DB: D1Database;
@@ -27,6 +27,7 @@ export default {
         if (p === "/api/health") return json({ ok: true });
         if (p === "/api/data" && request.method === "GET") return json(await readSnapshot(env));
         if (p === "/api/data" && request.method === "PUT") return await putData(env, request);
+        if (p === "/api/points" && request.method === "POST") return await postPoints(env, request);
         return json({ error: "not_found" }, 404);
       } catch (e) {
         return json({ error: "server_error", message: String(e) }, 500);
@@ -61,6 +62,11 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
     grade: r.grade === "중등" ? "중등" : "초등",
     startDate: String(r.start_date),
     excluded: Number(r.excluded) === 1,
+    status: (r.status as Student["status"]) || "재원",
+    school: String(r.school ?? ""),
+    birthdate: String(r.birthdate ?? ""),
+    parentPhone: String(r.parent_phone ?? ""),
+    studentPhone: String(r.student_phone ?? ""),
     lessons: lessonsByStudent[String(r.id)] || [],
   }));
 
@@ -82,7 +88,16 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
 
   const attendance: DataSnapshot["attendance"] = {};
   for (const r of aRes.results as Record<string, unknown>[]) {
-    attendance[String(r.att_key)] = r.status === "absent" ? "absent" : "present";
+    let status = String(r.status);
+    if (status === "present") status = "출석"; // legacy
+    else if (status === "absent") status = "결석"; // legacy
+    attendance[String(r.att_key)] = {
+      status: status as AttRecord["status"],
+      lateMinutes: r.late_minutes == null ? undefined : Number(r.late_minutes),
+      attitude: (r.attitude as AttRecord["attitude"]) || "",
+      note: String(r.note ?? ""),
+      pointsAwarded: Number(r.points_awarded) === 1,
+    };
   }
 
   return { students, makeups, attendance };
@@ -102,9 +117,21 @@ async function putData(env: Env, request: Request): Promise<Response> {
     stmts.push(
       env.DB
         .prepare(
-          "INSERT INTO class_students(id,name,grade,start_date,excluded,created_at) VALUES(?,?,?,?,?,?)"
+          "INSERT INTO class_students(id,name,grade,start_date,excluded,status,school,birthdate,parent_phone,student_phone,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
         )
-        .bind(s.id, s.name, s.grade, s.startDate, s.excluded ? 1 : 0, Date.now())
+        .bind(
+          s.id,
+          s.name,
+          s.grade,
+          s.startDate,
+          s.excluded ? 1 : 0,
+          s.status || "재원",
+          s.school || "",
+          s.birthdate || "",
+          s.parentPhone || "",
+          s.studentPhone || "",
+          Date.now()
+        )
     );
     (s.lessons || []).forEach((l, i) => {
       stmts.push(
@@ -142,13 +169,51 @@ async function putData(env: Env, request: Request): Promise<Response> {
   }
 
   for (const key of Object.keys(snap.attendance)) {
+    const a = snap.attendance[key];
     stmts.push(
-      env.DB.prepare("INSERT INTO class_attendance(att_key,status) VALUES(?,?)").bind(key, snap.attendance[key])
+      env.DB
+        .prepare(
+          "INSERT INTO class_attendance(att_key,status,late_minutes,attitude,note,points_awarded) VALUES(?,?,?,?,?,?)"
+        )
+        .bind(
+          key,
+          a.status,
+          a.lateMinutes == null ? null : a.lateMinutes,
+          a.attitude || "",
+          a.note || "",
+          a.pointsAwarded ? 1 : 0
+        )
     );
   }
 
   await env.DB.batch(stmts);
   return json({ ok: true });
+}
+
+/* ---------------- mogakgong points (출석 적립/회수) ---------------- */
+// Matches a class student to a mogakgong `students` row BY NAME, then logs a
+// point_history row AND keeps the denormalized students.points total in sync
+// (mogakgong invariant: students.points == SUM(point_history.delta)).
+// No match -> { matched:false }, nothing written. Never touches other tables.
+async function postPoints(env: Env, request: Request): Promise<Response> {
+  const body = (await request.json()) as { name?: string; delta?: number; reason?: string };
+  const name = (body.name || "").trim();
+  const delta = Number(body.delta) || 0;
+  const reason = (body.reason || "출석").slice(0, 40);
+  if (!name || !delta) return json({ matched: false });
+
+  const row = await env.DB.prepare("SELECT id FROM students WHERE name = ?").bind(name).first<{
+    id: number;
+  }>();
+  if (!row) return json({ matched: false });
+
+  await env.DB.batch([
+    env.DB
+      .prepare("INSERT INTO point_history(student_id,delta,reason,category) VALUES(?,?,?,'learn')")
+      .bind(row.id, delta, reason),
+    env.DB.prepare("UPDATE students SET points = points + ? WHERE id = ?").bind(delta, row.id),
+  ]);
+  return json({ matched: true });
 }
 
 function json(data: unknown, status = 200): Response {

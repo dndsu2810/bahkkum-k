@@ -12,7 +12,7 @@ import {
   parseD,
   timeToMin,
 } from "../lib/dates";
-import { gradeColor, studentById } from "../lib/logic";
+import { activeStudents, gradeColor, studentById } from "../lib/logic";
 import { Select } from "../components/ui";
 
 interface Evt {
@@ -96,7 +96,7 @@ export function Timetable() {
 
   // events per weekday index (0=월 ... 6=일)
   const evtByDay: Omit<Evt, "end" | "_col" | "_cols" | "_span">[][] = [[], [], [], [], [], [], []];
-  data.students.forEach((s) =>
+  activeStudents(data.students).forEach((s) =>
     (s.lessons || []).forEach((l) => {
       const di = DOW_ORDER.indexOf(l.day);
       if (di < 0) return;
