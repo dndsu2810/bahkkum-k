@@ -1,6 +1,7 @@
 import { Icon, type IconName } from "../icons";
 
 export type PageId =
+  | "today"
   | "dashboard"
   | "attendance"
   | "students"
@@ -11,6 +12,7 @@ export type PageId =
   | "report";
 
 const NAV: { id: PageId; label: string; icon: IconName }[] = [
+  { id: "today", label: "오늘", icon: "today" },
   { id: "dashboard", label: "대시보드", icon: "dashboard" },
   { id: "attendance", label: "출결 체크", icon: "clipboard" },
   { id: "students", label: "학생 관리", icon: "students" },

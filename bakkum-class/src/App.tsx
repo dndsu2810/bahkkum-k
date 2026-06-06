@@ -8,13 +8,14 @@ import { Attendance } from "./pages/Attendance";
 import { Students } from "./pages/Students";
 import { Timetable } from "./pages/Timetable";
 import { MakeupPage } from "./pages/Makeup";
+import { Today } from "./pages/Today";
 import { Homework } from "./pages/Homework";
 import { Progress } from "./pages/Progress";
 import { Report } from "./pages/Report";
 
 export default function App() {
   const { data, loaded } = useStore();
-  const [page, setPage] = useState<PageId>("dashboard");
+  const [page, setPage] = useState<PageId>("today");
 
   const pendingCount = data.makeups.filter((k) => k.status === "pending").length;
 
@@ -33,6 +34,7 @@ export default function App() {
             <div className="empty">불러오는 중…</div>
           ) : (
             <>
+              {page === "today" && <Today />}
               {page === "dashboard" && <Dashboard />}
               {page === "attendance" && <Attendance />}
               {page === "students" && <Students />}

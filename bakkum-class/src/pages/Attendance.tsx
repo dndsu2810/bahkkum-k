@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useStore } from "../store";
-import type { AttStatus, Attitude, DataSnapshot, Student } from "../types";
-import { DOW, fmtFull, parseD, timeToMin, todayStr, uid } from "../lib/dates";
+import type { AttStatus, Attitude, Student } from "../types";
+import { DOW, fmtFull, parseD, timeToMin, todayStr } from "../lib/dates";
 import { activeStudents } from "../lib/logic";
+import { NEEDS_MAKEUP, applyMakeup } from "../lib/attendanceLogic";
 import { awardPoints } from "../api";
 import { Avatar, GradeBadge } from "../components/ui";
 
@@ -22,8 +23,6 @@ const TONE: Record<AttStatus, string> = {
   보강: "purple",
 };
 const ATTITUDES: Attitude[] = ["매우좋음", "보통", "미흡"];
-/** statuses that auto-register a 보강 대기 */
-const NEEDS_MAKEUP: AttStatus[] = ["결석", "무단결석", "조퇴"];
 
 function lessonsOnDate(students: Student[], dateStr: string): LessonOnDate[] {
   const d = parseD(dateStr);
@@ -36,32 +35,6 @@ function lessonsOnDate(students: Student[], dateStr: string): LessonOnDate[] {
   );
   list.sort((a, b) => timeToMin(a.time) - timeToMin(b.time));
   return list;
-}
-
-function applyMakeup(d: DataSnapshot, key: string, it: LessonOnDate, status: AttStatus) {
-  const [date, , time] = key.split("|");
-  const existing = d.makeups.find((m) => m.attKey === key);
-  if (NEEDS_MAKEUP.includes(status)) {
-    if (!existing) {
-      d.makeups.push({
-        id: uid(),
-        studentId: it.student.id,
-        absentDate: date,
-        absentTime: time,
-        absentDuration: it.duration,
-        attKey: key,
-        status: "pending",
-        makeupDate: "",
-        makeupTime: "",
-        makeupDuration: it.duration,
-        parentContacted: false,
-        memo: status === "결석" ? "" : status, // 무단결석/조퇴 reason carried into memo
-        createdAt: Date.now(),
-      });
-    }
-  } else if (existing && existing.status === "pending") {
-    d.makeups = d.makeups.filter((m) => m.attKey !== key);
-  }
 }
 
 export function Attendance() {
@@ -95,7 +68,7 @@ export function Attendance() {
       if (newStatus !== "지각") rec.lateMinutes = undefined;
       rec.pointsAwarded = prevAwarded;
       draft.attendance[key] = rec;
-      applyMakeup(draft, key, it, newStatus);
+      applyMakeup(draft, key, it.student.id, it.duration, newStatus);
     });
 
     // point side-effect (remote only; awarded by roster id)
