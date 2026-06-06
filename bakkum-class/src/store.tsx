@@ -32,7 +32,13 @@ interface StoreCtx {
 const Ctx = createContext<StoreCtx | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<DataSnapshot>({ students: [], makeups: [], attendance: {} });
+  const [data, setData] = useState<DataSnapshot>({
+    students: [],
+    makeups: [],
+    attendance: {},
+    homeworkLog: [],
+    progressLog: [],
+  });
   const [loaded, setLoaded] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [modal, setModal] = useState<ReactNode | null>(null);

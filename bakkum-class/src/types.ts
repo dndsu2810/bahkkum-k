@@ -57,8 +57,34 @@ export interface AttRecord {
 
 export type Attendance = Record<string, AttRecord>;
 
+/** A homework record (숙제 관리 페이지에서 기록 → 월말리포트에 누적). */
+export interface HwLog {
+  id: string;
+  studentId: string;
+  date: string; // YYYY-MM-DD
+  book: string;
+  tags: string[];
+  completion: number; // 0..100
+  status: "done" | "late";
+  memo: string;
+}
+
+/** A progress record (진도 관리 페이지에서 기록 → 월말리포트에 누적). */
+export interface ProgLog {
+  id: string;
+  studentId: string;
+  date: string; // YYYY-MM-DD (기록일)
+  unit: string;
+  area: string;
+  pct: number; // 달성률 0..100
+  startDate: string; // 학습 시작일
+  memo: string;
+}
+
 export interface DataSnapshot {
   students: Student[];
   makeups: Makeup[];
   attendance: Attendance;
+  homeworkLog: HwLog[];
+  progressLog: ProgLog[];
 }

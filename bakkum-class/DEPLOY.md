@@ -48,6 +48,16 @@ npx wrangler secret put NOTION_TOKEN     # 프롬프트에 토큰 붙여넣기
    가정합니다. 실제 노션 속성명/타입과 다르면 동기화/저장이 실패하니, 한 번 동기화해 보고
    `wrangler tail` 로그의 실패 메시지를 보고 `NOTION_CFG`를 맞춰 주세요. (노션 실패해도 D1은 정상)
 
+## 2-d. (업데이트 시) 추가 마이그레이션
+
+기존 설치를 업데이트할 때 아직 적용 안 한 마이그레이션을 순서대로 1회씩:
+```bash
+# class_* FK 제거 (저장 사라짐 버그 수정)
+npx wrangler d1 execute bakuum-production --remote --file=./migrations/003_drop_class_fk.sql
+# 숙제/진도 기록 테이블
+npx wrangler d1 execute bakuum-production --remote --file=./migrations/004_homework_progress.sql
+```
+
 ## 3. 빌드 + 배포
 
 ```bash

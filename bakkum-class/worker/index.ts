@@ -62,13 +62,15 @@ export default {
 
 /* ---------------- read (roster ⨝ class_* extras) ---------------- */
 async function readSnapshot(env: Env): Promise<DataSnapshot> {
-  const [rosterRes, lRes, mRes, aRes] = await env.DB.batch([
+  const [rosterRes, lRes, mRes, aRes, hRes, pRes] = await env.DB.batch([
     env.DB.prepare(
       "SELECT id,name,grade,status,school,birth_date,parent_phone,student_phone,start_date,excluded FROM students"
     ),
     env.DB.prepare("SELECT * FROM class_lessons ORDER BY student_id, sort_order"),
     env.DB.prepare("SELECT * FROM class_makeups"),
     env.DB.prepare("SELECT * FROM class_attendance"),
+    env.DB.prepare("SELECT * FROM class_homework ORDER BY date DESC"),
+    env.DB.prepare("SELECT * FROM class_progress ORDER BY date DESC"),
   ]);
 
   const lessonsByStudent: Record<string, { day: string; time: string; duration: number }[]> = {};
@@ -136,7 +138,36 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
     };
   }
 
-  return { students, makeups, attendance };
+  const homeworkLog = (hRes.results as Record<string, unknown>[])
+    .filter((r) => rosterIds.has(String(r.student_id)))
+    .map((r) => ({
+      id: String(r.id),
+      studentId: String(r.student_id),
+      date: String(r.date),
+      book: String(r.book ?? ""),
+      tags: String(r.tags ?? "")
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean),
+      completion: Number(r.completion),
+      status: r.status === "late" ? ("late" as const) : ("done" as const),
+      memo: String(r.memo ?? ""),
+    }));
+
+  const progressLog = (pRes.results as Record<string, unknown>[])
+    .filter((r) => rosterIds.has(String(r.student_id)))
+    .map((r) => ({
+      id: String(r.id),
+      studentId: String(r.student_id),
+      date: String(r.date),
+      unit: String(r.unit ?? ""),
+      area: String(r.area ?? ""),
+      pct: Number(r.pct),
+      startDate: String(r.start_date ?? ""),
+      memo: String(r.memo ?? ""),
+    }));
+
+  return { students, makeups, attendance, homeworkLog, progressLog };
 }
 
 /* ---------------- write (class_* only; roster never bulk-touched) ---------------- */
@@ -146,7 +177,28 @@ async function putData(env: Env, request: Request): Promise<Response> {
     env.DB.prepare("DELETE FROM class_attendance"),
     env.DB.prepare("DELETE FROM class_makeups"),
     env.DB.prepare("DELETE FROM class_lessons"),
+    env.DB.prepare("DELETE FROM class_homework"),
+    env.DB.prepare("DELETE FROM class_progress"),
   ];
+
+  for (const h of snap.homeworkLog || []) {
+    stmts.push(
+      env.DB
+        .prepare(
+          "INSERT INTO class_homework(id,student_id,date,book,tags,completion,status,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?)"
+        )
+        .bind(h.id, h.studentId, h.date, h.book || "", (h.tags || []).join(","), h.completion || 0, h.status || "done", h.memo || "", Date.now())
+    );
+  }
+  for (const pr of snap.progressLog || []) {
+    stmts.push(
+      env.DB
+        .prepare(
+          "INSERT INTO class_progress(id,student_id,date,unit,area,pct,start_date,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?)"
+        )
+        .bind(pr.id, pr.studentId, pr.date, pr.unit || "", pr.area || "", pr.pct || 0, pr.startDate || "", pr.memo || "", Date.now())
+    );
+  }
 
   for (const s of snap.students) {
     (s.lessons || []).forEach((l, i) => {
@@ -339,9 +391,11 @@ async function syncStudents(env: Env): Promise<Response> {
         .bind(s.notionPageId, s.name)
         .first<{ id: number }>();
       if (ex) {
+        // start_date(등록일)는 앱에서 수정한 값을 보존 — 노션 첫수업일(영어 공용)이
+        // 덮어쓰지 않도록 비어있을 때만 채운다. 나머지 필드는 노션이 마스터.
         await env.DB
           .prepare(
-            "UPDATE students SET name=?,status=?,school=?,birth_date=?,parent_phone=?,student_phone=?,start_date=?,notion_page_id=? WHERE id=?"
+            "UPDATE students SET name=?,status=?,school=?,birth_date=?,parent_phone=?,student_phone=?,start_date=COALESCE(NULLIF(start_date,''),?),notion_page_id=? WHERE id=?"
           )
           .bind(s.name, s.status, s.school, s.birth, s.parentPhone, s.studentPhone, s.start, s.notionPageId, ex.id)
           .run();

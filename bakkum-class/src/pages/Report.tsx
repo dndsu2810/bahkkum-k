@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useStore } from "../store";
 import type { Student } from "../types";
-import type { EvalItem, HwItem, NoteItem, ReportData, ReportExtras } from "../lib/reportTypes";
+import type { EvalItem, NoteItem, ProgressInfo, ReportData, ReportExtras } from "../lib/reportTypes";
 import { emptyExtras } from "../lib/reportTypes";
 import { computeAtt, deriveNotes } from "../lib/reportCompute";
 import { loadExtras, saveExtras } from "../lib/reportExtras";
 import { saveReportAsImages } from "../lib/reportImage";
-import { curMonthStr, monthOptions, studentById } from "../lib/logic";
-import { uid, todayStr } from "../lib/dates";
-import { pushHomeworkNotion, pushProgressNotion } from "../api";
+import { curMonthStr, inMonth, monthOptions, studentById } from "../lib/logic";
+import { uid } from "../lib/dates";
 import { Select } from "../components/ui";
 import { Icon } from "../icons";
 import { ReportCard } from "../components/ReportCard";
@@ -61,6 +60,19 @@ export function Report() {
   }
   function buildData(studentId: string): ReportData {
     const s = studentById(data.students, studentId) as Student;
+    const stored = getExtras(studentId); // comment / evals / notes (manual)
+    // 숙제·진도는 '숙제 관리'·'진도 관리' 기록(D1)에서 해당 월로 자동 채움
+    const homeworks = data.homeworkLog
+      .filter((h) => h.studentId === studentId && inMonth(h.date, ym))
+      .sort((a, b) => (a.date < b.date ? -1 : 1))
+      .map((h) => ({ id: h.id, date: h.date, book: h.book, tags: h.tags, completion: h.completion, status: h.status, memo: h.memo }));
+    const progList = data.progressLog
+      .filter((p) => p.studentId === studentId && inMonth(p.date, ym))
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+    const latest = progList[0];
+    const progress: ProgressInfo = latest
+      ? { pct: latest.pct, unit: latest.unit, area: latest.area, startDate: latest.startDate, weeks: "" }
+      : { ...emptyExtras().progress };
     return {
       studentId,
       studentName: s ? s.name : "학생",
@@ -68,7 +80,7 @@ export function Report() {
       month,
       teacher: TEACHER,
       att: computeAtt(data, studentId, year, month),
-      extras: getExtras(studentId),
+      extras: { ...stored, homeworks, progress },
     };
   }
 
@@ -198,7 +210,6 @@ export function Report() {
                 </div>
                 {isOpen && (
                   <StudentEditor
-                    studentId={s.id}
                     extras={getExtras(s.id)}
                     onChange={(next) => updateExtras(s.id, next)}
                     onReloadNotes={() =>
@@ -225,34 +236,15 @@ export function Report() {
 
 /* ---------------- per-student content editor ---------------- */
 function StudentEditor({
-  studentId,
   extras,
   onChange,
   onReloadNotes,
 }: {
-  studentId: string;
   extras: ReportExtras;
   onChange: (next: ReportExtras) => void;
   onReloadNotes: () => void;
 }) {
-  const { toast } = useStore();
   const set = (patch: Partial<ReportExtras>) => onChange({ ...extras, ...patch });
-  const p = extras.progress;
-
-  function saveProgressToNotion() {
-    if (!p.unit.trim()) {
-      toast("진도 단원을 입력해 주세요.");
-      return;
-    }
-    const content = [p.unit, p.area, p.pct ? p.pct + "%" : ""].filter(Boolean).join(" · ");
-    pushProgressNotion(studentId, todayStr(), content);
-    toast("진도를 노션에 저장했어요.");
-  }
-  function saveHwToNotion(h: HwItem) {
-    const content = [h.book, h.tags.join("·"), h.completion ? h.completion + "%" : ""].filter(Boolean).join(" · ");
-    pushHomeworkNotion(studentId, h.date || todayStr(), content, h.status === "done");
-    toast("숙제를 노션에 저장했어요.");
-  }
 
   return (
     <div className="rep-editor">
@@ -267,36 +259,9 @@ function StudentEditor({
         onChange={(e) => set({ comment: e.target.value })}
       />
 
-      {/* 진도 */}
-      <div className="rep-mini">진도 달성 현황</div>
-      <div className="rep-itemrow">
-        <input
-          className="input"
-          type="number"
-          min={0}
-          max={100}
-          style={{ width: 90 }}
-          placeholder="달성률%"
-          value={p.pct || ""}
-          onChange={(e) => set({ progress: { ...p, pct: +e.target.value || 0 } })}
-        />
-        <input
-          className="input"
-          style={{ flex: 1, minWidth: 160 }}
-          placeholder="현재 학습 단원 (예: 3단원 소수의 나눗셈)"
-          value={p.unit}
-          onChange={(e) => set({ progress: { ...p, unit: e.target.value } })}
-        />
+      <div className="page-desc" style={{ margin: "12px 0 2px" }}>
+        숙제·진도는 ‘숙제 관리’·‘진도 관리’에서 기록하면 이 달 리포트에 자동으로 반영됩니다.
       </div>
-      <div className="rep-itemrow" style={{ marginTop: 7 }}>
-        <input className="input" style={{ width: 120 }} placeholder="학습 영역" value={p.area} onChange={(e) => set({ progress: { ...p, area: e.target.value } })} />
-        <input className="input" type="date" style={{ width: 160 }} value={p.startDate} onChange={(e) => set({ progress: { ...p, startDate: e.target.value } })} />
-        <input className="input" style={{ width: 120 }} placeholder="학습 기간(약 6주차)" value={p.weeks} onChange={(e) => set({ progress: { ...p, weeks: e.target.value } })} />
-      </div>
-      <button className="btn ghost sm" style={{ marginTop: 7 }} onClick={saveProgressToNotion}>
-        <Icon name="copy" />
-        진도 노션 저장
-      </button>
 
       {/* 평가 */}
       <div className="rep-mini">평가 결과 (주간평가 · 경시대회)</div>
@@ -320,35 +285,6 @@ function StudentEditor({
       <button className="btn ghost sm" style={{ marginTop: 7 }} onClick={() => set({ evals: [...extras.evals, { id: uid(), type: "주간평가", name: "", meta: "", date: "", score: 0 }] })}>
         <Icon name="plus" />
         평가 추가
-      </button>
-
-      {/* 숙제 */}
-      <div className="rep-mini">숙제 및 수행 기록</div>
-      <div className="rep-list">
-        {extras.homeworks.map((h, i) => (
-          <div className="rep-itemrow" key={h.id}>
-            <input className="input" type="date" style={{ width: 150 }} value={h.date} onChange={(e) => editHw(i, { date: e.target.value })} />
-            <input className="input" style={{ width: 150 }} placeholder="교재" value={h.book} onChange={(e) => editHw(i, { book: e.target.value })} />
-            <input className="input" style={{ width: 130 }} placeholder="태그(쉼표)" value={h.tags.join(",")} onChange={(e) => editHw(i, { tags: e.target.value.split(",").map((t) => t.trim()).filter(Boolean) })} />
-            <input className="input" type="number" min={0} max={100} style={{ width: 80 }} placeholder="완성%" value={h.completion || ""} onChange={(e) => editHw(i, { completion: +e.target.value || 0 })} />
-            <select className="input" value={h.status} onChange={(e) => editHw(i, { status: e.target.value as HwItem["status"] })}>
-              <option value="done">검사완료</option>
-              <option value="late">지연</option>
-            </select>
-            <input className="input" style={{ flex: 1, minWidth: 140 }} placeholder="선생님 메모(선택)" value={h.memo} onChange={(e) => editHw(i, { memo: e.target.value })} />
-            <button className="btn ghost sm" onClick={() => saveHwToNotion(h)} title="이 숙제를 노션에 저장">
-              <Icon name="copy" />
-              노션
-            </button>
-            <button className="rep-x" onClick={() => set({ homeworks: extras.homeworks.filter((_, j) => j !== i) })}>
-              <Icon name="x" />
-            </button>
-          </div>
-        ))}
-      </div>
-      <button className="btn ghost sm" style={{ marginTop: 7 }} onClick={() => set({ homeworks: [...extras.homeworks, { id: uid(), date: "", book: "", tags: [], completion: 0, status: "done", memo: "" }] })}>
-        <Icon name="plus" />
-        숙제 추가
       </button>
 
       {/* 출결 특이사항 */}
@@ -384,9 +320,6 @@ function StudentEditor({
 
   function editEval(i: number, patch: Partial<EvalItem>) {
     set({ evals: extras.evals.map((e, j) => (j === i ? { ...e, ...patch } : e)) });
-  }
-  function editHw(i: number, patch: Partial<HwItem>) {
-    set({ homeworks: extras.homeworks.map((h, j) => (j === i ? { ...h, ...patch } : h)) });
   }
   function editNote(i: number, patch: Partial<NoteItem>) {
     set({ notes: extras.notes.map((nt, j) => (j === i ? { ...nt, ...patch } : nt)) });

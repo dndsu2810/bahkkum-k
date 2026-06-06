@@ -60,6 +60,34 @@ CREATE TABLE IF NOT EXISTS class_makeups (
 CREATE INDEX IF NOT EXISTS idx_class_makeups_student ON class_makeups(student_id);
 CREATE INDEX IF NOT EXISTS idx_class_makeups_status ON class_makeups(status);
 
+-- 숙제 기록 (숙제 관리 페이지 → 월말리포트 누적). student_id = 로스터 id (no FK).
+CREATE TABLE IF NOT EXISTS class_homework (
+  id          TEXT PRIMARY KEY,
+  student_id  TEXT NOT NULL,
+  date        TEXT NOT NULL,
+  book        TEXT NOT NULL DEFAULT '',
+  tags        TEXT NOT NULL DEFAULT '',   -- comma-separated
+  completion  INTEGER NOT NULL DEFAULT 0,
+  status      TEXT NOT NULL DEFAULT 'done', -- done | late
+  memo        TEXT NOT NULL DEFAULT '',
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_class_homework_student ON class_homework(student_id);
+
+-- 진도 기록 (진도 관리 페이지 → 월말리포트 누적). student_id = 로스터 id (no FK).
+CREATE TABLE IF NOT EXISTS class_progress (
+  id          TEXT PRIMARY KEY,
+  student_id  TEXT NOT NULL,
+  date        TEXT NOT NULL,
+  unit        TEXT NOT NULL DEFAULT '',
+  area        TEXT NOT NULL DEFAULT '',
+  pct         INTEGER NOT NULL DEFAULT 0,
+  start_date  TEXT NOT NULL DEFAULT '',
+  memo        TEXT NOT NULL DEFAULT '',
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_class_progress_student ON class_progress(student_id);
+
 -- Shared roster + points tables. On bakuum-production these already exist
 -- (mogakgong) — IF NOT EXISTS is a no-op there. Defined here so local dev and
 -- fresh installs have them, including the academic columns (see migrations/002).

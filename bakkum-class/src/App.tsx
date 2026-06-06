@@ -8,6 +8,8 @@ import { Attendance } from "./pages/Attendance";
 import { Students } from "./pages/Students";
 import { Timetable } from "./pages/Timetable";
 import { MakeupPage } from "./pages/Makeup";
+import { Homework } from "./pages/Homework";
+import { Progress } from "./pages/Progress";
 import { Report } from "./pages/Report";
 
 export default function App() {
@@ -36,6 +38,8 @@ export default function App() {
               {page === "students" && <Students />}
               {page === "timetable" && <Timetable />}
               {page === "makeup" && <MakeupPage />}
+              {page === "homework" && <Homework />}
+              {page === "progress" && <Progress />}
               {page === "report" && <Report />}
             </>
           )}

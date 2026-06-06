@@ -11,6 +11,16 @@ import { uid } from "./lib/dates";
 const STORE_S = "bk_students";
 const STORE_M = "bk_makeups";
 const STORE_A = "bk_attendance";
+const STORE_H = "bk_homework";
+const STORE_P = "bk_progress";
+
+function readArr<T>(key: string): T[] {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "[]") || [];
+  } catch {
+    return [];
+  }
+}
 
 let mode: "local" | "remote" = "local";
 
@@ -49,13 +59,21 @@ function loadLocal(): DataSnapshot {
   // No demo seeding — a fresh install starts empty.
   if (!students) students = [];
   if (!makeups) makeups = [];
-  return { students, makeups, attendance };
+  return {
+    students,
+    makeups,
+    attendance,
+    homeworkLog: readArr(STORE_H),
+    progressLog: readArr(STORE_P),
+  };
 }
 
 function saveLocal(snap: DataSnapshot): void {
   localStorage.setItem(STORE_S, JSON.stringify(snap.students));
   localStorage.setItem(STORE_M, JSON.stringify(snap.makeups));
   localStorage.setItem(STORE_A, JSON.stringify(snap.attendance));
+  localStorage.setItem(STORE_H, JSON.stringify(snap.homeworkLog));
+  localStorage.setItem(STORE_P, JSON.stringify(snap.progressLog));
 }
 
 export async function loadData(): Promise<DataSnapshot> {
