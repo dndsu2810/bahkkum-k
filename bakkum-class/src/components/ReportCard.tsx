@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { ReportData } from "../lib/reportTypes";
 import { pad } from "../lib/dates";
+import { SECTION_LABELS, getReportOrder, type SectionKey } from "../lib/reportSections";
 import "../styles/reportCard.css";
 
 const LOGO = "/report-logo.png";
@@ -114,13 +115,155 @@ export function ReportCard({ data }: { data: ReportData }) {
     ? Math.round(extras.homeworks.reduce((s, h) => s + (h.completion || 0), 0) / extras.homeworks.length)
     : 0;
 
-  // section numbering (only count sections that render)
   const showComment = !!extras.comment.trim();
   const showProgress = !!extras.progress.unit.trim();
   const showEvals = extras.evals.length > 0;
   const showHw = extras.homeworks.length > 0;
+
+  // 섹션 본문 (제목/번호는 순서대로 렌더링하며 부여)
+  const bodies: Record<SectionKey, { show: boolean; aside?: ReactNode; body: ReactNode }> = {
+    summary: {
+      show: true,
+      body: (
+        <div className="r-kpis">
+          <div className="r-kpi">
+            <div className="r-kpi-label">주간평가 평균</div>
+            <div className="r-kpi-val">{weeklyAvg}<i>점</i></div>
+            <div className="r-kpi-bar"><span style={{ width: weeklyAvg + "%" }} /></div>
+            <div className="r-kpi-foot">주간평가 {weekly.length}회 평균</div>
+          </div>
+          <div className="r-kpi">
+            <div className="r-kpi-label">출석 현황</div>
+            <div className="r-kpi-val">{att.total}<i>회 수업</i></div>
+            <div className="r-stack">
+              <i className="r-s-att" style={{ flex: att.present || 0.0001 }} />
+              <i className="r-s-mk" style={{ flex: att.makeup || 0.0001 }} />
+              <i className="r-s-ab" style={{ flex: att.absent || 0.0001 }} />
+            </div>
+            <div className="r-legend">
+              <span><i className="r-dot g" />출석 {att.present}</span>
+              <span><i className="r-dot b" />보강 {att.makeup}</span>
+              <span><i className="r-dot r" />결석 {att.absent}</span>
+            </div>
+          </div>
+          <div className="r-kpi">
+            <div className="r-kpi-label">숙제 평균 완성도</div>
+            <div className="r-kpi-val">{hwAvg}<i>%</i></div>
+            <div className="r-kpi-bar"><span style={{ width: hwAvg + "%", background: "var(--green)" }} /></div>
+            <div className="r-kpi-foot">총 {extras.homeworks.length}건 검사 · 평균 기준</div>
+          </div>
+        </div>
+      ),
+    },
+    comment: {
+      show: showComment,
+      body: (
+        <div className="r-comment">
+          <div className="r-by">
+            <span className="r-nm">담임 선생님</span>
+            <span className="r-tg">종합 의견</span>
+          </div>
+          <p>{extras.comment}</p>
+        </div>
+      ),
+    },
+    progress: {
+      show: showProgress,
+      body: (
+        <div className="r-progress">
+          <Ring pct={extras.progress.pct} />
+          <div className="r-prog-info">
+            <span className="r-tag">현재 학습 단원</span>
+            <div className="r-unit">{extras.progress.unit}</div>
+            <div className="r-prog-grid">
+              <div className="r-it"><div className="r-l">학습 영역</div><div className="r-v">{extras.progress.area || "—"}</div></div>
+              <div className="r-it"><div className="r-l">학습 시작일</div><div className="r-v">{fmtYmd(extras.progress.startDate) || "—"}</div></div>
+              <div className="r-it"><div className="r-l">학습 기간</div><div className="r-v">{extras.progress.weeks || "—"}</div></div>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    attendance: {
+      show: true,
+      aside: <span className="r-sec-aside">{data.year}년 {data.month}월</span>,
+      body: <Calendar data={data} />,
+    },
+    evals: {
+      show: showEvals,
+      aside: weekly.length > 0 ? <span className="r-sec-aside">주간평가 평균 {weeklyAvg}점</span> : undefined,
+      body: (
+        <div className="r-evals">
+          {extras.evals.map((e) => (
+            <div className="r-ev" key={e.id}>
+              <div className="r-ev-head">
+                <span className={"r-ev-type " + (e.type === "주간평가" ? "wk" : "cp")}>{e.type}</span>
+                <span className="r-ev-status">완료</span>
+              </div>
+              <div className="r-ev-name">{e.name}</div>
+              <div className="r-ev-meta">{e.meta}</div>
+              <div className="r-ev-bottom">
+                <span className="r-ev-date">{fmtYmd(e.date)}</span>
+                <span className={"r-ev-score " + scoreClass(e.score)}>
+                  {e.score}<small>점</small>
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    homework: {
+      show: showHw,
+      aside: <span className="r-sec-aside">총 {extras.homeworks.length}건</span>,
+      body: (
+        <div className="r-hw">
+          {extras.homeworks.map((h) => {
+            const cc = compClasses(h.completion);
+            const md = /^(\d{4})-(\d{2})-(\d{2})$/.exec(h.date);
+            return (
+              <div className="r-hw-item" key={h.id}>
+                <div className="r-hw-main">
+                  <div className="r-hw-date">
+                    {md ? md[2] : h.date}
+                    {md && <span>/ {md[3]}</span>}
+                  </div>
+                  <div className="r-hw-book">
+                    <div className="r-bk">{h.book}</div>
+                    {h.tags.length > 0 && (
+                      <div className="r-hw-tags">
+                        {h.tags.map((t, i) => (
+                          <i key={i}>{t}</i>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="r-hw-comp">
+                    <div className="r-ctop">
+                      <span className="r-cl">완성도</span>
+                      <span className={"r-cv " + cc.txt}>{h.completion}%</span>
+                    </div>
+                    <div className="r-cbar"><span className={cc.bar} style={{ width: h.completion + "%" }} /></div>
+                  </div>
+                  <div className={"r-badge " + (h.status === "done" ? "done" : h.status === "late" ? "late" : "pending")}>
+                    {h.status === "done" ? "검사 완료" : h.status === "late" ? "지연" : "검사 전"}
+                  </div>
+                </div>
+                {h.memo && (
+                  <div className="r-hw-cmt">
+                    <span className="r-ck">선생님 메모</span>
+                    <span className="r-ctxt">{h.memo}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ),
+    },
+  };
+
   let n = 0;
-  const no = () => pad(++n);
 
   return (
     <div id="report-card" className="r-sheet">
@@ -149,174 +292,21 @@ export function ReportCard({ data }: { data: ReportData }) {
       </header>
 
       <div className="r-body">
-        {/* 01 요약 */}
-        <section className="r-sec">
-          <div className="r-sec-head">
-            <span className="r-sec-no">{no()}</span>
-            <span className="r-sec-title">이달의 학습 요약</span>
-          </div>
-          <div className="r-kpis">
-            <div className="r-kpi">
-              <div className="r-kpi-label">주간평가 평균</div>
-              <div className="r-kpi-val">{weeklyAvg}<i>점</i></div>
-              <div className="r-kpi-bar"><span style={{ width: weeklyAvg + "%" }} /></div>
-              <div className="r-kpi-foot">주간평가 {weekly.length}회 평균</div>
-            </div>
-            <div className="r-kpi">
-              <div className="r-kpi-label">출석 현황</div>
-              <div className="r-kpi-val">{att.total}<i>회 수업</i></div>
-              <div className="r-stack">
-                <i className="r-s-att" style={{ flex: att.present || 0.0001 }} />
-                <i className="r-s-mk" style={{ flex: att.makeup || 0.0001 }} />
-                <i className="r-s-ab" style={{ flex: att.absent || 0.0001 }} />
+        {getReportOrder().map((k) => {
+          const s = bodies[k];
+          if (!s || !s.show) return null;
+          const num = pad(++n);
+          return (
+            <section className="r-sec" key={k}>
+              <div className="r-sec-head">
+                <span className="r-sec-no">{num}</span>
+                <span className="r-sec-title">{SECTION_LABELS[k]}</span>
+                {s.aside}
               </div>
-              <div className="r-legend">
-                <span><i className="r-dot g" />출석 {att.present}</span>
-                <span><i className="r-dot b" />보강 {att.makeup}</span>
-                <span><i className="r-dot r" />결석 {att.absent}</span>
-              </div>
-            </div>
-            <div className="r-kpi">
-              <div className="r-kpi-label">숙제 평균 완성도</div>
-              <div className="r-kpi-val">{hwAvg}<i>%</i></div>
-              <div className="r-kpi-bar"><span style={{ width: hwAvg + "%", background: "var(--green)" }} /></div>
-              <div className="r-kpi-foot">총 {extras.homeworks.length}건 검사 · 평균 기준</div>
-            </div>
-          </div>
-        </section>
-
-        {/* 02 코멘트 */}
-        {showComment && (
-          <section className="r-sec">
-            <div className="r-sec-head">
-              <span className="r-sec-no">{no()}</span>
-              <span className="r-sec-title">선생님 종합 코멘트</span>
-            </div>
-            <div className="r-comment">
-              <div className="r-by">
-                <span className="r-nm">담임 선생님</span>
-                <span className="r-tg">종합 의견</span>
-              </div>
-              <p>{extras.comment}</p>
-            </div>
-          </section>
-        )}
-
-        {/* 03 진도 */}
-        {showProgress && (
-          <section className="r-sec">
-            <div className="r-sec-head">
-              <span className="r-sec-no">{no()}</span>
-              <span className="r-sec-title">진도 달성 현황</span>
-            </div>
-            <div className="r-progress">
-              <Ring pct={extras.progress.pct} />
-              <div className="r-prog-info">
-                <span className="r-tag">현재 학습 단원</span>
-                <div className="r-unit">{extras.progress.unit}</div>
-                <div className="r-prog-grid">
-                  <div className="r-it"><div className="r-l">학습 영역</div><div className="r-v">{extras.progress.area || "—"}</div></div>
-                  <div className="r-it"><div className="r-l">학습 시작일</div><div className="r-v">{fmtYmd(extras.progress.startDate) || "—"}</div></div>
-                  <div className="r-it"><div className="r-l">학습 기간</div><div className="r-v">{extras.progress.weeks || "—"}</div></div>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* 04 출결 */}
-        <section className="r-sec">
-          <div className="r-sec-head">
-            <span className="r-sec-no">{no()}</span>
-            <span className="r-sec-title">월간 출결 현황</span>
-            <span className="r-sec-aside">{data.year}년 {data.month}월</span>
-          </div>
-          <Calendar data={data} />
-        </section>
-
-        {/* 05 평가 */}
-        {showEvals && (
-          <section className="r-sec">
-            <div className="r-sec-head">
-              <span className="r-sec-no">{no()}</span>
-              <span className="r-sec-title">평가 결과 상세</span>
-              {weekly.length > 0 && <span className="r-sec-aside">주간평가 평균 {weeklyAvg}점</span>}
-            </div>
-            <div className="r-evals">
-              {extras.evals.map((e) => (
-                <div className="r-ev" key={e.id}>
-                  <div className="r-ev-head">
-                    <span className={"r-ev-type " + (e.type === "주간평가" ? "wk" : "cp")}>{e.type}</span>
-                    <span className="r-ev-status">완료</span>
-                  </div>
-                  <div className="r-ev-name">{e.name}</div>
-                  <div className="r-ev-meta">{e.meta}</div>
-                  <div className="r-ev-bottom">
-                    <span className="r-ev-date">{fmtYmd(e.date)}</span>
-                    <span className={"r-ev-score " + scoreClass(e.score)}>
-                      {e.score}<small>점</small>
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* 06 숙제 */}
-        {showHw && (
-          <section className="r-sec">
-            <div className="r-sec-head">
-              <span className="r-sec-no">{no()}</span>
-              <span className="r-sec-title">숙제 및 수행 기록</span>
-              <span className="r-sec-aside">총 {extras.homeworks.length}건</span>
-            </div>
-            <div className="r-hw">
-              {extras.homeworks.map((h) => {
-                const cc = compClasses(h.completion);
-                const md = /^(\d{4})-(\d{2})-(\d{2})$/.exec(h.date);
-                return (
-                  <div className="r-hw-item" key={h.id}>
-                    <div className="r-hw-main">
-                      <div className="r-hw-date">
-                        {md ? md[2] : h.date}
-                        {md && <span>/ {md[3]}</span>}
-                      </div>
-                      <div className="r-hw-book">
-                        <div className="r-bk">{h.book}</div>
-                        {h.tags.length > 0 && (
-                          <div className="r-hw-tags">
-                            {h.tags.map((t, i) => (
-                              <i key={i}>{t}</i>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div className="r-hw-comp">
-                        <div className="r-ctop">
-                          <span className="r-cl">완성도</span>
-                          <span className={"r-cv " + cc.txt}>{h.completion}%</span>
-                        </div>
-                        <div className="r-cbar"><span className={cc.bar} style={{ width: h.completion + "%" }} /></div>
-                      </div>
-                      <div
-                        className={"r-badge " + (h.status === "done" ? "done" : h.status === "late" ? "late" : "pending")}
-                      >
-                        {h.status === "done" ? "검사 완료" : h.status === "late" ? "지연" : "검사 전"}
-                      </div>
-                    </div>
-                    {h.memo && (
-                      <div className="r-hw-cmt">
-                        <span className="r-ck">선생님 메모</span>
-                        <span className="r-ctxt">{h.memo}</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
+              {s.body}
+            </section>
+          );
+        })}
       </div>
 
       <footer className="r-ft">

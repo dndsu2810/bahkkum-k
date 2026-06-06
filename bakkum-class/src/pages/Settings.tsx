@@ -1,5 +1,6 @@
 import { ALWAYS, fullOrdered, type NavPrefs, type PageId } from "../lib/nav";
 import { TONES, type Category, type Tone } from "../lib/categories";
+import { SECTION_LABELS, type SectionKey } from "../lib/reportSections";
 import { Icon } from "../icons";
 
 export function Settings({
@@ -7,12 +8,23 @@ export function Settings({
   onChange,
   categories,
   onCategoriesChange,
+  reportOrder,
+  onReportOrderChange,
 }: {
   navPrefs: NavPrefs;
   onChange: (p: NavPrefs) => void;
   categories: Category[];
   onCategoriesChange: (c: Category[]) => void;
+  reportOrder: SectionKey[];
+  onReportOrderChange: (o: SectionKey[]) => void;
 }) {
+  function moveSec(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= reportOrder.length) return;
+    const arr = reportOrder.slice();
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    onReportOrderChange(arr);
+  }
   const items = fullOrdered(navPrefs);
   const ids = items.map((x) => x.id);
 
@@ -135,8 +147,25 @@ export function Settings({
       </div>
 
       <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
-        <div className="card-title">곧 추가</div>
-        <div className="page-desc" style={{ marginTop: 4 }}>월말리포트 섹션 순서 — 다음 업데이트에서 제공됩니다.</div>
+        <div className="card-title" style={{ marginBottom: 10 }}>월말리포트 섹션 순서</div>
+        <div className="rep-list">
+          {reportOrder.map((k, i) => (
+            <div className="rep-srow" key={k}>
+              <span className="nm">{SECTION_LABELS[k]}</span>
+              <span className="att" style={{ display: "flex", gap: 6 }}>
+                <button className="rep-x" onClick={() => moveSec(i, -1)} disabled={i === 0} title="위로" style={{ transform: "rotate(180deg)" }}>
+                  <Icon name="chev" />
+                </button>
+                <button className="rep-x" onClick={() => moveSec(i, 1)} disabled={i === reportOrder.length - 1} title="아래로">
+                  <Icon name="chev" />
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="page-desc" style={{ marginTop: 10 }}>
+          미리보기/저장되는 리포트의 섹션 표시 순서입니다. (내용이 있는 섹션만 번호가 매겨져 표시됩니다)
+        </div>
       </div>
     </section>
   );

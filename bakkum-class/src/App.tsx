@@ -4,6 +4,7 @@ import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
 import { type PageId, type NavPrefs, loadNavPrefs, saveNavPrefs } from "./lib/nav";
 import { type Category, getCategories, setCategories } from "./lib/categories";
+import { type SectionKey, getReportOrder, setReportOrder } from "./lib/reportSections";
 import { ModalHost, ToastHost } from "./components/ModalHost";
 import { Dashboard } from "./pages/Dashboard";
 import { Attendance } from "./pages/Attendance";
@@ -21,6 +22,7 @@ export default function App() {
   const [page, setPage] = useState<PageId>("today");
   const [navPrefs, setNavPrefs] = useState<NavPrefs>(loadNavPrefs());
   const [cats, setCats] = useState<Category[]>(getCategories());
+  const [secOrder, setSecOrder] = useState<SectionKey[]>(getReportOrder());
 
   const pendingCount = data.makeups.filter((k) => k.status === "pending").length;
 
@@ -31,6 +33,10 @@ export default function App() {
   function updateCategories(c: Category[]) {
     setCategories(c);
     setCats(c);
+  }
+  function updateReportOrder(o: SectionKey[]) {
+    setReportOrder(o);
+    setSecOrder(o);
   }
 
   return (
@@ -64,6 +70,8 @@ export default function App() {
                   onChange={updateNavPrefs}
                   categories={cats}
                   onCategoriesChange={updateCategories}
+                  reportOrder={secOrder}
+                  onReportOrderChange={updateReportOrder}
                 />
               )}
             </>
