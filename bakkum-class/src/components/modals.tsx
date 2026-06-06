@@ -613,8 +613,14 @@ export function HomeworkModal({ id, presetStudentId }: { id: string | null; pres
         d.homeworkLog.push(rec);
       }
     });
-    const content = [rec.book, rec.tags.join("·"), rec.completion + "%"].filter(Boolean).join(" · ");
-    pushHomeworkNotion(studentId, date, content, status === "done");
+    pushHomeworkNotion(studentId, {
+      date,
+      book: rec.book,
+      tags: rec.tags,
+      completion: rec.completion,
+      done: status === "done",
+      memo: rec.memo,
+    });
     closeModal();
     toast(id ? "숙제 기록을 저장했어요." : "숙제를 기록했어요.");
   }
@@ -715,8 +721,7 @@ export function ProgressModal({ id, presetStudentId }: { id: string | null; pres
         d.progressLog.push(rec);
       }
     });
-    const content = [rec.unit, rec.area, rec.pct + "%"].filter(Boolean).join(" · ");
-    pushProgressNotion(studentId, date, content);
+    pushProgressNotion(studentId, { unit: rec.unit, area: rec.area, pct: rec.pct, startDate: rec.startDate, memo: rec.memo });
     closeModal();
     toast(id ? "진도 기록을 저장했어요." : "진도를 기록했어요.");
   }

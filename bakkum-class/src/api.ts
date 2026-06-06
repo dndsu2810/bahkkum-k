@@ -166,14 +166,30 @@ function notionPush(path: string, body: unknown): void {
     () => {}
   );
 }
-export function pushAttendanceNotion(studentId: string, date: string, status: string): void {
-  notionPush("/api/notion/attendance", { studentId, date, status });
+export function pushHomeworkNotion(
+  studentId: string,
+  h: { date: string; book: string; tags: string[]; completion: number; done: boolean; memo: string }
+): void {
+  notionPush("/api/notion/homework", { studentId, ...h });
 }
-export function pushHomeworkNotion(studentId: string, date: string, content: string, done: boolean): void {
-  notionPush("/api/notion/homework", { studentId, date, content, done });
+export function pushProgressNotion(
+  studentId: string,
+  p: { unit: string; area: string; pct: number; startDate: string; memo: string }
+): void {
+  notionPush("/api/notion/progress", { studentId, ...p });
 }
-export function pushProgressNotion(studentId: string, date: string, content: string): void {
-  notionPush("/api/notion/progress", { studentId, date, content });
+
+/** Import 3월~ 노션 기록(숙제/진도/출결) into D1. Remote only. */
+export async function importRecords(): Promise<{ homework: number; progress: number; attendance: number; error?: string }> {
+  if (mode !== "remote") return { homework: 0, progress: 0, attendance: 0, error: "백엔드 없음" };
+  try {
+    const r = await fetch("/api/sync/records", { cache: "no-store" });
+    const j = (await r.json().catch(() => ({}))) as any;
+    if (r.ok) return j;
+    return { homework: 0, progress: 0, attendance: 0, error: j.error || "HTTP " + r.status };
+  } catch (e) {
+    return { homework: 0, progress: 0, attendance: 0, error: String(e) };
+  }
 }
 
 async function flush(): Promise<void> {

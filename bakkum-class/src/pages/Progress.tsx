@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useStore } from "../store";
+import { importRecords } from "../api";
 import { curMonthStr, inMonth, monthOptions, studentById } from "../lib/logic";
 import { fmtMDDow } from "../lib/dates";
 import { Select, Empty } from "../components/ui";
@@ -7,8 +8,23 @@ import { ProgressModal } from "../components/modals";
 import { Icon } from "../icons";
 
 export function Progress() {
-  const { data, openModal } = useStore();
+  const { data, openModal, reload, toast } = useStore();
   const [ym, setYm] = useState(curMonthStr());
+  const [importing, setImporting] = useState(false);
+
+  async function onImport() {
+    setImporting(true);
+    try {
+      const r = await importRecords();
+      if (r.error) toast("가져오기 실패: " + r.error);
+      else {
+        await reload();
+        toast(`노션에서 숙제 ${r.homework} · 진도 ${r.progress} · 출결 ${r.attendance}건 가져왔어요.`);
+      }
+    } finally {
+      setImporting(false);
+    }
+  }
 
   const rows = data.progressLog
     .filter((p) => inMonth(p.date, ym))
@@ -23,6 +39,10 @@ export function Progress() {
         </div>
         <div className="head-actions">
           <Select value={ym} onChange={setYm} options={monthOptions()} />
+          <button className="btn" onClick={onImport} disabled={importing}>
+            <Icon name="refresh" />
+            {importing ? "가져오는 중…" : "노션에서 기록 가져오기"}
+          </button>
           <button className="btn primary" onClick={() => openModal(<ProgressModal id={null} />)}>
             <Icon name="plus" />
             진도 기록

@@ -3,7 +3,7 @@ import { useStore } from "../store";
 import type { AttStatus, Attitude, DataSnapshot, Student } from "../types";
 import { DOW, fmtFull, parseD, timeToMin, todayStr, uid } from "../lib/dates";
 import { activeStudents } from "../lib/logic";
-import { awardPoints, pushAttendanceNotion } from "../api";
+import { awardPoints } from "../api";
 import { Avatar, GradeBadge } from "../components/ui";
 
 interface LessonOnDate {
@@ -97,9 +97,6 @@ export function Attendance() {
       draft.attendance[key] = rec;
       applyMakeup(draft, key, it, newStatus);
     });
-
-    // best-effort: log to the Notion 수업기록/출결 DB
-    pushAttendanceNotion(it.student.id, attDate, newStatus);
 
     // point side-effect (remote only; awarded by roster id)
     if (!prevAwarded && willAward) {

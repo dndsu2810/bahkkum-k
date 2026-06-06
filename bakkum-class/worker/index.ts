@@ -22,10 +22,13 @@ import type { AttRecord, DataSnapshot, Makeup, Student } from "../src/types";
 import {
   fetchNotionStudents,
   inspectDb,
-  createAttendanceRecord,
   createHomeworkRecord,
   createProgressRecord,
+  fetchHomeworkRecords,
+  fetchProgressRecords,
+  fetchAttendanceRecords,
 } from "./notion";
+import { NOTION_CFG } from "./notion";
 
 export interface Env {
   DB: D1Database;
@@ -56,9 +59,9 @@ export default {
             return json({ error: String(e) }, 500);
           }
         }
-        if (p === "/api/notion/attendance" && request.method === "POST") return await notionAttendance(env, request);
         if (p === "/api/notion/homework" && request.method === "POST") return await notionHomework(env, request);
         if (p === "/api/notion/progress" && request.method === "POST") return await notionProgress(env, request);
+        if (p === "/api/sync/records" && request.method === "GET") return await importRecords(env, url);
         return json({ error: "not_found" }, 404);
       } catch (e) {
         return json({ error: "server_error", message: String(e) }, 500);
@@ -431,36 +434,106 @@ async function notionPageIdOf(env: Env, studentId: string): Promise<string | und
   return r?.notion_page_id || undefined;
 }
 
-async function notionAttendance(env: Env, request: Request): Promise<Response> {
-  const b = (await request.json()) as { studentId?: string; date?: string; status?: string };
-  const ok = await createAttendanceRecord(env, {
-    notionPageId: await notionPageIdOf(env, b.studentId || ""),
-    date: b.date || "",
-    status: b.status || "",
-    teacher: TEACHER,
-  });
-  return json({ ok });
-}
-
 async function notionHomework(env: Env, request: Request): Promise<Response> {
-  const b = (await request.json()) as { studentId?: string; date?: string; content?: string; done?: boolean };
+  const b = (await request.json()) as {
+    studentId?: string;
+    date?: string;
+    book?: string;
+    tags?: string[];
+    completion?: number;
+    done?: boolean;
+    memo?: string;
+  };
   const ok = await createHomeworkRecord(env, {
     notionPageId: await notionPageIdOf(env, b.studentId || ""),
     date: b.date || "",
-    content: b.content || "",
+    book: b.book || "",
+    tags: b.tags || [],
+    completion: b.completion || 0,
     done: !!b.done,
+    memo: b.memo || "",
   });
   return json({ ok });
 }
 
 async function notionProgress(env: Env, request: Request): Promise<Response> {
-  const b = (await request.json()) as { studentId?: string; date?: string; content?: string };
+  const b = (await request.json()) as {
+    studentId?: string;
+    unit?: string;
+    area?: string;
+    pct?: number;
+    startDate?: string;
+    memo?: string;
+  };
   const ok = await createProgressRecord(env, {
     notionPageId: await notionPageIdOf(env, b.studentId || ""),
-    date: b.date || "",
-    content: b.content || "",
+    unit: b.unit || "",
+    area: b.area || "",
+    pct: b.pct || 0,
+    startDate: b.startDate || "",
+    memo: b.memo || "",
   });
   return json({ ok });
+}
+
+/* ---------------- Notion → 앱 기록 가져오기 (3월부터) ---------------- */
+async function importRecords(env: Env, url: URL): Promise<Response> {
+  const since = url.searchParams.get("since") || NOTION_CFG.importSince;
+  // notion_page_id → 우리 students.id 매핑
+  const rows = await env.DB.prepare(
+    "SELECT id, notion_page_id FROM students WHERE notion_page_id IS NOT NULL AND notion_page_id <> ''"
+  ).all<{ id: number; notion_page_id: string }>();
+  const idByPage: Record<string, string> = {};
+  for (const r of rows.results || []) idByPage[r.notion_page_id] = String(r.id);
+
+  let hw = 0;
+  let prog = 0;
+  let att = 0;
+  try {
+    const stmts: D1PreparedStatement[] = [];
+    for (const r of await fetchHomeworkRecords(env, since)) {
+      const sid = idByPage[r.studentPageId];
+      if (!sid) continue;
+      stmts.push(
+        env.DB
+          .prepare(
+            "INSERT OR REPLACE INTO class_homework(id,student_id,date,book,tags,completion,status,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?)"
+          )
+          .bind("nh_" + r.srcId, sid, r.date, r.book, r.tags.join(","), r.completion, r.done ? "done" : "done", r.memo, Date.now())
+      );
+      hw++;
+    }
+    for (const r of await fetchProgressRecords(env, since)) {
+      const sid = idByPage[r.studentPageId];
+      if (!sid) continue;
+      stmts.push(
+        env.DB
+          .prepare(
+            "INSERT OR REPLACE INTO class_progress(id,student_id,date,unit,area,pct,start_date,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?)"
+          )
+          .bind("np_" + r.srcId, sid, r.date || r.startDate, r.unit, r.area, r.pct, r.startDate, r.memo, Date.now())
+      );
+      prog++;
+    }
+    for (const r of await fetchAttendanceRecords(env, since)) {
+      const sid = idByPage[r.studentPageId];
+      if (!sid) continue;
+      const attKey = `${r.date}|${sid}|n${r.srcId.replace(/-/g, "").slice(-8)}`;
+      stmts.push(
+        env.DB
+          .prepare(
+            "INSERT OR REPLACE INTO class_attendance(att_key,status,late_minutes,attitude,note,points_awarded) VALUES(?,?,?,?,?,0)"
+          )
+          .bind(attKey, r.status, r.lateMinutes || null, r.attitude || "", r.note || "")
+      );
+      att++;
+    }
+    // run in chunks (D1 batch limit safety)
+    for (let i = 0; i < stmts.length; i += 50) await env.DB.batch(stmts.slice(i, i + 50));
+  } catch (e) {
+    return json({ error: String(e), homework: hw, progress: prog, attendance: att }, 500);
+  }
+  return json({ homework: hw, progress: prog, attendance: att });
 }
 
 function json(data: unknown, status = 200): Response {

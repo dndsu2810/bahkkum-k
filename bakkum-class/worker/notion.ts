@@ -27,12 +27,23 @@ export const NOTION_CFG = {
   },
   // 이 수업(수업선택)에 해당하는 학생만 동기화
   studentClassFilter: ["초등수학", "중고등수학", "고백클래스"],
-  // 출결 DB 쓰기용 속성명 + 타입
-  attendance: { date: "날짜", student: "이름", status: "출결", teacher: "담당T" },
-  // 숙제 DB
-  homework: { date: "날짜", student: "학생", content: "숙제", done: "완료" },
-  // 진도 DB
-  progress: { date: "날짜", student: "학생", content: "진도" },
+  // 출결 DB (실제 속성)
+  attendance: { student: "이름", date: "날짜", status: "출결", attitude: "수업태도", late: "지각(숫자만)", note: "특이사항" },
+  // 숙제 DB (실제 속성)
+  homework: {
+    student: "학생 선택",
+    due: "숙제 마감일",
+    book: "숙제 교재",
+    area: "영역",
+    completion: "완성도(입력)",
+    done: "확인완료",
+    content: "숙제 내용",
+    note: "특이사항",
+  },
+  // 진도 DB (실제 속성)
+  progress: { student: "학생 선택", unit: "진도 현황", area: "영역", pct: "진행률", start: "시작일", note: "특이사항" },
+  // 3월부터 import 기준일
+  importSince: "2026-03-01",
 };
 
 interface NotionEnv {
@@ -132,6 +143,16 @@ function propValues(p: Prop | undefined): string[] {
   if (p.type === "status") return any.status ? [any.status.name] : [];
   const t = propText(p);
   return t ? [t] : [];
+}
+
+function numberVal(p: Prop | undefined): number {
+  const any = p as Record<string, any> | undefined;
+  if (p && p.type === "number" && typeof any!.number === "number") return any!.number;
+  return p ? parseFloat(propText(p)) || 0 : 0;
+}
+function checkboxVal(p: Prop | undefined): boolean {
+  const any = p as Record<string, any> | undefined;
+  return !!(p && p.type === "checkbox" && any!.checkbox);
 }
 
 export interface NotionStudent {
@@ -237,44 +258,154 @@ async function createPage(env: NotionEnv, databaseId: string, properties: Record
 
 const relation = (pageId?: string) => (pageId ? [{ id: pageId }] : []);
 const richText = (s: string) => [{ text: { content: s } }];
+const multi = (names: string[]) => ({ multi_select: names.filter(Boolean).map((n) => ({ name: n })) });
 
-export function createAttendanceRecord(
-  env: NotionEnv,
-  a: { notionPageId?: string; date: string; status: string; teacher: string }
-): Promise<boolean> {
-  const P = NOTION_CFG.attendance;
-  const props: Record<string, unknown> = {
-    [P.date]: { date: { start: a.date } },
-    [P.status]: { select: { name: a.status } },
-    [P.teacher]: { rich_text: richText(a.teacher) },
-  };
-  if (a.notionPageId) props[P.student] = { relation: relation(a.notionPageId) };
-  return createPage(env, NOTION_CFG.attendanceDb, props);
-}
-
+// 숙제 기록 → 노션 숙제 DB (새 행). 교재/영역=multi_select, 완성도=number, 확인완료=checkbox.
 export function createHomeworkRecord(
   env: NotionEnv,
-  h: { notionPageId?: string; date: string; content: string; done: boolean }
+  h: { notionPageId?: string; date: string; book: string; tags: string[]; completion: number; done: boolean; memo: string }
 ): Promise<boolean> {
   const P = NOTION_CFG.homework;
   const props: Record<string, unknown> = {
-    [P.date]: { date: { start: h.date } },
-    [P.content]: { rich_text: richText(h.content) },
-    [P.done]: { checkbox: h.done },
+    [P.due]: { date: { start: h.date } },
+    [P.completion]: { number: h.completion || 0 },
+    [P.done]: { checkbox: !!h.done },
   };
+  if (h.book) props[P.book] = multi([h.book]);
+  if (h.tags && h.tags.length) props[P.area] = multi(h.tags);
+  if (h.memo) props[P.note] = { rich_text: richText(h.memo) };
   if (h.notionPageId) props[P.student] = { relation: relation(h.notionPageId) };
   return createPage(env, NOTION_CFG.homeworkDb, props);
 }
 
+// 진도 기록 → 노션 진도 DB. 진도 현황/영역=multi_select, 진행률=number, 시작일=date.
 export function createProgressRecord(
   env: NotionEnv,
-  p: { notionPageId?: string; date: string; content: string }
+  pr: { notionPageId?: string; unit: string; area: string; pct: number; startDate: string; memo: string }
 ): Promise<boolean> {
   const P = NOTION_CFG.progress;
   const props: Record<string, unknown> = {
-    [P.date]: { date: { start: p.date } },
-    [P.content]: { rich_text: richText(p.content) },
+    [P.pct]: { number: pr.pct || 0 },
   };
-  if (p.notionPageId) props[P.student] = { relation: relation(p.notionPageId) };
+  if (pr.unit) props[P.unit] = multi([pr.unit]);
+  if (pr.area) props[P.area] = multi(pr.area.split(/[,·]/).map((s) => s.trim()));
+  if (pr.startDate) props[P.start] = { date: { start: pr.startDate } };
+  if (pr.memo) props[P.note] = { rich_text: richText(pr.memo) };
+  if (pr.notionPageId) props[P.student] = { relation: relation(pr.notionPageId) };
   return createPage(env, NOTION_CFG.progressDb, props);
+}
+
+/* ---------- import: 노션 기록 → 앱 (read; 3월부터) ---------- */
+async function queryAll(env: NotionEnv, dbId: string): Promise<any[]> {
+  const out: any[] = [];
+  let cursor: string | undefined;
+  do {
+    const res = await notionReq(env, "POST", `/v1/databases/${dbId}/query`, {
+      page_size: 100,
+      ...(cursor ? { start_cursor: cursor } : {}),
+    });
+    if (!res.ok) throw new Error(`query ${res.status}: ${await res.text()}`);
+    const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+    out.push(...j.results);
+    cursor = j.has_more ? j.next_cursor : undefined;
+  } while (cursor);
+  return out;
+}
+const relFirst = (p: Prop | undefined) => relationIds(p)[0] || "";
+
+export interface ImportHw {
+  srcId: string;
+  studentPageId: string;
+  date: string;
+  book: string;
+  tags: string[];
+  completion: number;
+  done: boolean;
+  memo: string;
+}
+export async function fetchHomeworkRecords(env: NotionEnv, since: string): Promise<ImportHw[]> {
+  const H = NOTION_CFG.homework;
+  const out: ImportHw[] = [];
+  for (const pg of await queryAll(env, NOTION_CFG.homeworkDb)) {
+    const p = (pg.properties || {}) as Record<string, Prop>;
+    const studentPageId = relFirst(p[H.student]);
+    const date = propText(p[H.due]);
+    if (!studentPageId || !date || date < since) continue;
+    out.push({
+      srcId: pg.id,
+      studentPageId,
+      date,
+      book: propValues(p[H.book]).join(", "),
+      tags: propValues(p[H.area]),
+      completion: numberVal(p[H.completion]),
+      done: checkboxVal(p[H.done]),
+      memo: propText(p[H.note]) || propText(p[H.content]),
+    });
+  }
+  return out;
+}
+
+export interface ImportProg {
+  srcId: string;
+  studentPageId: string;
+  date: string;
+  unit: string;
+  area: string;
+  pct: number;
+  startDate: string;
+  memo: string;
+}
+export async function fetchProgressRecords(env: NotionEnv, since: string): Promise<ImportProg[]> {
+  const P = NOTION_CFG.progress;
+  const out: ImportProg[] = [];
+  for (const pg of await queryAll(env, NOTION_CFG.progressDb)) {
+    const p = (pg.properties || {}) as Record<string, Prop>;
+    const studentPageId = relFirst(p[P.student]);
+    const start = propText(p[P.start]);
+    if (!studentPageId) continue;
+    if (start && start < since) continue;
+    out.push({
+      srcId: pg.id,
+      studentPageId,
+      date: start,
+      unit: propValues(p[P.unit]).join(", "),
+      area: propValues(p[P.area]).join(", "),
+      pct: numberVal(p[P.pct]),
+      startDate: start,
+      memo: propText(p[P.note]),
+    });
+  }
+  return out;
+}
+
+export interface ImportAtt {
+  srcId: string;
+  studentPageId: string;
+  date: string;
+  status: string;
+  attitude: string;
+  lateMinutes: number;
+  note: string;
+}
+export async function fetchAttendanceRecords(env: NotionEnv, since: string): Promise<ImportAtt[]> {
+  const A = NOTION_CFG.attendance;
+  const out: ImportAtt[] = [];
+  for (const pg of await queryAll(env, NOTION_CFG.attendanceDb)) {
+    const p = (pg.properties || {}) as Record<string, Prop>;
+    const studentPageId = relFirst(p[A.student]);
+    const date = propText(p[A.date]);
+    const status = propText(p[A.status]);
+    if (!studentPageId || !date || date < since) continue;
+    if (!status || status === "등원전" || status === "시작 전") continue;
+    out.push({
+      srcId: pg.id,
+      studentPageId,
+      date,
+      status,
+      attitude: propText(p[A.attitude]),
+      lateMinutes: parseInt(propText(p[A.late]), 10) || 0,
+      note: propText(p[A.note]),
+    });
+  }
+  return out;
 }
