@@ -127,6 +127,37 @@ export async function awardPoints(
   return { matched: false };
 }
 
+/* ---------------- Notion integration ---------------- */
+/** Pull 재원 students from Notion into D1 (remote only). */
+export async function syncStudents(): Promise<{ synced: number; total?: number; error?: string }> {
+  if (mode !== "remote") return { synced: 0, error: "백엔드 없음 (배포 환경에서만 동작)" };
+  try {
+    const r = await fetch("/api/sync/students", { cache: "no-store" });
+    const j = (await r.json().catch(() => ({}))) as { synced?: number; total?: number; error?: string };
+    if (r.ok) return { synced: j.synced ?? 0, total: j.total };
+    return { synced: 0, error: j.error || "HTTP " + r.status };
+  } catch (e) {
+    return { synced: 0, error: String(e) };
+  }
+}
+
+/** Fire-and-forget push of an app record to Notion (best-effort; never throws). */
+function notionPush(path: string, body: unknown): void {
+  if (mode !== "remote") return;
+  fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(
+    () => {}
+  );
+}
+export function pushAttendanceNotion(studentId: string, date: string, status: string): void {
+  notionPush("/api/notion/attendance", { studentId, date, status });
+}
+export function pushHomeworkNotion(studentId: string, date: string, content: string, done: boolean): void {
+  notionPush("/api/notion/homework", { studentId, date, content, done });
+}
+export function pushProgressNotion(studentId: string, date: string, content: string): void {
+  notionPush("/api/notion/progress", { studentId, date, content });
+}
+
 async function flush(): Promise<void> {
   if (!pending) return;
   const snap = pending;

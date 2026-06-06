@@ -20,6 +20,8 @@ interface StoreCtx {
   loaded: boolean;
   /** Mutate a deep copy of the snapshot, commit it to state, and persist. */
   mutate: (fn: (draft: DataSnapshot) => void) => void;
+  /** Re-fetch the snapshot from the backend (e.g. after a Notion sync). */
+  reload: () => Promise<void>;
   toast: (msg: string) => void;
   toasts: ToastItem[];
   openModal: (node: ReactNode) => void;
@@ -57,6 +59,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const reload = useCallback(async () => {
+    const snap = await loadData();
+    setData(snap);
+  }, []);
+
   const toast = useCallback((msg: string) => {
     const id = ++toastId.current;
     setToasts((t) => [...t, { id, msg }]);
@@ -69,7 +76,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const closeModal = useCallback(() => setModal(null), []);
 
   return (
-    <Ctx.Provider value={{ data, loaded, mutate, toast, toasts, openModal, closeModal, modal }}>
+    <Ctx.Provider value={{ data, loaded, mutate, reload, toast, toasts, openModal, closeModal, modal }}>
       {children}
     </Ctx.Provider>
   );

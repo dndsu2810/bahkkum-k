@@ -31,6 +31,23 @@ npx wrangler d1 execute bakuum-production --remote --file=./migrations/001_exten
 ```
 > `ADD COLUMN`은 IF NOT EXISTS가 없어 **딱 한 번만** 실행. class_* 테이블만 변경(모각공 무관).
 
+## 2-c. (노션 연동 사용 시) 마이그레이션 + 환경변수 + DB 공유
+
+1) 학사필드를 students 테이블로 옮기는 마이그레이션 (1회):
+```bash
+npx wrangler d1 execute bakuum-production --remote --file=./migrations/002_notion.sql
+```
+2) NOTION_TOKEN 시크릿 등록 (노션 Internal Integration 토큰):
+```bash
+npx wrangler secret put NOTION_TOKEN     # 프롬프트에 토큰 붙여넣기
+```
+   - 로컬 테스트는 `.dev.vars`에 `NOTION_TOKEN=secret_xxx` 한 줄.
+3) 노션에서 **4개 DB를 해당 Integration에 "연결(Share)"** 해야 API가 접근합니다
+   (학생 DB / 수업기록·출결 DB / 숙제 DB / 진도 DB 각각 ··· → 연결 → 통합 선택).
+4) **속성명 확인**: `worker/notion.ts`의 `NOTION_CFG`는 스펙의 한글 라벨을 속성명으로
+   가정합니다. 실제 노션 속성명/타입과 다르면 동기화/저장이 실패하니, 한 번 동기화해 보고
+   `wrangler tail` 로그의 실패 메시지를 보고 `NOTION_CFG`를 맞춰 주세요. (노션 실패해도 D1은 정상)
+
 ## 3. 빌드 + 배포
 
 ```bash

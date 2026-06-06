@@ -59,3 +59,31 @@ CREATE TABLE IF NOT EXISTS class_makeups (
 );
 CREATE INDEX IF NOT EXISTS idx_class_makeups_student ON class_makeups(student_id);
 CREATE INDEX IF NOT EXISTS idx_class_makeups_status ON class_makeups(status);
+
+-- Shared roster + points tables. On bakuum-production these already exist
+-- (mogakgong) — IF NOT EXISTS is a no-op there. Defined here so local dev and
+-- fresh installs have them, including the academic columns (see migrations/002).
+CREATE TABLE IF NOT EXISTS students (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  name           TEXT NOT NULL UNIQUE,
+  photo_url      TEXT,
+  points         INTEGER DEFAULT 0,
+  created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  grade          TEXT DEFAULT '초등',
+  status         TEXT DEFAULT '재원',
+  school         TEXT,
+  birth_date     TEXT,
+  parent_phone   TEXT,
+  student_phone  TEXT,
+  start_date     TEXT,
+  excluded       INTEGER DEFAULT 0,
+  notion_page_id TEXT
+);
+CREATE TABLE IF NOT EXISTS point_history (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  delta      INTEGER NOT NULL,
+  reason     TEXT NOT NULL,
+  category   TEXT NOT NULL DEFAULT 'learn',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

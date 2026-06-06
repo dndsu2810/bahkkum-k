@@ -65,6 +65,16 @@ npm run wrangler:dev          # http://localhost:8787 — /api 가 로컬 D1로 
 
 데모 시드 없음 — 명단은 모각공 students에서 옵니다.
 
+## 노션 양방향 연동
+
+- **노션 → 앱**: 학생 관리 "노션에서 학생 동기화" → `GET /api/sync/students`가 노션 학생 DB(재원)를
+  읽어 `students`에 upsert(notion_page_id 기준, 삭제 없음). 학사필드(상태·학교·생년월일·연락처·첫수업일)는
+  students 컬럼에 저장(migration 002).
+- **앱 → 노션(best-effort)**: 출결 체크 시 출결 DB, 월말리포트 폼의 "노션 저장" 버튼으로 숙제/진도 DB에
+  행 추가. 학생 연결은 notion_page_id(relation). 노션 저장 실패해도 D1은 정상 동작.
+- 설정: Worker 시크릿 `NOTION_TOKEN` + 노션에서 4개 DB를 Integration에 연결 + `worker/notion.ts`의
+  `NOTION_CFG` 속성명을 실제 노션 속성명에 맞추기. 자세한 절차는 `DEPLOY.md`.
+
 ## 배포
 
 `DEPLOY.md` 참고.

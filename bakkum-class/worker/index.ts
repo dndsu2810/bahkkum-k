@@ -19,11 +19,20 @@
 //   GET  /api/report          -> monthly attendance aggregation
 
 import type { AttRecord, DataSnapshot, Makeup, Student } from "../src/types";
+import {
+  fetchNotionStudents,
+  createAttendanceRecord,
+  createHomeworkRecord,
+  createProgressRecord,
+} from "./notion";
 
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+  NOTION_TOKEN?: string;
 }
+
+const TEACHER = "이지현";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -38,6 +47,10 @@ export default {
         if (p === "/api/students" && request.method === "POST") return await postStudents(env, request);
         if (p === "/api/points" && request.method === "POST") return await postPoints(env, request);
         if (p === "/api/report" && request.method === "GET") return await getReport(env, url);
+        if (p === "/api/sync/students" && request.method === "GET") return await syncStudents(env);
+        if (p === "/api/notion/attendance" && request.method === "POST") return await notionAttendance(env, request);
+        if (p === "/api/notion/homework" && request.method === "POST") return await notionHomework(env, request);
+        if (p === "/api/notion/progress" && request.method === "POST") return await notionProgress(env, request);
         return json({ error: "not_found" }, 404);
       } catch (e) {
         return json({ error: "server_error", message: String(e) }, 500);
@@ -49,16 +62,14 @@ export default {
 
 /* ---------------- read (roster ⨝ class_* extras) ---------------- */
 async function readSnapshot(env: Env): Promise<DataSnapshot> {
-  const [rosterRes, exRes, lRes, mRes, aRes] = await env.DB.batch([
-    env.DB.prepare("SELECT id, name FROM students"),
-    env.DB.prepare("SELECT * FROM class_students"),
+  const [rosterRes, lRes, mRes, aRes] = await env.DB.batch([
+    env.DB.prepare(
+      "SELECT id,name,grade,status,school,birth_date,parent_phone,student_phone,start_date,excluded FROM students"
+    ),
     env.DB.prepare("SELECT * FROM class_lessons ORDER BY student_id, sort_order"),
     env.DB.prepare("SELECT * FROM class_makeups"),
     env.DB.prepare("SELECT * FROM class_attendance"),
   ]);
-
-  const extrasById: Record<string, Record<string, unknown>> = {};
-  for (const r of exRes.results as Record<string, unknown>[]) extrasById[String(r.id)] = r;
 
   const lessonsByStudent: Record<string, { day: string; time: string; duration: number }[]> = {};
   for (const r of lRes.results as Record<string, unknown>[]) {
@@ -74,18 +85,17 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
   const students: Student[] = (rosterRes.results as Record<string, unknown>[]).map((r) => {
     const id = String(r.id);
     rosterIds.add(id);
-    const ex = extrasById[id];
     return {
       id,
       name: String(r.name),
-      grade: ex && ex.grade === "중등" ? "중등" : "초등",
-      startDate: ex ? String(ex.start_date ?? "") : "",
-      excluded: ex ? Number(ex.excluded) === 1 : false,
-      status: ex ? ((ex.status as Student["status"]) || "재원") : "재원",
-      school: ex ? String(ex.school ?? "") : "",
-      birthdate: ex ? String(ex.birthdate ?? "") : "",
-      parentPhone: ex ? String(ex.parent_phone ?? "") : "",
-      studentPhone: ex ? String(ex.student_phone ?? "") : "",
+      grade: r.grade === "중등" ? "중등" : "초등",
+      startDate: String(r.start_date ?? ""),
+      excluded: Number(r.excluded) === 1,
+      status: (r.status as Student["status"]) || "재원",
+      school: String(r.school ?? ""),
+      birthdate: String(r.birth_date ?? ""),
+      parentPhone: String(r.parent_phone ?? ""),
+      studentPhone: String(r.student_phone ?? ""),
       lessons: lessonsByStudent[id] || [],
     };
   });
@@ -136,29 +146,9 @@ async function putData(env: Env, request: Request): Promise<Response> {
     env.DB.prepare("DELETE FROM class_attendance"),
     env.DB.prepare("DELETE FROM class_makeups"),
     env.DB.prepare("DELETE FROM class_lessons"),
-    env.DB.prepare("DELETE FROM class_students"),
   ];
 
   for (const s of snap.students) {
-    stmts.push(
-      env.DB
-        .prepare(
-          "INSERT INTO class_students(id,name,grade,start_date,excluded,status,school,birthdate,parent_phone,student_phone,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
-        )
-        .bind(
-          s.id,
-          s.name,
-          s.grade,
-          s.startDate,
-          s.excluded ? 1 : 0,
-          s.status || "재원",
-          s.school || "",
-          s.birthdate || "",
-          s.parentPhone || "",
-          s.studentPhone || "",
-          Date.now()
-        )
-    );
     (s.lessons || []).forEach((l, i) => {
       stmts.push(
         env.DB
@@ -205,17 +195,31 @@ async function putData(env: Env, request: Request): Promise<Response> {
 
   await env.DB.batch(stmts);
 
-  // best-effort: sync renamed names back to the shared roster (single-row, additive).
-  // Wrapped per-row so a UNIQUE conflict never breaks the class_* persistence above.
+  // Persist academic fields to the shared roster — UPDATE only (never DELETE,
+  // never touch points/photo_url/notion_page_id). Per-row + try/catch so a
+  // UNIQUE-name conflict can't break the class_* persistence above.
   for (const s of snap.students) {
-    if (/^\d+$/.test(s.id) && s.name) {
-      try {
-        await env.DB.prepare("UPDATE students SET name = ? WHERE id = ? AND name <> ?")
-          .bind(s.name, Number(s.id), s.name)
-          .run();
-      } catch {
-        /* ignore unique-name conflicts */
-      }
+    if (!/^\d+$/.test(s.id)) continue;
+    try {
+      await env.DB
+        .prepare(
+          "UPDATE students SET name=?,grade=?,status=?,school=?,birth_date=?,parent_phone=?,student_phone=?,start_date=?,excluded=? WHERE id=?"
+        )
+        .bind(
+          s.name,
+          s.grade,
+          s.status || "재원",
+          s.school || "",
+          s.birthdate || "",
+          s.parentPhone || "",
+          s.studentPhone || "",
+          s.startDate || "",
+          s.excluded ? 1 : 0,
+          Number(s.id)
+        )
+        .run();
+    } catch {
+      /* ignore unique-name conflicts */
     }
   }
 
@@ -228,33 +232,27 @@ async function postStudents(env: Env, request: Request): Promise<Response> {
   const name = (b.name || "").trim();
   if (!name) return json({ error: "name_required" }, 400);
 
-  // link to an existing roster student with the same name, else insert.
-  let id: number;
+  // link to an existing roster student with the same name, else insert. Then
+  // set academic columns. Never touches points/photo_url/notion_page_id.
   const existing = await env.DB.prepare("SELECT id FROM students WHERE name = ?").bind(name).first<{ id: number }>();
+  let id: number;
   if (existing) {
     id = existing.id;
+    await env.DB
+      .prepare(
+        "UPDATE students SET grade=?,status=?,school=?,birth_date=?,parent_phone=?,student_phone=?,start_date=?,excluded=? WHERE id=?"
+      )
+      .bind(b.grade || "초등", b.status || "재원", b.school || "", b.birthdate || "", b.parentPhone || "", b.studentPhone || "", b.startDate || "", b.excluded ? 1 : 0, id)
+      .run();
   } else {
-    const ins = await env.DB.prepare("INSERT INTO students(name) VALUES(?) RETURNING id").bind(name).first<{ id: number }>();
+    const ins = await env.DB
+      .prepare(
+        "INSERT INTO students(name,grade,status,school,birth_date,parent_phone,student_phone,start_date,excluded) VALUES(?,?,?,?,?,?,?,?,?) RETURNING id"
+      )
+      .bind(name, b.grade || "초등", b.status || "재원", b.school || "", b.birthdate || "", b.parentPhone || "", b.studentPhone || "", b.startDate || "", b.excluded ? 1 : 0)
+      .first<{ id: number }>();
     id = ins!.id;
   }
-
-  await env.DB.prepare(
-    "INSERT OR REPLACE INTO class_students(id,name,grade,start_date,excluded,status,school,birthdate,parent_phone,student_phone,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
-  )
-    .bind(
-      String(id),
-      name,
-      b.grade || "초등",
-      b.startDate || "",
-      b.excluded ? 1 : 0,
-      b.status || "재원",
-      b.school || "",
-      b.birthdate || "",
-      b.parentPhone || "",
-      b.studentPhone || "",
-      Date.now()
-    )
-    .run();
 
   return json({ id: String(id) });
 }
@@ -322,6 +320,85 @@ async function getReport(env: Env, url: URL): Promise<Response> {
     homework: { rate: 0 },
     comment,
   });
+}
+
+/* ---------------- Notion: 학생 동기화 (노션 → D1) ---------------- */
+async function syncStudents(env: Env): Promise<Response> {
+  let list;
+  try {
+    list = await fetchNotionStudents(env);
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+  let synced = 0;
+  for (const s of list) {
+    try {
+      // upsert by notion_page_id (fallback: same name). Never deletes. grade is
+      // app-managed (not in Notion), so it's left as-is.
+      const ex = await env.DB.prepare("SELECT id FROM students WHERE notion_page_id = ? OR name = ? LIMIT 1")
+        .bind(s.notionPageId, s.name)
+        .first<{ id: number }>();
+      if (ex) {
+        await env.DB
+          .prepare(
+            "UPDATE students SET name=?,status=?,school=?,birth_date=?,parent_phone=?,student_phone=?,start_date=?,notion_page_id=? WHERE id=?"
+          )
+          .bind(s.name, s.status, s.school, s.birth, s.parentPhone, s.studentPhone, s.start, s.notionPageId, ex.id)
+          .run();
+      } else {
+        await env.DB
+          .prepare(
+            "INSERT INTO students(name,status,school,birth_date,parent_phone,student_phone,start_date,notion_page_id) VALUES(?,?,?,?,?,?,?,?)"
+          )
+          .bind(s.name, s.status, s.school, s.birth, s.parentPhone, s.studentPhone, s.start, s.notionPageId)
+          .run();
+      }
+      synced++;
+    } catch (e) {
+      console.log("sync upsert failed", s.name, String(e));
+    }
+  }
+  return json({ synced, total: list.length });
+}
+
+/* ---------------- Notion: 기록 저장 (앱 → 노션, best-effort) ---------------- */
+async function notionPageIdOf(env: Env, studentId: string): Promise<string | undefined> {
+  const r = await env.DB.prepare("SELECT notion_page_id FROM students WHERE id = ?")
+    .bind(Number(studentId) || -1)
+    .first<{ notion_page_id: string | null }>();
+  return r?.notion_page_id || undefined;
+}
+
+async function notionAttendance(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json()) as { studentId?: string; date?: string; status?: string };
+  const ok = await createAttendanceRecord(env, {
+    notionPageId: await notionPageIdOf(env, b.studentId || ""),
+    date: b.date || "",
+    status: b.status || "",
+    teacher: TEACHER,
+  });
+  return json({ ok });
+}
+
+async function notionHomework(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json()) as { studentId?: string; date?: string; content?: string; done?: boolean };
+  const ok = await createHomeworkRecord(env, {
+    notionPageId: await notionPageIdOf(env, b.studentId || ""),
+    date: b.date || "",
+    content: b.content || "",
+    done: !!b.done,
+  });
+  return json({ ok });
+}
+
+async function notionProgress(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json()) as { studentId?: string; date?: string; content?: string };
+  const ok = await createProgressRecord(env, {
+    notionPageId: await notionPageIdOf(env, b.studentId || ""),
+    date: b.date || "",
+    content: b.content || "",
+  });
+  return json({ ok });
 }
 
 function json(data: unknown, status = 200): Response {
