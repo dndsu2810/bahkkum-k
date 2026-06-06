@@ -10,10 +10,11 @@
 const NOTION_VERSION = "2022-06-28";
 
 export const NOTION_CFG = {
-  studentDb: "2e766817-e061-8158-a33b-000b843f7094",
-  attendanceDb: "2e766817-e061-81ad-92d8-000bf18c1be3",
-  homeworkDb: "2e766817-e061-81d9-94c6-000b9ddf2b5c",
-  progressDb: "2e766817-e061-8143-a07c-000b5000765a",
+  // 실제 database_id (노션 URL의 /p/ 뒤 32자리)
+  studentDb: "2e766817e0618114a052f6cd6d0672f6", // 학생목록
+  attendanceDb: "2e766817e0618131850bf4032cef1321", // 수업기록
+  homeworkDb: "2e766817e0618149bbf1d2c13f7fc0a8", // 수학숙제
+  progressDb: "2e766817e06181818459d59a19fa7e0e", // 수학진도
   // 학생 DB 읽기용 속성명 (이름은 title 속성에서 자동 추출)
   student: {
     status: "상태",
