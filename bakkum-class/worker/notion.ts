@@ -18,7 +18,7 @@ export const NOTION_CFG = {
   // 학생 DB 읽기용 속성명 (이름은 title 속성에서 자동 추출)
   student: {
     status: "상태",
-    classSelect: "수업선택",
+    classSelect: "수업 선택", // relation → 수업 DB (제목으로 필터)
     school: "학교",
     birth: "생년월일",
     parentPhone: "학부모 연락처",
@@ -88,6 +88,41 @@ function findTitle(props: Record<string, Prop>): string {
   return "";
 }
 
+function relationIds(p: Prop | undefined): string[] {
+  const any = p as Record<string, any> | undefined;
+  return p && p.type === "relation" && Array.isArray(any!.relation) ? any!.relation.map((r: any) => r.id) : [];
+}
+
+/** Resolve the "수업 선택" relation → set of related-page ids whose title is one
+ *  of studentClassFilter (초등수학/중고등수학/고백클래스). */
+async function resolveAllowedClassIds(env: NotionEnv): Promise<Set<string>> {
+  const allowed = new Set<string>();
+  try {
+    const meta = await notionReq(env, "GET", `/v1/databases/${NOTION_CFG.studentDb}`);
+    if (!meta.ok) return allowed;
+    const mj = (await meta.json()) as { properties?: Record<string, any> };
+    const classDbId = mj.properties?.[NOTION_CFG.student.classSelect]?.relation?.database_id;
+    if (!classDbId) return allowed;
+    let cursor: string | undefined;
+    do {
+      const res = await notionReq(env, "POST", `/v1/databases/${classDbId}/query`, {
+        page_size: 100,
+        ...(cursor ? { start_cursor: cursor } : {}),
+      });
+      if (!res.ok) break;
+      const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+      for (const pg of j.results) {
+        const title = findTitle((pg.properties || {}) as Record<string, Prop>);
+        if (NOTION_CFG.studentClassFilter.includes(title)) allowed.add(pg.id);
+      }
+      cursor = j.has_more ? j.next_cursor : undefined;
+    } while (cursor);
+  } catch {
+    /* fall back to no class filter */
+  }
+  return allowed;
+}
+
 /** select/multi_select/status values as an array (for filtering). */
 function propValues(p: Prop | undefined): string[] {
   if (!p || !p.type) return [];
@@ -113,6 +148,7 @@ export interface NotionStudent {
 /** Read all 재원 students from the Notion student DB (paginated). */
 export async function fetchNotionStudents(env: NotionEnv): Promise<NotionStudent[]> {
   if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
+  const allowedClassIds = await resolveAllowedClassIds(env);
   const out: NotionStudent[] = [];
   let cursor: string | undefined;
   do {
@@ -128,9 +164,12 @@ export async function fetchNotionStudents(env: NotionEnv): Promise<NotionStudent
       if (!name) continue;
       const status = propText(props[NOTION_CFG.student.status]) || "재원";
       if (status !== "재원") continue; // 재원만 동기화
-      // 수업선택이 지정 수업(초등수학/중고등수학/고백클래스) 중 하나인 학생만
-      const classes = propValues(props[NOTION_CFG.student.classSelect]);
-      if (!classes.some((c) => NOTION_CFG.studentClassFilter.includes(c))) continue;
+      // 수업 선택(relation)이 초등수학/중고등수학/고백클래스 중 하나인 학생만.
+      // (allowed 해석 실패 시에는 필터를 건너뛰어 0건이 되지 않게 함)
+      if (allowedClassIds.size > 0) {
+        const rel = relationIds(props[NOTION_CFG.student.classSelect]);
+        if (!rel.some((id) => allowedClassIds.has(id))) continue;
+      }
       out.push({
         notionPageId: pg.id,
         name,
