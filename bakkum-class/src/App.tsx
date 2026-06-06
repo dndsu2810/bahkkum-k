@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useStore } from "./store";
 import { Header } from "./components/Header";
-import { Sidebar, type PageId } from "./components/Sidebar";
+import { Sidebar } from "./components/Sidebar";
+import { type PageId, type NavPrefs, loadNavPrefs, saveNavPrefs } from "./lib/nav";
 import { ModalHost, ToastHost } from "./components/ModalHost";
 import { Dashboard } from "./pages/Dashboard";
 import { Attendance } from "./pages/Attendance";
@@ -12,12 +13,19 @@ import { Today } from "./pages/Today";
 import { Homework } from "./pages/Homework";
 import { Progress } from "./pages/Progress";
 import { Report } from "./pages/Report";
+import { Settings } from "./pages/Settings";
 
 export default function App() {
   const { data, loaded } = useStore();
   const [page, setPage] = useState<PageId>("today");
+  const [navPrefs, setNavPrefs] = useState<NavPrefs>(loadNavPrefs());
 
   const pendingCount = data.makeups.filter((k) => k.status === "pending").length;
+
+  function updateNavPrefs(p: NavPrefs) {
+    setNavPrefs(p);
+    saveNavPrefs(p);
+  }
 
   return (
     <div className="app">
@@ -28,6 +36,7 @@ export default function App() {
           onNavigate={setPage}
           studentCount={data.students.length}
           pendingCount={pendingCount}
+          navPrefs={navPrefs}
         />
         <main className="main">
           {!loaded ? (
@@ -43,6 +52,7 @@ export default function App() {
               {page === "homework" && <Homework />}
               {page === "progress" && <Progress />}
               {page === "report" && <Report />}
+              {page === "settings" && <Settings navPrefs={navPrefs} onChange={updateNavPrefs} />}
             </>
           )}
         </main>

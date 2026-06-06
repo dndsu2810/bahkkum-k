@@ -1,44 +1,27 @@
-import { Icon, type IconName } from "../icons";
+import { Icon } from "../icons";
+import { orderedNav, type NavPrefs, type PageId } from "../lib/nav";
 
-export type PageId =
-  | "today"
-  | "dashboard"
-  | "attendance"
-  | "students"
-  | "timetable"
-  | "makeup"
-  | "homework"
-  | "progress"
-  | "report";
-
-const NAV: { id: PageId; label: string; icon: IconName }[] = [
-  { id: "today", label: "오늘", icon: "today" },
-  { id: "dashboard", label: "대시보드", icon: "dashboard" },
-  { id: "attendance", label: "출결 체크", icon: "clipboard" },
-  { id: "students", label: "학생 관리", icon: "students" },
-  { id: "timetable", label: "시간표", icon: "cal" },
-  { id: "makeup", label: "보강 관리", icon: "refresh" },
-  { id: "homework", label: "숙제 관리", icon: "book" },
-  { id: "progress", label: "진도 관리", icon: "chart" },
-  { id: "report", label: "월말리포트", icon: "fileText" },
-];
+export type { PageId };
 
 export function Sidebar({
   page,
   onNavigate,
   studentCount,
   pendingCount,
+  navPrefs,
 }: {
   page: PageId;
   onNavigate: (p: PageId) => void;
   studentCount: number;
   pendingCount: number;
+  navPrefs: NavPrefs;
 }) {
+  const nav = orderedNav(navPrefs);
   return (
     <aside className="sidebar">
       <nav className="nav">
         <div className="nav-label">메뉴</div>
-        {NAV.map((n) => {
+        {nav.map((n) => {
           let count: React.ReactNode = null;
           if (n.id === "students") {
             count = <span className="nav-count">{studentCount}</span>;
