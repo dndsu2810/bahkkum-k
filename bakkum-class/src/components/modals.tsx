@@ -617,8 +617,8 @@ export function HomeworkModal({ id, presetStudentId }: { id: string | null; pres
   const [date, setDate] = useState(ex?.date ?? todayStr());
   const [book, setBook] = useState(ex?.book ?? "");
   const [tags, setTags] = useState((ex?.tags ?? []).join(", "));
-  const [completion, setCompletion] = useState(ex?.completion ?? 100);
-  const [status, setStatus] = useState<HwLog["status"]>(ex?.status ?? "done");
+  const [completion, setCompletion] = useState(ex?.completion ?? 0);
+  const [status, setStatus] = useState<HwLog["status"]>(ex?.status ?? "pending");
   const [memo, setMemo] = useState(ex?.memo ?? "");
 
   function save() {
@@ -663,7 +663,7 @@ export function HomeworkModal({ id, presetStudentId }: { id: string | null; pres
             <StudentSelect value={studentId} onChange={setStudentId} />
           </div>
           <div className="field">
-            <label>날짜</label>
+            <label>숙제 마감일</label>
             <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
         </div>
@@ -683,9 +683,9 @@ export function HomeworkModal({ id, presetStudentId }: { id: string | null; pres
           <div className="field">
             <label>상태</label>
             <div className="seg">
-              {(["done", "late"] as const).map((s) => (
+              {(["pending", "done", "late"] as const).map((s) => (
                 <button key={s} type="button" className={"seg-btn" + (status === s ? " on" : "")} onClick={() => setStatus(s)}>
-                  {s === "done" ? "검사완료" : "지연"}
+                  {s === "pending" ? "검사 전" : s === "done" ? "검사완료" : "지연"}
                 </button>
               ))}
             </div>

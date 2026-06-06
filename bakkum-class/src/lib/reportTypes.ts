@@ -18,7 +18,7 @@ export interface HwItem {
   book: string;
   tags: string[];
   completion: number; // 0..100
-  status: "done" | "late";
+  status: "pending" | "done" | "late"; // 검사 전 / 검사완료 / 지연
   memo: string;
 }
 

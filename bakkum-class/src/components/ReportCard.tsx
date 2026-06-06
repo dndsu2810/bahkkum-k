@@ -299,8 +299,10 @@ export function ReportCard({ data }: { data: ReportData }) {
                         </div>
                         <div className="r-cbar"><span className={cc.bar} style={{ width: h.completion + "%" }} /></div>
                       </div>
-                      <div className={"r-badge " + (h.status === "late" ? "late" : "done")}>
-                        {h.status === "late" ? "지연" : "검사 완료"}
+                      <div
+                        className={"r-badge " + (h.status === "done" ? "done" : h.status === "late" ? "late" : "pending")}
+                      >
+                        {h.status === "done" ? "검사 완료" : h.status === "late" ? "지연" : "검사 전"}
                       </div>
                     </div>
                     {h.memo && (

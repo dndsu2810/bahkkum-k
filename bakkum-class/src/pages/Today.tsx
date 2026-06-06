@@ -68,7 +68,7 @@ export function Today() {
   function toggleHwDone(id: string) {
     mutate((d) => {
       const h = d.homeworkLog.find((x) => x.id === id);
-      if (h) h.status = h.status === "done" ? "late" : "done";
+      if (h) h.status = h.status === "done" ? "pending" : "done";
     });
   }
 
@@ -145,7 +145,7 @@ export function Today() {
                 return (
                   <div className="mk-item" key={h.id}>
                     <div className="mk-main">
-                      <div className="mk-name">{s ? s.name : "?"} <span className={"badge " + (h.status === "late" ? "b-orange" : "b-green")}>{h.status === "late" ? "지연" : "검사완료"}</span></div>
+                      <div className="mk-name">{s ? s.name : "?"} <span className={"badge " + (h.status === "done" ? "b-green" : h.status === "late" ? "b-orange" : "b-gray")}>{h.status === "done" ? "검사완료" : h.status === "late" ? "지연" : "검사 전"}</span></div>
                       <div className="mk-meta"><span>{h.book || "숙제"}{h.tags.length ? " · " + h.tags.join(", ") : ""} · {h.completion}%</span></div>
                     </div>
                     <div className="mk-actions">

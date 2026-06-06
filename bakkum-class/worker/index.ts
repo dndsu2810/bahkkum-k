@@ -166,7 +166,7 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
         .map((t) => t.trim())
         .filter(Boolean),
       completion: Number(r.completion),
-      status: r.status === "late" ? ("late" as const) : ("done" as const),
+      status: r.status === "late" ? ("late" as const) : r.status === "pending" ? ("pending" as const) : ("done" as const),
       memo: String(r.memo ?? ""),
     }));
 
@@ -509,9 +509,9 @@ async function importRecords(env: Env, url: URL): Promise<Response> {
         stmts.push(
           env.DB
             .prepare(
-              "INSERT OR REPLACE INTO class_homework(id,student_id,date,book,tags,completion,status,memo,created_at) VALUES(?,?,?,?,?,?,'done',?,?)"
+              "INSERT OR REPLACE INTO class_homework(id,student_id,date,book,tags,completion,status,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?)"
             )
-            .bind("nh_" + r.srcId, sid, r.date, r.book, r.tags.join(","), r.completion, r.memo, Date.now())
+            .bind("nh_" + r.srcId, sid, r.date, r.book, r.tags.join(","), r.completion, r.done ? "done" : "pending", r.memo, Date.now())
         );
         res.homework++;
       }

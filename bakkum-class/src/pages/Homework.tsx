@@ -58,7 +58,7 @@ export function Homework() {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>날짜</th>
+                  <th>숙제 마감일</th>
                   <th>학생</th>
                   <th>교재 / 태그</th>
                   <th>완성도</th>
@@ -79,8 +79,12 @@ export function Homework() {
                       </td>
                       <td>{h.completion}%</td>
                       <td>
-                        <span className={"badge " + (h.status === "late" ? "b-orange" : "b-green")}>
-                          {h.status === "late" ? "지연" : "검사완료"}
+                        <span
+                          className={
+                            "badge " + (h.status === "done" ? "b-green" : h.status === "late" ? "b-orange" : "b-gray")
+                          }
+                        >
+                          {h.status === "done" ? "검사완료" : h.status === "late" ? "지연" : "검사 전"}
                         </span>
                       </td>
                       <td className="t-actions">
