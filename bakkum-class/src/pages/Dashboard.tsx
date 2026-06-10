@@ -4,7 +4,6 @@ import {
   activeStudents,
   curMonthStr,
   enrolledStudents,
-  monthLabel,
   monthLabelFull,
   monthOptions,
   newThisMonth,
@@ -25,32 +24,29 @@ function Stat({ icon, tone, num, label, sub }: { icon: IconName; tone: string; n
   return (
     <div className="stat">
       <span className={"kpi-ic ic-" + tone}><Icon name={icon} /></span>
-      <span className="stat-num">{num}</span>
-      <span className="stat-label">{label}</span>
-      <span className="stat-sub">{sub}</span>
+      <span className="stat-body">
+        <span className="stat-line">
+          <b className="stat-num">{num}</b>
+          <span className="stat-label">{label}</span>
+        </span>
+        <span className="stat-sub">{sub}</span>
+      </span>
     </div>
   );
 }
 
-const CHART_KEY = "bk_dash_chart_open";
 
 export function Dashboard() {
   const { data, toast } = useStore();
   const [curMonth, setCurMonth] = useState(curMonthStr());
-  const [chartOpen, setChartOpen] = useState(() => localStorage.getItem(CHART_KEY) !== "0");
-  function toggleChart() {
-    setChartOpen((v) => {
-      localStorage.setItem(CHART_KEY, v ? "0" : "1");
-      return !v;
-    });
-  }
 
   const active = activeStudents(data.students); // 전체 재원 (명단엔 전원 표시)
   const enrolled = enrolledStudents(data.students, curMonth); // 이번 달 재적 (첫주=7일 이전 등록)
   const excludedActive = active.filter((s) => s.excluded); // 정산 제외(원장 가족 등)
   const fresh = newThisMonth(data.students, curMonth).filter((s) => !s.excluded); // 둘째 주 이후 신규 → 다음 달
   const cats = getCategories();
-  const catCounts = cats.map((c) => ({ c, n: enrolled.filter((s) => s.grade === c.name).length }));
+  // 카테고리(초등/중등)는 '총 재적(전체 재원)' 기준으로 — 합이 총 재적 수와 맞게.
+  const catCounts = cats.map((c) => ({ c, n: active.filter((s) => s.grade === c.name).length }));
 
   // 인센티브 정산은 '정산 제외' 학생을 빼고 계산
   const billableEnrolled = enrolled.filter((s) => !s.excluded);
@@ -78,13 +74,26 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="statbar">
-        <Stat icon="users" tone="blue" num={enrolled.length} label="재적 학생"
-          sub={monthLabel(curMonth) + " 첫주" + (fresh.length ? " · 신규 " + fresh.length : "")} />
-        {catCounts.map(({ c, n }) => (
-          <Stat key={c.name} icon="cap" tone={c.tone} num={n} label={c.name} sub={pct(n, enrolled.length) + "%"} />
-        ))}
-        <Stat icon="users" tone="orange" num={overThis} label="인센티브 대상" sub={overThis ? BASE + "명 초과" : "없음"} />
+      <div className="dash-top">
+        <div className="card chart-left">
+          <div className="card-head">
+            <div>
+              <div className="card-title sm">요일별 수업 분포</div>
+              <div className="card-sub">재적 학생 정규 수업 기준</div>
+            </div>
+          </div>
+          <div className="chart-body sm">
+            <WeekdayBars enrolled={enrolled} />
+          </div>
+        </div>
+        <div className="statgrid">
+          <Stat icon="users" tone="blue" num={active.length} label="총 재적 학생"
+            sub={"이번 달 재적 " + enrolled.length + "명" + (fresh.length ? " · 신규 " + fresh.length : "")} />
+          {catCounts.map(({ c, n }) => (
+            <Stat key={c.name} icon="cap" tone={c.tone} num={n} label={c.name} sub={pct(n, active.length) + "%"} />
+          ))}
+          <Stat icon="users" tone="orange" num={overThis} label="인센티브 대상" sub={overThis ? BASE + "명 초과" : "없음"} />
+        </div>
       </div>
 
       {/* 인센티브 정산 (캡쳐용 정리) */}
@@ -135,21 +144,6 @@ export function Dashboard() {
             </>
           )}
         </div>
-      </div>
-
-      <div className="card sec-gap chart-card">
-        <button type="button" className="chart-toggle" onClick={toggleChart} aria-expanded={chartOpen}>
-          <div>
-            <div className="card-title sm">요일별 수업 분포</div>
-            <div className="card-sub">재적 학생 정규 수업 기준</div>
-          </div>
-          <span className={"chart-chev" + (chartOpen ? " open" : "")}><Icon name="chev" /></span>
-        </button>
-        {chartOpen && (
-          <div className="chart-body sm">
-            <WeekdayBars enrolled={enrolled} />
-          </div>
-        )}
       </div>
 
       <div className="card sec-gap">

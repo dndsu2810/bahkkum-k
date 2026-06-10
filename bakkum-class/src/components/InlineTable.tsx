@@ -67,29 +67,32 @@ export function InlineTable<T>({ rows, cols, rowId, onPatch, onDelete, empty, gr
     if (flashTimer.current) clearTimeout(flashTimer.current);
     flashTimer.current = setTimeout(() => setFlash(null), 1100);
   }
-  async function persist(id: string, key: string, value: string) {
+  // 백그라운드 저장 — UI를 막지 않는다. 결과는 flash로만 표시. orig는 호출 시점 값을 캡처.
+  function fireSave(id: string, key: string, value: string, orig: string) {
     const v = value.trim();
-    if (v === origRef.current.trim()) return; // 변경 없음
-    const ok = await onPatch(id, key, v, origRef.current);
-    doFlash(id, key, ok);
+    if (v === orig.trim()) return; // 변경 없음
+    void onPatch(id, key, v, orig).then((ok) => doFlash(id, key, ok));
   }
-  async function persistClose(id: string, key: string, value: string) {
-    await persist(id, key, value);
+  // 편집 확정: 먼저 즉시 닫고(다음 셀 편집을 막지 않게) 저장은 뒤에서 진행.
+  function persistClose(id: string, key: string, value: string) {
+    const orig = origRef.current;
     close();
+    fireSave(id, key, value, orig);
   }
-  async function commitMove(dir: 1 | -1) {
+  function commitMove(dir: 1 | -1) {
     const cur = edit;
     if (!cur) return;
-    await persist(cur.id, cur.key, draft);
+    const orig = origRef.current;
+    fireSave(cur.id, cur.key, draft, orig); // 저장은 백그라운드
     const i = seq.findIndex((x) => x.id === cur.id && x.key === cur.key);
     const nx = seq[i + dir];
-    if (nx) begin(nx.id, nx.key);
+    if (nx) begin(nx.id, nx.key); // 바로 다음 셀로 (저장 대기 없음)
     else close();
   }
   function onKey(e: React.KeyboardEvent, id: string, key: string) {
-    if (e.key === "Enter") { e.preventDefault(); skipBlur.current = true; void persistClose(id, key, draft); }
+    if (e.key === "Enter") { e.preventDefault(); skipBlur.current = true; persistClose(id, key, draft); }
     else if (e.key === "Escape") { e.preventDefault(); skipBlur.current = true; close(); }
-    else if (e.key === "Tab") { e.preventDefault(); skipBlur.current = true; void commitMove(e.shiftKey ? -1 : 1); }
+    else if (e.key === "Tab") { e.preventDefault(); skipBlur.current = true; commitMove(e.shiftKey ? -1 : 1); }
   }
   const openPicker = (el: HTMLSelectElement | null) => {
     if (!el) return;

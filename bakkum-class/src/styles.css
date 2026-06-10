@@ -526,14 +526,18 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 .inc-names{font-weight:700;color:var(--ink2)}
 .inc-v.inc-minus{color:var(--ink3)}
 
-/* 대시보드 — 한 줄 통계 바 (납작) */
-.statbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;margin-bottom:var(--s5);box-shadow:var(--sh-sm)}
-.stat{display:flex;align-items:center;gap:9px;background:var(--card);padding:10px 13px;min-width:0}
-.stat .kpi-ic{width:28px;height:28px;flex-shrink:0}
-.stat .kpi-ic svg{width:15px;height:15px}
+/* 대시보드 — 상단 2단(좌 요일별 분포 / 우 2×2 통계). 좌우 높이 맞춤(차트 기준으로 우측이 늘어남) */
+.dash-top{display:grid;grid-template-columns:1.25fr 1fr;gap:var(--s4);margin-bottom:var(--s5);align-items:stretch}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--sh-sm)}
+/* 통계 칸 — 아이콘 + (숫자·라벨) 위, 보조설명 아래 (좁은 칸에서도 안 잘리게) */
+.stat{display:flex;align-items:center;gap:10px;background:var(--card);padding:12px 14px;min-width:0}
+.stat .kpi-ic{width:30px;height:30px;flex-shrink:0}
+.stat .kpi-ic svg{width:16px;height:16px}
+.stat-body{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.stat-line{display:flex;align-items:baseline;gap:6px;min-width:0}
 .stat-num{font-size:var(--t-md);font-weight:800;letter-spacing:-.02em;color:var(--ink)}
-.stat-label{font-size:var(--t-sm);font-weight:600;color:var(--ink2);white-space:nowrap}
-.stat-sub{font-size:var(--t-cap);color:var(--ink4);margin-left:auto;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat-label{font-size:var(--t-sm);font-weight:600;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat-sub{font-size:var(--t-cap);color:var(--ink4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* 대시보드 — 요일별 분포(콤팩트·접기) */
 .chart-card{padding-top:6px}
@@ -605,7 +609,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
   .nav-badge{display:none}
   .topbar{padding:0 var(--s4)}
   .content{padding:20px 16px 48px}
-  .chart-row,.grid-2{grid-template-columns:1fr}
+  .chart-row,.grid-2,.dash-top{grid-template-columns:1fr}
   .field-row{grid-template-columns:1fr}
   .slot{grid-template-columns:1fr 1fr;gap:7px}
   .slot .slot-x{grid-column:span 2;justify-self:start}
