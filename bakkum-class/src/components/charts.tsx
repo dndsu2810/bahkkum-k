@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Student } from "../types";
-import { DOW, DOW_ORDER, TODAY } from "../lib/dates";
+import { DOW, TODAY } from "../lib/dates";
 import { pct } from "../lib/logic";
 import { Icon, type IconName } from "../icons";
 import type { Tone } from "../lib/categories";
@@ -37,27 +37,28 @@ export function Kpi({
   );
 }
 
+// 주말(토·일)은 수업이 없어 분포에서 제외 — 평일만 표시.
+const WEEKDAYS = ["월", "화", "수", "목", "금"];
 export function WeekdayBars({ enrolled }: { enrolled: Student[] }) {
   const counts: Record<string, number> = {};
-  DOW_ORDER.forEach((d) => (counts[d] = 0));
+  WEEKDAYS.forEach((d) => (counts[d] = 0));
   enrolled.forEach((s) =>
     (s.lessons || []).forEach((l) => {
       if (counts[l.day] != null) counts[l.day]++;
     })
   );
-  const max = Math.max(1, Math.max(...DOW_ORDER.map((d) => counts[d])));
+  const max = Math.max(1, Math.max(...WEEKDAYS.map((d) => counts[d])));
   const todayDow = DOW[TODAY.getDay()];
   return (
     <div className="bars">
-      {DOW_ORDER.map((d) => {
+      {WEEKDAYS.map((d) => {
         const v = counts[d];
-        const h = Math.round((v / max) * 150) + (v ? 6 : 0);
-        const weekend = d === "토" || d === "일";
+        const h = Math.round((v / max) * 76) + (v ? 5 : 0);
         const isToday = d === todayDow;
         return (
           <div className={"bar-col" + (isToday ? " today" : "")} key={d}>
             <div className="bar-track">
-              <div className={"bar" + (weekend ? " weekend" : "")} style={{ height: h }}>
+              <div className="bar" style={{ height: h }}>
                 {v ? <span className="bar-val">{v}</span> : null}
               </div>
             </div>
@@ -117,8 +118,8 @@ export function Donut({ segments }: { segments: { label: string; value: number; 
             justifyContent: "center",
           }}
         >
-          <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-1px" }}>{total}</div>
-          <div style={{ fontSize: 11, color: "var(--text3)", fontWeight: 600 }}>총 재적</div>
+          <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-1px" }}>{total}</div>
+          <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 600 }}>총 재적</div>
         </div>
       </div>
       <div className="donut-legend">

@@ -1,5 +1,5 @@
 import type { Makeup, MakeupDisplay, Student } from "../types";
-import { mkStatus, studentById, gradeColor, avatarText } from "../lib/logic";
+import { mkStatus, studentById } from "../lib/logic";
 import { fmtMDDow } from "../lib/dates";
 import { Empty } from "./ui";
 import { Icon } from "../icons";
@@ -17,6 +17,8 @@ export interface MakeupActions {
   onSkip: (id: string) => void;
   onRevert: (id: string) => void;
   onDelete: (id: string) => void;
+  onComplete?: (id: string) => void; // 예정 → 완료
+  onUncomplete?: (id: string) => void; // 완료 → 예정
 }
 
 function MkRow({
@@ -32,7 +34,6 @@ function MkRow({
 }) {
   const s = studentById(students, k.studentId);
   const name = s ? s.name : "(삭제된 학생)";
-  const color = s ? gradeColor(s.grade) : "blue";
   const st = mkStatus(k);
 
   let meta = "";
@@ -76,6 +77,9 @@ function MkRow({
             <Icon name="ban" />
             미진행
           </button>
+          <button className="btn danger sm" onClick={() => actions.onDelete(k.id)}>
+            <Icon name="trash" />
+          </button>
         </>
       );
     } else if (st === "skip") {
@@ -94,9 +98,33 @@ function MkRow({
           </button>
         </>
       );
+    } else if (st === "done") {
+      actionsEl = (
+        <>
+          {actions.onUncomplete && (
+            <button className="btn ghost sm" onClick={() => actions.onUncomplete!(k.id)}>
+              <Icon name="undo" />
+              완료 취소
+            </button>
+          )}
+          <button className="btn ghost sm" onClick={() => actions.onSchedule(k.id)}>
+            <Icon name="edit" />
+            수정
+          </button>
+          <button className="btn danger sm" onClick={() => actions.onDelete(k.id)}>
+            <Icon name="trash" />
+          </button>
+        </>
+      );
     } else {
       actionsEl = (
         <>
+          {actions.onComplete && (
+            <button className="btn primary sm" onClick={() => actions.onComplete!(k.id)}>
+              <Icon name="check" />
+              보강 완료
+            </button>
+          )}
           <button className="btn ghost sm" onClick={() => actions.onSchedule(k.id)}>
             <Icon name="edit" />
             수정
@@ -115,7 +143,6 @@ function MkRow({
 
   return (
     <div className={"mk-item" + (st === "pending" ? " pending" : "")}>
-      <span className={"av av-" + color + " av-lg"}>{avatarText(name)}</span>
       <div className="mk-main">
         <div className="mk-name">
           {name} <MkBadge st={st} />

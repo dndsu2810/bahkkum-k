@@ -11,8 +11,10 @@ import {
   mondayOf,
   parseD,
   timeToMin,
+  ymd,
 } from "../lib/dates";
-import { activeStudents, gradeColor, studentById } from "../lib/logic";
+import { activeStudents, attendsOn, effectiveLessons, gradeColor, studentById } from "../lib/logic";
+import { holidayName } from "../lib/holidays";
 import { getCategories, type Tone } from "../lib/categories";
 import { Select } from "../components/ui";
 
@@ -122,24 +124,28 @@ export function Timetable() {
     dates.push(dd);
   }
 
-  // events per weekday index (0=월 ... 6=일)
+  // events per weekday index (0=월 ... 6=일) — 각 날짜에 유효한 시간표(버전) 사용
   const evtByDay: RawEvt[][] = [[], [], [], [], [], [], []];
   activeStudents(data.students).forEach((s) =>
-    (s.lessons || []).forEach((l) => {
-      const di = DOW_ORDER.indexOf(l.day);
-      if (di < 0) return;
-      evtByDay[di].push({
-        name: s.name,
-        start: timeToMin(l.time),
-        dur: +l.duration,
-        type: gradeColor(s.grade),
-        time: l.time,
+    DOW_ORDER.forEach((dow, di) => {
+      const dateStr = ymd(dates[di]);
+      if (holidayName(dateStr)) return; // 공휴일은 수업 없음
+      if (!attendsOn(s, dateStr)) return;
+      effectiveLessons(s, dateStr).forEach((l) => {
+        if (l.day !== dow) return;
+        evtByDay[di].push({
+          name: s.name,
+          start: timeToMin(l.time),
+          dur: +l.duration,
+          type: gradeColor(s.grade),
+          time: l.time,
+        });
       });
     })
   );
-  // scheduled makeups in this week
+  // 이번 주 보강 (예정 + 완료 둘 다 표시) — 완료 처리해도 시간표에서 사라지지 않게.
   data.makeups.forEach((k) => {
-    if (k.status !== "scheduled" || !k.makeupDate) return;
+    if ((k.status !== "scheduled" && k.status !== "done") || !k.makeupDate) return;
     const dd = parseD(k.makeupDate);
     dd.setHours(0, 0, 0, 0);
     if (dd >= mon && dd <= sun) {
@@ -177,10 +183,16 @@ export function Timetable() {
             <div className="tt-corner" />
             {DOW_ORDER.map((dow, c) => {
               const isToday = dates[c].getTime() === TODAY.getTime();
+              const hol = holidayName(ymd(dates[c]));
               return (
-                <div className={"tt-dayhead" + (isToday ? " today" : "")} key={dow}>
+                <div
+                  className={"tt-dayhead" + (isToday ? " today" : "") + (hol ? " holiday" : "")}
+                  key={dow}
+                  title={hol || undefined}
+                >
                   <div className="tt-dow">{dow}</div>
                   <div className="tt-date">{fmtMD(dates[c])}</div>
+                  {hol && <div className="tt-hol">{hol}</div>}
                 </div>
               );
             })}

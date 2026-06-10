@@ -1,7 +1,49 @@
+import { useState } from "react";
 import { ALWAYS, fullOrdered, type NavPrefs, type PageId } from "../lib/nav";
 import { TONES, type Category, type Tone } from "../lib/categories";
 import { SECTION_LABELS, type SectionKey } from "../lib/reportSections";
+import { useStore } from "../store";
+import { importRecords } from "../api";
 import { Icon } from "../icons";
+
+/** 최초 1회용 — 예전에 노션에 쌓아둔 기록(출결/숙제/진도/테스트)을 앱으로 한 번 옮긴다.
+ *  평소엔 쓰지 않음(앱이 기록의 원본). 설정 안에 숨겨 둔다. */
+function OneTimeImport() {
+  const { reload, toast } = useStore();
+  const [importing, setImporting] = useState(false);
+
+  async function onImport() {
+    if (importing) return;
+    if (!window.confirm("예전에 노션에 쌓아둔 기록을 앱으로 가져옵니다.\n평소엔 쓰지 않는 최초 1회용 기능이에요. 진행할까요?")) return;
+    setImporting(true);
+    try {
+      const r = await importRecords();
+      if (r.error) toast("가져오기 실패: " + r.error);
+      else {
+        await reload();
+        toast(`노션 기록 가져오기 완료 · 출결 ${r.attendance} · 숙제 ${r.homework} · 진도 ${r.progress} · 테스트 ${r.test}건`);
+      }
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
+      <div className="card-title" style={{ marginBottom: 6 }}>노션 기록 1회 가져오기 (최초 1회용)</div>
+      <div className="page-desc" style={{ marginBottom: 12 }}>
+        평소에는 필요 없습니다. 기록(출결·숙제·진도·테스트)은 이 앱이 원본이고 노션으로 자동 저장됩니다.
+        예전에 노션에 쌓아둔 기록을 앱으로 처음 한 번만 옮길 때 사용하세요.
+      </div>
+      <button className="btn" onClick={onImport} disabled={importing}>
+        <span className={importing ? "spin" : undefined}>
+          <Icon name="refresh" />
+        </span>
+        {importing ? "가져오는 중…" : "노션 기록 가져오기"}
+      </button>
+    </div>
+  );
+}
 
 export function Settings({
   navPrefs,
@@ -79,7 +121,6 @@ export function Settings({
             const hidden = navPrefs.hidden.includes(n.id) && !locked;
             return (
               <div className="rep-srow" key={n.id} style={hidden ? { opacity: 0.5 } : undefined}>
-                <Icon name={n.icon} />
                 <span className="nm">{n.label}</span>
                 {locked && <span className="badge b-gray">고정</span>}
                 <span className="att" style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -167,6 +208,8 @@ export function Settings({
           미리보기/저장되는 리포트의 섹션 표시 순서입니다. (내용이 있는 섹션만 번호가 매겨져 표시됩니다)
         </div>
       </div>
+
+      <OneTimeImport />
     </section>
   );
 }

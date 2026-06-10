@@ -25,6 +25,11 @@ export function parseD(s: string): Date {
   return new Date(+p[0], +p[1] - 1, +p[2]);
 }
 
+/** Date → 'YYYY-MM-DD' (로컬 기준). */
+export function ymd(d: Date): string {
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+}
+
 export function fmtMD(d: Date): string {
   return d.getMonth() + 1 + "/" + d.getDate();
 }
@@ -32,6 +37,12 @@ export function fmtMD(d: Date): string {
 export function fmtMDDow(s: string): string {
   const d = parseD(s);
   return fmtMD(d) + "(" + DOW[d.getDay()] + ")";
+}
+
+/** 날짜 띠 헤더용: '6월 12일 (금)'. */
+export function fmtDayBand(s: string): string {
+  const d = parseD(s);
+  return d.getMonth() + 1 + "월 " + d.getDate() + "일 (" + DOW[d.getDay()] + ")";
 }
 
 export function fmtFull(d: Date): string {

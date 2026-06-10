@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { HwLog, Lesson, Makeup, ProgLog, StudentStatus } from "../types";
+import type { HwLog, Lesson, Makeup, ProgLog, ScheduleVersion, StudentStatus, TestLog } from "../types";
 import { useStore } from "../store";
-import { createStudent, hideStudent, pushHomeworkNotion, pushProgressNotion } from "../api";
+import { createStudent, hideStudent, pushHomeworkNotion, pushProgressNotion, pushTestNotion } from "../api";
 import { DOW_ORDER, fmtMDDow, todayStr, uid } from "../lib/dates";
 import { activeStudents, studentById } from "../lib/logic";
 import { getCategories } from "../lib/categories";
@@ -39,11 +39,15 @@ export function StudentModal({ id }: { id: string | null }) {
   const [parentPhone, setParentPhone] = useState(existing?.parentPhone ?? "");
   const [studentPhone, setStudentPhone] = useState(existing?.studentPhone ?? "");
   const [excluded, setExcluded] = useState(existing?.excluded ?? false);
-  const [slots, setSlots] = useState<Lesson[]>(
-    existing
-      ? existing.lessons.map((l) => ({ ...l }))
-      : [{ day: "월", time: "16:00", duration: 70 }]
-  );
+  const [slots, setSlots] = useState<Lesson[]>(() => {
+    if (!existing) return [{ day: "월", time: "16:00", duration: 70 }];
+    if (existing.lessons.length) return existing.lessons.map((l) => ({ ...l }));
+    // s.lessons가 비었으면 스케줄의 최신 '비어있지 않은' 버전에서 불러온다(꼬인 빈 버전 대비).
+    const v = (existing.schedule || []).filter((x) => x.lessons.length).sort((a, b) => (a.from < b.from ? 1 : -1))[0];
+    return v ? v.lessons.map((l) => ({ ...l })) : [];
+  });
+  // 시간표를 바꿀 때 새 시간표가 적용될 시작일 (기존 학생 수정 시에만 사용)
+  const [effFrom, setEffFrom] = useState(todayStr());
 
   function updateSlot(i: number, key: keyof Lesson, value: string) {
     setSlots((cur) =>
@@ -71,7 +75,7 @@ export function StudentModal({ id }: { id: string | null }) {
       return;
     }
     const lessons = slots.map((s) => ({ day: s.day, time: s.time, duration: +s.duration || 0 }));
-    const fields = {
+    const baseFields = {
       name: nm,
       grade,
       status,
@@ -81,16 +85,36 @@ export function StudentModal({ id }: { id: string | null }) {
       parentPhone: parentPhone.trim(),
       studentPhone: studentPhone.trim(),
       excluded,
-      lessons,
     };
     if (id) {
+      let scheduleChanged = false;
       mutate((d) => {
         const s = studentById(d.students, id);
-        if (s) Object.assign(s, fields);
+        if (!s) return;
+        Object.assign(s, baseFields);
+        // 이전 버전 이력 (스케줄 없으면 등록일 기준 단일, 그것도 없으면 빈 이력)
+        const prev: ScheduleVersion[] =
+          s.schedule && s.schedule.length
+            ? s.schedule.map((v) => ({ from: v.from, lessons: v.lessons.map((l) => ({ ...l })) }))
+            : s.lessons && s.lessons.length
+              ? [{ from: s.startDate || "2000-01-01", lessons: s.lessons.map((l) => ({ ...l })) }]
+              : [];
+        const prevLatest = prev.length ? prev.reduce((a, b) => (b.from > a.from ? b : a)).lessons : [];
+        // 이번 시간표는 effFrom부터 적용 — effFrom 이후(>=) 버전은 이번 것으로 대체, 그 이전(이력)은 유지.
+        // (예전엔 effFrom보다 미래의 빈 버전이 남아 실제 시간표를 가리는 버그가 있었음)
+        const past = prev.filter((v) => v.from < effFrom);
+        const hist = lessons.length ? [...past, { from: effFrom, lessons }] : past;
+        hist.sort((a, b) => (a.from < b.from ? -1 : 1));
+        scheduleChanged = JSON.stringify(prevLatest) !== JSON.stringify(lessons);
+        s.schedule = hist;
+        s.lessons = hist.length ? hist.reduce((a, b) => (b.from > a.from ? b : a)).lessons : [];
       });
       closeModal();
-      toast("학생 정보를 저장했어요.");
+      toast(scheduleChanged ? `학생 정보 저장 · 새 시간표는 ${effFrom}부터 적용돼요.` : "학생 정보를 저장했어요.");
     } else {
+      // 신규: 등록일부터 적용되는 단일 버전으로 시작
+      const schedule: ScheduleVersion[] = [{ from: startDate, lessons }];
+      const fields = { ...baseFields, lessons, schedule };
       // roster id is allocated by the shared `students` table (links by name if it exists)
       const { id: newId } = await createStudent(fields);
       mutate((d) => {
@@ -278,15 +302,42 @@ export function StudentModal({ id }: { id: string | null }) {
           <div className="hint">
             초등 주2회 70분 · 주3회 90분 / 중등 주2회 150분 · 주3회 120·120·60분 (가이드)
           </div>
+          {existing && (
+            <div className="field" style={{ marginTop: 12, marginBottom: 0 }}>
+              <label>시간표 적용 시작일</label>
+              <input
+                className="input"
+                type="date"
+                value={effFrom}
+                onChange={(e) => setEffFrom(e.target.value)}
+                style={{ width: "auto" }}
+              />
+              <div className="hint">
+                시간표를 바꾸면 이 날짜부터 새 시간표로 출결에 표시되고, 이전 날짜는 기존 시간표가 그대로
+                유지됩니다. (시간표를 안 바꾸면 무시돼요.)
+              </div>
+              {existing.schedule && existing.schedule.length > 1 && (
+                <div className="hint" style={{ marginTop: 6 }}>
+                  변경 이력:{" "}
+                  {existing.schedule
+                    .slice()
+                    .sort((a, b) => (a.from < b.from ? -1 : 1))
+                    .map((v) => `${v.from}~ (주${v.lessons.length}회)`)
+                    .join(" → ")}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
-          <label>원장 메모</label>
+          <label>인센티브 카운트</label>
           <label className="check">
             <input type="checkbox" checked={excluded} onChange={(e) => setExcluded(e.target.checked)} />
             <span>
-              <span className="ctxt">정산 특이 학생으로 표시</span>
+              <span className="ctxt">인센티브 인원에서 카운트 제외</span>
               <span className="csub">
-                원장 본인 확인용 내부 메모입니다. 화면 어디에도 표시되지 않으며 리포트에도 포함되지 않습니다.
+                인센티브 인원 계산에 넣지 않을 학생. 명단·출결·리포트엔 그대로 표시되고,
+                대시보드 인센티브 인원에서만 빠집니다.
               </span>
             </span>
           </label>
@@ -791,6 +842,137 @@ export function ProgressModal({ id, presetStudentId }: { id: string | null; pres
       <div className="modal-foot">
         {ex && (
           <button className="btn danger" onClick={() => { mutate((d) => { d.progressLog = d.progressLog.filter((p) => p.id !== id); }); closeModal(); toast("진도 기록을 삭제했어요."); }}>
+            <Icon name="trash" />
+            삭제
+          </button>
+        )}
+        <button className="btn ghost" onClick={closeModal}>취소</button>
+        <button className="btn primary" onClick={save}>
+          <Icon name="check" />
+          저장
+        </button>
+      </div>
+    </>
+  );
+}
+
+/* ---------------- Test add / edit (테스트 관리) ---------------- */
+export function TestModal({ id, presetStudentId }: { id: string | null; presetStudentId?: string }) {
+  const { data, mutate, toast, closeModal } = useStore();
+  const ex = id ? data.testLog.find((t) => t.id === id) : null;
+  const first = activeStudents(data.students)[0];
+  const [studentId, setStudentId] = useState(ex?.studentId ?? presetStudentId ?? first?.id ?? "");
+  const [date, setDate] = useState(ex?.date ?? todayStr());
+  const [type, setType] = useState(ex?.type ?? "주간평가");
+  const [round, setRound] = useState(ex?.round ?? "");
+  const [range, setRange] = useState(ex?.range ?? "");
+  const [status, setStatus] = useState<TestLog["status"]>(ex?.status ?? "예정");
+  const [score, setScore] = useState(ex?.score ?? 0);
+  const [memo, setMemo] = useState(ex?.memo ?? "");
+
+  function save() {
+    if (!studentId) {
+      toast("학생을 선택해 주세요.");
+      return;
+    }
+    const rec: TestLog = {
+      id: id || uid(),
+      studentId,
+      date,
+      type: type.trim(),
+      round: round.trim(),
+      range: range.trim(),
+      score: status === "완료" ? +score || 0 : 0,
+      status,
+      memo: memo.trim(),
+    };
+    mutate((d) => {
+      if (id) {
+        const i = d.testLog.findIndex((t) => t.id === id);
+        if (i >= 0) d.testLog[i] = rec;
+      } else {
+        d.testLog.push(rec);
+      }
+    });
+    pushTestNotion(studentId, {
+      date: rec.date,
+      type: rec.type,
+      round: rec.round,
+      range: rec.range,
+      score: rec.score,
+      status: rec.status,
+      memo: rec.memo,
+    });
+    closeModal();
+    toast(id ? "테스트 기록을 저장했어요." : "테스트를 기록했어요.");
+  }
+
+  return (
+    <>
+      <div className="modal-head">
+        <div className="modal-title">{ex ? "테스트 기록 수정" : "테스트 기록"}</div>
+        <button className="modal-x" onClick={closeModal}>
+          <Icon name="x" />
+        </button>
+      </div>
+      <div className="modal-body">
+        <div className="field-row">
+          <div className="field">
+            <label>학생</label>
+            <StudentSelect value={studentId} onChange={setStudentId} />
+          </div>
+          <div className="field">
+            <label>시험일</label>
+            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <label>시험 유형</label>
+            <input className="input" placeholder="예: 주간평가" value={type} onChange={(e) => setType(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>회차</label>
+            <input className="input" placeholder="예: 6월 2주차" value={round} onChange={(e) => setRound(e.target.value)} />
+          </div>
+        </div>
+        <div className="field">
+          <label>시험 범위</label>
+          <input className="input" placeholder="예: 5단원 분수의 덧셈과 뺄셈" value={range} onChange={(e) => setRange(e.target.value)} />
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <label>평가</label>
+            <div className="seg">
+              {(["예정", "완료"] as const).map((s) => (
+                <button key={s} type="button" className={"seg-btn" + (status === s ? " on" : "")} onClick={() => setStatus(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="field">
+            <label>점수</label>
+            <input
+              className="input"
+              type="number"
+              min={0}
+              max={100}
+              value={score}
+              disabled={status !== "완료"}
+              placeholder={status === "예정" ? "완료 시 입력" : ""}
+              onChange={(e) => setScore(+e.target.value || 0)}
+            />
+          </div>
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label>특이사항</label>
+          <input className="input" placeholder="선택" value={memo} onChange={(e) => setMemo(e.target.value)} />
+        </div>
+      </div>
+      <div className="modal-foot">
+        {ex && (
+          <button className="btn danger" onClick={() => { mutate((d) => { d.testLog = d.testLog.filter((t) => t.id !== id); }); closeModal(); toast("테스트 기록을 삭제했어요."); }}>
             <Icon name="trash" />
             삭제
           </button>

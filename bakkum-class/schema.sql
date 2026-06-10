@@ -32,6 +32,14 @@ CREATE TABLE IF NOT EXISTS class_lessons (
 );
 CREATE INDEX IF NOT EXISTS idx_class_lessons_student ON class_lessons(student_id);
 
+-- 시간표 변경 이력(버전). 한 학생당 1행, versions는 JSON 배열
+-- [{ "from":"YYYY-MM-DD", "lessons":[{ "day","time","duration" }] }] (적용 시작일 오름차순).
+-- class_lessons에는 항상 '최신' 시간표가 들어가고, 과거 날짜 출결은 이 이력으로 복원한다.
+CREATE TABLE IF NOT EXISTS class_schedules (
+  student_id  TEXT PRIMARY KEY,
+  versions    TEXT NOT NULL DEFAULT '[]'
+);
+
 -- Student class attendance. key = "YYYY-MM-DD|studentId|HH:MM"
 CREATE TABLE IF NOT EXISTS class_attendance (
   att_key         TEXT PRIMARY KEY,
@@ -60,6 +68,19 @@ CREATE TABLE IF NOT EXISTS class_makeups (
 CREATE INDEX IF NOT EXISTS idx_class_makeups_student ON class_makeups(student_id);
 CREATE INDEX IF NOT EXISTS idx_class_makeups_status ON class_makeups(status);
 
+-- 사용자가 직접 삭제한 보강(결석)의 삭제 표시(tombstone) — 노션 재가져오기/재체크
+-- 때 보강 대기가 자동으로 되살아나지 않게 한다. att_key 하나당 1행.
+CREATE TABLE IF NOT EXISTS class_makeup_dismissed (
+  att_key  TEXT PRIMARY KEY
+);
+
+-- 앱에서 인라인 수정해 '앱 소유'가 된 학생 필드(name·school·grade·status) 목록.
+-- 노션 동기화가 이 필드는 덮어쓰지 않는다. 학생 1명당 1행(fields = JSON 배열).
+CREATE TABLE IF NOT EXISTS class_student_overrides (
+  student_id  TEXT PRIMARY KEY,
+  fields      TEXT NOT NULL DEFAULT '[]'
+);
+
 -- 숙제 기록 (숙제 관리 페이지 → 월말리포트 누적). student_id = 로스터 id (no FK).
 CREATE TABLE IF NOT EXISTS class_homework (
   id          TEXT PRIMARY KEY,
@@ -87,6 +108,21 @@ CREATE TABLE IF NOT EXISTS class_progress (
   created_at  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_class_progress_student ON class_progress(student_id);
+
+-- 테스트/평가 기록 (테스트 관리 → 월말리포트 평가 누적, 노션 수학 테스트 DB와 동일 양식).
+CREATE TABLE IF NOT EXISTS class_tests (
+  id          TEXT PRIMARY KEY,
+  student_id  TEXT NOT NULL,
+  date        TEXT NOT NULL DEFAULT '',   -- 시험일 YYYY-MM-DD
+  type        TEXT NOT NULL DEFAULT '',   -- 시험 유형
+  round       TEXT NOT NULL DEFAULT '',   -- 회차
+  range_      TEXT NOT NULL DEFAULT '',   -- 시험 범위 (range는 예약어라 range_)
+  score       INTEGER NOT NULL DEFAULT 0, -- 점수
+  status      TEXT NOT NULL DEFAULT '예정', -- 평가: 예정|완료
+  memo        TEXT NOT NULL DEFAULT '',   -- 특이사항
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_class_tests_student ON class_tests(student_id);
 
 -- Shared roster + points tables. On bakuum-production these already exist
 -- (mogakgong) — IF NOT EXISTS is a no-op there. Defined here so local dev and

@@ -66,18 +66,21 @@
 .r-comment p{ font-size:16px; line-height:1.78; color:var(--ink-2); font-weight:500; word-break:keep-all; white-space:pre-wrap }
 
 /* PROGRESS */
-.r-progress{ display:flex; align-items:center; gap:30px; border:1px solid var(--line); border-radius:18px; padding:26px 28px }
+.r-progress{ display:flex; align-items:center; gap:30px; border:1px solid var(--line); border-radius:18px; padding:26px 28px; background:var(--teal-soft) }
 .r-ring{ position:relative; width:138px; height:138px; flex:none }
-.r-ring .r-rin{ position:absolute; inset:0; display:grid; place-items:center; text-align:center }
+.r-ring .r-rin{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center }
 .r-rnum{ font-size:33px; font-weight:800; color:var(--teal-deep); letter-spacing:-0.03em; line-height:1 }
 .r-rnum i{ font-size:17px; font-style:normal; margin-left:1px }
 .r-rcap{ display:block; font-size:12.5px; font-weight:700; color:var(--ink-3); margin-top:4px }
 .r-prog-info{ flex:1; min-width:0 }
 .r-prog-info .r-tag{ display:inline-block; font-size:12px; font-weight:700; color:var(--teal); background:var(--teal-tint); padding:4px 10px; border-radius:7px; margin-bottom:10px }
-.r-unit{ font-size:24px; font-weight:800; letter-spacing:-0.02em; color:var(--ink); margin-bottom:18px }
-.r-prog-grid{ display:flex; gap:34px; border-top:1px solid var(--line); padding-top:16px }
-.r-prog-grid .r-it .r-l{ font-size:12.5px; font-weight:700; color:var(--ink-3); margin-bottom:5px }
-.r-prog-grid .r-it .r-v{ font-size:16px; font-weight:700; color:var(--ink) }
+.r-unit{ font-size:24px; font-weight:800; letter-spacing:-0.02em; color:var(--ink); margin-bottom:14px }
+.r-pbar{ height:10px; border-radius:999px; background:#DCEAEC; overflow:hidden; margin-bottom:18px }
+.r-pbar>span{ display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,var(--teal-deep),var(--teal)) }
+.r-prog-grid{ display:flex; gap:12px }
+.r-prog-grid .r-it{ flex:1; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px }
+.r-prog-grid .r-it .r-l{ font-size:12px; font-weight:700; color:var(--ink-3); margin-bottom:5px }
+.r-prog-grid .r-it .r-v{ font-size:16px; font-weight:800; color:var(--ink) }
 
 /* CALENDAR */
 .r-cal-card{ border:1px solid var(--line); border-radius:18px; padding:22px 22px 20px }
@@ -93,6 +96,15 @@
 .r-cell.empty{ border:0; background:transparent }
 .r-cell .r-d{ font-size:15px; font-weight:700; color:var(--ink-2) }
 .r-celltag{ font-size:11px; font-weight:800; margin-top:auto; padding:2px 7px; border-radius:6px; letter-spacing:-0.02em }
+/* 하루에 여러 표시(출석+보강 등) — 태그를 세로로 모두 노출, 각 태그가 자체 색 */
+.r-celltags{ margin-top:auto; display:flex; flex-direction:column; gap:3px; align-items:center }
+.r-celltags .r-celltag{ margin-top:0 }
+.r-celltag.tag-p{ color:#0E7A4C; background:rgba(22,163,107,.16) }
+.r-celltag.tag-m{ color:#274FB0; background:rgba(46,107,224,.15) }
+.r-celltag.tag-a{ color:#C23A40; background:rgba(224,74,79,.15) }
+/* 공휴일 — 이름 표기(긴 이름은 줄바꿈), 결석(빨강)과 구분되게 회색 */
+.r-cell.att-h{ background:#f5f6f8; border-color:transparent }
+.r-celltag.tag-h{ color:#7C8597; background:#e9ebf0; font-size:9.5px; font-weight:700; line-height:1.15; white-space:normal; text-align:center; letter-spacing:-0.03em; padding:2px 5px }
 .r-cell.att-p{ background:var(--green-tint); border-color:transparent }
 .r-cell.att-p .r-d{ color:#0E7A4C } .r-cell.att-p .r-celltag{ color:#0E7A4C; background:rgba(22,163,107,.16) }
 .r-cell.att-m{ background:var(--blue-tint); border-color:transparent }

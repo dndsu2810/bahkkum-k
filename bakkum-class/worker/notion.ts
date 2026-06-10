@@ -15,6 +15,7 @@ export const NOTION_CFG = {
   attendanceDb: "2e766817e0618131850bf4032cef1321", // 수업기록
   homeworkDb: "2e766817e0618149bbf1d2c13f7fc0a8", // 수학숙제
   progressDb: "2e766817e06181818459d59a19fa7e0e", // 수학진도
+  testDb: "2e766817e0618157815ef11fcf5523dd", // 수학 테스트
   // 학생 DB 읽기용 속성명 (이름은 title 속성에서 자동 추출)
   student: {
     status: "상태",
@@ -25,13 +26,15 @@ export const NOTION_CFG = {
     studentPhone: "학생 연락처",
     start: "첫수업일",
   },
-  // 이 수업(수업선택)에 해당하는 학생만 동기화
-  studentClassFilter: ["초등수학", "중고등수학", "고백클래스"],
-  // 출결 DB (실제 속성)
-  attendance: { student: "이름", date: "날짜", status: "출결", attitude: "수업태도", late: "지각(숫자만)", note: "특이사항" },
-  // 숙제 DB (실제 속성)
+  // 이 수업(수업선택)에 해당하는 학생/출결만 동기화 (고백클래스 제외 — 혼선 방지)
+  studentClassFilter: ["초등수학", "중고등수학"],
+  // 출결 DB (실제 속성). classSelect=수업 선택(relation) → 초등수학/중고등수학만 가져오는 기준
+  attendance: { student: "이름", date: "날짜", status: "출결", attitude: "수업태도", late: "지각(숫자만)", note: "특이사항", classSelect: "수업 선택" },
+  // 숙제 DB (실제 속성). classSelect=수업 선택(relation), title=제목(title)
   homework: {
     student: "학생 선택",
+    classSelect: "수업 선택",
+    title: "수학숙제(자동)",
     due: "숙제 마감일",
     book: "숙제 교재",
     area: "영역",
@@ -39,9 +42,37 @@ export const NOTION_CFG = {
     done: "확인완료",
     content: "숙제 내용",
     note: "특이사항",
+    delay: "숙제 현황", // multi_select: 1~5차 밀림 등
   },
-  // 진도 DB (실제 속성)
-  progress: { student: "학생 선택", unit: "진도 현황", area: "영역", pct: "진행률", start: "시작일", note: "특이사항" },
+  // 진도 DB (실제 속성). classSelect=수업 선택(relation), title=제목(title)
+  progress: {
+    student: "학생 선택",
+    classSelect: "수업 선택",
+    title: "수학진도(자동)",
+    unit: "진도 현황",
+    area: "영역",
+    pct: "진행률",
+    start: "시작일",
+    note: "특이사항",
+  },
+  // 테스트 DB (수학 테스트). classSelect=수업선택(공백 없음), title=수학 test
+  test: {
+    student: "학생 선택",
+    classSelect: "수업선택",
+    title: "수학 test",
+    date: "시험일",
+    type: "시험 유형",
+    round: "회차",
+    range: "시험 범위",
+    score: "점수",
+    status: "평가",
+    note: "특이사항",
+  },
+  // 수업(과목) DB — 수업 선택 relation의 연결 대상(초등수학/중고등수학 페이지가 여기 있음)
+  classDb: "2e766817-e061-8132-bef1-eba8f92c1633",
+  // 학원 일정 DB (읽기 전용 표시용). 일정명=title, 날짜=date(범위 가능), 구분=select, 상태=status
+  scheduleDb: "2e766817e061814993deffb437a7ed6a",
+  schedule: { title: "일정명", date: "날짜", category: "구분", status: "상태" },
   // 3월부터 import 기준일
   importSince: "2026-03-01",
 };
@@ -50,8 +81,8 @@ interface NotionEnv {
   NOTION_TOKEN?: string;
 }
 
-async function notionReq(env: NotionEnv, method: string, path: string, body?: unknown): Promise<Response> {
-  return fetch("https://api.notion.com" + path, {
+async function notionReq(env: NotionEnv, method: string, path: string, body?: unknown, attempt = 0): Promise<Response> {
+  const res = await fetch("https://api.notion.com" + path, {
     method,
     headers: {
       Authorization: `Bearer ${env.NOTION_TOKEN}`,
@@ -60,6 +91,14 @@ async function notionReq(env: NotionEnv, method: string, path: string, body?: un
     },
     body: body ? JSON.stringify(body) : undefined,
   });
+  // 노션 속도 제한(429)·일시 오류(5xx)는 백오프 후 재시도 — 여러 명 동시 푸시 시 일부 누락 방지.
+  if ((res.status === 429 || res.status >= 500) && attempt < 4) {
+    const ra = parseFloat(res.headers.get("Retry-After") || "");
+    const waitMs = Math.min(8000, (ra > 0 ? ra * 1000 : 0) || 400 * Math.pow(2, attempt));
+    await new Promise((r) => setTimeout(r, waitMs));
+    return notionReq(env, method, path, body, attempt + 1);
+  }
+  return res;
 }
 
 /* ---------- read helpers ---------- */
@@ -217,7 +256,9 @@ export async function inspectDb(env: NotionEnv, which: string): Promise<unknown>
         ? NOTION_CFG.progressDb
         : which === "attendance"
           ? NOTION_CFG.attendanceDb
-          : NOTION_CFG.studentDb;
+          : which === "test"
+            ? NOTION_CFG.testDb
+            : NOTION_CFG.studentDb;
 
   const meta = await notionReq(env, "GET", `/v1/databases/${dbId}`);
   if (!meta.ok) throw new Error(`db ${meta.status}: ${await meta.text()}`);
@@ -259,40 +300,320 @@ async function createPage(env: NotionEnv, databaseId: string, properties: Record
 const relation = (pageId?: string) => (pageId ? [{ id: pageId }] : []);
 const richText = (s: string) => [{ text: { content: s } }];
 const multi = (names: string[]) => ({ multi_select: names.filter(Boolean).map((n) => ({ name: n })) });
+const titleProp = (s: string) => ({ title: s ? [{ text: { content: s } }] : [] });
 
-// 숙제 기록 → 노션 숙제 DB (새 행). 교재/영역=multi_select, 완성도=number, 확인완료=checkbox.
-export function createHomeworkRecord(
+/** 노션 기록 제목(자동화 라벨과 동일하게 고정 입력). */
+const TITLE_HOMEWORK = "수학숙제";
+const TITLE_PROGRESS = "수업진도";
+const TITLE_TEST = "수학Test";
+
+/** 수업(과목) DB의 페이지들 → { 제목: pageId } 맵. 수업 선택 relation 채울 때 사용.
+ *  초등수학/중고등수학은 거의 안 바뀌므로 isolate 단위로 캐시해 매 푸시마다의 조회를 없앤다. */
+let _classMapCache: Record<string, string> | null = null;
+export async function fetchClassPageMap(env: NotionEnv): Promise<Record<string, string>> {
+  if (_classMapCache) return _classMapCache;
+  const map: Record<string, string> = {};
+  try {
+    let cursor: string | undefined;
+    do {
+      const res = await notionReq(env, "POST", `/v1/databases/${NOTION_CFG.classDb}/query`, {
+        page_size: 100,
+        ...(cursor ? { start_cursor: cursor } : {}),
+      });
+      if (!res.ok) break;
+      const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+      for (const pg of j.results) {
+        const title = findTitle((pg.properties || {}) as Record<string, Prop>);
+        if (title) map[title] = pg.id;
+      }
+      cursor = j.has_more ? j.next_cursor : undefined;
+    } while (cursor);
+  } catch {
+    /* ignore */
+  }
+  if (map["초등수학"] || map["중고등수학"]) _classMapCache = map; // 정상 조회 시에만 캐시
+  return map;
+}
+
+// 수업(과목) 페이지 id (실측 확인값). 수업 DB가 연동에 공유 안 돼 fetchClassPageMap이
+// 비어도 출결/숙제 행을 과목으로 특정할 수 있게 폴백으로 사용한다.
+const CLASS_PAGE_ID: Record<string, string> = {
+  초등수학: "2e766817-e061-8194-a7fc-ce8db36089cc",
+  중고등수학: "2e766817-e061-8187-9bae-c2460a579bb9",
+};
+
+/** 학생 학년('초등'/'중등'...) → 수업 선택 페이지 id (초등→초등수학, 그 외→중고등수학). */
+export function classPageIdForGrade(map: Record<string, string>, grade: string): string | undefined {
+  const wanted = (grade || "").startsWith("초") ? "초등수학" : "중고등수학";
+  return map[wanted] || CLASS_PAGE_ID[wanted];
+}
+
+// 숙제 기록 → 노션 숙제 DB. 같은 학생·같은 마감일 행이 있으면 갱신(중복 행 방지).
+//  - 숙제 내용(text) = 교재/내용 텍스트   - 영역(multi_select) = 태그
+//  - 완성도(number) · 확인완료(checkbox) · 특이사항(text) = 메모(분리)
+//  - '숙제 교재'(multi_select)는 자유 텍스트로 더럽히지 않도록 건드리지 않는다.
+export async function upsertHomeworkRecord(
   env: NotionEnv,
-  h: { notionPageId?: string; date: string; book: string; tags: string[]; completion: number; done: boolean; memo: string }
+  h: {
+    notionPageId?: string;
+    classPageId?: string;
+    date: string;
+    book: string;
+    tags: string[];
+    completion: number;
+    done: boolean;
+    memo: string;
+    /** 지연 횟수 — 노션 '숙제 현황'에 'N차 밀림'으로 반영(>0일 때). */
+    delayCount?: number;
+    /** 검사완료/지연 토글만: 기존 행이 있으면 확인완료·완성도·숙제현황만 갱신하고
+     *  숙제 내용·특이사항·영역 등 직접 입력분은 건드리지 않는다. */
+    checkOnly?: boolean;
+  }
 ): Promise<boolean> {
+  if (!env.NOTION_TOKEN || !h.notionPageId || !h.date) return false;
   const P = NOTION_CFG.homework;
-  const props: Record<string, unknown> = {
+  const fullProps: Record<string, unknown> = {
+    [P.title]: titleProp(TITLE_HOMEWORK),
     [P.due]: { date: { start: h.date } },
     [P.completion]: { number: h.completion || 0 },
     [P.done]: { checkbox: !!h.done },
+    [P.content]: { rich_text: richText(h.book || "") }, // 숙제 내용
+    [P.note]: { rich_text: richText(h.memo || "") }, // 특이사항(메모만, 숙제 내용과 분리)
+    [P.student]: { relation: relation(h.notionPageId) },
   };
-  if (h.book) props[P.book] = multi([h.book]);
-  if (h.tags && h.tags.length) props[P.area] = multi(h.tags);
-  if (h.memo) props[P.note] = { rich_text: richText(h.memo) };
-  if (h.notionPageId) props[P.student] = { relation: relation(h.notionPageId) };
-  return createPage(env, NOTION_CFG.homeworkDb, props);
+  if (h.tags && h.tags.length) fullProps[P.area] = multi(h.tags);
+  if (h.classPageId) fullProps[P.classSelect] = { relation: relation(h.classPageId) };
+  try {
+    const existing = await findHomeworkPage(env, h.notionPageId, h.date, h.classPageId);
+    if (existing) {
+      // 검사완료/지연 토글: 확인완료 + 완성도(+숙제현황)만 갱신. 그 외엔 전체 갱신.
+      let props: Record<string, unknown> = fullProps;
+      if (h.checkOnly) {
+        props = { [P.done]: { checkbox: !!h.done }, [P.completion]: { number: h.completion || 0 } };
+        if (h.delayCount && h.delayCount > 0) props[P.delay] = multi([Math.min(h.delayCount, 5) + "차 밀림"]);
+      }
+      const r = await notionReq(env, "PATCH", `/v1/pages/${existing}`, { properties: props });
+      if (!r.ok) console.log("notion hw update failed", r.status, await r.text());
+      return r.ok;
+    }
+    return await createPage(env, NOTION_CFG.homeworkDb, fullProps);
+  } catch (e) {
+    console.log("notion hw upsert error", String(e));
+    return false;
+  }
+}
+
+/** 같은 학생(relation)·같은 마감일·같은 수업의 기존 숙제 페이지 id (없으면 null). */
+async function findHomeworkPage(env: NotionEnv, studentPageId: string, date: string, classPageId?: string): Promise<string | null> {
+  const P = NOTION_CFG.homework;
+  const and: unknown[] = [
+    { property: P.student, relation: { contains: studentPageId } },
+    { property: P.due, date: { equals: date } },
+  ];
+  if (classPageId) and.push({ property: P.classSelect, relation: { contains: classPageId } });
+  try {
+    const r = await notionReq(env, "POST", `/v1/databases/${NOTION_CFG.homeworkDb}/query`, {
+      page_size: 1,
+      filter: { and },
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { results: { id: string }[] };
+    return j.results[0]?.id || null;
+  } catch {
+    return null;
+  }
 }
 
 // 진도 기록 → 노션 진도 DB. 진도 현황/영역=multi_select, 진행률=number, 시작일=date.
-export function createProgressRecord(
+// 같은 학생·같은 단원(진도 현황) 행이 있으면 갱신(중복 행 방지). 없으면 새로 생성.
+export async function upsertProgressRecord(
   env: NotionEnv,
-  pr: { notionPageId?: string; unit: string; area: string; pct: number; startDate: string; memo: string }
+  pr: {
+    notionPageId?: string;
+    classPageId?: string;
+    unit: string;
+    area: string;
+    pct: number;
+    startDate: string;
+    memo: string;
+  }
 ): Promise<boolean> {
+  if (!env.NOTION_TOKEN || !pr.notionPageId) return false;
   const P = NOTION_CFG.progress;
   const props: Record<string, unknown> = {
+    [P.title]: titleProp(TITLE_PROGRESS),
     [P.pct]: { number: pr.pct || 0 },
+    [P.note]: { rich_text: richText(pr.memo || "") },
+    [P.student]: { relation: relation(pr.notionPageId) },
   };
   if (pr.unit) props[P.unit] = multi([pr.unit]);
   if (pr.area) props[P.area] = multi(pr.area.split(/[,·]/).map((s) => s.trim()));
   if (pr.startDate) props[P.start] = { date: { start: pr.startDate } };
-  if (pr.memo) props[P.note] = { rich_text: richText(pr.memo) };
-  if (pr.notionPageId) props[P.student] = { relation: relation(pr.notionPageId) };
-  return createPage(env, NOTION_CFG.progressDb, props);
+  if (pr.classPageId) props[P.classSelect] = { relation: relation(pr.classPageId) };
+  try {
+    const existing = await findProgressPage(env, pr.notionPageId, pr.unit);
+    if (existing) {
+      const r = await notionReq(env, "PATCH", `/v1/pages/${existing}`, { properties: props });
+      if (!r.ok) console.log("notion prog update failed", r.status, await r.text());
+      return r.ok;
+    }
+    return await createPage(env, NOTION_CFG.progressDb, props);
+  } catch (e) {
+    console.log("notion prog upsert error", String(e));
+    return false;
+  }
+}
+
+/** 같은 학생(relation)·같은 단원(진도 현황 contains)의 기존 진도 페이지 id (단원 없으면 null→새로). */
+async function findProgressPage(env: NotionEnv, studentPageId: string, unit: string): Promise<string | null> {
+  if (!unit) return null;
+  const P = NOTION_CFG.progress;
+  try {
+    const r = await notionReq(env, "POST", `/v1/databases/${NOTION_CFG.progressDb}/query`, {
+      page_size: 1,
+      filter: {
+        and: [
+          { property: P.student, relation: { contains: studentPageId } },
+          { property: P.unit, multi_select: { contains: unit } },
+        ],
+      },
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { results: { id: string }[] };
+    return j.results[0]?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+// 테스트 기록 → 노션 테스트 DB. 시험 유형/회차=multi_select, 점수=number, 평가=select.
+// 같은 학생·같은 시험일·같은 유형 행이 있으면 갱신(중복 행 방지). 제목/학생/수업선택도 채움.
+export async function upsertTestRecord(
+  env: NotionEnv,
+  t: {
+    notionPageId?: string;
+    classPageId?: string;
+    date: string;
+    type: string;
+    round: string;
+    range: string;
+    score: number;
+    status: string;
+    memo: string;
+  }
+): Promise<boolean> {
+  if (!env.NOTION_TOKEN || !t.notionPageId || !t.date) return false;
+  const P = NOTION_CFG.test;
+  const props: Record<string, unknown> = {
+    [P.title]: titleProp(TITLE_TEST),
+    [P.status]: { select: { name: t.status || "예정" } },
+    [P.date]: { date: { start: t.date } },
+    [P.score]: { number: t.score || 0 },
+    [P.range]: { rich_text: richText(t.range || "") },
+    [P.note]: { rich_text: richText(t.memo || "") },
+    [P.student]: { relation: relation(t.notionPageId) },
+  };
+  if (t.type) props[P.type] = multi([t.type]);
+  if (t.round) props[P.round] = multi([t.round]);
+  if (t.classPageId) props[P.classSelect] = { relation: relation(t.classPageId) };
+  try {
+    const existing = await findTestPage(env, t.notionPageId, t.date, t.type);
+    if (existing) {
+      const r = await notionReq(env, "PATCH", `/v1/pages/${existing}`, { properties: props });
+      if (!r.ok) console.log("notion test update failed", r.status, await r.text());
+      return r.ok;
+    }
+    return await createPage(env, NOTION_CFG.testDb, props);
+  } catch (e) {
+    console.log("notion test upsert error", String(e));
+    return false;
+  }
+}
+
+/** 같은 학생(relation)·같은 시험일·같은 시험유형의 기존 테스트 페이지 id (없으면 null). */
+async function findTestPage(env: NotionEnv, studentPageId: string, date: string, type: string): Promise<string | null> {
+  const P = NOTION_CFG.test;
+  const and: unknown[] = [
+    { property: P.student, relation: { contains: studentPageId } },
+    { property: P.date, date: { equals: date } },
+  ];
+  if (type) and.push({ property: P.type, multi_select: { contains: type } });
+  try {
+    const r = await notionReq(env, "POST", `/v1/databases/${NOTION_CFG.testDb}/query`, { page_size: 1, filter: { and } });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { results: { id: string }[] };
+    return j.results[0]?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+// 출결 기록 → 노션 수업기록 DB. 출결=select, 수업태도=select, 지각(숫자만)=text(숫자 문자열),
+// 이름/수업 선택=relation, 날짜=date. 같은 학생·같은 날짜 행이 있으면 갱신(중복 행 방지).
+export async function upsertAttendanceRecord(
+  env: NotionEnv,
+  a: {
+    notionPageId?: string;
+    classPageId?: string;
+    date: string;
+    status: string;
+    attitude: string;
+    lateMinutes: number;
+    note: string;
+  }
+): Promise<boolean> {
+  if (!env.NOTION_TOKEN || !a.notionPageId || !a.date || !a.status) return false;
+  const A = NOTION_CFG.attendance;
+  const props: Record<string, unknown> = {
+    [A.date]: { date: { start: a.date } },
+    [A.status]: { select: { name: a.status } },
+    [A.student]: { relation: relation(a.notionPageId) },
+  };
+  // 수업태도는 앱이 소유 → 값 있으면 설정, 비우면 노션도 해제(null).
+  props[A.attitude] = a.attitude ? { select: { name: a.attitude } } : { select: null };
+  // 지각(숫자만)은 노션에서 '텍스트' 속성 → 숫자 문자열로 보낸다(숫자로 보내면 400으로 전체 거부됨).
+  if (a.status === "지각" && a.lateMinutes) props[A.late] = { rich_text: richText(String(a.lateMinutes)) };
+  if (a.note) props[A.note] = { rich_text: richText(a.note) };
+  if (a.classPageId) props[A.classSelect] = { relation: relation(a.classPageId) };
+  try {
+    const existing = await findAttendancePage(env, a.notionPageId, a.date, a.classPageId);
+    if (existing) {
+      const r = await notionReq(env, "PATCH", `/v1/pages/${existing}`, { properties: props });
+      if (!r.ok) console.log("notion att update failed", r.status, await r.text());
+      return r.ok;
+    }
+    return await createPage(env, NOTION_CFG.attendanceDb, props);
+  } catch (e) {
+    console.log("notion att upsert error", String(e));
+    return false;
+  }
+}
+
+/** 같은 학생(relation)·같은 날짜·같은 수업(수업 선택)의 기존 출결 페이지 id (없으면 null).
+ *  수업 선택까지 맞춰야 한 학생이 같은 날 수학/영어 행을 둘 다 가질 때 엉뚱한 행을 안 잡는다. */
+async function findAttendancePage(
+  env: NotionEnv,
+  studentPageId: string,
+  date: string,
+  classPageId?: string
+): Promise<string | null> {
+  const A = NOTION_CFG.attendance;
+  const and: unknown[] = [
+    { property: A.student, relation: { contains: studentPageId } },
+    { property: A.date, date: { equals: date } },
+  ];
+  if (classPageId) and.push({ property: A.classSelect, relation: { contains: classPageId } });
+  try {
+    const r = await notionReq(env, "POST", `/v1/databases/${NOTION_CFG.attendanceDb}/query`, {
+      page_size: 1,
+      filter: { and },
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { results: { id: string }[] };
+    return j.results[0]?.id || null;
+  } catch {
+    return null;
+  }
 }
 
 /* ---------- import: 노션 기록 → 앱 (read; 3월부터, 서버 필터) ---------- */
@@ -337,11 +658,13 @@ export async function fetchHomeworkRecords(env: NotionEnv, since: string): Promi
       srcId: pg.id,
       studentPageId,
       date,
-      book: propValues(p[H.book]).join(", "),
+      // 쓰기와 대칭: 앱 '교재/내용' ← 노션 '숙제 내용'(content), '메모' ← '특이사항'(note).
+      // (노션 '숙제 교재' multi_select는 쓰기와 동일하게 import에서도 건드리지 않음)
+      book: propText(p[H.content]),
       tags: propValues(p[H.area]),
       completion: numberVal(p[H.completion]),
       done: checkboxVal(p[H.done]),
-      memo: propText(p[H.note]) || propText(p[H.content]),
+      memo: propText(p[H.note]),
     });
   }
   return out;
@@ -380,10 +703,18 @@ export async function fetchProgressRecords(env: NotionEnv, since: string): Promi
   return out;
 }
 
+/** 날짜 속성의 종료일(date.end) — 기간(범위) 결석 판별용. 없으면 ''. */
+function propDateEnd(p: Prop | undefined): string {
+  const any = p as Record<string, any> | undefined;
+  return p && p.type === "date" ? any!.date?.end || "" : "";
+}
+
 export interface ImportAtt {
   srcId: string;
   studentPageId: string;
   date: string;
+  /** 기간 결석이면 종료일(YYYY-MM-DD), 단일 날짜면 ''. */
+  dateEnd: string;
   status: string;
   attitude: string;
   lateMinutes: number;
@@ -391,9 +722,14 @@ export interface ImportAtt {
 }
 export async function fetchAttendanceRecords(env: NotionEnv, since: string): Promise<ImportAtt[]> {
   const A = NOTION_CFG.attendance;
+  // 학생 동기화와 동일하게 '수업 선택'(relation)이 초등수학/중고등수학인 출결만.
+  // (영어·고백클래스 등 다른 수업 제외) 해석 실패로 비면 import 0 → 잘못 들어오는 것보다 안전.
+  const allowedClassIds = await resolveAllowedClassIds(env);
   const out: ImportAtt[] = [];
   for (const pg of await queryAll(env, NOTION_CFG.attendanceDb, dateFilter(A.date, since))) {
     const p = (pg.properties || {}) as Record<string, Prop>;
+    const classRel = relationIds(p[A.classSelect]);
+    if (!classRel.some((id) => allowedClassIds.has(id))) continue;
     const studentPageId = relFirst(p[A.student]);
     const date = propText(p[A.date]);
     const status = propText(p[A.status]);
@@ -403,11 +739,85 @@ export async function fetchAttendanceRecords(env: NotionEnv, since: string): Pro
       srcId: pg.id,
       studentPageId,
       date,
+      dateEnd: propDateEnd(p[A.date]),
       status,
       attitude: propText(p[A.attitude]),
       lateMinutes: parseInt(propText(p[A.late]), 10) || 0,
       note: propText(p[A.note]),
     });
   }
+  return out;
+}
+
+export interface ImportTest {
+  srcId: string;
+  studentPageId: string;
+  date: string;
+  type: string;
+  round: string;
+  range: string;
+  score: number;
+  status: string;
+  memo: string;
+}
+export async function fetchTestRecords(env: NotionEnv, since: string): Promise<ImportTest[]> {
+  const T = NOTION_CFG.test;
+  // 수업선택이 초등수학/중고등수학인 테스트만(영어·고백 제외).
+  const allowedClassIds = await resolveAllowedClassIds(env);
+  const out: ImportTest[] = [];
+  for (const pg of await queryAll(env, NOTION_CFG.testDb, dateFilter(T.date, since))) {
+    const p = (pg.properties || {}) as Record<string, Prop>;
+    const classRel = relationIds(p[T.classSelect]);
+    if (!classRel.some((id) => allowedClassIds.has(id))) continue;
+    const studentPageId = relFirst(p[T.student]);
+    const date = propText(p[T.date]);
+    if (!studentPageId || !date || date < since) continue;
+    out.push({
+      srcId: pg.id,
+      studentPageId,
+      date,
+      type: propValues(p[T.type]).join(", "),
+      round: propValues(p[T.round]).join(", "),
+      range: propText(p[T.range]),
+      score: numberVal(p[T.score]),
+      status: propText(p[T.status]) || "예정",
+      memo: propText(p[T.note]),
+    });
+  }
+  return out;
+}
+
+/* ---------- 학원 일정 (읽기 전용 표시) ---------- */
+export interface ScheduleItem {
+  id: string;
+  title: string;
+  date: string; // YYYY-MM-DD (시작)
+  dateEnd: string; // 범위면 종료일, 아니면 ''
+  isDatetime: boolean;
+  category: string; // 구분 (학원 일정/학교 일정/할일/강사 일정/공휴일…)
+  status: string; // 예정/진행 중/완료/취소
+}
+/** 학원 일정 DB에서 since(YYYY-MM-DD) 이후 일정을 읽어온다(읽기 전용). */
+export async function fetchScheduleItems(env: NotionEnv, since: string): Promise<ScheduleItem[]> {
+  const S = NOTION_CFG.schedule;
+  const out: ScheduleItem[] = [];
+  for (const pg of await queryAll(env, NOTION_CFG.scheduleDb, dateFilter(S.date, since))) {
+    const p = (pg.properties || {}) as Record<string, Prop>;
+    const dp = p[S.date] as Record<string, any> | undefined;
+    const startRaw = dp && dp.type === "date" ? dp.date?.start || "" : "";
+    if (!startRaw) continue;
+    const date = String(startRaw).slice(0, 10);
+    const endRaw = propDateEnd(p[S.date]);
+    out.push({
+      id: pg.id,
+      title: findTitle(p) || "(제목 없음)",
+      date,
+      dateEnd: endRaw ? String(endRaw).slice(0, 10) : "",
+      isDatetime: String(startRaw).length > 10,
+      category: propText(p[S.category]),
+      status: propText(p[S.status]),
+    });
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   return out;
 }

@@ -3,12 +3,14 @@ import type { IconName } from "../icons";
 export type PageId =
   | "today"
   | "dashboard"
+  | "schedule"
   | "attendance"
   | "students"
   | "timetable"
   | "makeup"
   | "homework"
   | "progress"
+  | "tests"
   | "report"
   | "settings";
 
@@ -21,18 +23,43 @@ export interface NavItem {
 export const ALL_NAV: NavItem[] = [
   { id: "today", label: "오늘", icon: "today" },
   { id: "dashboard", label: "대시보드", icon: "dashboard" },
-  { id: "attendance", label: "출결 체크", icon: "clipboard" },
+  { id: "schedule", label: "학원 일정", icon: "calplus" },
+  { id: "attendance", label: "출결 기록", icon: "clipboard" },
   { id: "students", label: "학생 관리", icon: "students" },
   { id: "timetable", label: "시간표", icon: "cal" },
   { id: "makeup", label: "보강 관리", icon: "refresh" },
-  { id: "homework", label: "숙제 관리", icon: "book" },
-  { id: "progress", label: "진도 관리", icon: "chart" },
+  { id: "homework", label: "숙제 기록", icon: "book" },
+  { id: "progress", label: "진도 기록", icon: "chart" },
+  { id: "tests", label: "테스트 기록", icon: "cap" },
   { id: "report", label: "월말리포트", icon: "fileText" },
   { id: "settings", label: "설정", icon: "gear" },
 ];
 
 /** 숨기거나 순서를 바꿀 수 없는 메뉴 */
 export const ALWAYS: PageId[] = ["today", "settings"];
+
+/** 사이드바 그룹(메인/수업/관리) — 표시용. 그룹 안에서는 사용자 순서를 따른다. */
+export type NavGroup = "메인" | "수업 기록" | "관리";
+export const GROUP_ORDER: NavGroup[] = ["메인", "수업 기록", "관리"];
+export const GROUP_OF: Record<PageId, NavGroup> = {
+  today: "메인",
+  dashboard: "메인",
+  schedule: "메인",
+  attendance: "수업 기록",
+  homework: "수업 기록",
+  progress: "수업 기록",
+  tests: "수업 기록",
+  students: "관리",
+  timetable: "메인",
+  makeup: "관리",
+  report: "관리",
+  settings: "관리",
+};
+
+/** 페이지 라벨(브레드크럼·제목용). */
+export function navLabel(id: PageId): string {
+  return ALL_NAV.find((n) => n.id === id)?.label ?? "";
+}
 
 export interface NavPrefs {
   order: PageId[];

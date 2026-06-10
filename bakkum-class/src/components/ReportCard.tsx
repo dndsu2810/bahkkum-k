@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { ReportData } from "../lib/reportTypes";
 import { pad } from "../lib/dates";
+import { holidayName } from "../lib/holidays";
 import { SECTION_LABELS, getReportOrder, type SectionKey } from "../lib/reportSections";
 import "../styles/reportCard.css";
 
@@ -58,15 +59,26 @@ function Calendar({ data }: { data: ReportData }) {
   const cells: ReactNode[] = [];
   for (let i = 0; i < firstDow; i++) cells.push(<div className="r-cell empty" key={"e" + i} />);
   for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = year + "-" + pad(month) + "-" + pad(day);
+    const hol = holidayName(dateStr);
     const dow = new Date(year, month - 1, day).getDay();
-    const dCls = dow === 0 ? "r-d sun" : dow === 6 ? "r-d sat" : "r-d";
-    const b = att.days[day];
-    const cls = b === "p" ? "r-cell att-p" : b === "m" ? "r-cell att-m" : b === "a" ? "r-cell att-a" : "r-cell";
-    const tag = b === "p" ? "출석" : b === "m" ? "보강" : b === "a" ? "결석" : null;
+    const dCls = hol || dow === 0 ? "r-d sun" : dow === 6 ? "r-d sat" : "r-d";
+    const bs = att.days[day] || [];
+    const label: Record<string, string> = { p: "출석", m: "보강", a: "결석" };
+    // 단일 기록이면 셀 배경을 옅게 틴트, 여러 기록이면 흰 셀에 태그 모두 표시. 공휴일(기록 없음)은 회색.
+    const cls = bs.length === 1 ? "r-cell att-" + bs[0] : hol && bs.length === 0 ? "r-cell att-h" : "r-cell";
     cells.push(
-      <div className={cls} key={day}>
+      <div className={cls} key={day} title={hol || undefined}>
         <span className={dCls}>{day}</span>
-        {tag && <span className="r-celltag">{tag}</span>}
+        {bs.length > 0 ? (
+          <span className="r-celltags">
+            {bs.map((x) => (
+              <span key={x} className={"r-celltag tag-" + x}>{label[x]}</span>
+            ))}
+          </span>
+        ) : hol ? (
+          <span className="r-celltag tag-h">{hol}</span>
+        ) : null}
       </div>
     );
   }
@@ -175,10 +187,10 @@ export function ReportCard({ data }: { data: ReportData }) {
           <div className="r-prog-info">
             <span className="r-tag">현재 학습 단원</span>
             <div className="r-unit">{extras.progress.unit}</div>
+            <div className="r-pbar"><span style={{ width: Math.max(0, Math.min(100, extras.progress.pct)) + "%" }} /></div>
             <div className="r-prog-grid">
               <div className="r-it"><div className="r-l">학습 영역</div><div className="r-v">{extras.progress.area || "—"}</div></div>
               <div className="r-it"><div className="r-l">학습 시작일</div><div className="r-v">{fmtYmd(extras.progress.startDate) || "—"}</div></div>
-              <div className="r-it"><div className="r-l">학습 기간</div><div className="r-v">{extras.progress.weeks || "—"}</div></div>
             </div>
           </div>
         </div>

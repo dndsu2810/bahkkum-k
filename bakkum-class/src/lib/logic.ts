@@ -1,6 +1,27 @@
-import type { Makeup, MakeupDisplay, Student, StudentStatus } from "../types";
-import { DOW_ORDER, TODAY, pad, parseD } from "./dates";
+import type { Lesson, Makeup, MakeupDisplay, ScheduleVersion, Student, StudentStatus } from "../types";
+import { DOW, DOW_ORDER, TODAY, pad, parseD, ymd } from "./dates";
 import { toneOf, type Tone } from "./categories";
+import { holidayName } from "./holidays";
+
+/** 주어진 날짜(YYYY-MM-DD)에 유효한 시간표를 반환.
+ *  - schedule(버전 이력)이 있으면 from <= dateStr 중 가장 최근 버전의 lessons.
+ *    그 날짜 이전(아직 적용 전)이면 빈 배열.
+ *  - schedule이 없으면 기존 단일 lessons를 그대로 사용(하위 호환). */
+export function effectiveLessons(s: Student, dateStr: string): Lesson[] {
+  const hist = s.schedule;
+  if (!hist || !hist.length) return s.lessons || [];
+  let chosen: ScheduleVersion | null = null;
+  for (const v of hist) {
+    if (v.from <= dateStr && (!chosen || v.from > chosen.from)) chosen = v;
+  }
+  return chosen ? chosen.lessons : [];
+}
+
+/** 해당 날짜가 학생의 첫 등원일(등록일) 이후인지 — 출결/시간표 표시 가드. */
+export function attendsOn(s: Student, dateStr: string): boolean {
+  if (s.startDate && dateStr < s.startDate) return false;
+  return true;
+}
 
 /** Students actively attending — the only ones shown on dashboard/attendance/timetable. */
 export function isActive(s: Student): boolean {
@@ -38,16 +59,22 @@ export function pct(a: number, b: number): number {
 }
 
 /* ---------- enrollment logic ----------
-   재적 = 해당 월 1일 이전(포함)에 등록된 학생만 */
+   재적 = 해당 월 '첫주'(1~7일)에 등록된 학생까지. 둘째 주(8일~) 등록은 다음 달부터. */
+export const ENROLL_CUTOFF_DAY = 7; // 첫주 끝(포함)
 export function firstOfMonth(ym: string): Date {
   const p = ym.split("-");
   return new Date(+p[0], +p[1] - 1, 1);
 }
-export function enrolledStudents(students: Student[], ym: string): Student[] {
-  const first = firstOfMonth(ym);
-  return students.filter((s) => isActive(s) && parseD(s.startDate) <= first);
+/** 재적 기준일 = 그 달 7일(첫주 끝). 7일 이전(포함) 등록 = 이번 달 재적. */
+export function enrollCutoff(ym: string): Date {
+  const p = ym.split("-");
+  return new Date(+p[0], +p[1] - 1, ENROLL_CUTOFF_DAY);
 }
-/** 이번 달 등록(2일 이후) → 다음 달부터 재적 */
+export function enrolledStudents(students: Student[], ym: string): Student[] {
+  const cut = enrollCutoff(ym);
+  return students.filter((s) => isActive(s) && parseD(s.startDate) <= cut);
+}
+/** 이번 달 둘째 주 이후(8일~) 등록 → 다음 달부터 재적 */
 export function newThisMonth(students: Student[], ym: string): Student[] {
   const p = ym.split("-");
   const y = +p[0];
@@ -55,7 +82,7 @@ export function newThisMonth(students: Student[], ym: string): Student[] {
   return students.filter((s) => {
     if (!isActive(s)) return false;
     const d = parseD(s.startDate);
-    return d.getFullYear() === y && d.getMonth() + 1 === m && d.getDate() > 1;
+    return d.getFullYear() === y && d.getMonth() + 1 === m && d.getDate() > ENROLL_CUTOFF_DAY;
   });
 }
 export function inMonth(dateStr: string, ym: string): boolean {
@@ -67,8 +94,9 @@ export function inMonth(dateStr: string, ym: string): boolean {
 
 /* ---------- makeup status ---------- */
 export function mkStatus(k: Makeup): MakeupDisplay {
+  // 명시적으로 '완료' 처리했으면 그대로. (스케줄만 잡고 날짜가 지난 건 자동 완료로 간주 — 하위호환)
   if (k.status === "scheduled") return parseD(k.makeupDate) < TODAY ? "done" : "scheduled";
-  return k.status; // pending | skip
+  return k.status; // pending | skip | done
 }
 
 export function monthScheduled(makeups: Makeup[], ym: string): Makeup[] {
@@ -138,4 +166,20 @@ export function lessonDays(s: Student): string[] {
   });
   uniq.sort((a, b) => DOW_ORDER.indexOf(a) - DOW_ORDER.indexOf(b));
   return uniq;
+}
+
+/** from(YYYY-MM-DD) 다음 날부터 그 학생의 가장 가까운 수업일(YYYY-MM-DD).
+ *  공휴일·등록일 이전·시간표 없는 요일은 건너뛴다. 3주 내 없으면 ''. */
+export function nextLessonDate(s: Student, fromDateStr: string): string {
+  const start = parseD(fromDateStr);
+  for (let i = 1; i <= 21; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    const ds = ymd(d);
+    if (holidayName(ds)) continue;
+    if (!attendsOn(s, ds)) continue;
+    const dow = DOW[d.getDay()];
+    if (effectiveLessons(s, ds).some((l) => l.day === dow)) return ds;
+  }
+  return "";
 }

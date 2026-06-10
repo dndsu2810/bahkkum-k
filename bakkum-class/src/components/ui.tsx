@@ -1,11 +1,22 @@
 import type { ReactNode } from "react";
 import type { Grade, StudentStatus } from "../types";
 import { avatarText, gradeColor, statusTone } from "../lib/logic";
+import { useStore } from "../store";
 import { Icon, type IconName } from "../icons";
 
 /* ---------- badge / avatar ---------- */
 export function Badge({ tone, children }: { tone: string; children: ReactNode }) {
   return <span className={"badge b-" + tone}>{children}</span>;
+}
+
+/** 안내 부제 안에서 '오늘' 화면으로 이동하는 텍스트 링크. */
+export function TodayLink() {
+  const { navigate } = useStore();
+  return (
+    <button type="button" className="tlink" onClick={() => navigate("today")}>
+      오늘
+    </button>
+  );
 }
 
 export function GradeBadge({ grade }: { grade: Grade | string }) {

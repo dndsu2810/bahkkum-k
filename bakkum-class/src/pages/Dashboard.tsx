@@ -1,36 +1,62 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import {
+  activeStudents,
   curMonthStr,
   enrolledStudents,
-  monthActivity,
   monthLabel,
   monthLabelFull,
   monthOptions,
-  monthPending,
-  monthScheduled,
   newThisMonth,
   pct,
 } from "../lib/logic";
+import { fmtMD, parseD } from "../lib/dates";
 import { buildReport, copyText } from "../lib/report";
-import { getCategories, toneColorVar } from "../lib/categories";
-import { Kpi, WeekdayBars, Donut } from "../components/charts";
+import { getCategories } from "../lib/categories";
+import { WeekdayBars } from "../components/charts";
 import { StudentTable } from "../components/StudentTable";
-import { MakeupList } from "../components/MakeupList";
 import { Select } from "../components/ui";
-import { Icon } from "../icons";
+import { Icon, type IconName } from "../icons";
+
+const BASE = 5; // 기본 인원 (이 인원까지는 인센티브 없음, 초과분부터 지급)
+
+/** 한 줄 통계 바의 한 칸 — 아이콘 + 숫자 + 라벨 + 보조설명(콤팩트). */
+function Stat({ icon, tone, num, label, sub }: { icon: IconName; tone: string; num: number; label: string; sub: string }) {
+  return (
+    <div className="stat">
+      <span className={"kpi-ic ic-" + tone}><Icon name={icon} /></span>
+      <span className="stat-num">{num}</span>
+      <span className="stat-label">{label}</span>
+      <span className="stat-sub">{sub}</span>
+    </div>
+  );
+}
+
+const CHART_KEY = "bk_dash_chart_open";
 
 export function Dashboard() {
   const { data, toast } = useStore();
   const [curMonth, setCurMonth] = useState(curMonthStr());
+  const [chartOpen, setChartOpen] = useState(() => localStorage.getItem(CHART_KEY) !== "0");
+  function toggleChart() {
+    setChartOpen((v) => {
+      localStorage.setItem(CHART_KEY, v ? "0" : "1");
+      return !v;
+    });
+  }
 
-  const enrolled = enrolledStudents(data.students, curMonth);
+  const active = activeStudents(data.students); // 전체 재원 (명단엔 전원 표시)
+  const enrolled = enrolledStudents(data.students, curMonth); // 이번 달 재적 (첫주=7일 이전 등록)
+  const excludedActive = active.filter((s) => s.excluded); // 정산 제외(원장 가족 등)
+  const fresh = newThisMonth(data.students, curMonth).filter((s) => !s.excluded); // 둘째 주 이후 신규 → 다음 달
   const cats = getCategories();
   const catCounts = cats.map((c) => ({ c, n: enrolled.filter((s) => s.grade === c.name).length }));
-  const pend = monthPending(data.makeups, curMonth);
-  const sched = monthScheduled(data.makeups, curMonth);
-  const act = monthActivity(data.makeups, curMonth);
-  const fresh = newThisMonth(data.students, curMonth);
+
+  // 인센티브 정산은 '정산 제외' 학생을 빼고 계산
+  const billableEnrolled = enrolled.filter((s) => !s.excluded);
+  const overThis = Math.max(0, billableEnrolled.length - BASE); // 이번 달 인센티브 지급 인원
+  const nextEnrolled = billableEnrolled.length + fresh.length; // 다음 달 예상 정산 재적
+  const overNext = Math.max(0, nextEnrolled - BASE);
 
   function onCopy() {
     copyText(buildReport(data, curMonth)).then(() => toast("복사됐어요. 카톡에 붙여넣기 하면 돼요."));
@@ -52,83 +78,92 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="kpi-row">
-        <Kpi
-          label="재적 학생"
-          num={enrolled.length}
-          unit="명"
-          tone="blue"
-          icon="users"
-          foot={monthLabel(curMonth) + " 1일 기준" + (fresh.length ? " · 신규 " + fresh.length + "명" : "")}
-        />
+      <div className="statbar">
+        <Stat icon="users" tone="blue" num={enrolled.length} label="재적 학생"
+          sub={monthLabel(curMonth) + " 첫주" + (fresh.length ? " · 신규 " + fresh.length : "")} />
         {catCounts.map(({ c, n }) => (
-          <Kpi
-            key={c.name}
-            label={c.name}
-            num={n}
-            unit="명"
-            tone={c.tone}
-            icon="cap"
-            foot={"전체의 " + pct(n, enrolled.length) + "%"}
-          />
+          <Stat key={c.name} icon="cap" tone={c.tone} num={n} label={c.name} sub={pct(n, enrolled.length) + "%"} />
         ))}
-        <Kpi
-          label="보강 대기"
-          num={pend.length}
-          unit="건"
-          tone="orange"
-          icon="refresh"
-          foot={sched.length ? "예정·완료 " + sched.length + "건" : "예정 없음"}
-        />
+        <Stat icon="users" tone="orange" num={overThis} label="인센티브 대상" sub={overThis ? BASE + "명 초과" : "없음"} />
       </div>
 
-      <div className="chart-row">
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">요일별 수업 분포</div>
-              <div className="card-sub">재적 학생 정규 수업 기준</div>
-            </div>
+      {/* 인센티브 정산 (캡쳐용 정리) */}
+      <div className="card sec-gap inc-card">
+        <div className="card-head">
+          <div>
+            <div className="card-title">인센티브 정산</div>
+            <div className="card-sub">{monthLabelFull(curMonth)} · {BASE}명 초과 시 {BASE + 1}번째부터 1인당 지급</div>
           </div>
-          <div className="chart-body">
+        </div>
+        <div className="inc-grid">
+          <div className="inc-row inc-total">
+            <span className="inc-l">총 재원</span>
+            <span className="inc-v">{active.length}<i>명</i></span>
+          </div>
+          {excludedActive.length > 0 && (
+            <div className="inc-row">
+              <span className="inc-l">
+                카운트 제외
+                <span className="inc-names"> {excludedActive.map((s) => s.name).join(", ")}</span>
+              </span>
+              <span className="inc-v inc-minus">−{excludedActive.length}<i>명</i></span>
+            </div>
+          )}
+          <div className="inc-sep" />
+          <div className="inc-row">
+            <span className="inc-l">이번 달 재적 <em>(첫주 기준 · 정산 대상)</em></span>
+            <span className="inc-v">{billableEnrolled.length}<i>명</i></span>
+          </div>
+          <div className="inc-row inc-pay">
+            <span className="inc-l">이번 달 인센티브 <em>(기본 {BASE}명 초과분)</em></span>
+            <span className="inc-v">{overThis}<i>명분</i></span>
+          </div>
+          {fresh.length > 0 && (
+            <>
+              <div className="inc-sep" />
+              <div className="inc-note">
+                <div className="inc-note-h">이번 달 신규 {fresh.length}명 · 다음 달부터 정산</div>
+                <ul>
+                  {fresh.map((s) => (
+                    <li key={s.id}>
+                      <b>{s.name}</b> <span className="muted">{fmtMD(parseD(s.startDate))} 등록</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="inc-next">→ 다음 달 예상: 재적 {nextEnrolled}명 · 인센티브 {overNext}명분</div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="card sec-gap chart-card">
+        <button type="button" className="chart-toggle" onClick={toggleChart} aria-expanded={chartOpen}>
+          <div>
+            <div className="card-title sm">요일별 수업 분포</div>
+            <div className="card-sub">재적 학생 정규 수업 기준</div>
+          </div>
+          <span className={"chart-chev" + (chartOpen ? " open" : "")}><Icon name="chev" /></span>
+        </button>
+        {chartOpen && (
+          <div className="chart-body sm">
             <WeekdayBars enrolled={enrolled} />
           </div>
-        </div>
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">학생 구분</div>
-              <div className="card-sub">{cats.map((c) => c.name).join(" · ")} 비율</div>
-            </div>
-          </div>
-          <div className="chart-body">
-            <Donut segments={catCounts.map(({ c, n }) => ({ label: c.name, value: n, color: toneColorVar(c.tone) }))} />
-          </div>
-        </div>
+        )}
       </div>
 
       <div className="card sec-gap">
         <div className="card-head">
           <div>
-            <div className="card-title">재적 학생</div>
-            <div className="card-sub">{enrolled.length}명</div>
-          </div>
-        </div>
-        <div className="tbl-wrap">
-          <StudentTable list={enrolled} withActions={false} />
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-head">
-          <div>
-            <div className="card-title">{monthLabel(curMonth)} 보강 현황</div>
+            <div className="card-title">재원 학생</div>
             <div className="card-sub">
-              {act.length}건 · 대기 {pend.length} / 예정·완료 {sched.length}
+              전체 {active.length}명{fresh.length ? ` · 이번 달 재적 ${enrolled.length}명 (신규 ${fresh.length}명은 다음 달부터)` : ""}
             </div>
           </div>
         </div>
-        <MakeupList list={act} students={data.students} manage={false} />
+        <div className="tbl-wrap">
+          <StudentTable list={active} withActions={false} />
+        </div>
       </div>
     </section>
   );

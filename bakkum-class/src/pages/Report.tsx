@@ -75,6 +75,18 @@ export function Report() {
     const progress: ProgressInfo = current
       ? { pct: current.pct, unit: current.unit, area: current.area, startDate: current.startDate, weeks: "" }
       : { ...emptyExtras().progress };
+    // 테스트(완료) 기록을 이 달 '평가 결과'에 자동 반영 + 수동 입력 평가와 합침
+    const testEvals: EvalItem[] = data.testLog
+      .filter((t) => t.studentId === studentId && t.status === "완료" && inMonth(t.date, ym))
+      .sort((a, b) => (a.date < b.date ? -1 : 1))
+      .map((t) => ({
+        id: "t_" + t.id,
+        type: t.type.includes("경시") ? "경시대회" : "주간평가",
+        name: t.round || t.type || "테스트",
+        meta: t.range,
+        date: t.date,
+        score: t.score,
+      }));
     return {
       studentId,
       studentName: s ? s.name : "학생",
@@ -82,7 +94,7 @@ export function Report() {
       month,
       teacher: TEACHER,
       att: computeAtt(data, studentId, year, month),
-      extras: { ...stored, homeworks, progress },
+      extras: { ...stored, homeworks, progress, evals: [...testEvals, ...stored.evals] },
     };
   }
 

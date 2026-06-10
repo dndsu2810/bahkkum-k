@@ -1,18 +1,17 @@
 import { TODAY, fmtFull } from "../lib/dates";
+import { GROUP_OF, navLabel, type PageId } from "../lib/nav";
 
-export function Header() {
+export function Header({ page }: { page: PageId }) {
   return (
-    <header className="header">
-      <div className="brand">
-        <div className="brand-logo">바</div>
-        <div>
-          <div className="brand-name">바꿈영수학원</div>
-          <div className="brand-sub">수업 관리 도구</div>
-        </div>
+    <header className="topbar">
+      <div className="crumb">
+        {GROUP_OF[page]} · <b>{navLabel(page)}</b>
       </div>
-      <div className="date-badge">
-        <span className="dot" />
-        <span>{fmtFull(TODAY)}</span>
+      <div className="top-actions">
+        <div className="pill-date">
+          <span className="dot" />
+          {fmtFull(TODAY)}
+        </div>
       </div>
     </header>
   );

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode } from "react";
 import type { Makeup } from "../types";
 import { useStore } from "../store";
 import { byAbsentDesc, mkStatus } from "../lib/logic";
@@ -46,6 +46,29 @@ export function MakeupPage() {
   const actions: MakeupActions = {
     onSchedule: (id) => openModal(<ScheduleModal id={id} />),
     onSkip: (id) => openModal(<SkipModal id={id} />),
+    onComplete: (id) => {
+      mutate((d) => {
+        const k = d.makeups.find((m) => m.id === id);
+        if (!k) return;
+        k.status = "done";
+        // 보강 출결 기록(앱 내부) 생성 → 달력/리포트에 '보강 (시각)'으로 표시.
+        if (k.makeupDate) {
+          const key = k.makeupDate + "|" + k.studentId + "|" + (k.makeupTime || "");
+          d.attendance[key] = { ...(d.attendance[key] || {}), status: "보강" };
+        }
+      });
+      toast("보강 완료 처리했어요.");
+    },
+    onUncomplete: (id) => {
+      mutate((d) => {
+        const k = d.makeups.find((m) => m.id === id);
+        if (!k) return;
+        k.status = "scheduled";
+        const key = k.makeupDate + "|" + k.studentId + "|" + (k.makeupTime || "");
+        delete d.attendance[key];
+      });
+      toast("보강 예정으로 되돌렸어요.");
+    },
     onRevert: (id) => {
       mutate((d) => {
         const k = d.makeups.find((m) => m.id === id);
@@ -60,6 +83,12 @@ export function MakeupPage() {
     },
     onDelete: (id) => {
       mutate((d) => {
+        const k = d.makeups.find((m) => m.id === id);
+        // 결석에서 자동 등록된 보강이면 att_key를 '삭제 표시'에 남겨
+        // 노션 재가져오기/출결 재체크 때 되살아나지 않게 한다.
+        if (k?.attKey) {
+          d.dismissedMakeups = [...new Set([...(d.dismissedMakeups || []), k.attKey])];
+        }
         d.makeups = d.makeups.filter((m) => m.id !== id);
       });
       toast("보강 항목을 삭제했어요.");
