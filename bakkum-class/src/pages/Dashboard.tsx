@@ -62,7 +62,7 @@ export function Dashboard() {
     <section className="page active">
       <div className="page-head">
         <div>
-          <div className="page-title">월별 현황</div>
+          <h1 className="page-title">월별 현황</h1>
           <div className="page-desc">{monthLabelFull(curMonth)} 기준 재적 현황 및 월말 정산</div>
         </div>
         <div className="head-actions">

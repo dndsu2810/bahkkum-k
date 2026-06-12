@@ -2,6 +2,7 @@ import type { IconName } from "../icons";
 
 export type PageId =
   | "today"
+  | "board"
   | "dashboard"
   | "schedule"
   | "attendance"
@@ -22,6 +23,7 @@ export interface NavItem {
 
 export const ALL_NAV: NavItem[] = [
   { id: "today", label: "오늘", icon: "today" },
+  { id: "board", label: "강사 업무", icon: "board" },
   { id: "dashboard", label: "대시보드", icon: "dashboard" },
   { id: "schedule", label: "학원 일정", icon: "calplus" },
   { id: "attendance", label: "출결 기록", icon: "clipboard" },
@@ -43,6 +45,7 @@ export type NavGroup = "메인" | "수업 기록" | "관리";
 export const GROUP_ORDER: NavGroup[] = ["메인", "수업 기록", "관리"];
 export const GROUP_OF: Record<PageId, NavGroup> = {
   today: "메인",
+  board: "메인",
   dashboard: "메인",
   schedule: "메인",
   attendance: "수업 기록",

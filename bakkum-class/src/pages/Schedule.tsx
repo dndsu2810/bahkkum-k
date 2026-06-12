@@ -168,7 +168,7 @@ export function Schedule() {
     <section className="page active">
       <div className="page-head">
         <div>
-          <div className="page-title">학원 일정</div>
+          <h1 className="page-title">학원 일정</h1>
           <div className="page-desc">노션 ‘학원 일정’에서 불러옵니다 · 보기 전용</div>
         </div>
         <div className="head-actions">

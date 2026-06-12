@@ -108,7 +108,7 @@ export function Settings({
     <section className="page active">
       <div className="page-head">
         <div>
-          <div className="page-title">설정</div>
+          <h1 className="page-title">설정</h1>
           <div className="page-desc">사이드바 메뉴 순서와 표시 여부를 조정합니다. (이 기기에 저장)</div>
         </div>
       </div>

@@ -18,7 +18,7 @@
 //   POST /api/points          -> {studentId,delta,reason} award/revoke points
 //   GET  /api/report          -> monthly attendance aggregation
 
-import type { AttRecord, DataSnapshot, Makeup, ScheduleVersion, Student, TestLog } from "../src/types";
+import type { AttRecord, DataSnapshot, Makeup, ScheduleVersion, Student, Task, TestLog } from "../src/types";
 import {
   fetchNotionStudents,
   inspectDb,
@@ -35,12 +35,22 @@ import {
   classPageIdForGrade,
 } from "./notion";
 import { NOTION_CFG } from "./notion";
-import { isHoliday } from "../src/lib/holidays";
+import { isHoliday, holidayName } from "../src/lib/holidays";
+import { buildBriefing, kstToday } from "./briefing";
+import { sendKakao } from "./kakao";
+
+const DEFAULT_APP_URL = "https://bakkum-class.dndsu2810.workers.dev";
 
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   NOTION_TOKEN?: string;
+  // 카카오워크 브리핑 봇 (Worker Secret로 주입)
+  KAKAO_WEBHOOK_URL?: string; // Incoming Webhook URL (권장)
+  KAKAO_WORK_TOKEN?: string;
+  KAKAO_WORK_RECIPIENT?: string;
+  BOT_SECRET?: string; // 수동 테스트 엔드포인트 보호용
+  APP_URL?: string; // 메시지 안의 앱 링크 (없으면 기본값)
 }
 
 const TEACHER = "이지현";
@@ -82,9 +92,52 @@ export default {
         return json({ error: "server_error", message: String(e) }, 500);
       }
     }
+
+    // 카카오워크 봇 수동 테스트 (BOT_SECRET 설정 시 ?key= 필요). send=1 이면 실제 발송.
+    if (p === "/__send-noon" || p === "/__send-night") {
+      if (env.BOT_SECRET && url.searchParams.get("key") !== env.BOT_SECRET) return json({ error: "forbidden" }, 403);
+      const slot = p === "/__send-noon" ? "noon" : "night";
+      const doSend = url.searchParams.get("send") === "1";
+      try {
+        return json(await runBriefing(env, slot, doSend));
+      } catch (e) {
+        return json({ error: "briefing_failed", message: String(e) }, 500);
+      }
+    }
     return env.ASSETS.fetch(request);
   },
+
+  // 크론: 13:00 KST(=04:00 UTC) 낮 브리핑, 21:00 KST(=12:00 UTC) 밤 요약.
+  async scheduled(event: ScheduledController, env: Env): Promise<void> {
+    const hourUtc = new Date(event.scheduledTime).getUTCHours();
+    const slot: "noon" | "night" = hourUtc < 8 ? "noon" : "night";
+    try {
+      await runBriefing(env, slot, true);
+    } catch (e) {
+      console.error("scheduled briefing failed", String(e));
+    }
+  },
 };
+
+interface ScheduledController {
+  scheduledTime: number;
+  cron: string;
+}
+
+/** 오늘자 스냅샷을 읽어 낮/밤 메시지를 만들고, send면 수업 있는 날만 카카오로 발송. */
+async function runBriefing(env: Env, slot: "noon" | "night", send: boolean) {
+  const snap = await readSnapshot(env);
+  const { date } = kstToday();
+  const holiday = holidayName(date);
+  const appUrl = env.APP_URL || DEFAULT_APP_URL;
+  const b = buildBriefing(snap, holiday);
+  const text = slot === "noon" ? b.noon : b.night;
+  const button = { label: slot === "noon" ? "출결 입력하러 가기" : "보강·출결 정리하러 가기", url: appUrl };
+  // 수업 없는 날(휴원/등원 0)이면 발송하지 않음.
+  if (send && !b.hasClass) return { slot, date, hasClass: false, sent: false, reason: "no_class_today", text };
+  const result = send ? await sendKakao(env, text, button) : { sent: false, reason: "dry_run" };
+  return { slot, date, hasClass: b.hasClass, holiday: b.holiday, ...result, text };
+}
 
 /* class_schedules / class_tests 테이블 자가 생성(마이그레이션 미적용이어도 동작하게).
    추가전용(IF NOT EXISTS) — 기존 데이터 무영향. */
@@ -124,6 +177,16 @@ async function ensureSchedulesTable(env: Env): Promise<void> {
   // '오늘 숙제 없음'으로 정리한 표식 — 숙제 기록을 만들지 않고 정리완료만 기억. key=studentId|날짜.
   try {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_homework_none (mark_key TEXT PRIMARY KEY)").run();
+  } catch {
+    /* ignore */
+  }
+  // 강사 업무 보드(칸반) 카드.
+  try {
+    await env.DB
+      .prepare(
+        "CREATE TABLE IF NOT EXISTS class_tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'todo', tag TEXT NOT NULL DEFAULT '', due TEXT NOT NULL DEFAULT '', student_id TEXT NOT NULL DEFAULT '', memo TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, done_at INTEGER, archived INTEGER NOT NULL DEFAULT 0)"
+      )
+      .run();
   } catch {
     /* ignore */
   }
@@ -273,6 +336,22 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
     };
   }
 
+  // 보강 출결 그림자 중복 정리: 같은 (날짜·학생)에 보강이 2개 이상이고
+  // 한쪽은 메모(note)가 있는데 다른 쪽은 비어 있으면, 비어 있는 쪽을 버린다.
+  // (앱의 '보강 완료'가 makeupTime 키로 새 행을 만들어 기존 보강 행과 겹치던 문제)
+  const boBySD: Record<string, string[]> = {};
+  for (const key of Object.keys(attendance)) {
+    if (attendance[key].status !== "보강") continue;
+    const p = key.split("|");
+    (boBySD[p[0] + "|" + p[1]] ||= []).push(key);
+  }
+  for (const grp of Object.values(boBySD)) {
+    if (grp.length < 2) continue;
+    const hasNoted = grp.some((k) => (attendance[k].note || "").trim());
+    if (!hasNoted) continue;
+    for (const k of grp) if (!(attendance[k].note || "").trim()) delete attendance[k];
+  }
+
   const homeworkLog = (hRes.results as Record<string, unknown>[])
     .filter((r) => rosterIds.has(String(r.student_id)))
     .map((r) => ({
@@ -323,7 +402,30 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
     /* class_tests 없으면 빈 배열 */
   }
 
-  return { students, makeups, attendance, homeworkLog, progressLog, testLog, dismissedMakeups: [...dismissedSet], noHomework: [...noHomeworkSet] };
+  // 강사 업무 보드 카드 — 별도 쿼리 + try/catch
+  const tasks: Task[] = [];
+  try {
+    const kRes = await env.DB.prepare("SELECT * FROM class_tasks").all();
+    for (const r of kRes.results as Record<string, unknown>[]) {
+      tasks.push({
+        id: String(r.id),
+        title: String(r.title ?? ""),
+        status: r.status === "doing" ? "doing" : r.status === "done" ? "done" : "todo",
+        tag: String(r.tag ?? "") || undefined,
+        due: String(r.due ?? "") || undefined,
+        studentId: String(r.student_id ?? "") || undefined,
+        memo: String(r.memo ?? "") || undefined,
+        source: String(r.source ?? "") || undefined,
+        createdAt: Number(r.created_at ?? 0),
+        doneAt: r.done_at == null ? undefined : Number(r.done_at),
+        archived: Number(r.archived ?? 0) === 1,
+      });
+    }
+  } catch {
+    /* class_tasks 없으면 빈 배열 */
+  }
+
+  return { students, makeups, attendance, homeworkLog, progressLog, testLog, tasks, dismissedMakeups: [...dismissedSet], noHomework: [...noHomeworkSet] };
 }
 
 /* ---------------- write (class_* only; roster never bulk-touched) ---------------- */
@@ -341,7 +443,31 @@ async function putData(env: Env, request: Request): Promise<Response> {
     env.DB.prepare("DELETE FROM class_makeup_dismissed"),
     env.DB.prepare("DELETE FROM class_student_overrides"),
     env.DB.prepare("DELETE FROM class_homework_none"),
+    env.DB.prepare("DELETE FROM class_tasks"),
   ];
+
+  // 강사 업무 보드 카드
+  for (const k of snap.tasks || []) {
+    stmts.push(
+      env.DB
+        .prepare(
+          "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
+        )
+        .bind(
+          k.id,
+          k.title || "",
+          k.status || "todo",
+          k.tag || "",
+          k.due || "",
+          k.studentId || "",
+          k.memo || "",
+          k.source || "",
+          k.createdAt || Date.now(),
+          k.doneAt == null ? null : k.doneAt,
+          k.archived ? 1 : 0
+        )
+    );
+  }
 
   // 삭제 표시(tombstone) — 중복 제거 후 다시 기록.
   for (const key of [...new Set(snap.dismissedMakeups || [])]) {

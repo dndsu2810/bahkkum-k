@@ -3,6 +3,10 @@ main = "worker/index.ts"
 compatibility_date = "2024-09-23"
 account_id = "027f80eb39da9f27ed17a443a4b9093a"
 
+# 카카오워크 일일 브리핑 크론 — 13:00 KST(=04:00 UTC) 낮 · 21:00 KST(=12:00 UTC) 밤
+[triggers]
+crons = ["0 4 * * *", "0 12 * * *"]
+
 # The Worker serves the built SPA (dist/) and handles /api/* against D1.
 [assets]
 directory = "./dist"

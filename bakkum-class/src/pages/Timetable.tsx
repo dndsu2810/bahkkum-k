@@ -111,6 +111,8 @@ const WEEK_OPTS = [
 export function Timetable() {
   const { data } = useStore();
   const [curWeek, setCurWeek] = useState(0);
+  // 좁아서 요약 칩으로 접힌 수업 블록 중 펼쳐 보는 것 (C-2)
+  const [openEvt, setOpenEvt] = useState<string | null>(null);
 
   const mon = mondayOf(TODAY, curWeek);
   const sun = new Date(mon);
@@ -162,14 +164,24 @@ export function Timetable() {
     }
   });
 
+  // 비어 있는 앞쪽 시간 행 접기 — 그 주 첫 수업 시간부터 그리드를 시작 (C-5)
+  let earliest = Infinity;
+  let latest = -Infinity;
+  for (const day of evtByDay)
+    for (const e of day) {
+      if (e.start < earliest) earliest = e.start;
+      if (e.start + e.dur > latest) latest = e.start + e.dur;
+    }
+  const startH = isFinite(earliest) ? Math.floor(earliest / 60) : TT_START;
+  const endH = isFinite(latest) ? Math.max(TT_END, Math.ceil(latest / 60)) : TT_END;
   const hours: number[] = [];
-  for (let h = TT_START; h < TT_END; h++) hours.push(h);
+  for (let h = startH; h < endH; h++) hours.push(h);
 
   return (
     <section className="page active">
       <div className="page-head">
         <div>
-          <div className="page-title">주간 시간표</div>
+          <h1 className="page-title">주간 시간표</h1>
           <div className="page-desc">{rangeLabel} · 정규 수업 및 보강</div>
         </div>
         <div className="head-actions">
@@ -212,33 +224,46 @@ export function Timetable() {
                     <div className="tt-rowline" key={h} />
                   ))}
                   {events.map((e, i) => {
-                    const top = ((e.start - TT_START * 60) / 60) * ROW_H;
+                    const evKey = ci + "|" + e.start + "|" + e.type;
+                    const top = ((e.start - startH * 60) / 60) * ROW_H;
+                    // 칸이 3열 이상으로 쪼개지면 너무 좁아 이름이 잘림 → 요약 칩 + 클릭 펼침 (C-2)
+                    const narrow = e._cols >= 3;
+                    const expanded = openEvt === evKey;
+                    const compact = narrow && !expanded;
                     // grow the block so all names fit (time line + one line per name)
                     const need = 20 + e.names.length * 15;
-                    const hgt = Math.max((e.dur / 60) * ROW_H - 3, 24, need);
+                    const hgt = compact
+                      ? Math.max((e.dur / 60) * ROW_H - 3, 24)
+                      : Math.max((e.dur / 60) * ROW_H - 3, 24, need);
                     const w = (e._span / e._cols) * 100;
                     const left = (e._col / e._cols) * 100;
+                    // 펼친 칩은 컬럼 전체 폭으로 떠올라 모든 이름을 보여줌
+                    const style = expanded
+                      ? { top, height: Math.max(hgt, need), left: "3px", right: "3px", width: "auto", zIndex: 6 }
+                      : { top, height: hgt, left: `calc(${left}% + 3px)`, width: `calc(${w}% - 6px)` };
                     return (
                       <div
-                        className={"tt-evt evt-" + e.type}
+                        className={"tt-evt evt-" + e.type + (narrow ? " is-chip" : "") + (expanded ? " is-open" : "")}
                         key={i}
                         title={`${e.time} · ${e.dur}분 (${e.names.length}명)\n${e.names.join(", ")}`}
-                        style={{
-                          top,
-                          height: hgt,
-                          left: `calc(${left}% + 3px)`,
-                          width: `calc(${w}% - 6px)`,
-                        }}
+                        onClick={narrow ? () => setOpenEvt(expanded ? null : evKey) : undefined}
+                        style={style}
                       >
                         <div className="e-time">
                           {e.time} · {e.dur}분
                           {e.names.length > 1 ? ` · ${e.names.length}명` : ""}
                         </div>
-                        {e.names.map((nm, j) => (
-                          <div className="e-name" key={j}>
-                            {nm}
+                        {compact ? (
+                          <div className="e-name e-chip">
+                            {e.names.length > 1 ? `${e.names[0]} 외 ${e.names.length - 1}명` : e.names[0]}
                           </div>
-                        ))}
+                        ) : (
+                          e.names.map((nm, j) => (
+                            <div className="e-name" key={j}>
+                              {nm}
+                            </div>
+                          ))
+                        )}
                       </div>
                     );
                   })}

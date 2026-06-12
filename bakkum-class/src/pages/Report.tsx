@@ -174,7 +174,7 @@ export function Report() {
     <section className="page active">
       <div className="page-head">
         <div>
-          <div className="page-title">월말 리포트</div>
+          <h1 className="page-title">월말 리포트</h1>
           <div className="page-desc">학생·월 선택 → 내용 작성 → 이미지 2장(상/하) 저장. 출결은 자동 집계됩니다.</div>
         </div>
         <div className="head-actions">

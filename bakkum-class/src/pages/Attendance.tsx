@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useStore } from "../store";
 import type { AttStatus, Attitude, Student } from "../types";
 import { DOW, fmtDayBand, parseD, timeToMin, todayStr } from "../lib/dates";
@@ -68,6 +68,8 @@ export function Attendance() {
   const [recMonth, setRecMonth] = useState(curMonthStr());
   // 줄별 '더보기'(조퇴/무단결석/보강) 펼침 — 펼친 줄의 att-key
   const [moreKey, setMoreKey] = useState<string | null>(null);
+  // 키보드 단축키용 행 참조 (Enter로 다음 학생 이동) (A-7)
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const holiday = holidayName(attDate);
   const lessons = lessonsOnDate(data.students, attDate);
@@ -194,11 +196,23 @@ export function Attendance() {
     }
   }
 
+  // 행 포커스 상태에서 1=출석 2=지각 3=결석, Enter=다음 학생 (A-7)
+  function onRowKey(e: React.KeyboardEvent, it: LessonOnDate, key: string, idx: number) {
+    const map: Record<string, AttStatus> = { "1": "출석", "2": "지각", "3": "결석" };
+    if (map[e.key]) {
+      e.preventDefault();
+      setStatus(it, key, map[e.key]);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      rowRefs.current[idx + 1]?.focus();
+    }
+  }
+
   return (
     <section className="page active">
       <div className="page-head">
         <div>
-          <div className="page-title">출결 기록</div>
+          <h1 className="page-title">출결 기록</h1>
           <div className="page-desc">
             출석 체크는 <TodayLink /> 화면에서 빠르게, 여기선 날짜별 출결 기록을 모아 보고 수정해요.
             {holiday ? " · " + holiday + " (공휴일·휴원)" : ""}
@@ -228,11 +242,12 @@ export function Attendance() {
               <div className="card-title">오늘 수업 {lessons.length}건</div>
               <div className="card-sub">
                 출석 {counts.출석} · 지각 {counts.지각} · 결석/조퇴 {counts.결석류} · 미체크 {unchecked}
+                <span className="kbd-hint"> · 행 선택 후 <kbd>1</kbd> 출석 <kbd>2</kbd> 지각 <kbd>3</kbd> 결석 <kbd>↵</kbd> 다음</span>
               </div>
             </div>
           </div>
           <div style={{ marginTop: 6 }}>
-            {lessons.map((it) => {
+            {lessons.map((it, idx) => {
               const s = it.student;
               const key = attDate + "|" + s.id + "|" + it.time;
               const rec = data.attendance[key];
@@ -240,7 +255,12 @@ export function Attendance() {
               const missing = st === "결석" || st === "무단결석";
               return (
                 <div key={key}>
-                  <div className={"att-row" + (missing ? " is-absent" : "")}>
+                  <div
+                    className={"att-row" + (missing ? " is-absent" : "")}
+                    tabIndex={0}
+                    ref={(el) => { rowRefs.current[idx] = el; }}
+                    onKeyDown={(e) => onRowKey(e, it, key, idx)}
+                  >
                     <div className="att-time">{it.time}</div>
                     <div className="att-stu">
                       <div>

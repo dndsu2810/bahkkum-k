@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import type { Makeup } from "../types";
 import { useStore } from "../store";
 import { byAbsentDesc, mkStatus } from "../lib/logic";
+import { findBoKey } from "../lib/attendanceLogic";
 import { MakeupList, type MakeupActions } from "../components/MakeupList";
 import { ScheduleModal, SkipModal, MakeupModal } from "../components/modals";
 import { Icon } from "../icons";
@@ -52,9 +53,11 @@ export function MakeupPage() {
         if (!k) return;
         k.status = "done";
         // 보강 출결 기록(앱 내부) 생성 → 달력/리포트에 '보강 (시각)'으로 표시.
+        // 같은 날짜·학생에 이미 보강 출결이 있으면 그 행을 재사용(중복 방지).
         if (k.makeupDate) {
-          const key = k.makeupDate + "|" + k.studentId + "|" + (k.makeupTime || "");
-          d.attendance[key] = { ...(d.attendance[key] || {}), status: "보강" };
+          const exist = findBoKey(d.attendance, k.makeupDate, k.studentId);
+          const key = exist || k.makeupDate + "|" + k.studentId + "|" + (k.makeupTime || "");
+          d.attendance[key] = { ...(d.attendance[key] || {}), status: "보강", note: d.attendance[key]?.note || k.memo || "" };
         }
       });
       toast("보강 완료 처리했어요.");
@@ -64,8 +67,8 @@ export function MakeupPage() {
         const k = d.makeups.find((m) => m.id === id);
         if (!k) return;
         k.status = "scheduled";
-        const key = k.makeupDate + "|" + k.studentId + "|" + (k.makeupTime || "");
-        delete d.attendance[key];
+        const exist = findBoKey(d.attendance, k.makeupDate, k.studentId);
+        delete d.attendance[exist || k.makeupDate + "|" + k.studentId + "|" + (k.makeupTime || "")];
       });
       toast("보강 예정으로 되돌렸어요.");
     },
@@ -99,7 +102,7 @@ export function MakeupPage() {
     <section className="page active">
       <div className="page-head">
         <div>
-          <div className="page-title">보강 관리</div>
+          <h1 className="page-title">보강 관리</h1>
           <div className="page-desc">결석 학생 보강 일정 관리 · 대기 {pending.length}건</div>
         </div>
         <div className="head-actions">

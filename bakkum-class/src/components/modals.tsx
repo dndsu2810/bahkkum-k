@@ -522,6 +522,9 @@ export function ScheduleModal({ id }: { id: string }) {
         m.makeupTime = time;
         m.makeupDuration = +dur || 0;
         m.memo = memo.trim();
+        // 보강이 실제로 잡히면, 자동 생성된 '보강 일정 잡기' 카드는 완료 처리.
+        const card = (d.tasks || []).find((t) => t.source === "absence:" + m.attKey && t.status !== "done");
+        if (card) { card.status = "done"; card.doneAt = Date.now(); }
       }
     });
     closeModal();

@@ -70,7 +70,7 @@ export function Students() {
     <section className="page active">
       <div className="page-head">
         <div>
-          <div className="page-title">학생 관리</div>
+          <h1 className="page-title">학생 관리</h1>
           <div className="page-desc">
             전체 {data.students.length}명 · 셀을 클릭하면 이름·구분·상태·학교를 바로 수정할 수 있어요
           </div>

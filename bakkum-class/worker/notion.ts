@@ -384,7 +384,8 @@ export async function upsertHomeworkRecord(
   if (h.tags && h.tags.length) fullProps[P.area] = multi(h.tags);
   if (h.classPageId) fullProps[P.classSelect] = { relation: relation(h.classPageId) };
   try {
-    const existing = await findHomeworkPage(env, h.notionPageId, h.date, h.classPageId);
+    // 같은 학생·마감일에 여러 숙제가 있을 수 있으므로 '숙제 내용'까지 맞춰 정확히 그 행만 잡는다.
+    const existing = await findHomeworkPage(env, h.notionPageId, h.date, h.classPageId, h.book);
     if (existing) {
       // 검사완료/지연 토글: 확인완료 + 완성도(+숙제현황)만 갱신. 그 외엔 전체 갱신.
       let props: Record<string, unknown> = fullProps;
@@ -403,14 +404,15 @@ export async function upsertHomeworkRecord(
   }
 }
 
-/** 같은 학생(relation)·같은 마감일·같은 수업의 기존 숙제 페이지 id (없으면 null). */
-async function findHomeworkPage(env: NotionEnv, studentPageId: string, date: string, classPageId?: string): Promise<string | null> {
+/** 같은 학생·마감일·수업(+숙제 내용)의 기존 숙제 페이지 id (없으면 null). */
+async function findHomeworkPage(env: NotionEnv, studentPageId: string, date: string, classPageId?: string, content?: string): Promise<string | null> {
   const P = NOTION_CFG.homework;
   const and: unknown[] = [
     { property: P.student, relation: { contains: studentPageId } },
     { property: P.due, date: { equals: date } },
   ];
   if (classPageId) and.push({ property: P.classSelect, relation: { contains: classPageId } });
+  if (content) and.push({ property: P.content, rich_text: { equals: content } });
   try {
     const r = await notionReq(env, "POST", `/v1/databases/${NOTION_CFG.homeworkDb}/query`, {
       page_size: 1,
@@ -680,15 +682,16 @@ export interface ImportProg {
   startDate: string;
   memo: string;
 }
-export async function fetchProgressRecords(env: NotionEnv, since: string): Promise<ImportProg[]> {
+export async function fetchProgressRecords(env: NotionEnv, _since: string): Promise<ImportProg[]> {
   const P = NOTION_CFG.progress;
   const out: ImportProg[] = [];
-  for (const pg of await queryAll(env, NOTION_CFG.progressDb, dateFilter(P.start, since))) {
+  // 진도는 '시작일'이 사건 날짜가 아니라 '단원 시작일'이라 몇 달 전이어도 현재 진도일 수 있다.
+  // 따라서 날짜로 거르지 않고 전체를 가져온다(예: 시작일이 3월 이전인 학생 진도도 포함).
+  for (const pg of await queryAll(env, NOTION_CFG.progressDb)) {
     const p = (pg.properties || {}) as Record<string, Prop>;
     const studentPageId = relFirst(p[P.student]);
     const start = propText(p[P.start]);
     if (!studentPageId) continue;
-    if (start && start < since) continue;
     out.push({
       srcId: pg.id,
       studentPageId,

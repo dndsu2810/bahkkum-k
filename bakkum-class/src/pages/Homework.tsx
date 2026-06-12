@@ -56,7 +56,7 @@ export function Homework() {
     <section className="page active">
       <div className="page-head">
         <div>
-          <div className="page-title">숙제 기록</div>
+          <h1 className="page-title">숙제 기록</h1>
           <div className="page-desc">오늘 숙제 검사·내주기는 <TodayLink /> 화면에서, 여기선 쌓인 숙제 기록을 모아 보고 수정해요.</div>
         </div>
         <div className="head-actions">

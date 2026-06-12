@@ -14,6 +14,7 @@ import { loadData, saveData, saveDataNow } from "./api";
 interface ToastItem {
   id: number;
   msg: string;
+  undo?: () => void;
 }
 
 interface StoreCtx {
@@ -29,7 +30,9 @@ interface StoreCtx {
   mutateAsync: (fn: (draft: DataSnapshot) => void) => Promise<boolean>;
   /** Re-fetch the snapshot from the backend (e.g. after a Notion sync). */
   reload: () => Promise<void>;
-  toast: (msg: string) => void;
+  /** 토스트. undo를 주면 '되돌리기' 버튼이 잠깐(5초) 뜬다. */
+  toast: (msg: string, undo?: () => void) => void;
+  dismissToast: (id: number) => void;
   toasts: ToastItem[];
   openModal: (node: ReactNode) => void;
   closeModal: () => void;
@@ -49,6 +52,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     homeworkLog: [],
     progressLog: [],
     testLog: [],
+    tasks: [],
     dismissedMakeups: [],
     noHomework: [],
   });
@@ -131,13 +135,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const toast = useCallback((msg: string) => {
+  const toast = useCallback((msg: string, undo?: () => void) => {
     const id = ++toastId.current;
-    setToasts((t) => [...t, { id, msg }]);
+    setToasts((t) => [...t, { id, msg, undo }]);
     setTimeout(() => {
       setToasts((t) => t.filter((x) => x.id !== id));
-    }, 2700);
+    }, undo ? 5200 : 2700);
   }, []);
+  const dismissToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
 
   const openModal = useCallback((node: ReactNode) => setModal(node), []);
   const closeModal = useCallback(() => setModal(null), []);
@@ -148,7 +153,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ data, loaded, loadError, retryLoad, mutate, mutateAsync, reload, toast, toasts, openModal, closeModal, modal, page, navigate }}
+      value={{ data, loaded, loadError, retryLoad, mutate, mutateAsync, reload, toast, dismissToast, toasts, openModal, closeModal, modal, page, navigate }}
     >
       {children}
     </Ctx.Provider>

@@ -26,7 +26,7 @@ export function ModalHost() {
 }
 
 export function ToastHost() {
-  const { toasts } = useStore();
+  const { toasts, dismissToast } = useStore();
   return (
     <div className="toast-wrap">
       {toasts.map((t) => (
@@ -35,6 +35,11 @@ export function ToastHost() {
             <path d="M20 6 9 17l-5-5" />
           </svg>
           <span>{t.msg}</span>
+          {t.undo && (
+            <button className="toast-undo" onClick={() => { t.undo!(); dismissToast(t.id); }}>
+              되돌리기
+            </button>
+          )}
         </div>
       ))}
     </div>

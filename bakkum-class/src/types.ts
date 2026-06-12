@@ -111,6 +111,28 @@ export interface TestLog {
   memo: string; // 특이사항
 }
 
+/** 강사 업무 보드(칸반) 카드 1장. */
+export type TaskStatus = "todo" | "doing" | "done";
+export interface Task {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  /** 분류 태그 (보강·학부모·교재·경시·마케팅·행정·수업준비 등). 빈 값 가능. */
+  tag?: string;
+  /** 마감일 YYYY-MM-DD (선택). */
+  due?: string;
+  /** 연결 학생 id (선택). */
+  studentId?: string;
+  memo?: string;
+  /** 자동 생성 카드 식별/중복방지 키 (예: "absence:<attKey>"). 수동 카드는 빈 값. */
+  source?: string;
+  createdAt: number;
+  /** 완료 처리 시각 — 완료 후 7일 지나면 보관함 자동 이동 기준. */
+  doneAt?: number;
+  /** 보관함으로 이동됨 (보드에서 숨김). */
+  archived?: boolean;
+}
+
 export interface DataSnapshot {
   students: Student[];
   makeups: Makeup[];
@@ -118,6 +140,8 @@ export interface DataSnapshot {
   homeworkLog: HwLog[];
   progressLog: ProgLog[];
   testLog: TestLog[];
+  /** 강사 업무 보드 카드. */
+  tasks?: Task[];
   /** 사용자가 직접 삭제한 보강(결석)의 attKey 목록 — 노션 재가져오기/재체크 때
    *  자동으로 보강 대기가 되살아나지 않도록 하는 '삭제 표시(tombstone)'. */
   dismissedMakeups?: string[];
