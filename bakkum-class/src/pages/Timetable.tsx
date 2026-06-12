@@ -177,6 +177,16 @@ export function Timetable() {
   const hours: number[] = [];
   for (let h = startH; h < endH; h++) hours.push(h);
 
+  // 평일(월~금)은 항상, 토·일은 그 주에 수업/보강이 있을 때만 보여준다.
+  // (DOW_ORDER = 월화수목금토일 → 인덱스 5=토, 6=일)
+  const visIdx = [0, 1, 2, 3, 4, 5, 6].filter((i) => i < 5 || evtByDay[i].length > 0);
+  const nCols = visIdx.length;
+  // 보이는 날 수에 맞춰 폭 분배 — 날이 적으면 평일이 그만큼 넉넉해진다.
+  const gridStyle = {
+    gridTemplateColumns: `56px repeat(${nCols}, minmax(160px, 1fr))`,
+    minWidth: 56 + nCols * 160,
+  };
+
   return (
     <section className="page active">
       <div className="page-head">
@@ -191,9 +201,10 @@ export function Timetable() {
 
       <div className="card tt-card">
         <div className="tt-scroll">
-          <div className="tt-grid">
+          <div className="tt-grid" style={gridStyle}>
             <div className="tt-corner" />
-            {DOW_ORDER.map((dow, c) => {
+            {visIdx.map((c) => {
+              const dow = DOW_ORDER[c];
               const isToday = dates[c].getTime() === TODAY.getTime();
               const hol = holidayName(ymd(dates[c]));
               return (
@@ -215,7 +226,8 @@ export function Timetable() {
                 </div>
               ))}
             </div>
-            {dates.map((dt, ci) => {
+            {visIdx.map((ci) => {
+              const dt = dates[ci];
               const todayCol = dt.getTime() === TODAY.getTime();
               const events = laneEvents(groupSlots(evtByDay[ci]));
               return (
@@ -230,8 +242,8 @@ export function Timetable() {
                     const narrow = e._cols >= 3;
                     const expanded = openEvt === evKey;
                     const compact = narrow && !expanded;
-                    // grow the block so all names fit (time line + one line per name)
-                    const need = 20 + e.names.length * 15;
+                    // 이름을 쉼표로 묶어 가로로 줄바꿈 → 한 줄에 2~3명. 줄 수만큼 높이 확보.
+                    const need = 20 + Math.ceil(e.names.length / 2) * 16;
                     const hgt = compact
                       ? Math.max((e.dur / 60) * ROW_H - 3, 24)
                       : Math.max((e.dur / 60) * ROW_H - 3, 24, need);
@@ -258,11 +270,7 @@ export function Timetable() {
                             {e.names.length > 1 ? `${e.names[0]} 외 ${e.names.length - 1}명` : e.names[0]}
                           </div>
                         ) : (
-                          e.names.map((nm, j) => (
-                            <div className="e-name" key={j}>
-                              {nm}
-                            </div>
-                          ))
+                          <div className="e-names">{e.names.join(", ")}</div>
                         )}
                       </div>
                     );

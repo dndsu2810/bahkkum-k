@@ -23,25 +23,36 @@ export function Header({ page }: { page: PageId }) {
 function ThemeToggle() {
   const [dark, setDark] = useState(() => {
     try {
-      return localStorage.getItem("theme") === "dark";
+      const saved = localStorage.getItem("theme");
+      if (saved === "dark") return true;
+      if (saved === "light") return false;
+      // 저장된 선택 없으면 시스템 설정을 따른다.
+      return !!window.matchMedia?.("(prefers-color-scheme: dark)").matches;
     } catch {
       return false;
     }
   });
+  // DOM에 반영만 (저장은 사용자가 토글할 때만 → 선택 전엔 시스템 설정을 계속 따름)
   useEffect(() => {
     const root = document.documentElement;
     if (dark) root.setAttribute("data-theme", "dark");
     else root.removeAttribute("data-theme");
-    try {
-      localStorage.setItem("theme", dark ? "dark" : "light");
-    } catch {
-      /* ignore */
-    }
   }, [dark]);
+  function toggle() {
+    setDark((v) => {
+      const nv = !v;
+      try {
+        localStorage.setItem("theme", nv ? "dark" : "light");
+      } catch {
+        /* ignore */
+      }
+      return nv;
+    });
+  }
   return (
     <button
       className="theme-toggle"
-      onClick={() => setDark((v) => !v)}
+      onClick={toggle}
       title={dark ? "밝은 모드로" : "어두운 모드로"}
       aria-label={dark ? "밝은 모드로 전환" : "어두운 모드로 전환"}
     >

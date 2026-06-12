@@ -9,6 +9,18 @@
 </head>
 <body>
   <div id="root"></div>
+  <script>
+    // 첫 페인트 전에 테마 적용 — 깜빡임(흰 화면 번쩍) 방지.
+    // 저장된 선택이 없으면 시스템 설정(prefers-color-scheme)을 따른다.
+    (function () {
+      try {
+        var saved = localStorage.getItem("theme");
+        var dark = saved ? saved === "dark"
+          : window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        if (dark) document.documentElement.setAttribute("data-theme", "dark");
+      } catch (e) {}
+    })();
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

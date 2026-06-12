@@ -83,34 +83,35 @@
 .r-prog-grid .r-it .r-v{ font-size:16px; font-weight:800; color:var(--ink) }
 
 /* CALENDAR */
-.r-cal-card{ border:1px solid var(--line); border-radius:18px; padding:22px 22px 20px }
-.r-cal-legend{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:18px }
-.r-cal-legend span{ font-size:13px; font-weight:700; color:var(--ink-2); display:flex; align-items:center; gap:6px }
-.r-lg{ width:11px; height:11px; border-radius:4px; display:inline-block }
-.r-lg.g{ background:var(--green) } .r-lg.b{ background:var(--blue) } .r-lg.r{ background:var(--red) } .r-lg.n{ background:#EDF0F2 }
-.r-cal{ display:grid; grid-template-columns:repeat(7,1fr); gap:7px }
-.r-wd{ text-align:center; font-size:12.5px; font-weight:700; color:var(--ink-3); padding-bottom:3px }
+.r-cal-card{ border:1px solid var(--line); border-radius:18px; padding:20px 20px 18px; background:#fff }
+.r-cal-legend{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px }
+.r-cal-legend span{ font-size:12.5px; font-weight:600; color:var(--ink-2); display:flex; align-items:center; gap:7px }
+.r-lg{ width:9px; height:9px; border-radius:50%; display:inline-block }
+.r-lg.g{ background:var(--green) } .r-lg.b{ background:var(--blue) } .r-lg.r{ background:var(--red) } .r-lg.n{ background:#D7DCE0 }
+.r-cal{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px }
+.r-wd{ text-align:center; font-size:12px; font-weight:700; color:var(--ink-3); padding-bottom:7px; letter-spacing:.04em }
 .r-wd.sun{ color:var(--red) } .r-wd.sat{ color:var(--blue) }
-/* min-height is a fallback: html2canvas 1.4.1 doesn't honor aspect-ratio */
-.r-cell{ aspect-ratio:1/1.04; min-height:80px; border-radius:11px; border:1px solid var(--line-2); background:#fff; padding:8px 6px 6px; display:flex; flex-direction:column; align-items:center }
+/* 날짜는 좌상단, 상태 알약은 좌하단 — 달력다운 레이아웃.
+   min-height는 html2canvas가 aspect-ratio를 무시할 때의 보정(저장 시 눌림 방지). */
+.r-cell{ aspect-ratio:1/1; min-height:92px; border-radius:13px; border:1px solid var(--line-2); background:#fff; padding:9px 10px 10px; display:flex; flex-direction:column; align-items:flex-start }
 .r-cell.empty{ border:0; background:transparent }
-.r-cell .r-d{ font-size:15px; font-weight:700; color:var(--ink-2) }
-.r-celltag{ font-size:11px; font-weight:800; margin-top:auto; padding:2px 7px; border-radius:6px; letter-spacing:-0.02em }
+.r-cell .r-d{ font-size:14.5px; font-weight:800; color:var(--ink-2); line-height:1 }
+.r-celltag{ font-size:10.5px; font-weight:800; padding:3px 9px; border-radius:999px; letter-spacing:-0.02em; align-self:flex-start }
 /* 하루에 여러 표시(출석+보강 등) — 태그를 세로로 모두 노출, 각 태그가 자체 색 */
-.r-celltags{ margin-top:auto; display:flex; flex-direction:column; gap:3px; align-items:center }
+.r-celltags{ margin-top:auto; display:flex; flex-direction:column; gap:4px; align-items:flex-start }
 .r-celltags .r-celltag{ margin-top:0 }
 .r-celltag.tag-p{ color:#0E7A4C; background:rgba(22,163,107,.16) }
 .r-celltag.tag-m{ color:#274FB0; background:rgba(46,107,224,.15) }
 .r-celltag.tag-a{ color:#C23A40; background:rgba(224,74,79,.15) }
 /* 공휴일 — 이름 표기(긴 이름은 줄바꿈), 결석(빨강)과 구분되게 회색 */
-.r-cell.att-h{ background:#f5f6f8; border-color:transparent }
-.r-celltag.tag-h{ color:#7C8597; background:#e9ebf0; font-size:9.5px; font-weight:700; line-height:1.15; white-space:normal; text-align:center; letter-spacing:-0.03em; padding:2px 5px }
+.r-cell.att-h{ background:#f6f7f9; border-color:transparent }
+.r-celltag.tag-h{ margin-top:auto; color:#7C8597; background:#e9ebf0; font-size:9.5px; font-weight:700; line-height:1.15; white-space:normal; text-align:left; letter-spacing:-0.03em; padding:3px 7px; border-radius:7px }
 .r-cell.att-p{ background:var(--green-tint); border-color:transparent }
-.r-cell.att-p .r-d{ color:#0E7A4C } .r-cell.att-p .r-celltag{ color:#0E7A4C; background:rgba(22,163,107,.16) }
+.r-cell.att-p .r-d{ color:#0E7A4C } .r-cell.att-p .r-celltag{ color:#0E7A4C; background:rgba(22,163,107,.2) }
 .r-cell.att-m{ background:var(--blue-tint); border-color:transparent }
-.r-cell.att-m .r-d{ color:#274FB0 } .r-cell.att-m .r-celltag{ color:#274FB0; background:rgba(46,107,224,.15) }
+.r-cell.att-m .r-d{ color:#274FB0 } .r-cell.att-m .r-celltag{ color:#274FB0; background:rgba(46,107,224,.18) }
 .r-cell.att-a{ background:var(--red-tint); border-color:transparent }
-.r-cell.att-a .r-d{ color:#C23A40 } .r-cell.att-a .r-celltag{ color:#C23A40; background:rgba(224,74,79,.15) }
+.r-cell.att-a .r-d{ color:#C23A40 } .r-cell.att-a .r-celltag{ color:#C23A40; background:rgba(224,74,79,.18) }
 .r-cell .r-d.sun{ color:var(--red) } .r-cell .r-d.sat{ color:var(--blue) }
 
 /* NOTES */

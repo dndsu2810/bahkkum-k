@@ -103,32 +103,54 @@ export function buildBriefing(snap: DataSnapshot, holiday: string | null): Brief
   noon.push(`특이사항`, ...special);
 
   /* ===== 밤 21:00 — 오늘 수업 요약 ===== */
-  let present = 0, late = 0, absent = 0, unchecked = 0;
+  // 출결을 인원수가 아니라 '누가'로 — 지각은 몇 분까지 표기
+  const presentN: string[] = [];
+  const lateN: string[] = [];
+  const absentN: string[] = [];
+  const absentIds = new Set<string>(); // 오늘 결석 학생 — 숙제 미흡 집계에서 제외용
+  let unchecked = 0;
   for (const a of reg) {
     const rec = snap.attendance[`${date}|${a.student.id}|${a.time}`];
     if (!rec || !rec.status) { unchecked++; continue; }
-    if (rec.status === "출석") present++;
-    else if (rec.status === "지각") late++;
-    else if (rec.status === "결석" || rec.status === "무단결석" || rec.status === "조퇴") absent++;
+    const nm = a.student.name;
+    if (rec.status === "출석") presentN.push(nm);
+    else if (rec.status === "지각") lateN.push(rec.lateMinutes ? `${nm} (${rec.lateMinutes}분)` : nm);
+    else if (rec.status === "결석" || rec.status === "무단결석" || rec.status === "조퇴") {
+      absentN.push(nm);
+      absentIds.add(a.student.id);
+    }
   }
   const pendingMk = snap.makeups.filter((k) => k.status === "pending");
   const mkTodoLines = pendingMk.length
     ? pendingMk.map((k) => `${studentById(snap, k.studentId)?.name || "?"} (${fmtMD(k.absentDate)} 결석)`)
     : ["없음"];
-  // 내준 숙제 — 학생별 가장 빠른 마감일
-  const upcoming = snap.homeworkLog.filter((h) => h.date > date);
-  const byStu: Record<string, string> = {};
-  for (const h of upcoming) if (!byStu[h.studentId] || h.date < byStu[h.studentId]) byStu[h.studentId] = h.date;
-  const upIds = Object.keys(byStu).sort((a, b) => (byStu[a] < byStu[b] ? -1 : 1));
-  const hwLine = upIds.length
-    ? upIds.map((id) => `${studentById(snap, id)?.name || "?"} (${fmtMD(byStu[id])})`).join(", ")
-    : "없음";
+  // 숙제 미흡 — 오늘 검사 대상 중 완성도 50% 이하(또는 지연=안 해옴). 이름만, 학생당 1번.
+  // 단, 오늘 결석한 학생은 검사 자체가 안 됐고 숙제가 자동으로 밀린 것이라 제외.
+  const undoneByStu: Record<string, string> = {};
+  for (const h of snap.homeworkLog) {
+    if ((h.recheckDate || h.date) !== date) continue;
+    if (absentIds.has(h.studentId)) continue;
+    const bad = h.status === "late" || (h.completion ?? 0) <= 50;
+    if (!bad) continue;
+    if (undoneByStu[h.studentId]) continue;
+    undoneByStu[h.studentId] = studentById(snap, h.studentId)?.name || "?";
+  }
+  const undoneN = Object.values(undoneByStu);
+
+  // 오늘 보강 출석한 학생 (보강 완료 = done)
+  const mkDoneN = mkToday
+    .filter((k) => k.status === "done")
+    .map((k) => studentById(snap, k.studentId)?.name || "?");
 
   const night: string[] = [`[오늘 수업 요약] ${M}월 ${D}일 (${dow})`, ""];
-  night.push(`출결  ·  출석 ${present} · 지각 ${late} · 결석 ${absent}`);
+  night.push(`출결`);
+  night.push(`출석  ${presentN.length ? presentN.join(", ") : "없음"}`);
+  night.push(`지각  ${lateN.length ? lateN.join(", ") : "없음"}`);
+  night.push(`결석  ${absentN.length ? absentN.join(", ") : "없음"}`);
+  if (mkDoneN.length) night.push(`보강출석  ${mkDoneN.join(", ")}`);
   if (unchecked > 0) night.push(`미체크 ${unchecked}명 — 확인 필요`);
-  night.push("", `보강 잡을 학생`, ...mkTodoLines, "");
-  night.push(`내준 숙제`, hwLine);
+  if (undoneN.length) night.push("", `숙제 미흡`, undoneN.join(", "));
+  night.push("", `보강 잡을 학생`, ...mkTodoLines);
 
   return { hasClass, holiday, noon: noon.join("\n").trimEnd(), night: night.join("\n").trimEnd() };
 }

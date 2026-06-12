@@ -40,6 +40,8 @@ body{
 button{font-family:inherit;cursor:pointer}
 input,select{font-family:inherit}
 ::selection{background:var(--brand-soft)}
+/* 테마 전환 부드럽게 (200ms) — '동작 줄이기' 설정 시 아래 media query가 즉시로 덮음 */
+body,.side,.topbar,.card,.board-col,.today-brief,.nav-item{transition:background-color .2s ease,border-color .2s ease,color .2s ease}
 .spin{display:inline-flex;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -304,6 +306,9 @@ table.tbl tbody tr:last-child td{border-bottom:none}
   font-size:var(--t-cap);border:1px solid transparent;box-shadow:var(--sh-sm);
 }
 .tt-evt .e-name{font-weight:700;font-size:var(--t-cap);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:keep-all}
+/* 이름을 가로로 묶어 줄바꿈 — 세로로 한 명씩 쌓지 않고 최대한 다 보이게 */
+.tt-evt .e-names{font-weight:700;font-size:var(--t-cap);line-height:1.35;white-space:normal;word-break:keep-all;overflow:hidden}
+.tt-evt:hover .e-names{overflow:visible}
 .tt-evt .e-time{font-size:var(--t-cap);font-weight:600;opacity:.8;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
 .tt-evt:hover{overflow:visible;z-index:8;box-shadow:var(--sh-lg)}
 .tt-evt:hover .e-name{overflow:visible}
@@ -762,35 +767,91 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 
 /* ===== B-7 다크 모드 (opt-in: html[data-theme=dark]) ===== */
 [data-theme="dark"]{
-  --brand:#3b82f6; --brand-d:#9cc0ff; --brand-soft:#1b2945; --brand-line:#2e4368;
-  --ok:#4ade80; --ok-soft:#15311f;
-  --warn:#fbbf24; --warn-soft:#3a2c0e;
-  --bad:#f87171; --bad-soft:#3a1818;
-  --ink:#e8edf3; --ink2:#b6c2d2; --ink3:#90a0b3; --ink4:#90a0b3;
-  --bg:#0e131a; --card:#1a212b; --line:#2a3340; --line2:#39465a;
-  --purple:#c4b5fd; --purple-bg:#2a2143;
-  --pink:#f0a6c4; --pink-bg:#3a1f2c;
-  --card2:#222b37;
+  color-scheme:dark; /* 네이티브 날짜 입력칸·달력 팝업까지 다크 */
+  /* 표면을 단계로 쌓아 카드가 떠 보이게 (바탕 < 카드 < 보조표면) */
+  --bg:#10151f; --card:#172033; --card2:#1c2536;
+  --line:#26324a; --line2:#33425f;
+  /* 호버 — 어떤 표면 위든 동일하게 '살짝만' 밝아지는 반투명 오버레이 (톤 일관) */
+  --hover:rgba(255,255,255,.045);
+  /* 글자 — 순백 대신 톤다운, 보조/캡션도 명암비 4.5:1 이상 */
+  --ink:#e8ecf4; --ink2:#a7b0c0; --ink3:#8b97ad; --ink4:#8b97ad;
+  /* 포인트(파랑) — 텍스트형은 밝게, 채움형은 blue-500 */
+  --brand:#3b82f6; --brand-d:#6aa0ff; --brand-soft:rgba(106,160,255,.14); --brand-line:#2e4368;
+  /* 상태색 — 400단계 + 반투명 배경(형광 방지, 어떤 표면에도 자연스럽게) */
+  --ok:#4ade80; --ok-soft:rgba(34,197,94,.16);
+  --warn:#fbbf24; --warn-soft:rgba(245,158,11,.16);
+  --bad:#f87171; --bad-soft:rgba(239,68,68,.16);
+  --purple:#c4b5fd; --purple-bg:rgba(124,58,237,.22);
+  --pink:#f0a6c4; --pink-bg:rgba(190,63,114,.22);
   --sh-sm:0 1px 2px rgba(0,0,0,.4);
   --sh:0 1px 3px rgba(0,0,0,.45), 0 6px 16px rgba(0,0,0,.4);
   --sh-lg:0 10px 30px rgba(0,0,0,.55);
 }
-[data-theme="dark"] .topbar{background:rgba(14,19,26,.85)}
-[data-theme="dark"] .nav-item:hover{background:#222b37}
-[data-theme="dark"] .nav-item.active{background:var(--brand-soft)}
-[data-theme="dark"] .nav-badge{background:#2a3340;color:var(--ink2)}
-[data-theme="dark"] .nav-item.active .nav-badge{background:#0e131a;color:var(--brand-d)}
-[data-theme="dark"] .side-foot{background:#222b37;border-color:var(--line)}
-[data-theme="dark"] .btn:hover{background:#222b37}
-[data-theme="dark"] .btn.ghost:hover{background:#222b37}
+[data-theme="dark"] .side{background:#0b0f18} /* 사이드바 가장 어둡게 */
+[data-theme="dark"] .topbar{background:rgba(16,21,31,.86)}
+[data-theme="dark"] .nav-item:hover{background:var(--hover)}
+[data-theme="dark"] .nav-item.active{background:var(--brand-soft);color:var(--brand-d)}
+[data-theme="dark"] .nav-badge{background:var(--card2);color:var(--ink2)}
+[data-theme="dark"] .nav-item.active .nav-badge{background:#0b0f18;color:var(--brand-d)}
+[data-theme="dark"] .side-foot{background:var(--card);border-color:var(--line)}
+[data-theme="dark"] .btn:hover{background:var(--hover)}
+[data-theme="dark"] .btn.ghost:hover{background:var(--hover)}
 [data-theme="dark"] .btn.primary{color:#fff}
-[data-theme="dark"] .input,[data-theme="dark"] .ctrl{background:#10161e;color:var(--ink)}
-[data-theme="dark"] .seg-toggle{background:#222b37}
-[data-theme="dark"] .seg-toggle button.on{background:#0e131a}
-[data-theme="dark"] .badge.b-gray,[data-theme="dark"] .dchip{background:#2a3340;color:var(--ink2)}
-[data-theme="dark"] kbd{background:#222b37;border-color:#2a3340;color:var(--ink2)}
-[data-theme="dark"] .tbl-band{background:#1f2832}
-[data-theme="dark"] .skel{background:linear-gradient(100deg,#1c242f 30%,#243040 50%,#1c242f 70%);background-size:200% 100%}
+/* 입력칸 — 흰 박스 제거 */
+[data-theme="dark"] .input,
+[data-theme="dark"] .ctrl,
+[data-theme="dark"] .inline-input,
+[data-theme="dark"] .inline-select,
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea,
+[data-theme="dark"] .att-extra .mini-note,
+[data-theme="dark"] .att-extra .mini-num,
+[data-theme="dark"] .slot input,
+[data-theme="dark"] .slot select{background:#141c2b;color:var(--ink);border-color:var(--line2)}
+[data-theme="dark"] .input::placeholder,
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder{color:var(--ink4)}
+/* 오늘 한 줄 브리핑 — 흰색 번짐 제거, 다크 그라데이션 */
+[data-theme="dark"] .today-brief{background:linear-gradient(135deg,#1e2a4a,#141a28);border-color:#2e4368}
+/* 세그 토글 트랙 */
+[data-theme="dark"] .seg-toggle,
+[data-theme="dark"] .att-seg,
+[data-theme="dark"] .today-seg{background:#141c2b}
+[data-theme="dark"] .seg-toggle button.on{background:var(--card)}
+/* 출결/태도 선택 — 솔리드+흰글씨 대신 반투명 틴트 + 상태색 글자 */
+[data-theme="dark"] .att-seg button.on-present,[data-theme="dark"] .att-seg button.on.t-green,
+[data-theme="dark"] .today-seg button.on-present{background:var(--ok-soft);color:var(--ok);box-shadow:none}
+[data-theme="dark"] .att-seg button.on-absent,[data-theme="dark"] .att-seg button.on.t-red,
+[data-theme="dark"] .today-seg button.on-absent{background:var(--bad-soft);color:var(--bad);box-shadow:none}
+[data-theme="dark"] .att-seg button.on.t-orange,
+[data-theme="dark"] .today-seg button.on-late{background:var(--warn-soft);color:var(--warn);box-shadow:none}
+[data-theme="dark"] .att-seg button.on.t-purple{background:var(--purple-bg);color:var(--purple);box-shadow:none}
+[data-theme="dark"] .att-seg button.on{background:var(--brand-soft);color:var(--brand-d);box-shadow:none}
+[data-theme="dark"] .badge.b-gray,[data-theme="dark"] .dchip{background:var(--card2);color:var(--ink2)}
+[data-theme="dark"] kbd{background:var(--card2);border-color:var(--line);color:var(--ink2)}
+[data-theme="dark"] .tbl-band{background:var(--card2)}
+[data-theme="dark"] .board-col{background:#0d1420}
+[data-theme="dark"] .skel{background:linear-gradient(100deg,#172033 30%,#1e2a42 50%,#172033 70%);background-size:200% 100%}
+/* 완료(alldone) 카드·진도 — 라이트 크림색 제거, 은은한 다크 그린 */
+[data-theme="dark"] .today-stu.alldone{border-color:rgba(74,222,128,.40);background:rgba(34,197,94,.05)}
+[data-theme="dark"] .today-stu.alldone .today-stu-head{background:rgba(34,197,94,.09)}
+[data-theme="dark"] .today-prog-item.done{background:var(--ok-soft);border-color:rgba(74,222,128,.40)}
+[data-theme="dark"] .today-sec-tag.asn{color:var(--ok)}
+/* 남은 세그 토글 트랙 */
+[data-theme="dark"] .mini-seg,
+[data-theme="dark"] .today-mood-seg,
+[data-theme="dark"] .today-pct-quick{background:#141c2b}
+/* 남은 hover/보조 표면 */
+[data-theme="dark"] .att-more:hover{background:var(--hover)}
+[data-theme="dark"] table.tbl tbody tr:hover,
+[data-theme="dark"] .mk-item:hover{background:var(--hover)}
+[data-theme="dark"] .task-iconbtn:hover,
+[data-theme="dark"] .date-arrow:hover,
+[data-theme="dark"] .theme-toggle:hover,
+[data-theme="dark"] .seg-toggle button:not(.on):hover{background:var(--hover)}
+[data-theme="dark"] .c-mut{background:var(--card2);color:var(--ink3)}
+[data-theme="dark"] .saved-tag{background:var(--card)}
 
 /* B-4 접근성 — '동작 줄이기'를 켠 사용자에겐 애니메이션·전환을 끈다 */
 @media (prefers-reduced-motion: reduce){

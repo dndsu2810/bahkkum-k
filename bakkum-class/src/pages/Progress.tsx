@@ -10,14 +10,14 @@ import { Icon } from "../icons";
 
 type ProgTab = "all" | "ing" | "done";
 const TABS: { v: ProgTab; label: string }[] = [
-  { v: "all", label: "전체" },
   { v: "ing", label: "진행중" },
+  { v: "all", label: "전체" },
   { v: "done", label: "완료" },
 ];
 
 export function Progress() {
   const { data, openModal, mutate, mutateAsync, toast } = useStore();
-  const [tab, setTab] = useState<ProgTab>("all");
+  const [tab, setTab] = useState<ProgTab>("ing");
 
   const all = data.progressLog.slice().sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
   const sorted = all.filter((p) => (tab === "all" ? true : tab === "done" ? p.pct >= 100 : p.pct < 100));
