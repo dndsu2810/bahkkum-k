@@ -20,3 +20,8 @@ not_found_handling = "single-page-application"
 binding = "DB"
 database_name = "bakuum-production"
 database_id = "661eef60-81a2-43dd-affd-34460b077dfd"
+
+# 업로드 이미지(SNS 글 등) 저장용 R2 버킷
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "bakkum-media"

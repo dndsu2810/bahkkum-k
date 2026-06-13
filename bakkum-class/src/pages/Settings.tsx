@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { ALWAYS, fullOrdered, type NavPrefs, type PageId } from "../lib/nav";
 import { TONES, type Category, type Tone } from "../lib/categories";
-import { SECTION_LABELS, type SectionKey } from "../lib/reportSections";
 import { useStore } from "../store";
 import { importRecords } from "../api";
 import { Icon } from "../icons";
@@ -46,44 +44,12 @@ function OneTimeImport() {
 }
 
 export function Settings({
-  navPrefs,
-  onChange,
   categories,
   onCategoriesChange,
-  reportOrder,
-  onReportOrderChange,
 }: {
-  navPrefs: NavPrefs;
-  onChange: (p: NavPrefs) => void;
   categories: Category[];
   onCategoriesChange: (c: Category[]) => void;
-  reportOrder: SectionKey[];
-  onReportOrderChange: (o: SectionKey[]) => void;
 }) {
-  function moveSec(i: number, dir: -1 | 1) {
-    const j = i + dir;
-    if (j < 0 || j >= reportOrder.length) return;
-    const arr = reportOrder.slice();
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-    onReportOrderChange(arr);
-  }
-  const items = fullOrdered(navPrefs);
-  const ids = items.map((x) => x.id);
-
-  function move(i: number, dir: -1 | 1) {
-    const j = i + dir;
-    if (j < 0 || j >= ids.length) return;
-    const arr = ids.slice();
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-    onChange({ ...navPrefs, order: arr });
-  }
-  function toggleHide(id: PageId) {
-    const hidden = new Set(navPrefs.hidden);
-    if (hidden.has(id)) hidden.delete(id);
-    else hidden.add(id);
-    onChange({ ...navPrefs, hidden: [...hidden] });
-  }
-
   function editCat(i: number, patch: Partial<Category>) {
     onCategoriesChange(categories.map((c, j) => (j === i ? { ...c, ...patch } : c)));
   }
@@ -109,43 +75,11 @@ export function Settings({
       <div className="page-head">
         <div>
           <h1 className="page-title">설정</h1>
-          <div className="page-desc">사이드바 메뉴 순서와 표시 여부를 조정합니다. (이 기기에 저장)</div>
+          <div className="page-desc">수업 구분(카테고리)과 데이터 관리. 강사 계정은 ‘강사 관리’ 메뉴에서.</div>
         </div>
       </div>
 
       <div className="card" style={{ padding: 16 }}>
-        <div className="card-title" style={{ marginBottom: 10 }}>메뉴 순서 · 표시</div>
-        <div className="rep-list">
-          {items.map((n, i) => {
-            const locked = ALWAYS.includes(n.id);
-            const hidden = navPrefs.hidden.includes(n.id) && !locked;
-            return (
-              <div className="rep-srow" key={n.id} style={hidden ? { opacity: 0.5 } : undefined}>
-                <span className="nm">{n.label}</span>
-                {locked && <span className="badge b-gray">고정</span>}
-                <span className="att" style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <button className="rep-x" onClick={() => move(i, -1)} disabled={i === 0} title="위로" style={{ transform: "rotate(180deg)" }}>
-                    <Icon name="chev" />
-                  </button>
-                  <button className="rep-x" onClick={() => move(i, 1)} disabled={i === ids.length - 1} title="아래로">
-                    <Icon name="chev" />
-                  </button>
-                  {!locked && (
-                    <button className="btn ghost sm" onClick={() => toggleHide(n.id)}>
-                      {hidden ? "표시" : "숨기기"}
-                    </button>
-                  )}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="page-desc" style={{ marginTop: 10 }}>
-          위/아래 화살표로 순서를, ‘숨기기’로 사이드바에서 감춥니다. ‘오늘·설정’은 항상 표시됩니다.
-        </div>
-      </div>
-
-      <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
         <div className="card-title" style={{ marginBottom: 10 }}>수업 구분(카테고리)</div>
         <div className="rep-list">
           {categories.map((c, i) => (
@@ -184,28 +118,6 @@ export function Settings({
         <div className="page-desc" style={{ marginTop: 10 }}>
           구분을 바꿔도 기존 학생의 구분은 유지됩니다. 학생별 구분은 ‘학생 관리’에서 바꿔주세요.
           대시보드·시간표·리포트 색상이 여기 설정을 따릅니다.
-        </div>
-      </div>
-
-      <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
-        <div className="card-title" style={{ marginBottom: 10 }}>월말리포트 섹션 순서</div>
-        <div className="rep-list">
-          {reportOrder.map((k, i) => (
-            <div className="rep-srow" key={k}>
-              <span className="nm">{SECTION_LABELS[k]}</span>
-              <span className="att" style={{ display: "flex", gap: 6 }}>
-                <button className="rep-x" onClick={() => moveSec(i, -1)} disabled={i === 0} title="위로" style={{ transform: "rotate(180deg)" }}>
-                  <Icon name="chev" />
-                </button>
-                <button className="rep-x" onClick={() => moveSec(i, 1)} disabled={i === reportOrder.length - 1} title="아래로">
-                  <Icon name="chev" />
-                </button>
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="page-desc" style={{ marginTop: 10 }}>
-          미리보기/저장되는 리포트의 섹션 표시 순서입니다. (내용이 있는 섹션만 번호가 매겨져 표시됩니다)
         </div>
       </div>
 

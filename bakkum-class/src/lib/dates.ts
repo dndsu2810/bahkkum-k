@@ -68,3 +68,14 @@ export function mondayOf(date: Date, offsetWeeks: number): Date {
 export function uid(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
+
+/** epoch(ms) → 사람이 읽는 시각. 오늘이면 'HH:MM', 올해면 'M/D HH:MM', 그 외 'YYYY.M.D'. */
+export function fmtWhen(ts: number): string {
+  if (!ts) return "";
+  const d = new Date(ts);
+  const now = new Date();
+  const hm = `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  if (d.toDateString() === now.toDateString()) return hm;
+  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+  return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+}

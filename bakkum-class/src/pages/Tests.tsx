@@ -61,7 +61,7 @@ export function Tests() {
     <section className="page active">
       <div className="page-head">
         <div>
-          <h1 className="page-title">테스트 기록</h1>
+          <h1 className="page-title">수학 테스트 기록</h1>
           <div className="page-desc">오늘 테스트는 <TodayLink /> 화면에서, 여기선 전체 테스트 기록을 모아 보고 수정해요.</div>
         </div>
         <div className="head-actions">

@@ -1,0 +1,131 @@
+// 통합 사이드바 구성 — 로그인하면 역할별 사이드바가 바로 열린다.
+// 수학 메뉴는 [수학 수업관리] 카테고리 안으로, 영어는 [영어 수업관리]로,
+// 공통/원장 전용이 같은 사이드바에 카테고리로 함께.
+
+import type { IconName } from "../icons";
+import type { PageId } from "./nav";
+import type { AuthUser } from "./roles";
+import { areasForUser } from "./roles";
+
+/** 사이드바 항목. math는 기존 수학 페이지(store.page), hub는 허브 화면. */
+export interface WsEntry {
+  key: string;
+  label: string;
+  icon: IconName;
+  kind: "math" | "hub";
+  /** math일 때 매핑되는 수학 페이지. */
+  page?: PageId;
+}
+
+export interface WsGroup {
+  label?: string; // 카테고리 제목 (없으면 상단 무제목)
+  entries: WsEntry[];
+}
+
+/* ---- 수학 수업관리 (기존 앱 메뉴 그대로) ---- */
+const MATH: WsEntry[] = [
+  { key: "today", label: "오늘", icon: "today", kind: "math", page: "today" },
+  { key: "timetable", label: "시간표", icon: "cal", kind: "math", page: "timetable" },
+  { key: "dashboard", label: "대시보드", icon: "dashboard", kind: "math", page: "dashboard" },
+  { key: "attendance", label: "출결 기록", icon: "clipboard", kind: "math", page: "attendance" },
+  { key: "homework", label: "숙제 기록", icon: "book", kind: "math", page: "homework" },
+  { key: "progress", label: "진도 기록", icon: "chart", kind: "math", page: "progress" },
+  { key: "tests", label: "테스트 기록", icon: "cap", kind: "math", page: "tests" },
+  { key: "students", label: "학생 관리", icon: "students", kind: "math", page: "students" },
+  { key: "makeup", label: "보강 관리", icon: "refresh", kind: "math", page: "makeup" },
+  { key: "report", label: "수학 월말리포트", icon: "fileText", kind: "math", page: "report" },
+];
+
+/* ---- 영어 수업관리 (핵심부터) ---- */
+function engEntries(band: "mid" | "elem"): WsEntry[] {
+  const sfx = "_" + band;
+  return [
+    { key: "eng_today" + sfx, label: "오늘 (일일기록)", icon: "today", kind: "hub" },
+    { key: "eng_tt" + sfx, label: "시간표", icon: "cal", kind: "hub" },
+    { key: "eng_progress" + sfx, label: "진도 기록", icon: "chart", kind: "hub" },
+    { key: "eng_test" + sfx, label: "테스트 기록", icon: "cap", kind: "hub" },
+    { key: "eng_makeup" + sfx, label: "보강 관리", icon: "refresh", kind: "hub" },
+    { key: "eng_dash" + sfx, label: "대시보드", icon: "dashboard", kind: "hub" },
+  ];
+}
+
+const HOME: WsEntry = { key: "home", label: "홈", icon: "today", kind: "hub" };
+const SCHEDULE: WsEntry = { key: "schedule_hub", label: "학원 일정", icon: "calplus", kind: "hub" };
+const BOARD: WsEntry = { key: "board", label: "강사 업무 보드", icon: "board", kind: "hub" };
+const NOTES: WsEntry = { key: "notes", label: "강사 특이사항", icon: "edit", kind: "hub" };
+const WIKI: WsEntry = { key: "wiki", label: "바꿈 매뉴얼", icon: "book", kind: "hub" };
+const SNS: WsEntry = { key: "sns", label: "SNS 관리", icon: "copy", kind: "hub" };
+const MASTER: WsEntry = { key: "master", label: "학생 명단", icon: "students", kind: "hub" };
+const ENGREPORT: WsEntry = { key: "engreport", label: "영어 월말리포트", icon: "fileText", kind: "hub" };
+const ACCOUNTS: WsEntry = { key: "accounts", label: "강사 관리", icon: "users", kind: "hub" };
+const ADMIN_DASH: WsEntry = { key: "admin_dash", label: "원장 대시보드", icon: "dashboard", kind: "hub" };
+const SETTINGS: WsEntry = { key: "settings", label: "설정", icon: "gear", kind: "hub" };
+
+// 데스크 전용
+const DESK_TODAY: WsEntry = { key: "desk_today", label: "오늘", icon: "today", kind: "hub" };
+const DESK_TT: WsEntry = { key: "desk_tt", label: "전체 시간표", icon: "cal", kind: "hub" };
+const DESK_STU: WsEntry = { key: "desk_students", label: "학생 정보", icon: "students", kind: "hub" };
+const DESK_ACC: WsEntry = { key: "desk_accounts", label: "강사 계정 리스트", icon: "users", kind: "hub" };
+
+/** 역할·배정에 따라 이 사용자의 사이드바 그룹을 만든다. */
+export function sidebarFor(user: AuthUser): WsGroup[] {
+  const areas = new Set(areasForUser(user));
+  const role = user.role;
+  const groups: WsGroup[] = [];
+
+  // 상단(무제목): 홈 + 학원 일정(공용) + 업무 보드
+  const top: WsEntry[] = [HOME, SCHEDULE];
+  if (areas.has("board")) top.push(BOARD);
+  groups.push({ entries: top });
+
+  // 수학 수업관리
+  if (areas.has("math")) groups.push({ label: "수학 수업관리", entries: MATH });
+
+  // 영어 수업관리 — 영어 강사 + 원장(전체 열람). 원장은 초등·중고등 모두 본다.
+  if (role === "english_mid" || role === "admin") groups.push({ label: "영어 수업관리 — 중고등", entries: engEntries("mid") });
+  if (role === "english_elem" || role === "admin") groups.push({ label: "영어 수업관리 — 초등", entries: engEntries("elem") });
+
+  // 데스크
+  if (role === "desk") groups.push({ label: "데스크", entries: [DESK_TODAY, DESK_TT, DESK_STU, DESK_ACC] });
+
+  // 공통
+  const common: WsEntry[] = [];
+  if (areas.has("notes")) common.push(NOTES);
+  if (areas.has("wiki")) common.push(WIKI);
+  if (areas.has("sns")) common.push(SNS);
+  if (common.length) groups.push({ label: "공통", entries: common });
+
+  // 원장 전용
+  if (role === "admin") {
+    groups.push({ label: "원장 전용", entries: [ADMIN_DASH, MASTER, ENGREPORT, ACCOUNTS, SETTINGS] });
+  }
+
+  return groups;
+}
+
+/** 로그인 직후 기본 진입 항목. */
+export function defaultEntry(user: AuthUser): string {
+  if (areasForUser(user).includes("math")) return "today";
+  if (user.role === "english_mid") return "eng_today_mid";
+  if (user.role === "english_elem") return "eng_today_elem";
+  if (user.role === "desk") return "desk_today";
+  return "home";
+}
+
+/** 담당 표시 문구 — 로고 아래 한 줄. 예: "수학 · 원장". */
+export function dutyLabel(user: AuthUser): string {
+  switch (user.role) {
+    case "admin":
+      return "수학 · 원장";
+    case "math":
+      return "수학";
+    case "english_mid":
+      return "영어 중고등";
+    case "english_elem":
+      return "영어 초등";
+    case "desk":
+      return "데스크";
+    default:
+      return "";
+  }
+}

@@ -33,17 +33,40 @@ import {
   fetchScheduleItems,
   fetchClassPageMap,
   classPageIdForGrade,
+  fetchAllStudentsFull,
+  fetchClassTitleMap,
+  fetchManualPages,
+  fetchSnsPages,
 } from "./notion";
 import { NOTION_CFG } from "./notion";
 import { isHoliday, holidayName } from "../src/lib/holidays";
 import { buildBriefing, kstToday } from "./briefing";
 import { sendKakao } from "./kakao";
+import {
+  type Role,
+  type SessionUser,
+  readSession,
+  signSession,
+  sessionCookie,
+  clearCookie,
+  loginTeacher,
+  loginStudent,
+  listUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  getUserPrefs,
+  setUserPrefs,
+} from "./auth";
+import { handleHub, ensureHubTables } from "./hub";
+import { handleEng } from "./eng";
 
 const DEFAULT_APP_URL = "https://bakkum-class.dndsu2810.workers.dev";
 
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+  MEDIA?: R2Bucket; // 업로드 이미지 저장
   NOTION_TOKEN?: string;
   // 카카오워크 브리핑 봇 (Worker Secret로 주입)
   KAKAO_WEBHOOK_URL?: string; // Incoming Webhook URL (권장)
@@ -51,6 +74,9 @@ export interface Env {
   KAKAO_WORK_RECIPIENT?: string;
   BOT_SECRET?: string; // 수동 테스트 엔드포인트 보호용
   APP_URL?: string; // 메시지 안의 앱 링크 (없으면 기본값)
+  // 통합 허브 인증
+  AUTH_SECRET?: string; // 세션 쿠키 서명 키 (없으면 BOT_SECRET/기본값)
+  ADMIN_PIN?: string; // 원장(이지현) 부트스트랩 기본 PIN (없으면 기본값)
 }
 
 const TEACHER = "이지현";
@@ -63,6 +89,166 @@ export default {
     if (p.startsWith("/api/")) {
       try {
         if (p === "/api/health") return json({ ok: true });
+
+        // 업로드 이미지 서빙(공개) / 업로드(스태프)
+        if (p.startsWith("/api/media/") && request.method === "GET") {
+          if (!env.MEDIA) return new Response("no media", { status: 404 });
+          const key = decodeURIComponent(p.slice("/api/media/".length));
+          const obj = await env.MEDIA.get(key);
+          if (!obj) return new Response("not found", { status: 404 });
+          const h = new Headers();
+          obj.writeHttpMetadata(h);
+          h.set("cache-control", "public, max-age=31536000, immutable");
+          return new Response(obj.body, { headers: h });
+        }
+        if (p === "/api/upload" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
+          if (!env.MEDIA) return json({ error: "no_media" }, 500);
+          const ct = request.headers.get("content-type") || "application/octet-stream";
+          const ext = ct.includes("png") ? "png" : ct.includes("webp") ? "webp" : ct.includes("gif") ? "gif" : ct.includes("jpeg") || ct.includes("jpg") ? "jpg" : "bin";
+          const body = await request.arrayBuffer();
+          if (body.byteLength === 0) return json({ error: "empty" }, 400);
+          if (body.byteLength > 12_000_000) return json({ error: "too_large" }, 413);
+          const key = `up/${crypto.randomUUID()}.${ext}`;
+          await env.MEDIA.put(key, body, { httpMetadata: { contentType: ct } });
+          return json({ url: `/api/media/${key}` });
+        }
+
+        // ---- 통합 허브 인증 ----
+        if (p === "/api/auth/login" && request.method === "POST") return await authLogin(env, request);
+        if (p === "/api/auth/logout" && request.method === "POST") return authLogout();
+        if (p === "/api/auth/me" && request.method === "GET") {
+          const u = await readSession(env, request);
+          return u ? json({ user: u }) : json({ user: null }, 401);
+        }
+        // 계정별 화면 설정(메뉴 순서·즐겨찾기) — PC 달라도 따라오게 계정에 저장.
+        if (p === "/api/me/prefs") {
+          const me = await readSession(env, request);
+          if (!me) return json({ error: "unauthorized" }, 401);
+          if (request.method === "GET") return json({ prefs: await getUserPrefs(env, me.sub) });
+          if (request.method === "POST") {
+            const b = (await request.json().catch(() => ({}))) as { prefs?: unknown };
+            const prefs = typeof b.prefs === "string" ? b.prefs : JSON.stringify(b.prefs ?? "");
+            await setUserPrefs(env, me.sub, prefs);
+            return json({ ok: true });
+          }
+        }
+        // 강사 계정 — 조회는 학생 제외 전 스태프(이름·역할만, 담당자 지정용), 생성·수정·삭제는 원장 전용.
+        if (p === "/api/users") {
+          const me = await readSession(env, request);
+          if (request.method === "GET") {
+            if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
+            return json({ users: await listUsers(env) });
+          }
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          if (request.method === "POST") return await usersCreate(env, request);
+        }
+        if (p === "/api/users/update" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await usersUpdate(env, request);
+        }
+        if (p === "/api/users/delete" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await usersDelete(env, request);
+        }
+
+        // ---- 공통 학생 마스터 (수학·영어 공유) ----
+        if (p === "/api/roster" && request.method === "GET") {
+          const me = await readSession(env, request);
+          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
+          return json({ students: await readRoster(env) });
+        }
+        if (p === "/api/roster/meta" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await rosterMetaUpsert(env, request);
+        }
+        if (p === "/api/roster/core" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await rosterCoreUpdate(env, request);
+        }
+        if (p === "/api/roster/slots" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await rosterSlotsUpdate(env, request);
+        }
+        // 원장 대시보드 — 등록 현황·지각결석·특이사항 집계(원장 전용).
+        if (p === "/api/admin/overview" && request.method === "GET") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await adminOverview(env, url);
+        }
+        if (p === "/api/admin/student" && request.method === "GET") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await adminStudentReport(env, url);
+        }
+        // 데스크 오늘 — 오늘 등원·지각(학생 제외 전 스태프).
+        if (p === "/api/today" && request.method === "GET") {
+          const me = await readSession(env, request);
+          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
+          return await todayAttendance(env);
+        }
+        // 노션 → 앱: 전체 재원 학생 동기화(수업 선택으로 과목 구분, 원장 전용, ?dry=1 미리보기)
+        if (p === "/api/sync/roster") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await syncRoster(env, url);
+        }
+        // 시간표: 통합 조회(스태프) / 일괄 등록(원장)
+        if (p === "/api/timetable" && request.method === "GET") {
+          const me = await readSession(env, request);
+          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
+          return json({ lessons: await readTimetable(env) });
+        }
+        if (p === "/api/sync/timetable" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await writeTimetable(env, request);
+        }
+        // 노션 → 앱: 바꿈 매뉴얼 → 위키 / SNS(블로그) → SNS 관리 (원장 전용)
+        if (p === "/api/sync/wiki") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await importWiki(env);
+        }
+        if (p === "/api/sync/sns") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await importSns(env);
+        }
+        if (p === "/api/sync/events") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await importEvents(env, request);
+        }
+        if (p === "/api/sync/eng-timetable" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await importEngTimetable(env, request);
+        }
+
+        // ---- 허브 공유 영역(특이사항·위키·SNS·업무보드) ----
+        if (p.startsWith("/api/notes") || p.startsWith("/api/wiki") || p.startsWith("/api/sns") || p.startsWith("/api/tasks") || p.startsWith("/api/events")) {
+          const me = await readSession(env, request);
+          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
+          const res = await handleHub(env, request, p, me);
+          if (res) return res;
+        }
+
+        // ---- 영어(신규) — 원장·영어 강사만 ----
+        if (p.startsWith("/api/eng/")) {
+          const me = await readSession(env, request);
+          if (!me || (me.role !== "admin" && me.role !== "english_mid" && me.role !== "english_elem"))
+            return json({ error: "forbidden" }, 403);
+          const res = await handleEng(env, request, p, me);
+          if (res) return res;
+        }
+
         if (p === "/api/data" && request.method === "GET") return json(await readSnapshot(env));
         if (p === "/api/data" && request.method === "PUT") return await putData(env, request);
         if (p === "/api/students" && request.method === "POST") return await postStudents(env, request);
@@ -137,6 +323,848 @@ async function runBriefing(env: Env, slot: "noon" | "night", send: boolean) {
   if (send && !b.hasClass) return { slot, date, hasClass: false, sent: false, reason: "no_class_today", text };
   const result = send ? await sendKakao(env, text, button) : { sent: false, reason: "dry_run" };
   return { slot, date, hasClass: b.hasClass, holiday: b.holiday, ...result, text };
+}
+
+/* ---------------- 인증 핸들러 ---------------- */
+async function authLogin(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json().catch(() => ({}))) as {
+    kind?: "teacher" | "student";
+    name?: string;
+    pin?: string;
+    birth?: string;
+  };
+  const name = (b.name || "").trim();
+  if (!name) return json({ error: "name_required" }, 400);
+  let user: SessionUser | null = null;
+  if (b.kind === "student") {
+    user = await loginStudent(env, name, b.birth || "");
+  } else {
+    user = await loginTeacher(env, name, b.pin || "");
+  }
+  if (!user) return json({ error: "invalid_credentials" }, 401);
+  const token = await signSession(env, user);
+  return new Response(JSON.stringify({ user }), {
+    status: 200,
+    headers: { "content-type": "application/json; charset=utf-8", "set-cookie": sessionCookie(token) },
+  });
+}
+
+function authLogout(): Response {
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: { "content-type": "application/json; charset=utf-8", "set-cookie": clearCookie() },
+  });
+}
+
+const VALID_ROLES: Role[] = ["admin", "math", "english_mid", "english_elem", "desk"];
+
+async function usersCreate(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json().catch(() => ({}))) as {
+    name?: string;
+    role?: Role;
+    scope?: string[];
+    pin?: string;
+  };
+  const name = (b.name || "").trim();
+  const role = (b.role && VALID_ROLES.includes(b.role) ? b.role : "math") as Role;
+  const pin = (b.pin || "").trim();
+  if (!name) return json({ error: "name_required" }, 400);
+  if (!/^\d{4,}$/.test(pin)) return json({ error: "pin_min_4_digits" }, 400);
+  const user = await createUser(env, { name, role, scope: b.scope || defaultScope(role), pin });
+  return json({ user });
+}
+
+async function usersUpdate(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json().catch(() => ({}))) as {
+    id?: string;
+    name?: string;
+    role?: Role;
+    scope?: string[];
+    pin?: string;
+  };
+  if (!b.id) return json({ error: "id_required" }, 400);
+  if (b.pin != null && b.pin !== "" && !/^\d{4,}$/.test(b.pin)) return json({ error: "pin_min_4_digits" }, 400);
+  if (b.role != null && !VALID_ROLES.includes(b.role)) return json({ error: "bad_role" }, 400);
+  await updateUser(env, b.id, { name: b.name, role: b.role, scope: b.scope, pin: b.pin });
+  return json({ ok: true });
+}
+
+async function usersDelete(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json().catch(() => ({}))) as { id?: string };
+  if (!b.id) return json({ error: "id_required" }, 400);
+  try {
+    await deleteUser(env, b.id);
+  } catch (e) {
+    if (String(e).includes("last_admin")) return json({ error: "last_admin" }, 400);
+    throw e;
+  }
+  return json({ ok: true });
+}
+
+/* ---------------- 공통 학생 마스터 ----------------
+   기존 students 로스터(노션·모각공 공유)는 그대로 두고, 허브 전용 필드
+   (온라인ID·수강과목·영어반)는 별도 class_student_meta에 보관(추가전용). */
+async function ensureStudentMeta(env: Env): Promise<void> {
+  try {
+    await env.DB
+      .prepare(
+        "CREATE TABLE IF NOT EXISTS class_student_meta (student_id TEXT PRIMARY KEY, online_id TEXT NOT NULL DEFAULT '', subjects TEXT NOT NULL DEFAULT '', english_band TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL DEFAULT 0)"
+      )
+      .run();
+  } catch {
+    /* ignore */
+  }
+  // 허브 전용 추가 필드 — 등원요일(JSON 배열)·메모(특이사항 누적). 추가전용 ALTER(이미 있으면 무시).
+  for (const col of [
+    "ALTER TABLE class_student_meta ADD COLUMN attend_days TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_student_meta ADD COLUMN memo TEXT NOT NULL DEFAULT ''",
+  ]) {
+    try {
+      await env.DB.prepare(col).run();
+    } catch {
+      /* 이미 있으면 무시 */
+    }
+  }
+}
+
+interface RosterStudent {
+  id: string;
+  name: string;
+  grade: string;
+  status: string;
+  school: string;
+  birthdate: string;
+  parentPhone: string;
+  studentPhone: string;
+  startDate: string;
+  onlineId: string;
+  subjects: string[]; // ["math","english"]
+  englishBand: string; // "elem" | "mid" | ""
+  attendDays: string[]; // 등원요일 ["월","수","금"]
+  memo: string; // 메모/특이사항(누적 자유 입력)
+  mathSlots: Slot[]; // 수학 수업 요일·시간 (class_lessons 공유 — 수학 앱과 양방향)
+  engSlots: Slot[]; // 영어 수업 요일·시간 (class_eng_lessons)
+}
+interface Slot {
+  day: string;
+  time: string;
+  duration: number;
+}
+
+async function readRoster(env: Env): Promise<RosterStudent[]> {
+  await ensureStudentMeta(env);
+  const rosterRes = await env.DB
+    .prepare(
+      "SELECT id,name,grade,status,school,birth_date,parent_phone,student_phone,start_date FROM students WHERE hidden IS NULL OR hidden = 0 ORDER BY name"
+    )
+    .all<Record<string, unknown>>();
+
+  const metaMap: Record<string, { online_id: string; subjects: string; english_band: string; attend_days?: string; memo?: string }> = {};
+  try {
+    const m = await env.DB
+      .prepare("SELECT student_id, online_id, subjects, english_band, attend_days, memo FROM class_student_meta")
+      .all<{ student_id: string; online_id: string; subjects: string; english_band: string; attend_days: string; memo: string }>();
+    for (const r of m.results || []) metaMap[String(r.student_id)] = r;
+  } catch {
+    /* meta 없으면 기본값 */
+  }
+
+  // 과목별 수업 슬롯 — 수학(class_lessons, 수학 앱과 공유)·영어(class_eng_lessons).
+  await ensureEngLessons(env);
+  const mathSlotMap: Record<string, Slot[]> = {};
+  const engSlotMap: Record<string, Slot[]> = {};
+  try {
+    const ml = await env.DB.prepare("SELECT student_id, day, time, duration FROM class_lessons ORDER BY sort_order").all<{ student_id: string; day: string; time: string; duration: number }>();
+    for (const r of ml.results || []) (mathSlotMap[String(r.student_id)] ||= []).push({ day: String(r.day), time: String(r.time), duration: Number(r.duration) });
+  } catch {
+    /* ignore */
+  }
+  try {
+    const el = await env.DB.prepare("SELECT student_id, day, time, duration FROM class_eng_lessons").all<{ student_id: string; day: string; time: string; duration: number }>();
+    for (const r of el.results || []) (engSlotMap[String(r.student_id)] ||= []).push({ day: String(r.day), time: String(r.time), duration: Number(r.duration) });
+  } catch {
+    /* ignore */
+  }
+
+  return (rosterRes.results || []).map((r) => {
+    const id = String(r.id);
+    const meta = metaMap[id];
+    let subjects: string[] = ["math"]; // 현재 로스터는 수학 기준 — 원장이 영어 추가
+    if (meta) {
+      try {
+        const s = JSON.parse(meta.subjects || "[]");
+        if (Array.isArray(s)) subjects = s.map(String);
+      } catch {
+        /* ignore */
+      }
+    }
+    return {
+      id,
+      name: String(r.name ?? ""),
+      grade: String(r.grade ?? ""),
+      status: String(r.status ?? "재원"),
+      school: String(r.school ?? ""),
+      birthdate: String(r.birth_date ?? ""),
+      parentPhone: String(r.parent_phone ?? ""),
+      studentPhone: String(r.student_phone ?? ""),
+      startDate: String(r.start_date ?? ""),
+      onlineId: meta?.online_id || "",
+      subjects,
+      englishBand: meta?.english_band || "",
+      attendDays: parseStrArr(meta?.attend_days),
+      memo: meta?.memo || "",
+      mathSlots: mathSlotMap[id] || [],
+      engSlots: engSlotMap[id] || [],
+    };
+  });
+}
+
+function parseStrArr(s: unknown): string[] {
+  try {
+    const v = JSON.parse(String(s ?? "[]"));
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+const DOW = ["월", "화", "수", "목", "금", "토", "일"];
+async function rosterMetaUpsert(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json().catch(() => ({}))) as {
+    studentId?: string;
+    onlineId?: string;
+    subjects?: string[];
+    englishBand?: string;
+    attendDays?: string[];
+    memo?: string;
+  };
+  const sid = String(b.studentId || "");
+  if (!sid) return json({ error: "studentId_required" }, 400);
+  await ensureStudentMeta(env);
+  const subjects = Array.isArray(b.subjects) ? b.subjects.map(String).filter((s) => s === "math" || s === "english") : [];
+  const band = b.englishBand === "elem" || b.englishBand === "mid" ? b.englishBand : "";
+  const onlineId = typeof b.onlineId === "string" ? b.onlineId.slice(0, 120) : "";
+  const attendDays = Array.isArray(b.attendDays) ? b.attendDays.map(String).filter((d) => DOW.includes(d)) : [];
+  const memo = typeof b.memo === "string" ? b.memo.slice(0, 4000) : "";
+  await env.DB
+    .prepare(
+      "INSERT INTO class_student_meta(student_id,online_id,subjects,english_band,attend_days,memo,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(student_id) DO UPDATE SET online_id=excluded.online_id, subjects=excluded.subjects, english_band=excluded.english_band, attend_days=excluded.attend_days, memo=excluded.memo, updated_at=excluded.updated_at"
+    )
+    .bind(sid, onlineId, JSON.stringify(subjects), band, JSON.stringify(attendDays), memo, Date.now())
+    .run();
+  return json({ ok: true });
+}
+
+/* 프로필 편집 — 공통 학생 핵심 필드(학교·학년·상태·생년월일·연락처·등록일)를 students에
+   기록하고, 수정한 필드를 class_student_overrides에 '앱 소유'로 표시(노션 동기화가 안 덮어씀).
+   수학 인라인 수정과 같은 메커니즘을 공유한다. 원장 전용. */
+async function rosterCoreUpdate(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json().catch(() => ({}))) as {
+    studentId?: string;
+    grade?: string;
+    status?: string;
+    school?: string;
+    birthdate?: string;
+    parentPhone?: string;
+    studentPhone?: string;
+    startDate?: string;
+  };
+  const sid = String(b.studentId || "");
+  if (!sid || !/^\d+$/.test(sid)) return json({ error: "studentId_required" }, 400);
+  const str = (v: unknown, n = 200) => (typeof v === "string" ? v.slice(0, n) : "");
+  const grade = str(b.grade, 20);
+  const status = str(b.status, 20) || "재원";
+  const school = str(b.school);
+  const birth = str(b.birthdate, 20);
+  const pPhone = str(b.parentPhone, 40);
+  const sPhone = str(b.studentPhone, 40);
+  const start = str(b.startDate, 20);
+  try {
+    await env.DB
+      .prepare(
+        "UPDATE students SET grade=?,status=?,school=?,birth_date=?,parent_phone=?,student_phone=?,start_date=? WHERE id=?"
+      )
+      .bind(grade, status, school, birth, pPhone, sPhone, start, Number(sid))
+      .run();
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+  // 수정한 필드를 '앱 소유'로 표시 — 노션 동기화가 이 값들을 덮어쓰지 않도록.
+  try {
+    await env.DB
+      .prepare("CREATE TABLE IF NOT EXISTS class_student_overrides (student_id TEXT PRIMARY KEY, fields TEXT NOT NULL DEFAULT '[]')")
+      .run();
+    const row = await env.DB.prepare("SELECT fields FROM class_student_overrides WHERE student_id=?").bind(sid).first<{ fields: string }>();
+    const cur = new Set<string>();
+    try {
+      for (const f of JSON.parse(String(row?.fields ?? "[]"))) cur.add(String(f));
+    } catch {
+      /* ignore */
+    }
+    ["grade", "status", "school", "birthdate", "parentPhone", "studentPhone", "startDate"].forEach((f) => cur.add(f));
+    await env.DB
+      .prepare("INSERT INTO class_student_overrides(student_id,fields) VALUES(?,?) ON CONFLICT(student_id) DO UPDATE SET fields=excluded.fields")
+      .bind(sid, JSON.stringify([...cur]))
+      .run();
+  } catch {
+    /* overrides 실패해도 본 저장은 유지 */
+  }
+  return json({ ok: true });
+}
+
+/* 학생 1명의 과목별 수업 슬롯(요일·시간·수업시간)을 교체 저장.
+   수학은 class_lessons(수학 앱과 공유), 영어는 class_eng_lessons. 원장 전용.
+   수학 슬롯은 수학 앱의 시간표·학생관리와 같은 테이블이라 양방향 반영된다.
+   (다버전 시간표 이력이 있는 학생은 수학 앱에서 수정 권장 — 주석 참고) */
+async function rosterSlotsUpdate(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json().catch(() => ({}))) as {
+    studentId?: string;
+    math?: { day?: string; time?: string; duration?: number }[];
+    english?: { day?: string; time?: string; duration?: number }[];
+  };
+  const sid = String(b.studentId || "");
+  if (!sid || !/^\d+$/.test(sid)) return json({ error: "studentId_required" }, 400);
+  await ensureEngLessons(env);
+  const clean = (arr: unknown): Slot[] =>
+    (Array.isArray(arr) ? arr : [])
+      .map((l) => {
+        const o = (l || {}) as { day?: string; time?: string; duration?: number };
+        return { day: String(o.day || ""), time: String(o.time || ""), duration: Number(o.duration) || 0 };
+      })
+      .filter((l) => DOW.includes(l.day) && /^\d{1,2}:\d{2}$/.test(l.time));
+  const math = clean(b.math);
+  const eng = clean(b.english);
+  const stmts: D1PreparedStatement[] = [];
+  stmts.push(env.DB.prepare("DELETE FROM class_lessons WHERE student_id=?").bind(sid));
+  math.forEach((l, i) =>
+    stmts.push(
+      env.DB.prepare("INSERT INTO class_lessons(id,student_id,day,time,duration,sort_order) VALUES(?,?,?,?,?,?)").bind(`${sid}-${i}`, sid, l.day, l.time, l.duration, i)
+    )
+  );
+  stmts.push(env.DB.prepare("DELETE FROM class_eng_lessons WHERE student_id=?").bind(sid));
+  eng.forEach((l, i) =>
+    stmts.push(
+      env.DB.prepare("INSERT INTO class_eng_lessons(id,student_id,day,time,duration) VALUES(?,?,?,?,?)").bind(`${sid}-e${i}`, sid, l.day, l.time, l.duration)
+    )
+  );
+  try {
+    await env.DB.batch(stmts);
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+  return json({ ok: true });
+}
+
+/* ---------------- 원장 대시보드 · 데스크 오늘 집계 ---------------- */
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+async function rowsRecent<T>(env: Env, sql: string, id: string, map: (r: Record<string, unknown>) => T): Promise<T[]> {
+  try {
+    const r = await env.DB.prepare(sql).bind(id).all<Record<string, unknown>>();
+    return (r.results || []).map(map);
+  } catch {
+    return [];
+  }
+}
+
+async function adminOverview(env: Env, url: URL): Promise<Response> {
+  await ensureHubTables(env);
+  const now = new Date();
+  const month = url.searchParams.get("month") || `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;
+  const [yy, mm] = month.split("-").map(Number);
+  const lmD = new Date(Date.UTC(yy, mm - 2, 1));
+  const lastMonth = `${lmD.getUTCFullYear()}-${pad2(lmD.getUTCMonth() + 1)}`;
+
+  const roster = await readRoster(env);
+  const nameOf: Record<string, string> = {};
+  for (const s of roster) nameOf[s.id] = s.name;
+  const enrolled = roster.filter((s) => !s.status || s.status === "재원");
+  const has = (s: RosterStudent, x: string) => s.subjects.includes(x);
+  const summary = {
+    total: enrolled.length,
+    math: enrolled.filter((s) => has(s, "math")).length,
+    eng: enrolled.filter((s) => has(s, "english")).length,
+    elem: enrolled.filter((s) => has(s, "english") && s.englishBand === "elem").length,
+    mid: enrolled.filter((s) => has(s, "english") && s.englishBand === "mid").length,
+  };
+  const newThis = roster.filter((s) => (s.startDate || "").startsWith(month)).length;
+  const newLast = roster.filter((s) => (s.startDate || "").startsWith(lastMonth)).length;
+
+  let late = 0;
+  let absent = 0;
+  const per: Record<string, { late: number; absent: number }> = {};
+  try {
+    const aRes = await env.DB.prepare("SELECT att_key,status FROM class_attendance WHERE att_key LIKE ?").bind(month + "%").all<Record<string, unknown>>();
+    for (const r of aRes.results || []) {
+      const sid = String(r.att_key).split("|")[1];
+      const st = String(r.status);
+      if (st === "지각") { late++; (per[sid] ||= { late: 0, absent: 0 }).late++; }
+      else if (st === "결석") { absent++; (per[sid] ||= { late: 0, absent: 0 }).absent++; }
+    }
+  } catch {
+    /* ignore */
+  }
+  const perStudent = Object.keys(per)
+    .filter((sid) => nameOf[sid])
+    .map((sid) => ({ id: sid, name: nameOf[sid], late: per[sid].late, absent: per[sid].absent }))
+    .sort((a, b) => b.late + b.absent - (a.late + a.absent));
+
+  let notes: unknown[] = [];
+  try {
+    const nRes = await env.DB.prepare("SELECT * FROM class_notes ORDER BY created_at DESC LIMIT 15").all<Record<string, unknown>>();
+    notes = (nRes.results || []).map((r) => ({
+      studentId: String(r.student_id),
+      studentName: nameOf[String(r.student_id)] || "",
+      author: String(r.author_name || ""),
+      body: String(r.body || ""),
+      createdAt: Number(r.created_at || 0),
+    }));
+  } catch {
+    /* ignore */
+  }
+
+  return json({
+    month,
+    lastMonth,
+    summary,
+    newThis,
+    newLast,
+    late,
+    absent,
+    perStudent,
+    notes,
+    students: roster.map((s) => ({ id: s.id, name: s.name, grade: s.grade, status: s.status, subjects: s.subjects, englishBand: s.englishBand })),
+  });
+}
+
+async function adminStudentReport(env: Env, url: URL): Promise<Response> {
+  const id = url.searchParams.get("id") || "";
+  if (!id) return json({ error: "id_required" }, 400);
+  const now = new Date();
+  const month = url.searchParams.get("month") || `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;
+  const roster = await readRoster(env);
+  const stu = roster.find((s) => s.id === id);
+
+  let mPresent = 0, mLate = 0, mAbsent = 0;
+  try {
+    const aRes = await env.DB.prepare("SELECT att_key,status FROM class_attendance WHERE att_key LIKE ?").bind(month + "%").all<Record<string, unknown>>();
+    for (const r of aRes.results || []) {
+      if (String(r.att_key).split("|")[1] !== id) continue;
+      const st = String(r.status);
+      if (st === "지각") mLate++;
+      else if (st === "결석") mAbsent++;
+      else mPresent++;
+    }
+  } catch {
+    /* ignore */
+  }
+  let mathHw = 0;
+  try {
+    const r = await env.DB.prepare("SELECT COUNT(*) AS n FROM class_homework WHERE student_id=? AND date LIKE ?").bind(id, month + "%").first<{ n: number }>();
+    mathHw = Number(r?.n || 0);
+  } catch {
+    /* ignore */
+  }
+  const mathTests = await rowsRecent(env, "SELECT * FROM class_tests WHERE student_id=? ORDER BY date DESC LIMIT 5", id, (r) => ({ date: String(r.date ?? ""), type: String(r.type ?? ""), score: Number(r.score ?? 0), status: String(r.status ?? "") }));
+  const mathProg = await rowsRecent(env, "SELECT * FROM class_progress WHERE student_id=? ORDER BY date DESC LIMIT 5", id, (r) => ({ date: String(r.date ?? ""), unit: String(r.unit ?? ""), area: String(r.area ?? ""), pct: Number(r.pct ?? 0) }));
+
+  let engAttend = 0, engHw = 0;
+  const engComments: { date: string; comment: string }[] = [];
+  try {
+    const eRes = await env.DB.prepare("SELECT * FROM class_eng_daily WHERE student_id=? AND date LIKE ? ORDER BY date DESC").bind(id, month + "%").all<Record<string, unknown>>();
+    for (const r of eRes.results || []) {
+      if (Number(r.attended) === 1) engAttend++;
+      if (Number(r.hw_checked) === 1) engHw++;
+      if (r.comment) engComments.push({ date: String(r.date), comment: String(r.comment) });
+    }
+  } catch {
+    /* ignore */
+  }
+  const engTests = await rowsRecent(env, "SELECT * FROM class_eng_test WHERE student_id=? ORDER BY date DESC LIMIT 5", id, (r) => ({ date: String(r.date ?? ""), name: String(r.name ?? ""), score: Number(r.score ?? 0), total: Number(r.total ?? 100) }));
+  const engProg = await rowsRecent(env, "SELECT * FROM class_eng_progress WHERE student_id=? ORDER BY updated_at DESC LIMIT 5", id, (r) => ({ book: String(r.book ?? ""), level: String(r.level ?? ""), status: String(r.status ?? "") }));
+  const notes = await rowsRecent(env, "SELECT * FROM class_notes WHERE student_id=? ORDER BY created_at DESC LIMIT 10", id, (r) => ({ author: String(r.author_name ?? ""), body: String(r.body ?? ""), createdAt: Number(r.created_at ?? 0) }));
+
+  return json({
+    id,
+    month,
+    student: stu ? { name: stu.name, grade: stu.grade, school: stu.school, status: stu.status, subjects: stu.subjects, englishBand: stu.englishBand } : null,
+    math: { present: mPresent, late: mLate, absent: mAbsent, homework: mathHw, tests: mathTests, progress: mathProg },
+    english: { attended: engAttend, hwChecked: engHw, comments: engComments.slice(0, 5), tests: engTests, progress: engProg },
+    notes,
+  });
+}
+
+async function todayAttendance(env: Env): Promise<Response> {
+  const now = new Date();
+  const date = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  const roster = await readRoster(env);
+  const nameOf: Record<string, string> = {};
+  const gradeOf: Record<string, string> = {};
+  for (const s of roster) { nameOf[s.id] = s.name; gradeOf[s.id] = s.grade; }
+  const records: { name: string; grade: string; subject: string; status: string; late: number; time: string }[] = [];
+  try {
+    const aRes = await env.DB.prepare("SELECT att_key,status,late_minutes FROM class_attendance WHERE att_key LIKE ?").bind(date + "%").all<Record<string, unknown>>();
+    for (const r of aRes.results || []) {
+      const parts = String(r.att_key).split("|");
+      const sid = parts[1];
+      if (!nameOf[sid]) continue;
+      records.push({ name: nameOf[sid], grade: gradeOf[sid] || "", subject: "math", status: String(r.status), late: r.late_minutes ? Number(r.late_minutes) : 0, time: parts[2] || "" });
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const eRes = await env.DB.prepare("SELECT student_id,attended FROM class_eng_daily WHERE date=?").bind(date).all<Record<string, unknown>>();
+    for (const r of eRes.results || []) {
+      const sid = String(r.student_id);
+      if (!nameOf[sid] || Number(r.attended) !== 1) continue;
+      records.push({ name: nameOf[sid], grade: gradeOf[sid] || "", subject: "english", status: "등원", late: 0, time: "" });
+    }
+  } catch {
+    /* ignore */
+  }
+  return json({ date, records });
+}
+
+/* 노션 → 앱 전체 학생 동기화. '수업 선택'(연결된 수업 제목)으로 과목을 구분한다:
+   제목에 '수학'→math, '영어'→english. 영어 반은 제목의 '초등'/'중고등'(없으면 학년).
+   앱에 없는 재원 학생은 students에 추가(공통 로스터). 과목·영어반·온라인ID는
+   class_student_meta에 기록. ?dry=1이면 미반영 미리보기만. */
+function gradeFromTitles(titles: string[]): string {
+  return titles.some((t) => t.includes("초등")) ? "초등" : "중등";
+}
+function bandFrom(engTitles: string[], grade: string): string {
+  if (engTitles.some((t) => t.includes("초등"))) return "elem";
+  if (engTitles.some((t) => t.includes("중") || t.includes("고"))) return "mid";
+  return grade === "초등" ? "elem" : "mid";
+}
+async function syncRoster(env: Env, url: URL): Promise<Response> {
+  const dry = url.searchParams.get("dry") === "1";
+  await ensureStudentMeta(env);
+  let students, classMap: Record<string, string>;
+  try {
+    [students, classMap] = await Promise.all([fetchAllStudentsFull(env), fetchClassTitleMap(env)]);
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+  if (Object.keys(classMap).length === 0)
+    return json({ error: "수업(과목) DB를 읽지 못했습니다. 노션 연동에 수업 DB 공유가 필요합니다." }, 400);
+
+  // 기존 D1 학생: notion_page_id → {id, grade}
+  const rows = await env.DB
+    .prepare("SELECT id, grade, notion_page_id FROM students WHERE (hidden IS NULL OR hidden=0)")
+    .all<{ id: number; grade: string; notion_page_id: string | null }>();
+  const byPage: Record<string, { id: string; grade: string }> = {};
+  for (const r of rows.results || [])
+    if (r.notion_page_id) byPage[String(r.notion_page_id)] = { id: String(r.id), grade: String(r.grade || "") };
+
+  const classCount: Record<string, number> = {};
+  let inserted = 0;
+  let mathN = 0;
+  let engN = 0;
+  let bothN = 0;
+  const engSample: string[] = [];
+  const noClass: string[] = [];
+
+  for (const s of students) {
+    const titles = s.classIds.map((id) => classMap[id]).filter(Boolean);
+    for (const t of titles) classCount[t] = (classCount[t] || 0) + 1;
+    const hasMath = titles.some((t) => t.includes("수학"));
+    const hasEng = titles.some((t) => t.includes("영어"));
+    const engTitles = titles.filter((t) => t.includes("영어"));
+    // 수업 연결이 전혀 없는 페이지(템플릿·미배정)는 건너뛴다.
+    if (!hasMath && !hasEng) {
+      noClass.push(s.name);
+      continue;
+    }
+    const subjects = [...(hasMath ? ["math"] : []), ...(hasEng ? ["english"] : [])];
+    const existing = byPage[s.notionPageId];
+    const grade = existing?.grade || gradeFromTitles(titles);
+    const band = hasEng ? bandFrom(engTitles, grade) : "";
+
+    if (hasMath && hasEng) bothN++;
+    else if (hasMath) mathN++;
+    else if (hasEng) engN++;
+    if (hasEng && engSample.length < 80) engSample.push(`${s.name}(${band === "elem" ? "초등" : "중고등"})`);
+
+    if (!dry) {
+      let sid = existing?.id;
+      if (!sid) {
+        // 앱에 없는 재원 학생 추가(공통 로스터). 추가전용 — 기존 데이터 무영향.
+        const ins = await env.DB
+          .prepare(
+            "INSERT INTO students(name,grade,status,school,birth_date,parent_phone,student_phone,start_date,notion_page_id) VALUES(?,?,?,?,?,?,?,?,?) RETURNING id"
+          )
+          .bind(s.name, grade, "재원", s.school, s.birth, s.parentPhone, s.studentPhone, s.start, s.notionPageId)
+          .first<{ id: number }>();
+        sid = String(ins!.id);
+        inserted++;
+      }
+      await env.DB
+        .prepare(
+          "INSERT INTO class_student_meta(student_id,online_id,subjects,english_band,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(student_id) DO UPDATE SET online_id=excluded.online_id, subjects=excluded.subjects, english_band=excluded.english_band, updated_at=excluded.updated_at"
+        )
+        .bind(sid, s.onlineId.trim(), JSON.stringify(subjects), band, Date.now())
+        .run();
+    } else if (!existing) {
+      inserted++; // dry: 추가 예정 수
+    }
+  }
+
+  return json({
+    dry,
+    applied: !dry,
+    notionStudents: students.length,
+    classKinds: classCount, // 발견된 수업 제목별 인원 (확인용)
+    willInsert: inserted,
+    mathOnly: mathN,
+    englishOnly: engN,
+    both: bothN,
+    noClassCount: noClass.length,
+    noClass: noClass.slice(0, 40),
+    englishSample: engSample,
+  });
+}
+
+/* ---------------- 시간표 (수학=class_lessons / 영어=class_eng_lessons) ---------------- */
+async function ensureEngLessons(env: Env): Promise<void> {
+  try {
+    await env.DB
+      .prepare(
+        "CREATE TABLE IF NOT EXISTS class_eng_lessons (id TEXT PRIMARY KEY, student_id TEXT NOT NULL, day TEXT NOT NULL, time TEXT NOT NULL, duration INTEGER NOT NULL DEFAULT 0)"
+      )
+      .run();
+  } catch {
+    /* ignore */
+  }
+}
+
+interface TtLesson {
+  studentId: string;
+  name: string;
+  subject: "math" | "english";
+  day: string;
+  time: string;
+  duration: number;
+}
+async function readTimetable(env: Env): Promise<TtLesson[]> {
+  await ensureEngLessons(env);
+  const nameRows = await env.DB.prepare("SELECT id, name FROM students WHERE hidden IS NULL OR hidden = 0").all<{ id: number; name: string }>();
+  const nameOf: Record<string, string> = {};
+  for (const r of nameRows.results || []) nameOf[String(r.id)] = String(r.name);
+  const out: TtLesson[] = [];
+  const m = await env.DB.prepare("SELECT student_id, day, time, duration FROM class_lessons").all<{ student_id: string; day: string; time: string; duration: number }>();
+  for (const r of m.results || [])
+    if (nameOf[String(r.student_id)]) out.push({ studentId: String(r.student_id), name: nameOf[String(r.student_id)], subject: "math", day: String(r.day), time: String(r.time), duration: Number(r.duration) });
+  try {
+    const e = await env.DB.prepare("SELECT student_id, day, time, duration FROM class_eng_lessons").all<{ student_id: string; day: string; time: string; duration: number }>();
+    for (const r of e.results || [])
+      if (nameOf[String(r.student_id)]) out.push({ studentId: String(r.student_id), name: nameOf[String(r.student_id)], subject: "english", day: String(r.day), time: String(r.time), duration: Number(r.duration) });
+  } catch {
+    /* eng_lessons 없으면 수학만 */
+  }
+  return out;
+}
+
+async function writeTimetable(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json().catch(() => ({}))) as {
+    math?: { studentId: string; day: string; time: string; duration: number }[];
+    english?: { studentId: string; day: string; time: string; duration: number }[];
+  };
+  await ensureEngLessons(env);
+  const math = (b.math || []).filter((l) => l.studentId && l.day && l.time);
+  const eng = (b.english || []).filter((l) => l.studentId && l.day && l.time);
+  const mathIds = [...new Set(math.map((l) => l.studentId))];
+  const engIds = [...new Set(eng.map((l) => l.studentId))];
+
+  const stmts: D1PreparedStatement[] = [];
+  // 페이로드에 등장한 학생의 기존 시간표를 지우고 새로 넣는다(교체).
+  for (const id of mathIds) stmts.push(env.DB.prepare("DELETE FROM class_lessons WHERE student_id=?").bind(id));
+  for (const id of engIds) stmts.push(env.DB.prepare("DELETE FROM class_eng_lessons WHERE student_id=?").bind(id));
+  const idx: Record<string, number> = {};
+  for (const l of math) {
+    const i = (idx[l.studentId] = (idx[l.studentId] ?? -1) + 1);
+    stmts.push(
+      env.DB
+        .prepare("INSERT INTO class_lessons(id,student_id,day,time,duration,sort_order) VALUES(?,?,?,?,?,?)")
+        .bind(`${l.studentId}-tt${i}`, l.studentId, l.day, l.time, l.duration || 0, i)
+    );
+  }
+  const eidx: Record<string, number> = {};
+  for (const l of eng) {
+    const i = (eidx[l.studentId] = (eidx[l.studentId] ?? -1) + 1);
+    stmts.push(
+      env.DB
+        .prepare("INSERT INTO class_eng_lessons(id,student_id,day,time,duration) VALUES(?,?,?,?,?)")
+        .bind(`${l.studentId}-e${i}`, l.studentId, l.day, l.time, l.duration || 0)
+    );
+  }
+  await runChunked(env, stmts);
+  return json({ ok: true, mathLessons: math.length, engLessons: eng.length, mathStudents: mathIds.length, engStudents: engIds.length });
+}
+
+/* ---------------- 노션 매뉴얼/SNS 가져오기 ---------------- */
+function mapImportance(s: string): number {
+  if (s.includes("핵심")) return 4;
+  if (s.includes("매우")) return 3;
+  if (s.includes("높음")) return 3;
+  if (s.includes("보통")) return 2;
+  if (s.includes("낮음")) return 1;
+  return 2;
+}
+function mapWikiStatus(s: string): string {
+  if (s.includes("최신")) return "current";
+  if (s.includes("업데이트")) return "outdated";
+  if (s.includes("검토")) return "review";
+  if (s.includes("작성")) return "writing";
+  return "draft";
+}
+function mapSnsStatus(s: string): string {
+  if (s.includes("완료")) return "done";
+  if (s.includes("중지")) return "stop";
+  if (s.includes("수정")) return "edit";
+  return "wait";
+}
+let importSeq = 0;
+async function importWiki(env: Env): Promise<Response> {
+  await ensureHubTables(env);
+  let pages;
+  try {
+    pages = await fetchManualPages(env);
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+  // 매뉴얼은 노션 미러 — 전체 교체(임시로 들어온 기존분 포함 정리).
+  await env.DB.prepare("DELETE FROM class_wiki").run();
+  const stmts: D1PreparedStatement[] = [];
+  for (const p of pages) {
+    stmts.push(
+      env.DB
+        .prepare("INSERT INTO class_wiki(id,title,body,importance,status,updated_by,updated_at,src) VALUES(?,?,?,?,?,?,?,?)")
+        .bind(`w_${Date.now().toString(36)}${importSeq++}`, p.title, p.body, mapImportance(p.importance), mapWikiStatus(p.status), "노션", Date.now(), p.pageId)
+    );
+  }
+  await runChunked(env, stmts);
+  return json({ ok: true, imported: pages.length });
+}
+// 노션 '학원 일정' → 앱 class_events 로 1회 가져오기. 노션 페이지 id(src)로 중복 방지(재가져오기 시 갱신).
+function mapEventCat(c: string): string {
+  if (c.includes("학교")) return "학교";
+  if (c.includes("강사")) return "강사";
+  if (c.includes("휴") || c.includes("공휴")) return "휴원";
+  if (c.includes("할")) return "할일";
+  return "학원";
+}
+let evSeq = 0;
+async function importEvents(env: Env, request: Request): Promise<Response> {
+  await ensureHubTables(env);
+  // 기본: 지난 90일부터 이후 일정 모두. ?since=YYYY-MM-DD 로 조정 가능.
+  const url = new URL(request.url);
+  let since = url.searchParams.get("since") || "";
+  if (!since) {
+    const d = new Date(Date.now() - 90 * 86400000);
+    since = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  }
+  let items;
+  try {
+    items = await fetchScheduleItems(env, since);
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+  let imported = 0;
+  const now = Date.now();
+  for (const it of items) {
+    try {
+      const cat = mapEventCat(it.category || "");
+      const memo = it.status ? `상태: ${it.status}` : "";
+      const ex = await env.DB.prepare("SELECT id FROM class_events WHERE src=?").bind(it.id).first<{ id: string }>();
+      if (ex) {
+        await env.DB
+          .prepare("UPDATE class_events SET date=?,end_date=?,title=?,category=?,memo=?,updated_at=? WHERE id=?")
+          .bind(it.date, it.dateEnd || "", it.title, cat, memo, now, ex.id)
+          .run();
+      } else {
+        const id = `ev_${now.toString(36)}${(evSeq++).toString(36)}`;
+        await env.DB
+          .prepare("INSERT INTO class_events(id,date,end_date,title,category,memo,author_id,author_name,created_at,updated_at,src) VALUES(?,?,?,?,?,?,?,?,?,?,?)")
+          .bind(id, it.date, it.dateEnd || "", it.title, cat, memo, "", "노션", now, now, it.id)
+          .run();
+      }
+      imported++;
+    } catch {
+      /* 개별 실패는 건너뜀 */
+    }
+  }
+  return json({ ok: true, imported });
+}
+
+// 영어 시간표 일괄 가져오기 — 이름으로 학생 매칭 → class_eng_lessons만 교체(수학 불변). 원장 전용.
+async function importEngTimetable(env: Env, request: Request): Promise<Response> {
+  await ensureEngLessons(env);
+  const b = (await request.json().catch(() => ({}))) as {
+    students?: { name?: string; slots?: { day?: string; time?: string; duration?: number }[] }[];
+  };
+  const entries = Array.isArray(b.students) ? b.students : [];
+  const matched: string[] = [];
+  const unmatched: string[] = [];
+  for (const e of entries) {
+    const name = String(e.name || "").trim();
+    if (!name) continue;
+    const row = await env.DB.prepare("SELECT id FROM students WHERE name=? AND (hidden IS NULL OR hidden=0) LIMIT 1").bind(name).first<{ id: number }>();
+    if (!row) {
+      unmatched.push(name);
+      continue;
+    }
+    const sid = String(row.id);
+    const slots = (Array.isArray(e.slots) ? e.slots : [])
+      .map((s) => ({ day: String(s.day || ""), time: String(s.time || ""), duration: Number(s.duration) || 0 }))
+      .filter((s) => DOW.includes(s.day) && /^\d{1,2}:\d{2}$/.test(s.time));
+    const stmts: D1PreparedStatement[] = [env.DB.prepare("DELETE FROM class_eng_lessons WHERE student_id=?").bind(sid)];
+    slots.forEach((s, i) =>
+      stmts.push(env.DB.prepare("INSERT INTO class_eng_lessons(id,student_id,day,time,duration) VALUES(?,?,?,?,?)").bind(`${sid}-e${i}`, sid, s.day, s.time, s.duration))
+    );
+    try {
+      await env.DB.batch(stmts);
+      matched.push(name);
+    } catch {
+      unmatched.push(name);
+    }
+  }
+  return json({ ok: true, matched: matched.length, unmatched });
+}
+
+async function importSns(env: Env): Promise<Response> {
+  await ensureHubTables(env);
+  let pages;
+  try {
+    pages = await fetchSnsPages(env);
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+  await env.DB.prepare("DELETE FROM class_sns WHERE src <> ''").run();
+  const stmts: D1PreparedStatement[] = [];
+  for (const p of pages) {
+    const now = Date.now();
+    stmts.push(
+      env.DB
+        .prepare(
+          "INSERT INTO class_sns(id,title,body,channel,author_id,author_name,status,link,created_at,updated_at,src) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
+        )
+        .bind(`s_${Date.now().toString(36)}${importSeq++}`, p.title, p.body, "블로그", "", "노션", mapSnsStatus(p.status), p.link, now, now, p.pageId)
+    );
+  }
+  await runChunked(env, stmts);
+  return json({ ok: true, imported: pages.length });
+}
+
+/** 역할별 기본 담당 배분. */
+function defaultScope(role: Role): string[] {
+  if (role === "math") return ["math"];
+  if (role === "english_mid") return ["english_mid"];
+  if (role === "english_elem") return ["english_elem"];
+  if (role === "admin") return ["math", "english_mid", "english_elem"];
+  return [];
 }
 
 /* class_schedules / class_tests 테이블 자가 생성(마이그레이션 미적용이어도 동작하게).
@@ -274,8 +1302,27 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
 
   const overridesByStudent = await readStudentOverrides(env);
 
+  // 영어만 듣는 학생(class_student_meta.subjects에 'math' 없음)은 수학 앱 명단에서 제외.
+  // meta가 없으면(레거시) 수학으로 간주해 그대로 표시(회귀 방지).
+  const mathExcluded = new Set<string>();
+  try {
+    const mr = await env.DB.prepare("SELECT student_id, subjects FROM class_student_meta").all<{ student_id: string; subjects: string }>();
+    for (const r of mr.results || []) {
+      try {
+        const s = JSON.parse(String(r.subjects || "[]"));
+        if (Array.isArray(s) && s.length > 0 && !s.includes("math")) mathExcluded.add(String(r.student_id));
+      } catch {
+        /* ignore */
+      }
+    }
+  } catch {
+    /* meta 없으면 전체 표시 */
+  }
+
   const rosterIds = new Set<string>();
-  const students: Student[] = (rosterRes.results as Record<string, unknown>[]).map((r) => {
+  const students: Student[] = (rosterRes.results as Record<string, unknown>[])
+    .filter((r) => !mathExcluded.has(String(r.id)))
+    .map((r) => {
     const id = String(r.id);
     rosterIds.add(id);
     return {
@@ -765,13 +1812,17 @@ async function syncStudents(env: Env): Promise<Response> {
         const vName = owned.includes("name") ? String(ex.name ?? "") : s.name;
         const vStatus = owned.includes("status") ? String(ex.status ?? "") : s.status;
         const vSchool = owned.includes("school") ? String(ex.school ?? "") : s.school;
+        // 허브 프로필에서 수정한(앱 소유) 생년월일·연락처도 노션이 덮어쓰지 않게 보존.
+        const vBirth = owned.includes("birthdate") ? String(ex.birth_date ?? "") : s.birth;
+        const vPPhone = owned.includes("parentPhone") ? String(ex.parent_phone ?? "") : s.parentPhone;
+        const vSPhone = owned.includes("studentPhone") ? String(ex.student_phone ?? "") : s.studentPhone;
         const same =
           String(ex.name ?? "") === vName &&
           String(ex.status ?? "") === vStatus &&
           String(ex.school ?? "") === vSchool &&
-          String(ex.birth_date ?? "") === s.birth &&
-          String(ex.parent_phone ?? "") === s.parentPhone &&
-          String(ex.student_phone ?? "") === s.studentPhone &&
+          String(ex.birth_date ?? "") === vBirth &&
+          String(ex.parent_phone ?? "") === vPPhone &&
+          String(ex.student_phone ?? "") === vSPhone &&
           curStart === newStart &&
           String(ex.notion_page_id ?? "") === s.notionPageId;
         if (same) {
@@ -781,7 +1832,7 @@ async function syncStudents(env: Env): Promise<Response> {
             .prepare(
               "UPDATE students SET name=?,status=?,school=?,birth_date=?,parent_phone=?,student_phone=?,start_date=?,notion_page_id=? WHERE id=?"
             )
-            .bind(vName, vStatus, vSchool, s.birth, s.parentPhone, s.studentPhone, newStart, s.notionPageId, Number(ex.id))
+            .bind(vName, vStatus, vSchool, vBirth, vPPhone, vSPhone, newStart, s.notionPageId, Number(ex.id))
             .run();
           updated++;
         }

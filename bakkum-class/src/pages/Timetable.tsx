@@ -1,18 +1,6 @@
 import { useState } from "react";
 import { useStore } from "../store";
-import {
-  DOW,
-  DOW_ORDER,
-  ROW_H,
-  TODAY,
-  TT_END,
-  TT_START,
-  fmtMD,
-  mondayOf,
-  parseD,
-  timeToMin,
-  ymd,
-} from "../lib/dates";
+import { DOW, DOW_ORDER, TODAY, fmtMD, mondayOf, parseD, timeToMin, ymd } from "../lib/dates";
 import { activeStudents, attendsOn, effectiveLessons, gradeColor, studentById } from "../lib/logic";
 import { holidayName } from "../lib/holidays";
 import { getCategories, type Tone } from "../lib/categories";
@@ -32,16 +20,8 @@ interface Grp {
   type: Tone;
   time: string;
 }
-interface Evt extends Grp {
-  end: number;
-  _col: number;
-  _cols: number;
-  _span: number;
-}
-
 // Merge students sharing the exact same slot (start+duration+grade) into ONE
-// block — so a busy time shows one wide block with the names listed, instead of
-// many squished columns.
+// block — so a busy time shows one wide block with the names listed.
 function groupSlots(list: RawEvt[]): Grp[] {
   const map = new Map<string, Grp>();
   for (const e of list) {
@@ -57,50 +37,6 @@ function groupSlots(list: RawEvt[]): Grp[] {
   return [...map.values()];
 }
 
-// Calendar-style packing: blocks only narrow for the slots they ACTUALLY
-// overlap, and expand to fill any free space to their right.
-function laneEvents(list: Grp[]): Evt[] {
-  if (!list.length) return [];
-  const evs = list.map((e) => ({ ...e, end: e.start + e.dur })) as Evt[];
-  evs.sort((a, b) => a.start - b.start || a.end - b.end);
-  let columns: Evt[][] = [];
-  let lastEnd: number | null = null;
-  function flush() {
-    const n = columns.length;
-    columns.forEach((col, ci) => {
-      col.forEach((e) => {
-        let span = 1;
-        for (let c = ci + 1; c < n; c++) {
-          const free = columns[c].every((o) => o.start >= e.end || o.end <= e.start);
-          if (free) span++;
-          else break;
-        }
-        e._col = ci;
-        e._cols = n;
-        e._span = span;
-      });
-    });
-    columns = [];
-    lastEnd = null;
-  }
-  evs.forEach((e) => {
-    if (lastEnd !== null && e.start >= lastEnd) flush();
-    let placed = false;
-    for (let i = 0; i < columns.length; i++) {
-      const col = columns[i];
-      if (col[col.length - 1].end <= e.start) {
-        col.push(e);
-        placed = true;
-        break;
-      }
-    }
-    if (!placed) columns.push([e]);
-    lastEnd = lastEnd === null ? e.end : Math.max(lastEnd, e.end);
-  });
-  if (columns.length) flush();
-  return evs;
-}
-
 const WEEK_OPTS = [
   { v: "-1", l: "지난주" },
   { v: "0", l: "이번주" },
@@ -111,8 +47,6 @@ const WEEK_OPTS = [
 export function Timetable() {
   const { data } = useStore();
   const [curWeek, setCurWeek] = useState(0);
-  // 좁아서 요약 칩으로 접힌 수업 블록 중 펼쳐 보는 것 (C-2)
-  const [openEvt, setOpenEvt] = useState<string | null>(null);
 
   const mon = mondayOf(TODAY, curWeek);
   const sun = new Date(mon);
@@ -164,34 +98,16 @@ export function Timetable() {
     }
   });
 
-  // 비어 있는 앞쪽 시간 행 접기 — 그 주 첫 수업 시간부터 그리드를 시작 (C-5)
-  let earliest = Infinity;
-  let latest = -Infinity;
-  for (const day of evtByDay)
-    for (const e of day) {
-      if (e.start < earliest) earliest = e.start;
-      if (e.start + e.dur > latest) latest = e.start + e.dur;
-    }
-  const startH = isFinite(earliest) ? Math.floor(earliest / 60) : TT_START;
-  const endH = isFinite(latest) ? Math.max(TT_END, Math.ceil(latest / 60)) : TT_END;
-  const hours: number[] = [];
-  for (let h = startH; h < endH; h++) hours.push(h);
-
   // 평일(월~금)은 항상, 토·일은 그 주에 수업/보강이 있을 때만 보여준다.
-  // (DOW_ORDER = 월화수목금토일 → 인덱스 5=토, 6=일)
   const visIdx = [0, 1, 2, 3, 4, 5, 6].filter((i) => i < 5 || evtByDay[i].length > 0);
   const nCols = visIdx.length;
-  // 보이는 날 수에 맞춰 폭 분배 — 날이 적으면 평일이 그만큼 넉넉해진다.
-  const gridStyle = {
-    gridTemplateColumns: `56px repeat(${nCols}, minmax(160px, 1fr))`,
-    minWidth: 56 + nCols * 160,
-  };
+  const colStyle = { gridTemplateColumns: `repeat(${nCols}, minmax(150px, 1fr))`, minWidth: nCols * 150 };
 
   return (
     <section className="page active">
       <div className="page-head">
         <div>
-          <h1 className="page-title">주간 시간표</h1>
+          <h1 className="page-title">수학 주간 시간표</h1>
           <div className="page-desc">{rangeLabel} · 정규 수업 및 보강</div>
         </div>
         <div className="head-actions">
@@ -199,82 +115,39 @@ export function Timetable() {
         </div>
       </div>
 
-      <div className="card tt-card">
-        <div className="tt-scroll">
-          <div className="tt-grid" style={gridStyle}>
-            <div className="tt-corner" />
+      <div className="card eng-week">
+        <div className="eng-week-scroll">
+          <div className="eng-week-grid" style={colStyle}>
             {visIdx.map((c) => {
-              const dow = DOW_ORDER[c];
               const isToday = dates[c].getTime() === TODAY.getTime();
               const hol = holidayName(ymd(dates[c]));
+              const blocks = groupSlots(evtByDay[c]).sort((a, b) => a.start - b.start || a.dur - b.dur);
               return (
-                <div
-                  className={"tt-dayhead" + (isToday ? " today" : "") + (hol ? " holiday" : "")}
-                  key={dow}
-                  title={hol || undefined}
-                >
-                  <div className="tt-dow">{dow}</div>
-                  <div className="tt-date">{fmtMD(dates[c])}</div>
-                  {hol && <div className="tt-hol">{hol}</div>}
-                </div>
-              );
-            })}
-            <div className="tt-gutter">
-              {hours.map((h) => (
-                <div className="tt-hour" key={h}>
-                  {h}:00
-                </div>
-              ))}
-            </div>
-            {visIdx.map((ci) => {
-              const dt = dates[ci];
-              const todayCol = dt.getTime() === TODAY.getTime();
-              const events = laneEvents(groupSlots(evtByDay[ci]));
-              return (
-                <div className={"tt-col" + (todayCol ? " today" : "")} key={ci}>
-                  {hours.map((h) => (
-                    <div className="tt-rowline" key={h} />
-                  ))}
-                  {events.map((e, i) => {
-                    const evKey = ci + "|" + e.start + "|" + e.type;
-                    const top = ((e.start - startH * 60) / 60) * ROW_H;
-                    // 칸이 3열 이상으로 쪼개지면 너무 좁아 이름이 잘림 → 요약 칩 + 클릭 펼침 (C-2)
-                    const narrow = e._cols >= 3;
-                    const expanded = openEvt === evKey;
-                    const compact = narrow && !expanded;
-                    // 이름을 쉼표로 묶어 가로로 줄바꿈 → 한 줄에 2~3명. 줄 수만큼 높이 확보.
-                    const need = 20 + Math.ceil(e.names.length / 2) * 16;
-                    const hgt = compact
-                      ? Math.max((e.dur / 60) * ROW_H - 3, 24)
-                      : Math.max((e.dur / 60) * ROW_H - 3, 24, need);
-                    const w = (e._span / e._cols) * 100;
-                    const left = (e._col / e._cols) * 100;
-                    // 펼친 칩은 컬럼 전체 폭으로 떠올라 모든 이름을 보여줌
-                    const style = expanded
-                      ? { top, height: Math.max(hgt, need), left: "3px", right: "3px", width: "auto", zIndex: 6 }
-                      : { top, height: hgt, left: `calc(${left}% + 3px)`, width: `calc(${w}% - 6px)` };
-                    return (
-                      <div
-                        className={"tt-evt evt-" + e.type + (narrow ? " is-chip" : "") + (expanded ? " is-open" : "")}
-                        key={i}
-                        title={`${e.time} · ${e.dur}분 (${e.names.length}명)\n${e.names.join(", ")}`}
-                        onClick={narrow ? () => setOpenEvt(expanded ? null : evKey) : undefined}
-                        style={style}
-                      >
-                        <div className="e-time">
-                          {e.time} · {e.dur}분
-                          {e.names.length > 1 ? ` · ${e.names.length}명` : ""}
-                        </div>
-                        {compact ? (
-                          <div className="e-name e-chip">
-                            {e.names.length > 1 ? `${e.names[0]} 외 ${e.names.length - 1}명` : e.names[0]}
+                <div className={"eng-wcol" + (isToday ? " today" : "")} key={c}>
+                  <div className={"eng-whead" + (isToday ? " today" : "") + (hol ? " holiday" : "")}>
+                    <div className="eng-wdow">{DOW_ORDER[c]}</div>
+                    <div className="eng-wdate">{fmtMD(dates[c])}{hol ? " · " + hol : ""}</div>
+                  </div>
+                  <div className="eng-wbody">
+                    {blocks.length === 0 ? (
+                      <div className="eng-wempty">—</div>
+                    ) : (
+                      blocks.map((e, i) => (
+                        <div className={"eng-wevt evt-" + e.type} key={i} title={`${e.time} · ${e.dur}분 (${e.names.length}명)`}>
+                          <div className="eng-wtime">
+                            {e.time}
+                            <span className="eng-wdur">{e.dur}분</span>
+                            {e.names.length > 1 && <span className="e-cnt">{e.names.length}</span>}
                           </div>
-                        ) : (
-                          <div className="e-names">{e.names.join(", ")}</div>
-                        )}
-                      </div>
-                    );
-                  })}
+                          <div className="eng-wnames">
+                            {e.names.map((n, j) => (
+                              <span className="eng-wnm" key={j}>{n}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -292,7 +165,7 @@ export function Timetable() {
             보강
           </div>
           <div className="tt-leg" style={{ marginLeft: "auto", color: "var(--text3)" }}>
-            오늘 컬럼은 파란색으로 강조됩니다
+            오늘은 파란색으로 강조됩니다
           </div>
         </div>
       </div>

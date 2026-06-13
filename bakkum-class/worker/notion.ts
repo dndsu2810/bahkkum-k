@@ -246,6 +246,303 @@ export async function fetchNotionStudents(env: NotionEnv): Promise<NotionStudent
   return out;
 }
 
+/** 수업(과목) DB의 page id → 제목 맵 (예: id → "초등영어"). */
+export async function fetchClassTitleMap(env: NotionEnv): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  if (!env.NOTION_TOKEN) return map;
+  let cursor: string | undefined;
+  try {
+    do {
+      const res = await notionReq(env, "POST", `/v1/databases/${NOTION_CFG.classDb}/query`, {
+        page_size: 100,
+        ...(cursor ? { start_cursor: cursor } : {}),
+      });
+      if (!res.ok) break;
+      const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+      for (const pg of j.results) {
+        const title = findTitle((pg.properties || {}) as Record<string, Prop>);
+        if (title) map[pg.id] = title;
+      }
+      cursor = j.has_more ? j.next_cursor : undefined;
+    } while (cursor);
+  } catch {
+    /* 권한/공유 문제면 빈 맵 */
+  }
+  return map;
+}
+
+export interface NotionFullStudent {
+  notionPageId: string;
+  name: string;
+  status: string;
+  school: string;
+  birth: string;
+  parentPhone: string;
+  studentPhone: string;
+  start: string;
+  onlineId: string;
+  classIds: string[]; // 수업 선택 relation page ids
+}
+
+/** 모든 재원 학생을 수업 선택(relation) 포함해 읽는다(과목 필터 없음). */
+export async function fetchAllStudentsFull(env: NotionEnv): Promise<NotionFullStudent[]> {
+  if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
+  const out: NotionFullStudent[] = [];
+  let cursor: string | undefined;
+  do {
+    const res = await notionReq(env, "POST", `/v1/databases/${NOTION_CFG.studentDb}/query`, {
+      page_size: 100,
+      ...(cursor ? { start_cursor: cursor } : {}),
+    });
+    if (!res.ok) throw new Error(`query ${res.status}: ${await res.text()}`);
+    const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+    for (const pg of j.results) {
+      const props = (pg.properties || {}) as Record<string, Prop>;
+      const name = findTitle(props);
+      if (!name) continue;
+      const status = propText(props[NOTION_CFG.student.status]) || "재원";
+      if (status !== "재원") continue;
+      out.push({
+        notionPageId: pg.id,
+        name,
+        status,
+        school: propText(props[NOTION_CFG.student.school]),
+        birth: propText(props[NOTION_CFG.student.birth]),
+        parentPhone: propText(props[NOTION_CFG.student.parentPhone]),
+        studentPhone: propText(props[NOTION_CFG.student.studentPhone]),
+        start: propText(props[NOTION_CFG.student.start]),
+        onlineId: propText(props["ID"]),
+        classIds: relationIds(props[NOTION_CFG.student.classSelect]),
+      });
+    }
+    cursor = j.has_more ? j.next_cursor : undefined;
+  } while (cursor);
+  return out;
+}
+
+export interface NotionEnglishMeta {
+  notionPageId: string;
+  name: string;
+  onlineId: string; // "ID" rich_text
+  englishDays: string; // "영어수업요일" multi_select (비어있지 않으면 영어 수강)
+  englishCurri: string; // "영어 커리" rich_text
+}
+
+/** 학생 DB에서 영어 관련 메타(온라인ID·영어수업요일·영어커리)를 모든 재원 학생에 대해 읽는다.
+ *  수업 선택 필터를 적용하지 않아 영어만 듣는 학생도 포함. */
+export async function fetchStudentEnglishMeta(env: NotionEnv): Promise<NotionEnglishMeta[]> {
+  if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
+  const out: NotionEnglishMeta[] = [];
+  let cursor: string | undefined;
+  do {
+    const res = await notionReq(env, "POST", `/v1/databases/${NOTION_CFG.studentDb}/query`, {
+      page_size: 100,
+      ...(cursor ? { start_cursor: cursor } : {}),
+    });
+    if (!res.ok) throw new Error(`query ${res.status}: ${await res.text()}`);
+    const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+    for (const pg of j.results) {
+      const props = (pg.properties || {}) as Record<string, Prop>;
+      const name = findTitle(props);
+      if (!name) continue;
+      const status = propText(props[NOTION_CFG.student.status]) || "재원";
+      if (status !== "재원") continue;
+      out.push({
+        notionPageId: pg.id,
+        name,
+        onlineId: propText(props["ID"]),
+        englishDays: propText(props["영어수업요일"]),
+        englishCurri: propText(props["영어 커리"]),
+      });
+    }
+    cursor = j.has_more ? j.next_cursor : undefined;
+  } while (cursor);
+  return out;
+}
+
+/* ---------------- 노션 페이지 본문 → 평문 + 매뉴얼/SNS 가져오기 ---------------- */
+const MANUAL_DB = "2e766817-e061-811e-9250-c3a5f6e56899"; // 바꿈 매뉴얼
+const BLOG_DB = "32766817-e061-8074-9879-fa229ae1b3ea"; // SNS 관리(블로그)
+
+function blockText(b: Record<string, any>): string {
+  const t = b.type as string;
+  const o = b[t];
+  if (!o) return "";
+  if (t === "table_row") return (o.cells || []).map((cell: any[]) => (cell || []).map((x) => x.plain_text || "").join("")).join(" | ");
+  const rt = (o.rich_text || o.text || []) as any[];
+  let s = Array.isArray(rt) ? rt.map((x) => x.plain_text || "").join("") : "";
+  if (t === "to_do") s = (o.checked ? "[x] " : "[ ] ") + s;
+  else if (t.startsWith("heading")) s = (s ? "\n" + s : s);
+  else if (t === "bulleted_list_item" || t === "numbered_list_item") s = "- " + s;
+  return s;
+}
+
+// 하위 페이지·하위 데이터베이스까지 펼치다 보면 깊어질 수 있어 깊이 상한만 둔다.
+const MAX_BLOCK_DEPTH = 5;
+
+/** 페이지(블록) 본문을 평문으로. 토글/리스트는 들여쓰기로, 하위 페이지·하위 DB는 통째로 펼친다. */
+export async function fetchPageText(env: NotionEnv, pageId: string, depth = 0): Promise<string> {
+  if (depth > MAX_BLOCK_DEPTH) return "";
+  const out: string[] = [];
+  let cursor: string | undefined;
+  try {
+    do {
+      const path = `/v1/blocks/${pageId}/children?page_size=100` + (cursor ? `&start_cursor=${cursor}` : "");
+      const res = await notionReq(env, "GET", path);
+      if (!res.ok) break;
+      const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+      for (const b of j.results || []) {
+        // 하위 데이터베이스(예: 매뉴얼 페이지 안에 박힌 표/DB) — 행을 모두 펼쳐 빠짐없이 가져온다.
+        if (b.type === "child_database") {
+          const sub = await fetchChildDatabase(env, b.id, b.child_database?.title || "", depth + 1);
+          if (sub) out.push(sub);
+          continue;
+        }
+        // 하위 페이지 — 제목 + 본문 펼치기.
+        if (b.type === "child_page") {
+          const t = b.child_page?.title || "";
+          if (t) out.push("\n■ " + t);
+          const sub = await fetchPageText(env, b.id, depth + 1);
+          if (sub) out.push(sub);
+          continue;
+        }
+        const txt = blockText(b);
+        if (txt) out.push(depth ? "  " + txt : txt);
+        if (
+          b.has_children &&
+          ["toggle", "bulleted_list_item", "numbered_list_item", "callout", "quote", "column_list", "column", "table", "synced_block"].includes(b.type)
+        ) {
+          const sub = await fetchPageText(env, b.id, depth + 1);
+          if (sub) out.push(sub);
+        }
+      }
+      cursor = j.has_more ? j.next_cursor : undefined;
+    } while (cursor);
+  } catch {
+    /* ignore */
+  }
+  return out.join("\n").trim();
+}
+
+/** 하위 데이터베이스의 모든 행(페이지)을 컬럼 전체가 담긴 파이프 표로 펼친다.
+ *  예) "강사용 아이디 비번"처럼 site·ID·PW·비고 같은 속성값을 빠짐없이 가져온다.
+ *  본문은 `헤더 | 헤더` + 행별 `값 | 값` 형태 — 앱(위키)에서 표 + 셀 복사로 렌더링. */
+async function fetchChildDatabase(env: NotionEnv, dbId: string, title: string, depth: number): Promise<string> {
+  if (depth > MAX_BLOCK_DEPTH) return "";
+  const out: string[] = [];
+  if (title) out.push("\n【" + title.trim() + "】");
+
+  // 컬럼 순서 — DB 메타에서 가져오고 제목(title) 컬럼을 맨 앞으로. 실패 시 첫 행 키로 폴백.
+  let cols: string[] = [];
+  try {
+    const meta = await notionReq(env, "GET", `/v1/databases/${dbId}`);
+    if (meta.ok) {
+      const mj = (await meta.json()) as { properties?: Record<string, { type?: string }> };
+      const props = mj.properties || {};
+      const keys = Object.keys(props);
+      const titleKey = keys.find((k) => props[k]?.type === "title");
+      cols = [...(titleKey ? [titleKey] : []), ...keys.filter((k) => k !== titleKey)];
+    }
+  } catch {
+    /* 폴백은 아래에서 */
+  }
+  const cell = (v: string) => v.replace(/\s*\|\s*/g, "/").replace(/\s*\n\s*/g, " ").trim();
+
+  let cursor: string | undefined;
+  let headerDone = false;
+  let rows = 0;
+  try {
+    do {
+      const res = await notionReq(env, "POST", `/v1/databases/${dbId}/query`, {
+        page_size: 100,
+        ...(cursor ? { start_cursor: cursor } : {}),
+      });
+      if (!res.ok) break;
+      const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+      for (const pg of j.results || []) {
+        const props = (pg.properties || {}) as Record<string, Prop>;
+        if (!cols.length) cols = Object.keys(props);
+        if (!headerDone) {
+          out.push(cols.join(" | "));
+          headerDone = true;
+        }
+        out.push(cols.map((c) => cell(propText(props[c]))).join(" | "));
+        rows++;
+      }
+      cursor = j.has_more ? j.next_cursor : undefined;
+    } while (cursor);
+  } catch {
+    /* ignore */
+  }
+  if (!rows) out.push("(비어 있음)");
+  return out.join("\n").trim();
+}
+
+export interface NotionManual {
+  pageId: string;
+  title: string;
+  importance: string; // 낮음/보통/높음/매우 높음/핵심
+  status: string; // 초안/작성중/검토중/최신/업데이트 필요
+  body: string;
+}
+export async function fetchManualPages(env: NotionEnv): Promise<NotionManual[]> {
+  if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
+  const out: NotionManual[] = [];
+  let cursor: string | undefined;
+  do {
+    const res = await notionReq(env, "POST", `/v1/databases/${MANUAL_DB}/query`, { page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) });
+    if (!res.ok) throw new Error(`manual ${res.status}: ${await res.text()}`);
+    const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+    for (const pg of j.results) {
+      const props = (pg.properties || {}) as Record<string, Prop>;
+      const title = findTitle(props);
+      if (!title) continue;
+      out.push({
+        pageId: pg.id,
+        title,
+        importance: propText(props["중요도"]),
+        status: propText(props["상태"]),
+        body: await fetchPageText(env, pg.id),
+      });
+    }
+    cursor = j.has_more ? j.next_cursor : undefined;
+  } while (cursor);
+  return out;
+}
+
+export interface NotionSns {
+  pageId: string;
+  title: string;
+  status: string; // 업로드 유무
+  link: string;
+  body: string;
+}
+export async function fetchSnsPages(env: NotionEnv): Promise<NotionSns[]> {
+  if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
+  const out: NotionSns[] = [];
+  let cursor: string | undefined;
+  do {
+    const res = await notionReq(env, "POST", `/v1/databases/${BLOG_DB}/query`, { page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) });
+    if (!res.ok) throw new Error(`blog ${res.status}: ${await res.text()}`);
+    const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+    for (const pg of j.results) {
+      const props = (pg.properties || {}) as Record<string, Prop>;
+      const title = findTitle(props);
+      if (!title) continue;
+      const linkProp = props["업로드 링크"] as Record<string, any> | undefined;
+      out.push({
+        pageId: pg.id,
+        title,
+        status: propText(props["업로드 유무"]),
+        link: (linkProp && linkProp.url) || "",
+        body: await fetchPageText(env, pg.id),
+      });
+    }
+    cursor = j.has_more ? j.next_cursor : undefined;
+  } while (cursor);
+  return out;
+}
+
 /** TEMP inspect: schema(속성명/타입) + 샘플 of a Notion DB (구현 점검용). */
 export async function inspectDb(env: NotionEnv, which: string): Promise<unknown> {
   if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");

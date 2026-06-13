@@ -212,7 +212,7 @@ export function Attendance() {
     <section className="page active">
       <div className="page-head">
         <div>
-          <h1 className="page-title">출결 기록</h1>
+          <h1 className="page-title">수학 출결 기록</h1>
           <div className="page-desc">
             출석 체크는 <TodayLink /> 화면에서 빠르게, 여기선 날짜별 출결 기록을 모아 보고 수정해요.
             {holiday ? " · " + holiday + " (공휴일·휴원)" : ""}

@@ -67,29 +67,51 @@ export function navLabel(id: PageId): string {
 export interface NavPrefs {
   order: PageId[];
   hidden: PageId[];
+  /** 즐겨찾기한 메뉴 — 사이드바 맨 위 '즐겨찾기' 그룹에 모인다. */
+  favorites: PageId[];
 }
 
 const KEY = "bk_navprefs";
-
-export function loadNavPrefs(): NavPrefs {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) {
-      const p = JSON.parse(raw) as Partial<NavPrefs>;
-      return { order: p.order ?? [], hidden: p.hidden ?? [] };
-    }
-  } catch {
-    /* ignore */
-  }
-  return { order: [], hidden: [] };
+/** 로그인 계정별로 메뉴 설정을 분리 저장(없으면 기기 공용 키). */
+function keyFor(userId?: string): string {
+  return userId ? `${KEY}:${userId}` : KEY;
 }
 
-export function saveNavPrefs(p: NavPrefs): void {
+/** 부분 객체/JSON을 안전한 NavPrefs로. (서버·로컬 공용) */
+export function normalizeNavPrefs(p: Partial<NavPrefs> | null | undefined): NavPrefs {
+  return { order: p?.order ?? [], hidden: p?.hidden ?? [], favorites: p?.favorites ?? [] };
+}
+
+export function loadNavPrefs(userId?: string): NavPrefs {
+  const fallback: NavPrefs = { order: [], hidden: [], favorites: [] };
+  const parse = (raw: string | null): NavPrefs | null => {
+    if (!raw) return null;
+    try {
+      return normalizeNavPrefs(JSON.parse(raw) as Partial<NavPrefs>);
+    } catch {
+      return null;
+    }
+  };
   try {
-    localStorage.setItem(KEY, JSON.stringify(p));
+    // 계정 전용 설정 우선, 없으면 예전 공용 설정을 1회 승계.
+    return parse(localStorage.getItem(keyFor(userId))) ?? (userId ? parse(localStorage.getItem(KEY)) : null) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function saveNavPrefs(p: NavPrefs, userId?: string): void {
+  try {
+    localStorage.setItem(keyFor(userId), JSON.stringify(p));
   } catch {
     /* ignore */
   }
+}
+
+/** 즐겨찾기한(숨김 아닌) 메뉴를 사용자 순서대로. 사이드바 '즐겨찾기' 그룹용. */
+export function favoritesNav(prefs: NavPrefs): NavItem[] {
+  const favSet = new Set(prefs.favorites || []);
+  return orderedNav(prefs).filter((n) => favSet.has(n.id));
 }
 
 /** ALL_NAV을 prefs.order대로 정렬(없는 건 뒤에), 숨김 제외(설정은 항상 표시). */

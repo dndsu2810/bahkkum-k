@@ -1,0 +1,366 @@
+/// <reference types="@cloudflare/workers-types" />
+// 통합 허브 공유 영역 백엔드 — 강사 특이사항 · 매뉴얼 위키 · SNS 관리 · 공유 업무 보드.
+// 모두 추가전용 class_* 테이블(자가 생성). 기존 수학/모각공 데이터 무영향.
+
+import type { Env } from "./index";
+import type { SessionUser } from "./auth";
+
+function json(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8" },
+  });
+}
+
+let seq = 0;
+function newId(prefix: string): string {
+  return `${prefix}_${Date.now().toString(36)}${(seq++).toString(36)}`;
+}
+
+export async function ensureHubTables(env: Env): Promise<void> {
+  const stmts = [
+    // 강사 특이사항(학생별 시간순 누적, 공용)
+    "CREATE TABLE IF NOT EXISTS class_notes (id TEXT PRIMARY KEY, student_id TEXT NOT NULL DEFAULT '', author_id TEXT NOT NULL DEFAULT '', author_name TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)",
+    // 바꿈 매뉴얼 위키
+    "CREATE TABLE IF NOT EXISTS class_wiki (id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '', importance INTEGER NOT NULL DEFAULT 2, status TEXT NOT NULL DEFAULT 'draft', updated_by TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL DEFAULT 0)",
+    // SNS 관리
+    "CREATE TABLE IF NOT EXISTS class_sns (id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '', channel TEXT NOT NULL DEFAULT '', author_id TEXT NOT NULL DEFAULT '', author_name TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'wait', link TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)",
+    // 공유 업무 보드(칸반) — class_tasks 는 수학 앱과 공유.
+    "CREATE TABLE IF NOT EXISTS class_tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'todo', tag TEXT NOT NULL DEFAULT '', due TEXT NOT NULL DEFAULT '', student_id TEXT NOT NULL DEFAULT '', memo TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, done_at INTEGER, archived INTEGER NOT NULL DEFAULT 0)",
+    // 학원 일정(공용) — 전 스태프가 보고 추가·수정. 앱이 주인(노션 X).
+    "CREATE TABLE IF NOT EXISTS class_events (id TEXT PRIMARY KEY, date TEXT NOT NULL DEFAULT '', end_date TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT '학원', memo TEXT NOT NULL DEFAULT '', author_id TEXT NOT NULL DEFAULT '', author_name TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)",
+  ];
+  for (const s of stmts) {
+    try {
+      await env.DB.prepare(s).run();
+    } catch {
+      /* ignore */
+    }
+  }
+  // 노션 가져오기용 출처 id 컬럼(있으면 무시). 재가져오기 시 중복 방지·교체 기준.
+  for (const a of [
+    "ALTER TABLE class_wiki ADD COLUMN src TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_sns ADD COLUMN src TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_wiki ADD COLUMN images TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE class_sns ADD COLUMN images TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE class_events ADD COLUMN src TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_tasks ADD COLUMN assignee TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'",
+  ]) {
+    try {
+      await env.DB.prepare(a).run();
+    } catch {
+      /* 이미 있으면 무시 */
+    }
+  }
+}
+
+/** 허브 공유 영역 라우팅. 처리하면 Response, 아니면 null. */
+export async function handleHub(
+  env: Env,
+  request: Request,
+  p: string,
+  me: SessionUser
+): Promise<Response | null> {
+  const m = request.method;
+  await ensureHubTables(env);
+
+  /* ---------------- 특이사항 ---------------- */
+  if (p === "/api/notes" && m === "GET") {
+    const url = new URL(request.url);
+    const sid = url.searchParams.get("student_id") || "";
+    const q = sid
+      ? env.DB.prepare("SELECT * FROM class_notes WHERE student_id=? ORDER BY created_at DESC").bind(sid)
+      : env.DB.prepare("SELECT * FROM class_notes ORDER BY created_at DESC LIMIT 500");
+    const r = await q.all<Record<string, unknown>>();
+    return json({ notes: (r.results || []).map(noteRow) });
+  }
+  if (p === "/api/notes" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { studentId?: string; body?: string };
+    const body = (b.body || "").trim();
+    if (!b.studentId || !body) return json({ error: "bad_input" }, 400);
+    const id = newId("note");
+    await env.DB
+      .prepare("INSERT INTO class_notes(id,student_id,author_id,author_name,body,created_at) VALUES(?,?,?,?,?,?)")
+      .bind(id, String(b.studentId), me.sub, me.name, body.slice(0, 4000), Date.now())
+      .run();
+    return json({ ok: true, id });
+  }
+  if (p === "/api/notes/delete" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string };
+    if (!b.id) return json({ error: "id_required" }, 400);
+    // 작성자 본인 또는 원장만 삭제
+    const row = await env.DB.prepare("SELECT author_id FROM class_notes WHERE id=?").bind(b.id).first<{ author_id: string }>();
+    if (row && row.author_id !== me.sub && me.role !== "admin") return json({ error: "forbidden" }, 403);
+    await env.DB.prepare("DELETE FROM class_notes WHERE id=?").bind(b.id).run();
+    return json({ ok: true });
+  }
+
+  /* ---------------- 학원 일정 (공용: 전원 열람·수정) ---------------- */
+  if (p === "/api/events" && m === "GET") {
+    const url = new URL(request.url);
+    const since = url.searchParams.get("since") || "";
+    const q = since
+      ? env.DB.prepare("SELECT * FROM class_events WHERE date>=? ORDER BY date, created_at").bind(since)
+      : env.DB.prepare("SELECT * FROM class_events ORDER BY date, created_at");
+    const r = await q.all<Record<string, unknown>>();
+    return json({ events: (r.results || []).map(eventRow) });
+  }
+  if (p === "/api/events" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as {
+      id?: string; date?: string; endDate?: string; title?: string; category?: string; memo?: string;
+    };
+    const date = (b.date || "").trim();
+    const title = (b.title || "").trim();
+    if (!date || !title) return json({ error: "bad_input" }, 400);
+    const endDate = (b.endDate || "").trim();
+    const category = (b.category || "학원").trim().slice(0, 20);
+    const memo = (b.memo || "").slice(0, 2000);
+    const now = Date.now();
+    if (b.id) {
+      await env.DB
+        .prepare("UPDATE class_events SET date=?,end_date=?,title=?,category=?,memo=?,updated_at=? WHERE id=?")
+        .bind(date, endDate, title.slice(0, 200), category, memo, now, b.id)
+        .run();
+      return json({ ok: true, id: b.id });
+    }
+    const id = newId("ev");
+    await env.DB
+      .prepare("INSERT INTO class_events(id,date,end_date,title,category,memo,author_id,author_name,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)")
+      .bind(id, date, endDate, title.slice(0, 200), category, memo, me.sub, me.name, now, now)
+      .run();
+    return json({ ok: true, id });
+  }
+  if (p === "/api/events/delete" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string };
+    if (!b.id) return json({ error: "id_required" }, 400);
+    await env.DB.prepare("DELETE FROM class_events WHERE id=?").bind(b.id).run();
+    return json({ ok: true });
+  }
+
+  /* ---------------- 매뉴얼 위키 ---------------- */
+  if (p === "/api/wiki" && m === "GET") {
+    const r = await env.DB.prepare("SELECT * FROM class_wiki ORDER BY updated_at DESC").all<Record<string, unknown>>();
+    return json({ pages: (r.results || []).map(wikiRow) });
+  }
+  if (p === "/api/wiki" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as {
+      id?: string;
+      title?: string;
+      body?: string;
+      importance?: number;
+      status?: string;
+      images?: string[];
+    };
+    const title = (b.title || "").trim();
+    if (!title) return json({ error: "title_required" }, 400);
+    const importance = Math.min(4, Math.max(1, Number(b.importance) || 2));
+    const status = ["draft", "writing", "review", "current", "outdated"].includes(String(b.status)) ? String(b.status) : "draft";
+    const imgs = JSON.stringify(Array.isArray(b.images) ? b.images.map(String) : []);
+    const now = Date.now();
+    if (b.id) {
+      await env.DB
+        .prepare("UPDATE class_wiki SET title=?,body=?,importance=?,status=?,images=?,updated_by=?,updated_at=? WHERE id=?")
+        .bind(title, b.body || "", importance, status, imgs, me.name, now, b.id)
+        .run();
+      return json({ ok: true, id: b.id });
+    }
+    const id = newId("wiki");
+    await env.DB
+      .prepare("INSERT INTO class_wiki(id,title,body,importance,status,images,updated_by,updated_at) VALUES(?,?,?,?,?,?,?,?)")
+      .bind(id, title, b.body || "", importance, status, imgs, me.name, now)
+      .run();
+    return json({ ok: true, id });
+  }
+  if (p === "/api/wiki/delete" && m === "POST") {
+    if (me.role !== "admin") return json({ error: "forbidden" }, 403);
+    const b = (await request.json().catch(() => ({}))) as { id?: string };
+    if (!b.id) return json({ error: "id_required" }, 400);
+    await env.DB.prepare("DELETE FROM class_wiki WHERE id=?").bind(b.id).run();
+    return json({ ok: true });
+  }
+
+  /* ---------------- SNS 관리 ---------------- */
+  if (p === "/api/sns" && m === "GET") {
+    const r = await env.DB.prepare("SELECT * FROM class_sns ORDER BY created_at DESC").all<Record<string, unknown>>();
+    return json({ posts: (r.results || []).map(snsRow) });
+  }
+  if (p === "/api/sns" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as {
+      id?: string;
+      title?: string;
+      body?: string;
+      channel?: string;
+      status?: string;
+      link?: string;
+      images?: string[];
+    };
+    const title = (b.title || "").trim();
+    if (!title && !b.id) return json({ error: "title_required" }, 400);
+    const status = ["wait", "edit", "stop", "done"].includes(String(b.status)) ? String(b.status) : "wait";
+    const imgs = JSON.stringify(Array.isArray(b.images) ? b.images.map(String) : []);
+    const now = Date.now();
+    if (b.id) {
+      await env.DB
+        .prepare("UPDATE class_sns SET title=?,body=?,channel=?,status=?,link=?,images=?,updated_at=? WHERE id=?")
+        .bind(title, b.body || "", b.channel || "", status, b.link || "", imgs, now, b.id)
+        .run();
+      return json({ ok: true, id: b.id });
+    }
+    const id = newId("sns");
+    await env.DB
+      .prepare(
+        "INSERT INTO class_sns(id,title,body,channel,author_id,author_name,status,link,images,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
+      )
+      .bind(id, title, b.body || "", b.channel || "", me.sub, me.name, status, b.link || "", imgs, now, now)
+      .run();
+    return json({ ok: true, id });
+  }
+  if (p === "/api/sns/delete" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string };
+    if (!b.id) return json({ error: "id_required" }, 400);
+    const row = await env.DB.prepare("SELECT author_id FROM class_sns WHERE id=?").bind(b.id).first<{ author_id: string }>();
+    if (row && row.author_id !== me.sub && me.role !== "admin") return json({ error: "forbidden" }, 403);
+    await env.DB.prepare("DELETE FROM class_sns WHERE id=?").bind(b.id).run();
+    return json({ ok: true });
+  }
+
+  /* ---------------- 공유 업무 보드 (class_tasks 라이브) ---------------- */
+  if (p === "/api/tasks" && m === "GET") {
+    const r = await env.DB.prepare("SELECT * FROM class_tasks ORDER BY created_at DESC").all<Record<string, unknown>>();
+    return json({ tasks: (r.results || []).map(taskRow) });
+  }
+  if (p === "/api/tasks" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const id = String(b.id || "") || newId("task");
+    const status = ["todo", "doing", "done"].includes(String(b.status)) ? String(b.status) : "todo";
+    const exists = await env.DB.prepare("SELECT id FROM class_tasks WHERE id=?").bind(id).first<{ id: string }>();
+    const doneAt = status === "done" ? (b.doneAt ? Number(b.doneAt) : Date.now()) : null;
+    const priority = String(b.priority) === "urgent" ? "urgent" : "normal";
+    const assignee = String(b.assignee || "");
+    if (exists) {
+      await env.DB
+        .prepare("UPDATE class_tasks SET title=?,status=?,tag=?,due=?,student_id=?,memo=?,assignee=?,priority=?,done_at=?,archived=? WHERE id=?")
+        .bind(
+          String(b.title || ""),
+          status,
+          String(b.tag || ""),
+          String(b.due || ""),
+          String(b.studentId || ""),
+          String(b.memo || ""),
+          assignee,
+          priority,
+          doneAt,
+          b.archived ? 1 : 0,
+          id
+        )
+        .run();
+    } else {
+      await env.DB
+        .prepare(
+          "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        )
+        .bind(
+          id,
+          String(b.title || ""),
+          status,
+          String(b.tag || ""),
+          String(b.due || ""),
+          String(b.studentId || ""),
+          String(b.memo || ""),
+          assignee,
+          priority,
+          String(b.source || ""),
+          Date.now(),
+          doneAt,
+          b.archived ? 1 : 0
+        )
+        .run();
+    }
+    return json({ ok: true, id });
+  }
+  if (p === "/api/tasks/delete" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string };
+    if (!b.id) return json({ error: "id_required" }, 400);
+    await env.DB.prepare("DELETE FROM class_tasks WHERE id=?").bind(b.id).run();
+    return json({ ok: true });
+  }
+
+  return null;
+}
+
+/* ---------------- row mappers ---------------- */
+function noteRow(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    studentId: String(r.student_id ?? ""),
+    authorId: String(r.author_id ?? ""),
+    authorName: String(r.author_name ?? ""),
+    body: String(r.body ?? ""),
+    createdAt: Number(r.created_at ?? 0),
+  };
+}
+function eventRow(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    date: String(r.date ?? ""),
+    endDate: String(r.end_date ?? ""),
+    title: String(r.title ?? ""),
+    category: String(r.category ?? "학원"),
+    memo: String(r.memo ?? ""),
+    authorId: String(r.author_id ?? ""),
+    authorName: String(r.author_name ?? ""),
+    updatedAt: Number(r.updated_at ?? 0),
+  };
+}
+function parseImgs(v: unknown): string[] {
+  try {
+    const a = JSON.parse(String(v ?? "[]"));
+    return Array.isArray(a) ? a.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+function wikiRow(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    title: String(r.title ?? ""),
+    body: String(r.body ?? ""),
+    importance: Number(r.importance ?? 2),
+    status: String(r.status ?? "draft"),
+    images: parseImgs(r.images),
+    updatedBy: String(r.updated_by ?? ""),
+    updatedAt: Number(r.updated_at ?? 0),
+  };
+}
+function snsRow(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    title: String(r.title ?? ""),
+    body: String(r.body ?? ""),
+    channel: String(r.channel ?? ""),
+    authorName: String(r.author_name ?? ""),
+    status: String(r.status ?? "wait"),
+    link: String(r.link ?? ""),
+    images: parseImgs(r.images),
+    createdAt: Number(r.created_at ?? 0),
+    updatedAt: Number(r.updated_at ?? 0),
+  };
+}
+function taskRow(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    title: String(r.title ?? ""),
+    status: r.status === "doing" ? "doing" : r.status === "done" ? "done" : "todo",
+    tag: String(r.tag ?? ""),
+    due: String(r.due ?? ""),
+    studentId: String(r.student_id ?? ""),
+    memo: String(r.memo ?? ""),
+    assignee: String(r.assignee ?? ""),
+    priority: r.priority === "urgent" ? "urgent" : "normal",
+    source: String(r.source ?? ""),
+    createdAt: Number(r.created_at ?? 0),
+    doneAt: r.done_at == null ? null : Number(r.done_at),
+    archived: Number(r.archived ?? 0) === 1,
+  };
+}

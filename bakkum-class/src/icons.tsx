@@ -149,3 +149,13 @@ export function Icon({ name }: { name: IconName }) {
     </svg>
   );
 }
+
+// 즐겨찾기 별 — filled면 색 채움(현재 즐겨찾기), 아니면 외곽선.
+const STAR = "M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.97 6.2 21l1.1-6.45-4.7-4.6 6.5-.95L12 2.6z";
+export function StarIcon({ filled }: { filled?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor">
+      <path d={STAR} />
+    </svg>
+  );
+}

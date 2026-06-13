@@ -1,26 +1,58 @@
 import { useEffect, useState } from "react";
 import { TODAY, fmtFull } from "../lib/dates";
 import { GROUP_OF, navLabel, type PageId } from "../lib/nav";
+import { useAuth } from "../auth";
+import { useHubNav } from "../hubNav";
+import { ROLE_LABEL } from "../lib/roles";
 
 export function Header({ page }: { page: PageId }) {
+  const hub = useHubNav();
   return (
     <header className="topbar">
       <div className="crumb">
         {GROUP_OF[page]} · <b>{navLabel(page)}</b>
       </div>
       <div className="top-actions">
+        {hub?.canLeaveMath && (
+          <button className="hub-btn" onClick={() => hub.go("home")} title="허브 홈으로">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <rect x="3" y="3" width="7" height="7" rx="1.5" />
+              <rect x="14" y="3" width="7" height="7" rx="1.5" />
+              <rect x="3" y="14" width="7" height="7" rx="1.5" />
+              <rect x="14" y="14" width="7" height="7" rx="1.5" />
+            </svg>
+            허브
+          </button>
+        )}
         <ThemeToggle />
         <div className="pill-date">
           <span className="dot" />
           {fmtFull(TODAY)}
         </div>
+        <AccountMenu />
       </div>
     </header>
   );
 }
 
+// 현재 로그인 사용자 칩 + 로그아웃. 백엔드 없는 dev 환경에선 숨김.
+function AccountMenu() {
+  const { user, noBackend, logout } = useAuth();
+  if (!user || noBackend) return null;
+  return (
+    <div className="acct">
+      <span className="acct-chip">
+        {user.name} · <span className="role">{ROLE_LABEL[user.role]}</span>
+      </span>
+      <button className="acct-logout" onClick={() => logout()}>
+        로그아웃
+      </button>
+    </div>
+  );
+}
+
 // B-7 다크 모드 토글 — 선택을 localStorage에 저장, html[data-theme]로 적용
-function ThemeToggle() {
+export function ThemeToggle() {
   const [dark, setDark] = useState(() => {
     try {
       const saved = localStorage.getItem("theme");
