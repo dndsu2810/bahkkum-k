@@ -16,6 +16,7 @@ import {
   type PromoteBefore,
 } from "../lib/rosterApi";
 import { GRADE_DIVS, DIV_MAX, makeGrade, parseGrade } from "../lib/grade";
+import { uploadImage } from "../lib/configApi";
 
 type FilterKey = "all" | "math" | "english" | "elem" | "mid";
 
@@ -248,7 +249,7 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
                 <tr key={r.id} onClick={() => setOpenId(r.id)} tabIndex={0}
                   onKeyDown={(e) => { if (e.key === "Enter") setOpenId(r.id); }}>
                   <td className="sm-name">
-                    <span className="sm-row-av">{initials(r.name)}</span>
+                    {r.photo ? <img className="sm-row-av sm-row-av-img" src={r.photo} alt={r.name} /> : <span className="sm-row-av">{initials(r.name)}</span>}
                     {r.name}
                   </td>
                   <td>{r.grade || "—"}</td>
@@ -293,7 +294,19 @@ function ProfileModal({
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState("");
+  const [photoBusy, setPhotoBusy] = useState(false);
   const hasEng = f.subjects.includes("english");
+
+  // 프로필 사진 업로드(선택) — 올리면 즉시 저장.
+  async function onPhoto(file?: File | null) {
+    if (!file || photoBusy) return;
+    setPhotoBusy(true);
+    try {
+      const url = await uploadImage(file);
+      setF((cur) => ({ ...cur, photo: url }));
+      await saveStudentMeta({ studentId: f.id, onlineId: f.onlineId, subjects: f.subjects, englishBand: f.englishBand, attendDays: f.attendDays, memo: f.memo, photo: url });
+    } catch { setErr("사진 업로드에 실패했어요."); } finally { setPhotoBusy(false); }
+  }
   // 등원요일 = 수동 지정값이 있으면 그것, 없으면 수업시간(요일)에서 자동 반영.
   const slotDays = DOW.filter((dd) => f.mathSlots.some((s) => s.day === dd) || f.engSlots.some((s) => s.day === dd));
   const effectiveDays = f.attendDays.length ? f.attendDays : slotDays;
@@ -329,6 +342,7 @@ function ProfileModal({
         englishBand: f.englishBand,
         attendDays: effectiveDays,
         memo: f.memo,
+        photo: f.photo,
       });
       await saveStudentCore({
         studentId: f.id,
@@ -360,7 +374,15 @@ function ProfileModal({
     <div className="prof-overlay" onClick={onClose}>
       <div className="prof" onClick={(e) => e.stopPropagation()}>
         <div className="prof-top">
-          <div className="av av-lg prof-av">{initials(f.name)}</div>
+          <div className="prof-av-wrap">
+            {f.photo ? <img className="av av-lg prof-av prof-av-img" src={f.photo} alt={f.name} /> : <div className="av av-lg prof-av">{initials(f.name)}</div>}
+            {!ro && (
+              <label className="prof-av-edit" title="사진 변경">
+                {photoBusy ? "…" : "📷"}
+                <input type="file" accept="image/*" style={{ display: "none" }} disabled={photoBusy} onChange={(e) => onPhoto(e.target.files?.[0])} />
+              </label>
+            )}
+          </div>
           <div className="prof-top-main">
             <div className="prof-name">{f.name}</div>
             <div className="prof-badges">

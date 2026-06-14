@@ -25,6 +25,7 @@ import { ChangeRequests } from "./screens/ChangeRequests";
 import { PointRanking } from "./screens/PointRanking";
 import { reqsApi } from "./lib/hubApi";
 import { getRoster, type RosterStudent } from "./lib/rosterApi";
+import { getConfig } from "./lib/configApi";
 import { NEW_REQ_EVENT, type ReqPrefill } from "./lib/changeReqLive";
 import { Settings } from "./pages/Settings";
 
@@ -95,6 +96,13 @@ export function Workspace() {
       return next;
     });
   }
+
+  // 학원 로고(설정에서 업로드). 없으면 기본 "바" 박스.
+  const [logoUrl, setLogoUrl] = useState("");
+  useEffect(() => {
+    if (noBackend) return;
+    getConfig().then((c) => setLogoUrl(c.logoUrl || "")).catch(() => {});
+  }, [noBackend]);
 
   // 시간표 변경 요청 — 나에게 온 대기 건수(사이드바 알림 배지)
   const [reqPending, setReqPending] = useState(0);
@@ -225,7 +233,7 @@ export function Workspace() {
     <div className="app">
       <aside className="side">
         <div className="brand" style={{ cursor: "default" }}>
-          <div className="logo">바</div>
+          {logoUrl ? <img className="logo logo-img" src={logoUrl} alt="바꿈" /> : <div className="logo">바</div>}
           <div>
             <b>바꿈영수학원</b>
             <span>

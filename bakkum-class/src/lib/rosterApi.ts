@@ -24,6 +24,7 @@ export interface RosterStudent {
   englishBand: EnglishBand;
   attendDays: string[]; // 등원요일 ["월","수","금"]
   memo: string; // 메모/특이사항
+  photo: string; // 프로필 사진 URL(선택)
   mathSlots: Slot[]; // 수학 수업 요일·시간(수학 앱과 공유)
   engSlots: Slot[]; // 영어 수업 요일·시간
 }
@@ -71,6 +72,7 @@ export async function saveStudentMeta(input: {
   englishBand: EnglishBand;
   attendDays?: string[];
   memo?: string;
+  photo?: string;
 }): Promise<void> {
   const r = await fetch("/api/roster/meta", {
     method: "POST",

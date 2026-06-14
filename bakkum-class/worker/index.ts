@@ -116,6 +116,26 @@ export default {
           await env.MEDIA.put(key, body, { httpMetadata: { contentType: ct } });
           return json({ url: `/api/media/${key}` });
         }
+        // 전역 설정(학원 로고 등). GET: 로그인 스태프 누구나, POST: 원장.
+        if (p === "/api/config" && request.method === "GET") {
+          const me = await readSession(env, request);
+          if (!me) return json({ error: "forbidden" }, 403);
+          await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_config (k TEXT PRIMARY KEY, v TEXT NOT NULL DEFAULT '')").run();
+          const r = await env.DB.prepare("SELECT k,v FROM class_config").all<{ k: string; v: string }>();
+          const cfg: Record<string, string> = {};
+          for (const row of r.results || []) cfg[row.k] = row.v;
+          return json({ config: cfg });
+        }
+        if (p === "/api/config" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+          await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_config (k TEXT PRIMARY KEY, v TEXT NOT NULL DEFAULT '')").run();
+          for (const [k, v] of Object.entries(b)) {
+            await env.DB.prepare("INSERT INTO class_config(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, String(v ?? "")).run();
+          }
+          return json({ ok: true });
+        }
 
         // ---- 통합 허브 인증 ----
         if (p === "/api/auth/login" && request.method === "POST") return await authLogin(env, request);
@@ -441,6 +461,7 @@ async function ensureStudentMeta(env: Env): Promise<void> {
   for (const col of [
     "ALTER TABLE class_student_meta ADD COLUMN attend_days TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_student_meta ADD COLUMN memo TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_student_meta ADD COLUMN photo TEXT NOT NULL DEFAULT ''",
   ]) {
     try {
       await env.DB.prepare(col).run();
@@ -465,6 +486,7 @@ interface RosterStudent {
   englishBand: string; // "elem" | "mid" | ""
   attendDays: string[]; // 등원요일 ["월","수","금"]
   memo: string; // 메모/특이사항(누적 자유 입력)
+  photo: string; // 프로필 사진 URL(선택)
   mathSlots: Slot[]; // 수학 수업 요일·시간 (class_lessons 공유 — 수학 앱과 양방향)
   engSlots: Slot[]; // 영어 수업 요일·시간 (class_eng_lessons)
 }
@@ -482,11 +504,11 @@ async function readRoster(env: Env): Promise<RosterStudent[]> {
     )
     .all<Record<string, unknown>>();
 
-  const metaMap: Record<string, { online_id: string; subjects: string; english_band: string; attend_days?: string; memo?: string }> = {};
+  const metaMap: Record<string, { online_id: string; subjects: string; english_band: string; attend_days?: string; memo?: string; photo?: string }> = {};
   try {
     const m = await env.DB
-      .prepare("SELECT student_id, online_id, subjects, english_band, attend_days, memo FROM class_student_meta")
-      .all<{ student_id: string; online_id: string; subjects: string; english_band: string; attend_days: string; memo: string }>();
+      .prepare("SELECT student_id, online_id, subjects, english_band, attend_days, memo, photo FROM class_student_meta")
+      .all<{ student_id: string; online_id: string; subjects: string; english_band: string; attend_days: string; memo: string; photo: string }>();
     for (const r of m.results || []) metaMap[String(r.student_id)] = r;
   } catch {
     /* meta 없으면 기본값 */
@@ -536,6 +558,7 @@ async function readRoster(env: Env): Promise<RosterStudent[]> {
       englishBand: meta?.english_band || "",
       attendDays: parseStrArr(meta?.attend_days),
       memo: meta?.memo || "",
+      photo: meta?.photo || "",
       mathSlots: mathSlotMap[id] || [],
       engSlots: engSlotMap[id] || [],
     };
@@ -560,6 +583,7 @@ async function rosterMetaUpsert(env: Env, request: Request): Promise<Response> {
     englishBand?: string;
     attendDays?: string[];
     memo?: string;
+    photo?: string;
   };
   const sid = String(b.studentId || "");
   if (!sid) return json({ error: "studentId_required" }, 400);
@@ -569,11 +593,12 @@ async function rosterMetaUpsert(env: Env, request: Request): Promise<Response> {
   const onlineId = typeof b.onlineId === "string" ? b.onlineId.slice(0, 120) : "";
   const attendDays = Array.isArray(b.attendDays) ? b.attendDays.map(String).filter((d) => DOW.includes(d)) : [];
   const memo = typeof b.memo === "string" ? b.memo.slice(0, 4000) : "";
+  const photo = typeof b.photo === "string" ? b.photo.slice(0, 400) : "";
   await env.DB
     .prepare(
-      "INSERT INTO class_student_meta(student_id,online_id,subjects,english_band,attend_days,memo,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(student_id) DO UPDATE SET online_id=excluded.online_id, subjects=excluded.subjects, english_band=excluded.english_band, attend_days=excluded.attend_days, memo=excluded.memo, updated_at=excluded.updated_at"
+      "INSERT INTO class_student_meta(student_id,online_id,subjects,english_band,attend_days,memo,photo,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(student_id) DO UPDATE SET online_id=excluded.online_id, subjects=excluded.subjects, english_band=excluded.english_band, attend_days=excluded.attend_days, memo=excluded.memo, photo=excluded.photo, updated_at=excluded.updated_at"
     )
-    .bind(sid, onlineId, JSON.stringify(subjects), band, JSON.stringify(attendDays), memo, Date.now())
+    .bind(sid, onlineId, JSON.stringify(subjects), band, JSON.stringify(attendDays), memo, photo, Date.now())
     .run();
   return json({ ok: true });
 }
