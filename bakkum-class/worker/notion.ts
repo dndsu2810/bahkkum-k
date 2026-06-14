@@ -543,9 +543,10 @@ export async function fetchSnsPages(env: NotionEnv): Promise<NotionSns[]> {
   return out;
 }
 
-// 중고등영어 DB — 데이터소스(소스) id를 써야 쿼리됨(뷰 id 아님).
-const ENG_HOMEWORK_DB = "2e766817e061811180a0000ba707cf4f"; // 과제 기록DB(소스)
-const ENG_ATTENDANCE_DB = "2e766817e06181ad92d8000bf18c1be3"; // 수업 기록 및 출결+포인트DB(소스)
+// 중고등영어 DB — /v1/databases/{id}/query 에는 '데이터베이스 id'(인라인 url)를 쓴다.
+// (collection://… 데이터소스 id가 아님 — 학생DB도 database id≠collection id.)
+const ENG_HOMEWORK_DB = "2e766817e06181d3ae8fd12e793cc28b"; // 과제 기록DB
+const ENG_ATTENDANCE_DB = "31a66817e061803c9d99e52b8d0ee194"; // 수업 기록 및 출결+포인트DB
 
 // relation 페이지id → 학생 이름(제목) 해석기(캐시).
 function makeNameResolver(env: NotionEnv) {
@@ -588,7 +589,10 @@ export async function fetchEngHomework(env: NotionEnv): Promise<NotionEngHw[]> {
       page_size: 100,
       ...(cursor ? { start_cursor: cursor } : {}),
     });
-    if (!res.ok) throw new Error("notion query failed: " + res.status);
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error("notion " + res.status + ": " + t.slice(0, 300));
+    }
     const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
     for (const pg of j.results) {
       const props = (pg.properties || {}) as Record<string, Prop>;
@@ -639,7 +643,10 @@ export async function fetchEngAttendance(env: NotionEnv): Promise<NotionEngAtt[]
       page_size: 100,
       ...(cursor ? { start_cursor: cursor } : {}),
     });
-    if (!res.ok) throw new Error("notion query failed: " + res.status);
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error("notion " + res.status + ": " + t.slice(0, 300));
+    }
     const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
     for (const pg of j.results) {
       const props = (pg.properties || {}) as Record<string, Prop>;
