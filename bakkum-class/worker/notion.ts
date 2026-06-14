@@ -543,6 +543,71 @@ export async function fetchSnsPages(env: NotionEnv): Promise<NotionSns[]> {
   return out;
 }
 
+// 중고등영어 '과제기록 입력' DB. 학생 선택(relation)·날짜·단어/리딩/문법 숙제·틀단확인.
+const ENG_HOMEWORK_DB = "2e766817e06181d3ae8fd12e793cc28b";
+export interface NotionEngHw {
+  studentName: string;
+  date: string; // YYYY-MM-DD
+  word: string; // 완료|미흡|안함|없음|""
+  reading: string;
+  grammar: string;
+  wrongCheck: boolean;
+}
+/** 과제기록 DB의 모든 행(이름·날짜·숙제 3분류·틀단확인). 학생은 relation→페이지 제목으로 이름 해석. */
+export async function fetchEngHomework(env: NotionEnv): Promise<NotionEngHw[]> {
+  if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
+  const norm = (v: string) => (v === "안 함" ? "안함" : v); // 옵션 중복 정리
+  const valid = new Set(["완료", "미흡", "안함", "없음"]);
+  const nameCache = new Map<string, string>();
+  async function nameOf(pageId: string): Promise<string> {
+    if (nameCache.has(pageId)) return nameCache.get(pageId)!;
+    let nm = "";
+    try {
+      const res = await notionReq(env, "GET", `/v1/pages/${pageId}`);
+      if (res.ok) {
+        const j = (await res.json()) as { properties?: Record<string, Prop> };
+        nm = findTitle((j.properties || {}) as Record<string, Prop>).trim();
+      }
+    } catch {
+      /* ignore */
+    }
+    nameCache.set(pageId, nm);
+    return nm;
+  }
+  const out: NotionEngHw[] = [];
+  let cursor: string | undefined;
+  do {
+    const res = await notionReq(env, "POST", `/v1/databases/${ENG_HOMEWORK_DB}/query`, {
+      page_size: 100,
+      ...(cursor ? { start_cursor: cursor } : {}),
+    });
+    if (!res.ok) throw new Error("notion query failed: " + res.status);
+    const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+    for (const pg of j.results) {
+      const props = (pg.properties || {}) as Record<string, Prop>;
+      const date = propText(props["날짜"]).slice(0, 10);
+      const sid = relationIds(props["학생 선택"])[0];
+      if (!date || !sid) continue;
+      const name = await nameOf(sid);
+      if (!name) continue;
+      const pick = (k: string) => {
+        const v = norm(propText(props[k]));
+        return valid.has(v) ? v : "";
+      };
+      out.push({
+        studentName: name,
+        date,
+        word: pick("단어숙제"),
+        reading: pick("리딩숙제"),
+        grammar: pick("문법숙제"),
+        wrongCheck: checkboxVal(props["틀단확인"]),
+      });
+    }
+    cursor = j.has_more ? j.next_cursor : undefined;
+  } while (cursor);
+  return out;
+}
+
 /** TEMP inspect: schema(속성명/타입) + 샘플 of a Notion DB (구현 점검용). */
 export async function inspectDb(env: NotionEnv, which: string): Promise<unknown> {
   if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");

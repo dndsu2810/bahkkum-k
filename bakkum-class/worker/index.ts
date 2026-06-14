@@ -37,6 +37,7 @@ import {
   fetchClassTitleMap,
   fetchManualPages,
   fetchSnsPages,
+  fetchEngHomework,
 } from "./notion";
 import { NOTION_CFG } from "./notion";
 import { isHoliday, holidayName } from "../src/lib/holidays";
@@ -59,7 +60,7 @@ import {
   setUserPrefs,
 } from "./auth";
 import { handleHub, ensureHubTables } from "./hub";
-import { handleEng } from "./eng";
+import { handleEng, ensureEngTables } from "./eng";
 
 const DEFAULT_APP_URL = "https://bakkum-class.dndsu2810.workers.dev";
 
@@ -231,6 +232,12 @@ export default {
           const me = await readSession(env, request);
           if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
           return await importEngTimetable(env, request);
+        }
+        // 노션 '과제기록 입력'(중고등영어 단어·리딩·문법 숙제) → class_eng_daily 가져오기.
+        if (p === "/api/sync/eng-daily" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await importEngDaily(env);
         }
 
         // ---- 허브 공유 영역(특이사항·위키·SNS·업무보드) ----
@@ -1133,6 +1140,44 @@ async function importEngTimetable(env: Env, request: Request): Promise<Response>
     }
   }
   return json({ ok: true, matched: matched.length, unmatched });
+}
+
+// 노션 과제기록(중고등영어 단어·리딩·문법 숙제) → class_eng_daily 가져오기(이름 매칭, 숙제 칸만 갱신).
+async function importEngDaily(env: Env): Promise<Response> {
+  await ensureEngTables(env);
+  let rows;
+  try {
+    rows = await fetchEngHomework(env);
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+  const nameRows = await env.DB.prepare("SELECT id, name FROM students WHERE hidden IS NULL OR hidden = 0").all<{ id: number; name: string }>();
+  const idByName = new Map<string, string>();
+  for (const r of nameRows.results || []) idByName.set(String(r.name).trim(), String(r.id));
+  const stmts: D1PreparedStatement[] = [];
+  let imported = 0;
+  const unmatched = new Set<string>();
+  for (const hw of rows) {
+    const sid = idByName.get(hw.studentName.trim());
+    if (!sid) {
+      unmatched.add(hw.studentName);
+      continue;
+    }
+    imported++;
+    stmts.push(
+      env.DB.prepare(
+        "INSERT INTO class_eng_daily(student_id,date,hw_word,hw_reading,hw_grammar,wrong_check,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, updated_at=excluded.updated_at"
+      ).bind(sid, hw.date, hw.word, hw.reading, hw.grammar, hw.wrongCheck ? 1 : 0, Date.now())
+    );
+  }
+  for (let i = 0; i < stmts.length; i += 50) {
+    try {
+      await env.DB.batch(stmts.slice(i, i + 50));
+    } catch {
+      /* 청크 실패는 건너뜀 */
+    }
+  }
+  return json({ ok: true, total: rows.length, imported, unmatched: [...unmatched] });
 }
 
 async function importSns(env: Env): Promise<Response> {

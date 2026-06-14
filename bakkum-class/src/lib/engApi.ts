@@ -5,13 +5,13 @@ async function jget<T>(url: string): Promise<T> {
   if (!r.ok) throw new Error("HTTP " + r.status);
   return (await r.json()) as T;
 }
-async function jpost(url: string, body: unknown): Promise<{ ok?: boolean; id?: string; error?: string }> {
+async function jpost<T = { ok?: boolean; id?: string; error?: string }>(url: string, body: unknown): Promise<T> {
   const r = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  const j = (await r.json().catch(() => ({}))) as { ok?: boolean; id?: string; error?: string };
+  const j = (await r.json().catch(() => ({}))) as T & { error?: string };
   if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
   return j;
 }
@@ -119,6 +119,8 @@ export const engApi = {
   dailyByStudent: (studentId: string) =>
     jget<{ daily: EngDaily[] }>("/api/eng/daily?student_id=" + encodeURIComponent(studentId)).then((j) => j.daily),
   saveDaily: (d: Partial<EngDaily> & { studentId: string; date: string }) => jpost("/api/eng/daily", d),
+  /** 노션 '과제기록 입력'(중고등 단어·리딩·문법 숙제) 1회 가져오기(원장 전용). */
+  syncDaily: () => jpost<{ ok: boolean; total: number; imported: number; unmatched: string[] }>("/api/sync/eng-daily", {}),
 
   progress: (studentId: string) =>
     jget<{ progress: EngProgress[] }>("/api/eng/progress?student_id=" + encodeURIComponent(studentId)).then((j) => j.progress),

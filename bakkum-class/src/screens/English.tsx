@@ -64,6 +64,25 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   const [daily, setDaily] = useState<Record<string, EngDaily>>({});
   const [sel, setSel] = useState("");
   const [err, setErr] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+
+  // 노션 '과제기록 입력' 1회 가져오기(원장 전용).
+  async function syncHw() {
+    if (syncing) return;
+    if (!window.confirm("노션 '과제기록 입력'의 단어·리딩·문법 숙제를 이름으로 매칭해 가져옵니다. 진행할까요?")) return;
+    setSyncing(true);
+    setSyncMsg("");
+    try {
+      const r = await engApi.syncDaily();
+      setSyncMsg(`가져오기 완료 · ${r.imported}건 반영` + (r.unmatched.length ? ` · 미매칭 ${r.unmatched.length}명: ${r.unmatched.slice(0, 10).join(", ")}` : ""));
+      engApi.dailyByDate(date).then((list) => { const m: Record<string, EngDaily> = {}; for (const d of list) m[d.studentId] = d; setDaily(m); }).catch(() => {});
+    } catch (e) {
+      setErr("가져오기 실패: " + String((e as Error).message));
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   const students = useMemo(
     () => roster.filter((s) => s.subjects.includes("english") && s.englishBand === band),
@@ -207,6 +226,9 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
           <p className="sm-desc">{DESC[tab]}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {tab === "hw" && band === "mid" && user?.role === "admin" && (
+            <button className="btn ghost" disabled={syncing} onClick={syncHw}>{syncing ? "가져오는 중…" : "노션 과제기록 가져오기"}</button>
+          )}
           {(tab === "today" || tab === "att") && (
             <div className="date-nav">
               <button className="date-arrow" onClick={() => shiftDate(-1)} title="어제" aria-label="어제로">‹</button>
@@ -219,6 +241,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
         </div>
       </div>
 
+      {syncMsg && <div className="hub-muted" style={{ marginBottom: 10 }}>{syncMsg}</div>}
       {err && <div className="auth-err" style={{ marginBottom: 10 }}>{err}</div>}
       {showLive && <ApprovedBanner changes={approvedChanges} subject="english" date={date} />}
       {showLive && <ConflictPopup conflicts={conflicts} date={date} />}
