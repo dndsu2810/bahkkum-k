@@ -27,10 +27,14 @@ function ymLabel(month: string): string {
 
 /* ---------------- 레이더 차트 (8축 0~6) ---------------- */
 function Radar({ scores }: { scores: Record<string, string> }) {
-  const size = 360;
-  const cx = size / 2;
-  const cy = size / 2 + 6;
-  const maxR = 128;
+  // SVG를 카드 폭에 맞춰(=중앙정렬 불필요) 넓게 두고, 차트 원은 가운데에.
+  // 좌우 라벨이 viewBox 안에 충분히 들어오게 해서 저장 이미지에서도 안 잘리게.
+  const W = 718;
+  const H = 360;
+  const cx = W / 2;
+  const cy = H / 2 + 4;
+  const maxR = 118;
+  const labelR = maxR + 16;
   const N = ENG_CRITERIA.length; // 8
   const ang = (i: number) => (-90 + (360 / N) * i) * (Math.PI / 180);
   const pt = (i: number, r: number) => [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
@@ -42,7 +46,7 @@ function Radar({ scores }: { scores: Record<string, string> }) {
   const refLevel = 4;
 
   return (
-    <svg className="erc3-radar" width={size} height={size + 28} viewBox={`0 0 ${size} ${size + 28}`}>
+    <svg className="erc3-radar" width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
       {/* 그리드 링 */}
       {[1, 2, 3, 4, 5, 6].map((lv) => (
         <polygon key={lv} points={polyAt(lv)} fill="none" stroke="#E2E8EC" strokeWidth={1} />
@@ -62,7 +66,7 @@ function Radar({ scores }: { scores: Record<string, string> }) {
       })}
       {/* 축 라벨 */}
       {AXIS.map((label, i) => {
-        const [x, y] = pt(i, maxR + 20);
+        const [x, y] = pt(i, labelR);
         const anchor = Math.abs(x - cx) < 6 ? "middle" : x > cx ? "start" : "end";
         return (
           <text key={i} x={x} y={y} className="erc3-axis-l" textAnchor={anchor} dominantBaseline="middle">
@@ -84,7 +88,6 @@ export function EngReportCard({ baseId, data }: { baseId: string; data: EngRepor
       <div className="erc3-brand">
         <div>
           <b>바꿈영수학원</b>
-          <span>Bakkum English &amp; Math Academy</span>
         </div>
       </div>
       {right ? <div className="erc3-head-right">{right}</div> : (

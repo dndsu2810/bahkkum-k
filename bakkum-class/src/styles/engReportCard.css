@@ -46,9 +46,9 @@
 .erc3-badge.g-GR{ background:#3E9E6E } .erc3-badge.g-G{ background:#5AA9C0 }
 .erc3-badge.g-VG{ background:#E0A30C } .erc3-badge.g-NI{ background:#E0696E }
 
-/* 레이더 */
-.erc3-radar{ display:block; margin:0 auto }
-.erc3-axis-l{ font-size:11px; font-weight:700; fill:var(--ink2) }
+/* 레이더 — SVG가 카드 폭을 채우고 차트는 viewBox 가운데(중앙정렬 불필요) */
+.erc3-radar{ display:block; width:100%; height:auto; margin:4px 0 0 }
+.erc3-axis-l{ font-size:12px; font-weight:700; fill:var(--ink2) }
 
 /* 범례 */
 .erc3-scale{ margin:8px 30px 0; background:var(--t-soft); border:1px solid var(--t-tint); border-radius:12px; padding:14px 16px }
