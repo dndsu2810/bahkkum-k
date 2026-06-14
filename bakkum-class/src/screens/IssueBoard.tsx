@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { feedbackApi, ISSUE_PAGES, ISSUE_STATUSES, type Issue } from "../lib/feedbackApi";
 import { uploadImage } from "../lib/configApi";
 import { fmtWhen } from "../lib/dates";
+import { Icon } from "../icons";
 
 const ROLE_LABEL: Record<string, string> = { admin: "원장", math: "수학", english_mid: "영어(중고등)", english_elem: "영어(초등)", desk: "데스크", student: "학생" };
 const statusCls = (s: string) => (s === "완료" ? "done" : s === "해결중" ? "doing" : "new");
@@ -107,7 +108,7 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
             </select>
           </label>
           <label className="issue-shot-btn">
-            {shot ? "사진 변경" : "📷 스크린샷"}
+            <Icon name="camera" /> {shot ? "사진 변경" : "스크린샷"}
             <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => onShot(e.target.files?.[0])} />
           </label>
         </div>

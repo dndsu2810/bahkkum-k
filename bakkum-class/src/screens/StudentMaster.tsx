@@ -18,6 +18,7 @@ import {
 import { GRADE_DIVS, DIV_MAX, makeGrade, parseGrade } from "../lib/grade";
 import { uploadImage } from "../lib/configApi";
 import { StudentPage } from "./StudentPage";
+import { Icon } from "../icons";
 
 type FilterKey = "all" | "math" | "english" | "elem" | "mid";
 
@@ -380,7 +381,7 @@ function ProfileModal({
             {f.photo ? <img className="av av-lg prof-av prof-av-img" src={f.photo} alt={f.name} /> : <div className="av av-lg prof-av">{initials(f.name)}</div>}
             {!ro && (
               <label className="prof-av-edit" title="사진 변경">
-                {photoBusy ? "…" : "📷"}
+                {photoBusy ? "…" : <Icon name="camera" />}
                 <input type="file" accept="image/*" style={{ display: "none" }} disabled={photoBusy} onChange={(e) => onPhoto(e.target.files?.[0])} />
               </label>
             )}
@@ -394,7 +395,7 @@ function ProfileModal({
               <span className="prof-badge brand">{subjLabel(f)}</span>
             </div>
             {hasEng && (
-              <button className="btn ghost sm prof-pagebtn" onClick={() => setShowPage(true)}>📘 개별 페이지 (시간표·커리큘럼·일지)</button>
+              <button className="btn ghost sm prof-pagebtn" onClick={() => setShowPage(true)}><Icon name="book" /> 개별 페이지 (시간표·커리큘럼·일지)</button>
             )}
           </div>
           <button className="modal-x" onClick={onClose} aria-label="닫기">✕</button>

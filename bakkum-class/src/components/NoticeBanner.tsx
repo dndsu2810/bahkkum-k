@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { feedbackApi, type Notice } from "../lib/feedbackApi";
+import { Icon } from "../icons";
 
 const DISMISS_KEY = "bk_notice_dismissed";
 function dismissed(): Set<string> {
@@ -45,7 +46,7 @@ export function NoticeBanner() {
     <div className="notice-wrap">
       {shown.map((n) => (
         <div key={n.id} className={"notice-band " + (n.level === "warn" ? "warn" : "info")}>
-          <span className="notice-ic">📢</span>
+          <span className="notice-ic"><Icon name="megaphone" /></span>
           <span className="notice-text">{n.text}</span>
           <button className="notice-x" onClick={() => close(n.id)} aria-label="닫기">✕</button>
         </div>

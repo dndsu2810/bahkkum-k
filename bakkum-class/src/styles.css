@@ -118,7 +118,8 @@ body,.side,.topbar,.card,.board-col,.today-brief,.nav-item{transition:background
 /* 상단 알림 벨 (시간표 변경 요청) */
 .topbell{position:relative;width:36px;height:36px;border-radius:var(--r-full);border:1px solid var(--line2);background:var(--card);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:16px;line-height:1}
 .topbell:hover{background:var(--brand-soft);border-color:var(--brand-line)}
-.topbell-ic{filter:grayscale(.2)}
+.topbell svg{width:19px;height:19px;stroke-width:2;color:var(--ink2)}
+.topbell:hover svg{color:var(--brand-d)}
 .topbell-badge{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:var(--bad,#e04a4f);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--card)}
 .pill-date{display:flex;align-items:center;gap:6px;min-height:38px;padding:0 var(--s4);border:1px solid var(--line2);border-radius:var(--r-full);background:var(--card);font-size:var(--t-sm);font-weight:600;color:var(--ink2)}
 .pill-date .dot{width:7px;height:7px;border-radius:var(--r-full);background:var(--ok)}
@@ -1376,7 +1377,8 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 /* 프로필 사진 */
 .prof-av-wrap{position:relative;flex-shrink:0}
 .prof-av-img{object-fit:cover;padding:0}
-.prof-av-edit{position:absolute;right:-2px;bottom:-2px;width:22px;height:22px;border-radius:50%;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;box-shadow:var(--sh-sm)}
+.prof-av-edit{position:absolute;right:-2px;bottom:-2px;width:22px;height:22px;border-radius:50%;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;box-shadow:var(--sh-sm);color:var(--ink2)}
+.prof-av-edit svg{width:12px;height:12px;stroke-width:2}
 .sm-row-av-img{object-fit:cover;padding:0}
 /* 숙제 기록 탭 — 월별 그룹 + 컴팩트 표 */
 .eng-hwm-list{display:flex;flex-direction:column;gap:18px}
@@ -1932,9 +1934,11 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .issue-form-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
 .issue-f{display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px}
 .issue-f>span{font-size:var(--t-cap);font-weight:600;color:var(--ink2)}
-.issue-shot-btn{flex:none;border:1px solid var(--line2);background:var(--card);border-radius:var(--r-md);
+.issue-shot-btn{flex:none;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);background:var(--card);border-radius:var(--r-md);
   padding:9px 12px;font-size:var(--t-sm);color:var(--ink2);cursor:pointer}
+.issue-shot-btn svg{width:15px;height:15px;stroke-width:2}
 .issue-shot-btn:hover{border-color:var(--brand-line);color:var(--brand-d)}
+.notice-ic svg{width:16px;height:16px;stroke-width:2;display:block}
 .issue-shot-prev{position:relative;width:120px}
 .issue-shot-prev img{width:120px;height:90px;object-fit:cover;border-radius:var(--r-sm);border:1px solid var(--line)}
 .issue-shot-x{position:absolute;top:3px;right:3px;width:22px;height:22px;border:none;border-radius:50%;
@@ -1962,3 +1966,10 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .issue-stbtn.on.new{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-d);font-weight:700}
 .issue-stbtn.on.doing{background:var(--warn-soft);border-color:#fcd9a3;color:var(--warn);font-weight:700}
 .issue-stbtn.on.done{background:var(--ok-soft);border-color:#bbf7d0;color:var(--ok);font-weight:700}
+
+/* 벡터 아이콘 정렬(이모지 대체) */
+.maker-card-ic svg{width:24px;height:24px;stroke-width:1.8;color:var(--brand-d)}
+.sp-time-auto{display:flex;align-items:center;justify-content:center;gap:6px}
+.sp-time-auto svg{width:15px;height:15px;stroke-width:2}
+.sp-cur-note{display:flex;align-items:flex-start;gap:7px}
+.sp-cur-note svg{width:15px;height:15px;stroke-width:2;flex:none;margin-top:2px;color:var(--warn)}

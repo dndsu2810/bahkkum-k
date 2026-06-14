@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { snsApi, uploadImage, type SnsPost, type SnsStatus } from "../lib/hubApi";
 import { fmtWhen } from "../lib/dates";
 import { ImageGrid } from "../components/ImageGrid";
+import { Icon } from "../icons";
 
 const CHANNELS = ["블로그", "인스타", "카카오톡채널"];
 
@@ -24,7 +25,7 @@ function MarketingMakerCard() {
   return (
     <div className="maker-card card">
       <div className="maker-card-main">
-        <div className="maker-card-ic">✨</div>
+        <div className="maker-card-ic"><Icon name="sparkle" /></div>
         <div className="maker-card-text">
           <b>마케팅 뚝딱 메이커</b>
           <span>학원 블로그 글·카드뉴스를 우리 학원 색·말투로 자동 생성</span>

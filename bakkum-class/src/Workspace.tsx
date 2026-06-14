@@ -325,7 +325,7 @@ export function Workspace() {
               title={reqPending > 0 ? `받은 시간표 변경 요청 ${reqPending}건` : "시간표 변경 요청"}
               aria-label="시간표 변경 요청 알림"
             >
-              <span className="topbell-ic">🔔</span>
+              <Icon name="bell" />
               {reqPending > 0 && <span className="topbell-badge">{reqPending}</span>}
             </button>
             <ThemeToggle />

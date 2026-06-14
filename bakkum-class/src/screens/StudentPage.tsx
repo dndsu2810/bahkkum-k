@@ -4,6 +4,7 @@ import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type Curriculum, t
 import { DOW, DOW_ORDER, fmtFull, fmtMDDow, parseD, timeToMin, todayStr } from "../lib/dates";
 import { NoticeBanner } from "../components/NoticeBanner";
 import { IssueBoard } from "./IssueBoard";
+import { Icon } from "../icons";
 
 /** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
  *  - 학생 본인: studentId 생략(본인). 일지 입력 가능, 커리큘럼 조회.
@@ -114,7 +115,7 @@ function CurriculumView({ cur }: { cur: Curriculum }) {
   if (!cur.sections.length) return <div className="sp-muted">아직 커리큘럼이 등록되지 않았어요.</div>;
   return (
     <div className="sp-cur">
-      {cur.note && <div className="sp-cur-note">💡 {cur.note}</div>}
+      {cur.note && <div className="sp-cur-note"><Icon name="info" /> {cur.note}</div>}
       {cur.sections.map((sec, si) => (
         <div className="sp-cur-sec" key={si}>
           {sec.title && <div className="sp-cur-sectitle">{sec.title}</div>}
@@ -282,7 +283,7 @@ function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string
         </div>
         {scheduled && (
           <button type="button" className="sp-time-auto" onClick={fillScheduled}>
-            🕑 오늘 수업시간 자동입력 ({scheduled.time}{scheduled.duration ? `~${addMin(scheduled.time, scheduled.duration)}` : ""})
+            <Icon name="clock" /> 오늘 수업시간 자동입력 ({scheduled.time}{scheduled.duration ? `~${addMin(scheduled.time, scheduled.duration)}` : ""})
           </button>
         )}
       </div>
@@ -400,7 +401,7 @@ export function StudentHome() {
           </div>
         </div>
         <div className="sp-shell-actions">
-          <button className="btn ghost sm" onClick={() => setShowIssue(true)}>🐞 오류 신고</button>
+          <button className="btn ghost sm" onClick={() => setShowIssue(true)}><Icon name="alert" /> 오류 신고</button>
           <button className="btn ghost" onClick={() => logout()}>로그아웃</button>
         </div>
       </header>
