@@ -90,7 +90,8 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
 
   // 영어 수업관리 — 영어 강사 + 원장(전체 열람). 원장은 초등·중고등 모두 본다.
   if (role === "english_mid" || role === "admin") groups.push({ label: "영어 수업관리 (중고등)", entries: engEntries("mid") });
-  if (role === "english_elem" || role === "admin") groups.push({ label: "영어 수업관리 (초등)", entries: engEntries("elem") });
+  // 월말리포트(초등 전용)는 초등 영어 그룹 안에.
+  if (role === "english_elem" || role === "admin") groups.push({ label: "영어 수업관리 (초등)", entries: [...engEntries("elem"), ENGREPORT] });
 
   // 데스크
   if (role === "desk") groups.push({ label: "데스크", entries: [DESK_TODAY, DESK_TT, DESK_STU, DESK_ACC] });
@@ -105,7 +106,7 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
 
   // 원장 전용
   if (role === "admin") {
-    groups.push({ label: "원장 전용", entries: [ADMIN_DASH, ENGREPORT, ACCOUNTS, SETTINGS] });
+    groups.push({ label: "원장 전용", entries: [ADMIN_DASH, ACCOUNTS, SETTINGS] });
   }
 
   return groups;

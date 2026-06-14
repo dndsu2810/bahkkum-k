@@ -1,7 +1,6 @@
 import { ENG_CRITERIA, ENG_GRADES } from "../lib/engApi";
 import "../styles/engReportCard.css";
 
-const LOGO = "/report-logo.png";
 const GRADE_FULL: Record<string, string> = Object.fromEntries(ENG_GRADES.map((g) => [g.value, g.full]));
 // 등급 약자 → 레이더 점수(0~6). P=6 … NI=1, 미입력=0. (ENG_GRADES 순서 기준)
 const SCORE_OF: Record<string, number> = Object.fromEntries(ENG_GRADES.map((g, i) => [g.value, ENG_GRADES.length - i]));
@@ -83,7 +82,6 @@ export function EngReportCard({ baseId, data }: { baseId: string; data: EngRepor
   const Header = ({ right }: { right?: string }) => (
     <div className="erc3-head">
       <div className="erc3-brand">
-        <img src={LOGO} alt="" crossOrigin="anonymous" />
         <div>
           <b>바꿈영수학원</b>
           <span>Bakkum English &amp; Math Academy</span>
