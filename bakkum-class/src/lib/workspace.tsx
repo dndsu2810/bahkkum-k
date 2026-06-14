@@ -58,7 +58,7 @@ function engEntries(band: "mid" | "elem"): WsEntry[] {
 
 const HOME: WsEntry = { key: "home", label: "홈", icon: "today", kind: "hub" };
 const SCHEDULE: WsEntry = { key: "schedule_hub", label: "학원 일정", icon: "calplus", kind: "hub" };
-const REQS: WsEntry = { key: "reqs", label: "시간표 변경 요청", icon: "refresh", kind: "hub" };
+const REQS: WsEntry = { key: "reqs", label: "시간표 변경", icon: "refresh", kind: "hub" };
 const BOARD: WsEntry = { key: "board", label: "강사 업무 보드", icon: "board", kind: "hub" };
 const WIKI: WsEntry = { key: "wiki", label: "바꿈 매뉴얼", icon: "book", kind: "hub" };
 const SNS: WsEntry = { key: "sns", label: "SNS 관리", icon: "copy", kind: "hub" };

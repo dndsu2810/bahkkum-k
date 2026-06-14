@@ -158,9 +158,11 @@ export async function handleHub(
     if (!sid || !toDate || !b.toTime) return json({ error: "bad_input" }, 400);
     const id = newId("req");
     const now = Date.now();
+    // kind=log → 승인 불필요 1회성 변경 '기록'(즉시 반영). 기본은 'pending'(승인 요청).
+    const status = String(b.kind) === "log" ? "logged" : "pending";
     await env.DB
       .prepare("INSERT INTO class_change_reqs(id,student_id,student_name,subject,change_date,from_date,to_date,from_time,to_time,reason,requester_id,requester_name,target_id,target_name,status,response,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-      .bind(id, sid, String(b.studentName || ""), subject, toDate, fromDate, toDate, String(b.fromTime || ""), String(b.toTime), String(b.reason || "").slice(0, 1000), me.sub, me.name, String(b.targetId || ""), String(b.targetName || ""), "pending", "", now, now)
+      .bind(id, sid, String(b.studentName || ""), subject, toDate, fromDate, toDate, String(b.fromTime || ""), String(b.toTime), String(b.reason || "").slice(0, 1000), me.sub, me.name, String(b.targetId || ""), String(b.targetName || ""), status, "", now, now)
       .run();
     return json({ ok: true, id });
   }

@@ -161,6 +161,7 @@ export const reqsApi = {
     studentId: string; studentName: string; subject: string;
     fromDate: string; toDate: string; fromTime?: string; toTime: string;
     reason?: string; targetId?: string; targetName?: string;
+    kind?: "request" | "log"; // log = 승인 불필요 1회성 변경 기록
   }) => jpost("/api/reqs", r),
   respond: (id: string, status: "approved" | "rejected", response?: string) =>
     jpost("/api/reqs/respond", { id, status, response }),

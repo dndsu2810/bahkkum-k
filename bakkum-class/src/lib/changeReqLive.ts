@@ -32,7 +32,8 @@ export function useApprovedChanges(date: string): ChangeReq[] {
         .list()
         .then((rs) => {
           if (!alive) return;
-          setList(rs.filter((r) => r.status === "approved" && (r.toDate === date || r.fromDate === date || r.changeDate === date)));
+          // 승인된 요청 + 1회성 변경 기록(logged) 둘 다 그 날짜에 즉시 반영.
+          setList(rs.filter((r) => (r.status === "approved" || r.status === "logged") && (r.toDate === date || r.fromDate === date || r.changeDate === date)));
         })
         .catch(() => {});
     void load();

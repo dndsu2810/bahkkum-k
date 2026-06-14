@@ -7,13 +7,13 @@ import { ROLE_LABEL, type Role } from "../lib/roles";
 import { DOW, fmtWhen, parseD, todayStr, ymd } from "../lib/dates";
 import type { ReqPrefill } from "../lib/changeReqLive";
 
-type Tab = "in" | "out" | "new";
+type Tab = "log" | "in" | "out" | "new";
 const subjLabel = (s: string) => (s === "english" ? "영어" : "수학");
 
-/** 시간표 변경 요청 — 한 학생 수업시간 임시 변경을 담당/지정 강사에게 요청 → 승인. 앱 내 알림(배지). */
+/** 시간표 변경 — ①1회성 변경 '기록'(승인 불필요) ②다른 수업/과목에 영향 주는 '변경 요청'(승인). */
 export function ChangeRequests({ prefill }: { prefill?: (ReqPrefill & { n: number }) | null }) {
   const { user } = useAuth();
-  const [tab, setTab] = useState<Tab>(prefill ? "new" : "in");
+  const [tab, setTab] = useState<Tab>(prefill ? "new" : "log");
   // 충돌 팝업 등에서 프리필이 도착하면 '새 요청' 탭으로 전환.
   useEffect(() => {
     if (prefill) setTab("new");
@@ -33,8 +33,9 @@ export function ChangeRequests({ prefill }: { prefill?: (ReqPrefill & { n: numbe
   }, []);
 
   const mine = user?.sub || "";
-  const received = reqs.filter((r) => r.targetId === mine && r.status !== "withdrawn");
-  const sent = reqs.filter((r) => r.requesterId === mine);
+  const logs = reqs.filter((r) => r.status === "logged");
+  const received = reqs.filter((r) => r.targetId === mine && r.status !== "withdrawn" && r.status !== "logged");
+  const sent = reqs.filter((r) => r.requesterId === mine && r.status !== "logged");
   const pendingIn = received.filter((r) => r.status === "pending").length;
 
   async function withdraw(r: ChangeReq) {
@@ -58,19 +59,29 @@ export function ChangeRequests({ prefill }: { prefill?: (ReqPrefill & { n: numbe
     <div className="sm-wrap">
       <div className="sm-head">
         <div>
-          <h1 className="sm-title">시간표 변경 요청</h1>
-          <p className="sm-desc">특정일 수업시간을 임시로 바꿔야 할 때, 담당/지정 선생님께 요청하고 승인받습니다.</p>
+          <h1 className="sm-title">시간표 변경</h1>
+          <p className="sm-desc">
+            1회성으로 요일·시간을 바꾸면 <b>변경 기록</b>(승인 없이 바로 반영). 다른 수업·과목(영어↔수학)에 영향이 있어 협의가 필요하면 <b>변경 요청</b>으로 보내 승인받으세요.
+          </p>
         </div>
       </div>
 
       <div className="desk-tabs">
-        {([["in", `받은 요청${pendingIn ? ` (${pendingIn})` : ""}`], ["out", "보낸 요청"], ["new", "새 요청"]] as [Tab, string][]).map(([k, label]) => (
+        {([["log", "변경 기록"], ["new", "변경 요청 보내기"], ["in", `받은 요청${pendingIn ? ` (${pendingIn})` : ""}`], ["out", "보낸 요청"]] as [Tab, string][]).map(([k, label]) => (
           <button key={k} className={"sm-fchip" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>
       {err && <div className="auth-err" style={{ margin: "8px 0" }}>{err}</div>}
 
-      {tab === "new" ? (
+      {tab === "log" ? (
+        <>
+          <NewRequest roster={roster} users={users} logMode onCreated={() => void load()} />
+          <div className="req-list" style={{ marginTop: 14 }}>
+            {logs.map((r) => <ReqCard key={r.id} r={r} incoming={false} onRespond={respond} onWithdraw={withdraw} />)}
+            {logs.length === 0 && <div className="hub-muted" style={{ padding: 20 }}>아직 변경 기록이 없어요. 위에서 1회성 변경을 기록하면 해당 날짜 ‘오늘’에 바로 반영됩니다.</div>}
+          </div>
+        </>
+      ) : tab === "new" ? (
         <NewRequest roster={roster} users={users} prefill={prefill} onCreated={() => { setTab("out"); void load(); }} />
       ) : (
         <div className="req-list">
@@ -89,6 +100,7 @@ export function ChangeRequests({ prefill }: { prefill?: (ReqPrefill & { n: numbe
 function ReqCard({ r, incoming, onRespond, onWithdraw }: { r: ChangeReq; incoming: boolean; onRespond: (r: ChangeReq, s: "approved" | "rejected") => void; onWithdraw: (r: ChangeReq) => void }) {
   const st =
     r.status === "approved" ? { t: "승인됨", c: "ok" }
+    : r.status === "logged" ? { t: "변경 기록", c: "ok" }
     : r.status === "rejected" ? { t: "거절됨", c: "bad" }
     : r.status === "withdrawn" ? { t: "철회됨", c: "wait" }
     : { t: "대기 중", c: "wait" };
@@ -118,9 +130,9 @@ function ReqCard({ r, incoming, onRespond, onWithdraw }: { r: ChangeReq; incomin
           <button className="btn ghost sm" onClick={() => onRespond(r, "rejected")}>거절·대안</button>
         </div>
       )}
-      {!incoming && r.status === "pending" && (
+      {!incoming && (r.status === "pending" || r.status === "logged") && (
         <div className="req-acts">
-          <button className="btn ghost sm" onClick={() => onWithdraw(r)}>철회</button>
+          <button className="btn ghost sm" onClick={() => onWithdraw(r)}>{r.status === "logged" ? "삭제" : "철회"}</button>
         </div>
       )}
     </div>
@@ -143,7 +155,7 @@ function nextDateForDow(dayLabel: string): string {
 
 interface ClassOpt { subject: "math" | "english"; day: string; time: string; duration: number }
 
-function NewRequest({ roster, users, prefill, onCreated }: { roster: RosterStudent[]; users: UserRow[]; prefill?: (ReqPrefill & { n: number }) | null; onCreated: () => void }) {
+function NewRequest({ roster, users, prefill, logMode, onCreated }: { roster: RosterStudent[]; users: UserRow[]; prefill?: (ReqPrefill & { n: number }) | null; logMode?: boolean; onCreated: () => void }) {
   const [studentId, setStudentId] = useState(prefill?.studentId || "");
   const [studentQ, setStudentQ] = useState(prefill?.studentName || "");
   const [subject, setSubject] = useState<"math" | "english">(prefill?.subject || "math");
@@ -203,7 +215,7 @@ function NewRequest({ roster, users, prefill, onCreated }: { roster: RosterStude
     if (!student || !toDate || !toTime) return;
     setBusy(true);
     setErr("");
-    const target = targetId ? teachers.find((u) => u.id === targetId) : autoTarget;
+    const target = logMode ? null : targetId ? teachers.find((u) => u.id === targetId) : autoTarget;
     try {
       await reqsApi.create({
         studentId: student.id,
@@ -216,10 +228,13 @@ function NewRequest({ roster, users, prefill, onCreated }: { roster: RosterStude
         reason,
         targetId: target?.id || "",
         targetName: target?.name || "",
+        kind: logMode ? "log" : "request",
       });
+      // 기록 모드는 폼을 초기화해 연속 입력 편하게.
+      if (logMode) { setStudentId(""); setStudentQ(""); setSelKey(""); setReason(""); }
       onCreated();
     } catch {
-      setErr("요청에 실패했어요.");
+      setErr(logMode ? "기록 저장에 실패했어요." : "요청에 실패했어요.");
     } finally {
       setBusy(false);
     }
@@ -229,7 +244,9 @@ function NewRequest({ roster, users, prefill, onCreated }: { roster: RosterStude
     <div className="card req-form">
       {err && <div className="auth-err" style={{ marginBottom: 10 }}>{err}</div>}
       <p className="hub-muted" style={{ marginBottom: 12 }}>
-        학생을 고르고 <b>옮길 수업</b>을 누른 뒤, <b>언제로</b> 옮길지(날짜·시간)만 정하면 됩니다. 과목은 고른 수업으로 자동 지정돼요.
+        {logMode
+          ? <>학생의 1회성 요일·시간 변경을 <b>기록</b>합니다(승인 없이 그 날짜 ‘오늘’에 바로 반영). 학생을 고르고 옮길 수업·날짜·시간만 정하면 돼요.</>
+          : <>학생을 고르고 <b>옮길 수업</b>을 누른 뒤, <b>언제로</b> 옮길지(날짜·시간)만 정하면 됩니다. 과목은 고른 수업으로 자동 지정돼요.</>}
       </p>
 
       <label className="prof-field">
@@ -285,13 +302,15 @@ function NewRequest({ roster, users, prefill, onCreated }: { roster: RosterStude
           <span className="prof-field-l">변경할 시간</span>
           <input className="inline-input" type="time" value={toTime} onChange={(e) => setToTime(e.target.value)} />
         </label>
-        <label className="prof-field">
-          <span className="prof-field-l">보낼 선생님</span>
-          <select className="inline-select" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-            <option value="">담당 선생님{autoTarget ? ` (${autoTarget.name})` : ""}</option>
-            {teachers.map((u) => <option key={u.id} value={u.id}>{u.name} · {ROLE_LABEL[u.role]}</option>)}
-          </select>
-        </label>
+        {!logMode && (
+          <label className="prof-field">
+            <span className="prof-field-l">보낼 선생님</span>
+            <select className="inline-select" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+              <option value="">담당 선생님{autoTarget ? ` (${autoTarget.name})` : ""}</option>
+              {teachers.map((u) => <option key={u.id} value={u.id}>{u.name} · {ROLE_LABEL[u.role]}</option>)}
+            </select>
+          </label>
+        )}
       </div>
 
       {student && (
@@ -307,7 +326,7 @@ function NewRequest({ roster, users, prefill, onCreated }: { roster: RosterStude
       </label>
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-        <button className="btn primary" onClick={submit} disabled={busy || !student || !toDate || !toTime}>{busy ? "보내는 중…" : "변경 요청 보내기"}</button>
+        <button className="btn primary" onClick={submit} disabled={busy || !student || !toDate || !toTime}>{busy ? "저장 중…" : logMode ? "변경 기록 저장" : "변경 요청 보내기"}</button>
       </div>
     </div>
   );
