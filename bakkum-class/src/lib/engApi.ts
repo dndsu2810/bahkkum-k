@@ -20,10 +20,14 @@ export interface Goal {
   text: string;
   done: boolean;
 }
+export type AttStatus = "" | "등원" | "지각" | "결석";
 export interface EngDaily {
   studentId: string;
   date: string;
   attended: boolean;
+  attStatus: AttStatus;
+  lateMin: number; // 지각 분
+  absentReason: string; // 결석 사유
   goals: Goal[];
   homework: string;
   hwChecked: boolean;

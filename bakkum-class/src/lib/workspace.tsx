@@ -42,8 +42,11 @@ function engEntries(band: "mid" | "elem"): WsEntry[] {
   return [
     { key: "eng_today" + sfx, label: "오늘 (일일기록)", icon: "today", kind: "hub" },
     { key: "eng_tt" + sfx, label: "시간표", icon: "cal", kind: "hub" },
+    { key: "eng_att" + sfx, label: "출결 기록", icon: "clipboard", kind: "hub" },
+    { key: "eng_hw" + sfx, label: "숙제 기록", icon: "book", kind: "hub" },
     { key: "eng_progress" + sfx, label: "진도 기록", icon: "chart", kind: "hub" },
     { key: "eng_test" + sfx, label: "테스트 기록", icon: "cap", kind: "hub" },
+    // 학생 명단은 과목별로 나누지 않고 공통 「학생 명단」 하나로 단일화(단일 출처 원칙).
     { key: "eng_makeup" + sfx, label: "보강 관리", icon: "refresh", kind: "hub" },
     { key: "eng_dash" + sfx, label: "대시보드", icon: "dashboard", kind: "hub" },
   ];
@@ -51,8 +54,8 @@ function engEntries(band: "mid" | "elem"): WsEntry[] {
 
 const HOME: WsEntry = { key: "home", label: "홈", icon: "today", kind: "hub" };
 const SCHEDULE: WsEntry = { key: "schedule_hub", label: "학원 일정", icon: "calplus", kind: "hub" };
+const REQS: WsEntry = { key: "reqs", label: "시간표 변경 요청", icon: "refresh", kind: "hub" };
 const BOARD: WsEntry = { key: "board", label: "강사 업무 보드", icon: "board", kind: "hub" };
-const NOTES: WsEntry = { key: "notes", label: "강사 특이사항", icon: "edit", kind: "hub" };
 const WIKI: WsEntry = { key: "wiki", label: "바꿈 매뉴얼", icon: "book", kind: "hub" };
 const SNS: WsEntry = { key: "sns", label: "SNS 관리", icon: "copy", kind: "hub" };
 const MASTER: WsEntry = { key: "master", label: "학생 명단", icon: "students", kind: "hub" };
@@ -88,16 +91,17 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   // 데스크
   if (role === "desk") groups.push({ label: "데스크", entries: [DESK_TODAY, DESK_TT, DESK_STU, DESK_ACC] });
 
-  // 공통
+  // 공통 — 학생 명단(전과목 공통)·변경요청·특이사항·매뉴얼·SNS
   const common: WsEntry[] = [];
-  if (areas.has("notes")) common.push(NOTES);
+  if (areas.has("students")) common.push(MASTER);
+  common.push(REQS);
   if (areas.has("wiki")) common.push(WIKI);
   if (areas.has("sns")) common.push(SNS);
   if (common.length) groups.push({ label: "공통", entries: common });
 
   // 원장 전용
   if (role === "admin") {
-    groups.push({ label: "원장 전용", entries: [ADMIN_DASH, MASTER, ENGREPORT, ACCOUNTS, SETTINGS] });
+    groups.push({ label: "원장 전용", entries: [ADMIN_DASH, ENGREPORT, ACCOUNTS, SETTINGS] });
   }
 
   return groups;

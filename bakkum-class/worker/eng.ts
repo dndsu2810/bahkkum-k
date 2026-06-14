@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 // 영어(신규) 백엔드 — 일일 학습일지 · 진도 · 테스트. 앱(허브) 자체 저장(노션 X).
-// 수학과 분리된 class_eng_* 테이블. 인센티브/경시 개념 없음.
+// 수학과 분리된 class_eng_* 테이블.
 
 import type { Env } from "./index";
 import type { SessionUser } from "./auth";
@@ -36,6 +36,18 @@ export async function ensureEngTables(env: Env): Promise<void> {
       /* ignore */
     }
   }
+  // 출결 상태 확장 — 등원/지각/결석 + 지각 분 + 결석 사유. (기존 attended 0/1과 병행)
+  for (const a of [
+    "ALTER TABLE class_eng_daily ADD COLUMN att_status TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_eng_daily ADD COLUMN late_min INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE class_eng_daily ADD COLUMN absent_reason TEXT NOT NULL DEFAULT ''",
+  ]) {
+    try {
+      await env.DB.prepare(a).run();
+    } catch {
+      /* 이미 있으면 무시 */
+    }
+  }
 }
 
 export async function handleEng(env: Env, request: Request, p: string, me: SessionUser): Promise<Response | null> {
@@ -60,22 +72,31 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     const date = String(b.date || "");
     if (!sid || !date) return json({ error: "bad_input" }, 400);
     const goals = JSON.stringify(Array.isArray(b.goals) ? b.goals : []);
+    const status = ["등원", "지각", "결석"].includes(String(b.attStatus)) ? String(b.attStatus) : "";
+    const lateMin = Number(b.lateMin) || 0;
+    const reason = String(b.absentReason || "");
+    // 상태가 있으면 그걸로 등원여부 판단(등원·지각=등원). 없으면 기존 attended 불린.
+    const attended = status ? (status === "등원" || status === "지각" ? 1 : 0) : b.attended ? 1 : 0;
     await env.DB
       .prepare(
-        "INSERT INTO class_eng_daily(student_id,date,attended,goals,homework,hw_checked,comment,materials,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, comment=excluded.comment, materials=excluded.materials, updated_at=excluded.updated_at"
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,goals,homework,hw_checked,comment,materials,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, comment=excluded.comment, materials=excluded.materials, updated_at=excluded.updated_at"
       )
-      .bind(
-        sid,
-        date,
-        b.attended ? 1 : 0,
-        goals,
-        String(b.homework || ""),
-        b.hwChecked ? 1 : 0,
-        String(b.comment || ""),
-        String(b.materials || ""),
-        Date.now()
-      )
+      .bind(sid, date, attended, status, lateMin, reason, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, String(b.comment || ""), String(b.materials || ""), Date.now())
       .run();
+    // 결석 → 보강 관리로 연결: 같은 학생·결석일의 보강이 없으면 '예정'으로 자동 생성.
+    if (status === "결석") {
+      try {
+        const ex = await env.DB.prepare("SELECT id FROM class_eng_makeup WHERE student_id=? AND absent_date=?").bind(sid, date).first();
+        if (!ex) {
+          await env.DB
+            .prepare("INSERT INTO class_eng_makeup(id,student_id,absent_date,makeup_date,makeup_time,status,memo,created_at) VALUES(?,?,?,?,?,?,?,?)")
+            .bind(newId("em"), sid, date, "", "", "예정", reason, Date.now())
+            .run();
+        }
+      } catch {
+        /* 보강 자동생성 실패해도 출결 저장은 유지 */
+      }
+    }
     return json({ ok: true });
   }
 
@@ -260,6 +281,9 @@ function dailyRow(r: Record<string, unknown>) {
     studentId: String(r.student_id),
     date: String(r.date),
     attended: Number(r.attended) === 1,
+    attStatus: String(r.att_status ?? ""),
+    lateMin: Number(r.late_min ?? 0),
+    absentReason: String(r.absent_reason ?? ""),
     goals,
     homework: String(r.homework ?? ""),
     hwChecked: Number(r.hw_checked) === 1,

@@ -29,6 +29,8 @@ export async function ensureHubTables(env: Env): Promise<void> {
     "CREATE TABLE IF NOT EXISTS class_tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'todo', tag TEXT NOT NULL DEFAULT '', due TEXT NOT NULL DEFAULT '', student_id TEXT NOT NULL DEFAULT '', memo TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, done_at INTEGER, archived INTEGER NOT NULL DEFAULT 0)",
     // 학원 일정(공용) — 전 스태프가 보고 추가·수정. 앱이 주인(노션 X).
     "CREATE TABLE IF NOT EXISTS class_events (id TEXT PRIMARY KEY, date TEXT NOT NULL DEFAULT '', end_date TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT '학원', memo TEXT NOT NULL DEFAULT '', author_id TEXT NOT NULL DEFAULT '', author_name TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)",
+    // 시간표 변경 요청 — 한 학생의 수업시간 임시 변경을 담당/지정 강사에게 요청 → 승인.
+    "CREATE TABLE IF NOT EXISTS class_change_reqs (id TEXT PRIMARY KEY, student_id TEXT NOT NULL DEFAULT '', student_name TEXT NOT NULL DEFAULT '', subject TEXT NOT NULL DEFAULT '', change_date TEXT NOT NULL DEFAULT '', from_time TEXT NOT NULL DEFAULT '', to_time TEXT NOT NULL DEFAULT '', reason TEXT NOT NULL DEFAULT '', requester_id TEXT NOT NULL DEFAULT '', requester_name TEXT NOT NULL DEFAULT '', target_id TEXT NOT NULL DEFAULT '', target_name TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', response TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)",
   ];
   for (const s of stmts) {
     try {
@@ -135,6 +137,35 @@ export async function handleHub(
     const b = (await request.json().catch(() => ({}))) as { id?: string };
     if (!b.id) return json({ error: "id_required" }, 400);
     await env.DB.prepare("DELETE FROM class_events WHERE id=?").bind(b.id).run();
+    return json({ ok: true });
+  }
+
+  /* ---------------- 시간표 변경 요청 ---------------- */
+  if (p === "/api/reqs" && m === "GET") {
+    const r = await env.DB.prepare("SELECT * FROM class_change_reqs ORDER BY created_at DESC LIMIT 300").all<Record<string, unknown>>();
+    return json({ reqs: (r.results || []).map(reqRow) });
+  }
+  if (p === "/api/reqs" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const sid = String(b.studentId || "");
+    const subject = String(b.subject) === "english" ? "english" : "math";
+    if (!sid || !b.changeDate || !b.toTime) return json({ error: "bad_input" }, 400);
+    const id = newId("req");
+    const now = Date.now();
+    await env.DB
+      .prepare("INSERT INTO class_change_reqs(id,student_id,student_name,subject,change_date,from_time,to_time,reason,requester_id,requester_name,target_id,target_name,status,response,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(id, sid, String(b.studentName || ""), subject, String(b.changeDate), String(b.fromTime || ""), String(b.toTime), String(b.reason || "").slice(0, 1000), me.sub, me.name, String(b.targetId || ""), String(b.targetName || ""), "pending", "", now, now)
+      .run();
+    return json({ ok: true, id });
+  }
+  if (p === "/api/reqs/respond" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string; status?: string; response?: string };
+    if (!b.id) return json({ error: "id_required" }, 400);
+    const status = b.status === "approved" || b.status === "rejected" ? b.status : "pending";
+    await env.DB
+      .prepare("UPDATE class_change_reqs SET status=?, response=?, updated_at=? WHERE id=?")
+      .bind(status, String(b.response || "").slice(0, 1000), Date.now(), b.id)
+      .run();
     return json({ ok: true });
   }
 
@@ -298,6 +329,26 @@ function noteRow(r: Record<string, unknown>) {
     authorName: String(r.author_name ?? ""),
     body: String(r.body ?? ""),
     createdAt: Number(r.created_at ?? 0),
+  };
+}
+function reqRow(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    studentId: String(r.student_id ?? ""),
+    studentName: String(r.student_name ?? ""),
+    subject: String(r.subject ?? "math"),
+    changeDate: String(r.change_date ?? ""),
+    fromTime: String(r.from_time ?? ""),
+    toTime: String(r.to_time ?? ""),
+    reason: String(r.reason ?? ""),
+    requesterId: String(r.requester_id ?? ""),
+    requesterName: String(r.requester_name ?? ""),
+    targetId: String(r.target_id ?? ""),
+    targetName: String(r.target_name ?? ""),
+    status: String(r.status ?? "pending"),
+    response: String(r.response ?? ""),
+    createdAt: Number(r.created_at ?? 0),
+    updatedAt: Number(r.updated_at ?? 0),
   };
 }
 function eventRow(r: Record<string, unknown>) {

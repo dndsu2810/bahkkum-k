@@ -27,14 +27,18 @@ const DOW = ["월", "화", "수", "목", "금", "토", "일"];
 const STATUSES = ["재원", "휴원", "퇴원", "상담"];
 
 const initials = (name: string) => (name || "?").trim().slice(0, 2);
+// 등원요일: 지정값이 있으면 그것, 없으면 수업시간(요일)에서 자동 반영.
+const effAttendDays = (r: RosterStudent) =>
+  r.attendDays.length ? r.attendDays : DOW.filter((dd) => r.mathSlots.some((s) => s.day === dd) || r.engSlots.some((s) => s.day === dd));
 const subjLabel = (s: RosterStudent) =>
   [s.subjects.includes("math") ? "수학" : "", s.subjects.includes("english") ? "영어" : ""].filter(Boolean).join("·") || "—";
 
 /** 공통 학생 명단 — 수학·영어 공유. 목록은 핵심만, 학생을 누르면 이력서형 프로필에서 깊게 수정.
  *  원장은 편집, 나머지(데스크·영어)는 조회. */
-export function StudentMaster() {
+export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid"; jumpTo?: { id: string; n: number } | null } = {}) {
   const { user } = useAuth();
-  const canEdit = user?.role === "admin";
+  const canEdit = !!user && user.role !== "student"; // 전 스태프 편집 가능
+  const isAdmin = user?.role === "admin";
   const [rows, setRows] = useState<RosterStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -42,6 +46,14 @@ export function StudentMaster() {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [syncing, setSyncing] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  // 전역 검색에서 넘어오면 해당 학생 프로필을 바로 연다. (검색·필터는 초기화)
+  useEffect(() => {
+    if (jumpTo?.id) {
+      setOpenId(jumpTo.id);
+      setQ("");
+      setFilter("all");
+    }
+  }, [jumpTo?.id, jumpTo?.n]);
 
   async function reloadRows() {
     try {
@@ -87,14 +99,18 @@ export function StudentMaster() {
   const list = useMemo(() => {
     const kw = q.trim();
     return rows.filter((r) => {
+      if (bandLock) {
+        if (!(r.subjects.includes("english") && r.englishBand === bandLock)) return false;
+      }
       if (kw && !r.name.includes(kw) && !(r.school || "").includes(kw) && !(r.onlineId || "").includes(kw)) return false;
+      if (bandLock) return true;
       if (filter === "math") return r.subjects.includes("math");
       if (filter === "english") return r.subjects.includes("english");
       if (filter === "elem") return r.subjects.includes("english") && r.englishBand === "elem";
       if (filter === "mid") return r.subjects.includes("english") && r.englishBand === "mid";
       return true;
     });
-  }, [rows, q, filter]);
+  }, [rows, q, filter, bandLock]);
 
   const openStudent = rows.find((r) => r.id === openId) || null;
 
@@ -107,13 +123,14 @@ export function StudentMaster() {
     <div className="sm-wrap">
       <div className="sm-head">
         <div>
-          <h1 className="sm-title">학생 명단</h1>
+          <h1 className="sm-title">{bandLock ? `${bandLock === "elem" ? "초등" : "중고등"} 영어 학생 관리` : "학생 명단"}</h1>
           <p className="sm-desc">
-            수학·영어 공통 명단입니다. 학생을 누르면 {canEdit ? "프로필에서 자세히 보고 수정할 수 있어요." : "프로필을 볼 수 있어요."}
+            {bandLock ? "이 반 영어 학생 명단입니다. " : "수학·영어 공통 명단입니다. "}
+            학생을 누르면 {canEdit ? "프로필에서 자세히 보고 수정할 수 있어요." : "프로필을 볼 수 있어요."}
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {canEdit && (
+          {isAdmin && (
             <button className="btn ghost" onClick={syncNotion} disabled={syncing}>
               {syncing ? "동기화 중…" : "노션 동기화"}
             </button>
@@ -129,13 +146,15 @@ export function StudentMaster() {
           onChange={(e) => setQ(e.target.value)}
           placeholder="이름·학교·온라인ID 검색"
         />
-        <div className="sm-filters">
-          {FILTERS.map((f) => (
-            <button key={f.key} className={"sm-fchip" + (filter === f.key ? " on" : "")} onClick={() => setFilter(f.key)}>
-              {f.label}
-            </button>
-          ))}
-        </div>
+        {!bandLock && (
+          <div className="sm-filters">
+            {FILTERS.map((f) => (
+              <button key={f.key} className={"sm-fchip" + (filter === f.key ? " on" : "")} onClick={() => setFilter(f.key)}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {err && <div className="auth-err" style={{ marginBottom: 12 }}>{err}</div>}
@@ -171,7 +190,7 @@ export function StudentMaster() {
                   <td className="sm-dim">{r.school || "—"}</td>
                   <td className="sm-dim">{subjLabel(r)}</td>
                   <td className="sm-dim">{r.subjects.includes("english") && r.englishBand ? BAND_LABEL[r.englishBand] : "—"}</td>
-                  <td className="sm-dim">{r.attendDays.length ? r.attendDays.join("·") : "—"}</td>
+                  <td className="sm-dim">{effAttendDays(r).length ? effAttendDays(r).join("·") : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -209,6 +228,9 @@ function ProfileModal({
   const [done, setDone] = useState(false);
   const [err, setErr] = useState("");
   const hasEng = f.subjects.includes("english");
+  // 등원요일 = 수동 지정값이 있으면 그것, 없으면 수업시간(요일)에서 자동 반영.
+  const slotDays = DOW.filter((dd) => f.mathSlots.some((s) => s.day === dd) || f.engSlots.some((s) => s.day === dd));
+  const effectiveDays = f.attendDays.length ? f.attendDays : slotDays;
 
   const set = <K extends keyof RosterStudent>(k: K, v: RosterStudent[K]) => setF((c) => ({ ...c, [k]: v }));
   function toggleSubject(s: Subject) {
@@ -222,8 +244,10 @@ function ProfileModal({
   }
   function toggleDay(d: string) {
     setF((c) => {
-      const next = c.attendDays.includes(d) ? c.attendDays.filter((x) => x !== d) : [...c.attendDays, d];
-      return { ...c, attendDays: DOW.filter((x) => next.includes(x)) }; // 요일 순서 유지
+      // 처음 토글하면 자동 반영된 요일(수업시간 기준)에서 시작.
+      const base = c.attendDays.length ? c.attendDays : DOW.filter((dd) => c.mathSlots.some((s) => s.day === dd) || c.engSlots.some((s) => s.day === dd));
+      const next = base.includes(d) ? base.filter((x) => x !== d) : [...base, d];
+      return { ...c, attendDays: DOW.filter((x) => next.includes(x)) };
     });
   }
 
@@ -237,7 +261,7 @@ function ProfileModal({
         onlineId: f.onlineId,
         subjects: f.subjects,
         englishBand: f.englishBand,
-        attendDays: f.attendDays,
+        attendDays: effectiveDays,
         memo: f.memo,
       });
       await saveStudentCore({
@@ -322,7 +346,7 @@ function ProfileModal({
             <Field label="등원요일">
               <div className="prof-days">
                 {DOW.map((d) => (
-                  <button key={d} className={"prof-day" + (f.attendDays.includes(d) ? " on" : "")} disabled={ro} onClick={() => toggleDay(d)}>{d}</button>
+                  <button key={d} className={"prof-day" + (effectiveDays.includes(d) ? " on" : "")} disabled={ro} onClick={() => toggleDay(d)}>{d}</button>
                 ))}
               </div>
             </Field>

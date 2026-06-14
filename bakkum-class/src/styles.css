@@ -103,6 +103,17 @@ body,.side,.topbar,.card,.board-col,.today-brief,.nav-item{transition:background
 .crumb{font-size:var(--t-sm);color:var(--ink3);font-weight:500}
 .crumb b{color:var(--ink2);font-weight:600}
 .top-actions{display:flex;align-items:center;gap:var(--s3)}
+/* 전역 학생 검색 (상단바) */
+.gsearch{position:relative;flex:1;max-width:280px;margin:0 var(--s5)}
+.gsearch-input{width:100%;height:36px;border:1px solid var(--line2);border-radius:var(--r-full);padding:0 14px;font-size:var(--t-sm);background:var(--card);color:var(--ink)}
+.gsearch-input:focus{outline:none;border-color:var(--brand-line);background:var(--card)}
+.gsearch-pop{position:absolute;top:42px;left:0;right:0;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--sh);padding:5px;z-index:20;max-height:340px;overflow:auto}
+.gsearch-item{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;text-align:left;padding:7px 10px;border-radius:var(--r-sm);background:transparent}
+.gsearch-item:hover{background:var(--brand-soft)}
+.gsearch-item b{font-size:var(--t-sm);color:var(--ink)}
+.gsearch-meta{font-size:var(--t-cap);color:var(--ink3)}
+.gsearch-empty{padding:9px 10px;font-size:var(--t-sm);color:var(--ink3)}
+@media(max-width:760px){.gsearch{display:none}}
 .pill-date{display:flex;align-items:center;gap:6px;min-height:38px;padding:0 var(--s4);border:1px solid var(--line2);border-radius:var(--r-full);background:var(--card);font-size:var(--t-sm);font-weight:600;color:var(--ink2)}
 .pill-date .dot{width:7px;height:7px;border-radius:var(--r-full);background:var(--ok)}
 .content{padding:var(--s8);max-width:1180px;width:100%;margin:0 auto}
@@ -1275,6 +1286,66 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .desk-today-chip.absent{background:var(--bad-soft,#fdeaea)}
 .dt-meta{font-size:10px;font-weight:600;color:var(--ink3);margin-top:1px}
 @media(max-width:760px){.dash-kpis{grid-template-columns:repeat(2,1fr)}.dash-grid{grid-template-columns:1fr}}
+/* 시간표 변경 요청 */
+.req-list{display:flex;flex-direction:column;gap:10px}
+.req-card{border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);padding:var(--s4);box-shadow:var(--sh-sm)}
+.req-card-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.req-badge{font-size:11px;font-weight:700;border-radius:var(--r-full);padding:1px 9px}
+.req-badge.math{color:var(--brand-d);background:var(--brand-soft)}
+.req-badge.eng{color:#0891b2;background:#e6f7fb}
+.req-stu{color:var(--ink);font-size:var(--t-base)}
+.req-status{margin-left:auto;font-size:var(--t-cap);font-weight:700;border-radius:var(--r-full);padding:2px 10px}
+.req-status.ok{color:var(--ok);background:var(--ok-soft)}
+.req-status.bad{color:var(--bad);background:var(--bad-soft,#fdeaea)}
+.req-status.wait{color:var(--warn);background:var(--warn-soft)}
+.req-line{font-size:var(--t-base);color:var(--ink);margin-bottom:3px}
+.req-reason{font-size:var(--t-sm);color:var(--ink2);line-height:1.5}
+.req-meta{font-size:var(--t-cap);color:var(--ink3);margin-top:5px}
+.req-resp{font-size:var(--t-sm);color:var(--ink2);background:var(--bg);border-radius:var(--r-sm);padding:6px 10px;margin-top:7px}
+.req-acts{display:flex;gap:6px;margin-top:10px}
+.req-form{padding:var(--s5)}
+.req-conflict{margin-top:10px;font-size:var(--t-sm);color:var(--ink2);background:var(--bg);border:1px solid var(--line);
+  border-radius:var(--r-md);padding:9px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.req-conflict.warn{color:var(--bad);background:var(--bad-soft,#fdeaea);border-color:#f6cccc;font-weight:600}
+.req-conflict-chip{font-size:var(--t-cap);font-weight:600;background:var(--card);border:1px solid var(--line);border-radius:var(--r-full);padding:1px 9px;color:var(--ink2)}
+/* 영어 출결 그리드 · 숙제 기록 */
+.eng-att-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.eng-att-cell{display:flex;flex-direction:column;align-items:flex-start;gap:2px;border:1px solid var(--line);background:var(--card);
+  border-radius:var(--r-md);padding:10px 12px;cursor:pointer;text-align:left;transition:background .12s,border-color .12s}
+.eng-att-cell.on{background:var(--ok-soft);border-color:transparent}
+.eng-att-nm{font-weight:600;color:var(--ink)}
+.eng-att-st{font-size:var(--t-cap);font-weight:600;color:var(--ink3)}
+.eng-att-cell.on .eng-att-st{color:var(--ok)}
+.eng-hw-list{display:flex;flex-direction:column;gap:10px}
+.eng-hw-row{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3)}
+.eng-hw-date{font-size:var(--t-sm);font-weight:700;color:var(--ink2)}
+/* 영어 출결 상태(등/지/결) */
+.eng-att-seg{display:inline-flex;gap:3px;flex-shrink:0}
+.eas{width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--card);font-size:var(--t-cap);font-weight:700;color:var(--ink3);cursor:pointer;transition:.1s}
+.eas:hover{border-color:var(--brand-line)}
+.eas.on.g{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.eas.on.w{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.eas.on.b{background:var(--bad-soft,#fdeaea);color:var(--bad);border-color:transparent}
+.eng-stu-time{font-size:10px;font-weight:600;color:var(--brand-d);background:var(--brand-soft);border-radius:var(--r-full);padding:0 6px;margin-left:6px}
+.eng-stu-late{font-size:10px;font-weight:700;color:var(--warn);margin-left:5px}
+.eng-add-att{margin-top:8px}
+.eng-late-row{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:var(--t-sm);color:var(--ink2)}
+.eng-att-rows{display:flex;flex-direction:column;gap:6px}
+.eng-att-row{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);padding:9px 12px;cursor:default}
+.eng-att-row.extra{background:var(--card2)}
+.eng-att-row.cur{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-soft)}
+.eng-att-hint{font-size:var(--t-cap);color:var(--ink3);margin:-4px 0 12px}
+.eng-att-hint b{color:var(--ink2);font-weight:700}
+.eng-att-info{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.eng-att-info b{color:var(--ink)}
+.eng-att-time{font-size:11px;font-weight:600;color:var(--brand-d);background:var(--brand-soft);border-radius:var(--r-full);padding:1px 8px}
+.eng-att-detail{font-size:var(--t-cap);font-weight:600}
+.eng-att-detail.warn{color:var(--warn)}
+.eng-att-detail.bad{color:var(--bad)}
+.eng-prev-hw{font-size:var(--t-sm);color:var(--ink);line-height:1.5;background:var(--card2);border:1px solid var(--line);
+  border-radius:var(--r-md);padding:9px 12px;white-space:pre-wrap;min-height:38px}
+/* 빈 상태 — 무엇을 하면 되는지 사람 말로(수학의 친절한 빈 상태와 통일). */
+.eng-side-empty{font-size:var(--t-sm);color:var(--ink3);line-height:1.6;padding:12px 12px 4px}
 .eng-mk-h{font-size:var(--t-base);font-weight:700;color:var(--ink2);margin:0 0 8px}
 .eng-mk-memo{color:var(--ink3);font-size:var(--t-sm);margin-left:8px}
 .sm-st{font-size:11px;font-weight:600;border-radius:var(--r-full);padding:2px 9px}
@@ -1490,6 +1561,12 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
    영어 월말리포트 — 입력 표 + 성적표 카드(이미지 캡처용)
    =================================================================== */
 .er-toolbar{display:flex;align-items:center;gap:var(--s3);margin:var(--s4) 0;flex-wrap:wrap}
+.er-tall{display:flex;flex-direction:column;gap:3px;font-size:var(--t-cap);color:var(--ink3);font-weight:600}
+.er-tsel{min-width:96px}
+.er-acts{display:flex;gap:4px;white-space:nowrap}
+.er-preview-modal{max-width:780px}
+.er-preview-body{justify-content:center;background:var(--bg);overflow:auto}
+.er-preview-body .erc{flex-shrink:0;box-shadow:var(--sh-md,0 2px 12px rgba(15,23,42,.12))}
 .er-progress{font-size:var(--t-sm);font-weight:600;color:var(--brand-d);background:var(--brand-soft);
   border-radius:var(--r-sm);padding:8px 12px;margin-bottom:10px;display:inline-block}
 .er-table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card)}

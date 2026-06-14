@@ -21,6 +21,9 @@ import { StudentMaster } from "./screens/StudentMaster";
 import { AcademySchedule } from "./screens/AcademySchedule";
 import { AdminAccounts } from "./screens/AdminAccounts";
 import { AdminDashboard } from "./screens/AdminDashboard";
+import { ChangeRequests } from "./screens/ChangeRequests";
+import { reqsApi } from "./lib/hubApi";
+import { getRoster, type RosterStudent } from "./lib/rosterApi";
 import { Settings } from "./pages/Settings";
 
 export function Workspace() {
@@ -91,6 +94,47 @@ export function Workspace() {
     });
   }
 
+  // 시간표 변경 요청 — 나에게 온 대기 건수(사이드바 알림 배지)
+  const [reqPending, setReqPending] = useState(0);
+  useEffect(() => {
+    if (noBackend || !user) return;
+    let alive = true;
+    const load = () =>
+      reqsApi
+        .list()
+        .then((rs) => { if (alive) setReqPending(rs.filter((r) => r.targetId === user.sub && r.status === "pending").length); })
+        .catch(() => {});
+    void load();
+    const iv = setInterval(load, 20000);
+    return () => { alive = false; clearInterval(iv); };
+  }, [noBackend, user]);
+
+  // 전역 학생 검색 — 어느 화면에서든 이름으로 학생 명단 프로필로 점프.
+  const canSearch = user?.role !== "student" && !noBackend;
+  const [roster, setRoster] = useState<RosterStudent[]>([]);
+  const [gq, setGq] = useState("");
+  const [gqOpen, setGqOpen] = useState(false);
+  const [jumpStudent, setJumpStudent] = useState<{ id: string; n: number } | null>(null);
+  useEffect(() => {
+    if (!canSearch) return;
+    let alive = true;
+    getRoster().then((r) => { if (alive) setRoster(r); }).catch(() => {});
+    return () => { alive = false; };
+  }, [canSearch]);
+  const gqResults = useMemo(() => {
+    const kw = gq.trim();
+    if (!kw) return [];
+    return roster
+      .filter((r) => r.name.includes(kw) || (r.school || "").includes(kw))
+      .slice(0, 8);
+  }, [gq, roster]);
+  function jumpToStudent(s: RosterStudent) {
+    setJumpStudent((cur) => ({ id: s.id, n: (cur?.n || 0) + 1 }));
+    setView("master");
+    setGq("");
+    setGqOpen(false);
+  }
+
   function open(e: WsEntry) {
     if (e.kind === "math") {
       setView("math");
@@ -119,6 +163,7 @@ export function Workspace() {
       const n = store.data.makeups.filter((k) => k.status === "pending").length;
       return n > 0 ? <span className="nav-badge warn">{n}</span> : null;
     }
+    if (e.key === "reqs") return reqPending > 0 ? <span className="nav-badge warn">{reqPending}</span> : null;
     return null;
   }
 
@@ -155,7 +200,7 @@ export function Workspace() {
           <div>
             <b>바꿈영수학원</b>
             <span>
-              {user.name}님, 담당: {dutyLabel(user)}
+              {user.name}님{user.role === "admin" ? " · 원장" : `, 담당: ${dutyLabel(user)}`}
             </span>
           </div>
         </div>
@@ -201,6 +246,34 @@ export function Workspace() {
             {activeGroup?.label ? activeGroup.label + " · " : ""}
             <b>{activeEntry?.label || "홈"}</b>
           </div>
+          {canSearch && (
+            <div className="gsearch">
+              <input
+                className="gsearch-input"
+                value={gq}
+                onChange={(e) => { setGq(e.target.value); setGqOpen(true); }}
+                onFocus={() => setGqOpen(true)}
+                onBlur={() => setTimeout(() => setGqOpen(false), 150)}
+                placeholder="학생 검색 (이름·학교)"
+                aria-label="학생 전역 검색"
+              />
+              {gqOpen && gqResults.length > 0 && (
+                <div className="gsearch-pop">
+                  {gqResults.map((s) => (
+                    <button key={s.id} className="gsearch-item" onMouseDown={() => jumpToStudent(s)}>
+                      <b>{s.name}</b>
+                      <span className="gsearch-meta">
+                        {[s.school, s.subjects.includes("math") ? "수학" : "", s.subjects.includes("english") ? "영어" : ""].filter(Boolean).join(" · ")}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {gqOpen && gq.trim() && gqResults.length === 0 && (
+                <div className="gsearch-pop"><div className="gsearch-empty">일치하는 학생이 없어요.</div></div>
+              )}
+            </div>
+          )}
           <div className="top-actions">
             <ThemeToggle />
             <span className="acct-chip">
@@ -212,7 +285,7 @@ export function Workspace() {
           </div>
         </header>
         <main className={"content " + (view === "math" ? "is-math" : "is-hub")}>
-          <Body view={view} cats={cats} onCats={(c) => { setCategories(c); setCats(c); }} />
+          <Body view={view} cats={cats} jumpStudent={jumpStudent} onCats={(c) => { setCategories(c); setCats(c); }} />
         </main>
       </div>
       <ModalHost />
@@ -221,15 +294,16 @@ export function Workspace() {
   );
 }
 
-function Body({ view, cats, onCats }: { view: string; cats: Category[]; onCats: (c: Category[]) => void }) {
+function Body({ view, cats, jumpStudent, onCats }: { view: string; cats: Category[]; jumpStudent: { id: string; n: number } | null; onCats: (c: Category[]) => void }) {
   if (view === "math") return <MathContent />;
   if (view === "home") return <HubHome />;
   if (view === "schedule_hub") return <AcademySchedule />;
+  if (view === "reqs") return <ChangeRequests />;
   if (view === "board") return <BoardShared />;
   if (view === "notes") return <Notes />;
   if (view === "wiki") return <Wiki />;
   if (view === "sns") return <Sns />;
-  if (view === "master") return <StudentMaster />;
+  if (view === "master") return <StudentMaster jumpTo={jumpStudent} />;
   if (view === "engreport") return <EngReport />;
   if (view === "accounts") return <AdminAccounts />;
   if (view === "admin_dash") return <AdminDashboard />;
@@ -244,9 +318,13 @@ function Body({ view, cats, onCats }: { view: string; cats: Category[]; onCats: 
           ? "board"
           : view.startsWith("eng_tt")
             ? "tt"
-            : view.startsWith("eng_makeup")
-              ? "makeup"
-              : "today";
+            : view.startsWith("eng_att")
+              ? "att"
+              : view.startsWith("eng_hw")
+                ? "hw"
+                : view.startsWith("eng_makeup")
+                  ? "makeup"
+                  : "today";
     return <English key={view} band={band} tab={tab} />;
   }
   if (view.startsWith("desk_")) {

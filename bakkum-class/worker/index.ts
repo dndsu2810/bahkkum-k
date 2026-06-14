@@ -161,19 +161,20 @@ export default {
           if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
           return json({ students: await readRoster(env) });
         }
+        // 학생 명단/학생 관리 편집 — 학생 제외 전 스태프 허용(협업 관리).
         if (p === "/api/roster/meta" && request.method === "POST") {
           const me = await readSession(env, request);
-          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
           return await rosterMetaUpsert(env, request);
         }
         if (p === "/api/roster/core" && request.method === "POST") {
           const me = await readSession(env, request);
-          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
           return await rosterCoreUpdate(env, request);
         }
         if (p === "/api/roster/slots" && request.method === "POST") {
           const me = await readSession(env, request);
-          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
           return await rosterSlotsUpdate(env, request);
         }
         // 원장 대시보드 — 등록 현황·지각결석·특이사항 집계(원장 전용).
@@ -233,7 +234,7 @@ export default {
         }
 
         // ---- 허브 공유 영역(특이사항·위키·SNS·업무보드) ----
-        if (p.startsWith("/api/notes") || p.startsWith("/api/wiki") || p.startsWith("/api/sns") || p.startsWith("/api/tasks") || p.startsWith("/api/events")) {
+        if (p.startsWith("/api/notes") || p.startsWith("/api/wiki") || p.startsWith("/api/sns") || p.startsWith("/api/tasks") || p.startsWith("/api/events") || p.startsWith("/api/reqs")) {
           const me = await readSession(env, request);
           if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
           const res = await handleHub(env, request, p, me);

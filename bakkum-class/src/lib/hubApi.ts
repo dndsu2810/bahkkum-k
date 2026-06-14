@@ -133,3 +133,32 @@ export const eventsApi = {
   /** 노션 '학원 일정' → 앱으로 1회 가져오기(원장 전용). */
   sync: () => jpost("/api/sync/events", {}),
 };
+
+/* ---------------- 시간표 변경 요청 ---------------- */
+export interface ChangeReq {
+  id: string;
+  studentId: string;
+  studentName: string;
+  subject: string; // math | english
+  changeDate: string; // YYYY-MM-DD
+  fromTime: string;
+  toTime: string;
+  reason: string;
+  requesterId: string;
+  requesterName: string;
+  targetId: string;
+  targetName: string;
+  status: string; // pending | approved | rejected
+  response: string;
+  createdAt: number;
+  updatedAt: number;
+}
+export const reqsApi = {
+  list: () => jget<{ reqs: ChangeReq[] }>("/api/reqs").then((j) => j.reqs),
+  create: (r: {
+    studentId: string; studentName: string; subject: string; changeDate: string;
+    fromTime?: string; toTime: string; reason?: string; targetId?: string; targetName?: string;
+  }) => jpost("/api/reqs", r),
+  respond: (id: string, status: "approved" | "rejected", response?: string) =>
+    jpost("/api/reqs/respond", { id, status, response }),
+};
