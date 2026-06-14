@@ -428,7 +428,7 @@ function authLogout(): Response {
   });
 }
 
-const VALID_ROLES: Role[] = ["admin", "math", "english_mid", "english_elem", "desk"];
+const VALID_ROLES: Role[] = ["admin", "developer", "math", "english_mid", "english_elem", "desk"];
 
 async function usersCreate(env: Env, request: Request): Promise<Response> {
   const b = (await request.json().catch(() => ({}))) as {
@@ -1456,7 +1456,7 @@ function defaultScope(role: Role): string[] {
   if (role === "math") return ["math"];
   if (role === "english_mid") return ["english_mid"];
   if (role === "english_elem") return ["english_elem"];
-  if (role === "admin") return ["math", "english_mid", "english_elem"];
+  if (role === "admin" || role === "developer") return ["math", "english_mid", "english_elem"];
   return [];
 }
 

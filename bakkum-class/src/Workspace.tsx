@@ -6,7 +6,7 @@ import { Icon, StarIcon } from "./icons";
 import { ThemeToggle } from "./components/Header";
 import { ModalHost, ToastHost } from "./components/ModalHost";
 import { type Category, getCategories, setCategories } from "./lib/categories";
-import { ROLE_LABEL } from "./lib/roles";
+import { ROLE_LABEL, shownRole } from "./lib/roles";
 import { sidebarFor, defaultEntry, dutyLabel, type WsEntry } from "./lib/workspace";
 import { MathContent } from "./screens/MathContent";
 import { HubHome } from "./screens/HubHome";
@@ -244,7 +244,7 @@ export function Workspace() {
           <div>
             <b>바꿈영수학원</b>
             <span>
-              {user.name}님{user.role === "admin" ? " · 원장" : `, 담당: ${dutyLabel(user)}`}
+              {user.name}님{user.role === "admin" ? ` · ${ROLE_LABEL[shownRole(user)]}` : `, 담당: ${dutyLabel(user)}`}
             </span>
           </div>
         </div>
@@ -278,7 +278,7 @@ export function Workspace() {
         <div className="side-foot">
           <div className="h">
             <Icon name="users" />
-            {ROLE_LABEL[user.role]}
+            {ROLE_LABEL[shownRole(user)]}
           </div>
           <p>별(★)로 즐겨찾기하면 위로 모입니다. 설정은 로그인 계정별로 저장됩니다.</p>
         </div>
@@ -330,7 +330,7 @@ export function Workspace() {
             </button>
             <ThemeToggle />
             <span className="acct-chip">
-              {user.name} · <span className="role">{ROLE_LABEL[user.role]}</span>
+              {user.name} · <span className="role">{ROLE_LABEL[shownRole(user)]}</span>
             </span>
             <button className="acct-logout" onClick={() => logout()}>
               로그아웃

@@ -9,15 +9,18 @@
 
 import type { Env } from "./index";
 
-export type Role = "admin" | "math" | "english_mid" | "english_elem" | "desk" | "student";
+export type Role = "admin" | "developer" | "math" | "english_mid" | "english_elem" | "desk" | "student";
 
 export interface SessionUser {
   /** 강사: "u_xxx" / 학생: 로스터 student id(숫자 문자열) */
   sub: string;
+  /** 실효 권한 역할. 개발자 계정은 admin과 동일 권한이라 여기선 'admin'으로 둔다. */
   role: Role;
   name: string;
   /** 담당(과목/학년) 배분 — 강사만. 예: ["math"], ["english_mid"] */
   scope?: string[];
+  /** 표시용 역할(실효 role과 다를 때). 개발자 계정 = 'developer'. */
+  displayRole?: Role;
 }
 
 export interface UserRow {
@@ -152,7 +155,7 @@ export async function readSession(env: Env, request: Request): Promise<SessionUs
   try {
     const p = JSON.parse(b64urlDecode(body)) as SessionUser & { exp: number };
     if (!p.exp || p.exp < Date.now()) return null;
-    return { sub: p.sub, role: p.role, name: p.name, scope: p.scope };
+    return { sub: p.sub, role: p.role, name: p.name, scope: p.scope, displayRole: p.displayRole };
   } catch {
     return null;
   }
@@ -274,7 +277,12 @@ export async function loginTeacher(env: Env, name: string, pin: string): Promise
     .all<{ id: string; name: string; role: string; scope: string; pin_hash: string; salt: string }>();
   for (const row of r.results || []) {
     if (await verifyPin(pin.trim(), String(row.pin_hash), String(row.salt))) {
-      return { sub: String(row.id), role: row.role as Role, name: String(row.name), scope: parseScope(row.scope) };
+      const real = String(row.role) as Role;
+      // 개발자 계정은 원장(admin)과 동일 권한 — 실효 role은 admin, 표시만 developer.
+      if (real === "developer") {
+        return { sub: String(row.id), role: "admin", name: String(row.name), scope: parseScope(row.scope), displayRole: "developer" };
+      }
+      return { sub: String(row.id), role: real, name: String(row.name), scope: parseScope(row.scope) };
     }
   }
   return null;

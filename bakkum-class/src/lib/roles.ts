@@ -6,19 +6,28 @@
 //                          볼지"를 계정별로 정한다(allowedAreas, scope에 저장).
 // 역할은 데이터 범위·기본 화면셋의 '기본값'이고, 원장이 계정별로 덮어쓸 수 있다.
 
-export type Role = "admin" | "math" | "english_mid" | "english_elem" | "desk" | "student";
+export type Role = "admin" | "developer" | "math" | "english_mid" | "english_elem" | "desk" | "student";
 
 export interface AuthUser {
   sub: string;
+  /** 실효 권한 역할. 개발자 계정은 admin과 동일 권한이라 'admin'으로 온다. */
   role: Role;
   name: string;
   /** 원장이 이 계정에 허용한 화면(영역) 키 목록. admin은 전체로 간주. */
   scope?: string[];
+  /** 표시용 역할(실효 role과 다를 때). 개발자 = 'developer'. */
+  displayRole?: Role;
+}
+
+/** 화면 표시용 역할(개발자 등 별칭 반영). */
+export function shownRole(user: { role: Role; displayRole?: Role }): Role {
+  return user.displayRole || user.role;
 }
 
 /** 역할 한글 라벨. */
 export const ROLE_LABEL: Record<Role, string> = {
   admin: "원장",
+  developer: "개발자",
   math: "수학 강사",
   english_mid: "영어 강사",
   english_elem: "초등영어 강사",
@@ -27,11 +36,12 @@ export const ROLE_LABEL: Record<Role, string> = {
 };
 
 /** 원장이 강사 계정을 만들 때 고를 수 있는 역할(학생 제외). */
-export const ASSIGNABLE_ROLES: Role[] = ["admin", "math", "english_mid", "english_elem", "desk"];
+export const ASSIGNABLE_ROLES: Role[] = ["admin", "developer", "math", "english_mid", "english_elem", "desk"];
 
 /** 역할 한 줄 설명(계정 등록 화면용). */
 export const ROLE_DESC: Record<Role, string> = {
   admin: "전체 열람 + 강사 등록·배분·화면 설정",
+  developer: "원장과 동일 권한 (개발·운영용)",
   math: "수학 전체(초등+중고등) 수업 기록",
   english_mid: "중고등 영어 일일기록·테스트",
   english_elem: "초등 영어 일일기록",
@@ -82,6 +92,7 @@ export const AREA_LABEL: Record<AreaKey, string> = AREAS.reduce(
 /** 역할별 기본 허용 화면 — 원장이 계정 등록 시 자동 선택(이후 수정 가능). */
 export const DEFAULT_AREAS: Record<Role, AreaKey[]> = {
   admin: AREAS.map((a) => a.key), // 전체
+  developer: AREAS.map((a) => a.key), // 원장과 동일(전체)
   math: ["math", "students", "notes", "board", "wiki"],
   english_mid: ["eng_mid", "students", "notes", "board", "wiki"],
   english_elem: ["eng_elem", "students", "notes", "board", "wiki"],
@@ -91,7 +102,7 @@ export const DEFAULT_AREAS: Record<Role, AreaKey[]> = {
 
 /** 이 사용자가 실제로 볼 수 있는 화면 키 목록. admin은 전체. */
 export function areasForUser(user: { role: Role; scope?: string[] }): AreaKey[] {
-  if (user.role === "admin") return AREAS.map((a) => a.key);
+  if (user.role === "admin" || user.role === "developer") return AREAS.map((a) => a.key);
   const allow = new Set(user.scope || DEFAULT_AREAS[user.role] || []);
   return AREAS.map((a) => a.key).filter((k) => allow.has(k));
 }
