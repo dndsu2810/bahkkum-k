@@ -199,7 +199,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
       )}
 
       {tab === "board" ? (
-        <EngDashboard students={students} daily={daily} />
+        <EngDashboard students={students} daily={daily} band={band} />
       ) : tab === "makeup" ? (
         <EngMakeupPanel students={students} />
       ) : tab === "att" ? (
@@ -257,7 +257,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                     : "왼쪽에서 학생을 선택하면 테스트 점수를 기록할 수 있어요."}
               </div>
             ) : tab === "today" ? (
-              <DailyEditor key={sel + date} student={nameOf[sel] || ""} studentId={sel} value={getDaily(sel)} onSave={saveDaily} />
+              <DailyEditor key={sel + date} student={nameOf[sel] || ""} studentId={sel} band={band} value={getDaily(sel)} onSave={saveDaily} />
             ) : tab === "progress" ? (
               <ProgressPanel studentId={sel} name={nameOf[sel] || ""} />
             ) : (
@@ -271,7 +271,8 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
 }
 
 /* ---------------- 일일 학습일지 편집 ---------------- */
-function DailyEditor({ student, studentId, value, onSave }: { student: string; studentId: string; value: EngDaily; onSave: (d: EngDaily) => void }) {
+function DailyEditor({ student, studentId, band, value, onSave }: { student: string; studentId: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void }) {
+  const showHw = band !== "elem"; // 초등영어는 숙제 없음
   const [d, setD] = useState<EngDaily>(value);
   const [prevHw, setPrevHw] = useState<{ date: string; homework: string } | null>(null);
   const dirty = JSON.stringify(d) !== JSON.stringify(value);
@@ -329,16 +330,20 @@ function DailyEditor({ student, studentId, value, onSave }: { student: string; s
         <button className="btn ghost sm" onClick={() => setGoals([...d.goals, { text: "", done: false }])}>+ 목표 추가</button>
       </div>
 
-      <div className="eng-field">
-        <div className="eng-label">지난 숙제{prevHw ? ` · ${prevHw.date}` : ""}</div>
-        <div className="eng-prev-hw">{prevHw ? prevHw.homework : "지난 숙제 없음"}</div>
-        <label className="eng-check"><input type="checkbox" checked={d.hwChecked} onChange={(e) => setD({ ...d, hwChecked: e.target.checked })} /> 숙제검사 완료 (지난 숙제 확인)</label>
-      </div>
+      {showHw && (
+        <div className="eng-field">
+          <div className="eng-label">지난 숙제{prevHw ? ` · ${prevHw.date}` : ""}</div>
+          <div className="eng-prev-hw">{prevHw ? prevHw.homework : "지난 숙제 없음"}</div>
+          <label className="eng-check"><input type="checkbox" checked={d.hwChecked} onChange={(e) => setD({ ...d, hwChecked: e.target.checked })} /> 숙제검사 완료 (지난 숙제 확인)</label>
+        </div>
+      )}
 
-      <div className="eng-field">
-        <div className="eng-label">오늘 내줄 숙제</div>
-        <textarea className="input" rows={2} value={d.homework} onChange={(e) => setD({ ...d, homework: e.target.value })} placeholder="오늘 내줄 숙제 (다음 시간에 ‘지난 숙제’로 표시됩니다)" />
-      </div>
+      {showHw && (
+        <div className="eng-field">
+          <div className="eng-label">오늘 내줄 숙제</div>
+          <textarea className="input" rows={2} value={d.homework} onChange={(e) => setD({ ...d, homework: e.target.value })} placeholder="오늘 내줄 숙제 (다음 시간에 ‘지난 숙제’로 표시됩니다)" />
+        </div>
+      )}
 
       <div className="eng-field">
         <div className="eng-label">코멘트</div>
@@ -839,16 +844,17 @@ function MakeupRow({ mk, name, onStatus, onRemove }: { mk: EngMakeup; name: stri
 }
 
 /* ---------------- 현황 대시보드 ---------------- */
-function EngDashboard({ students, daily }: { students: RosterStudent[]; daily: Record<string, EngDaily> }) {
+function EngDashboard({ students, daily, band }: { students: RosterStudent[]; daily: Record<string, EngDaily>; band: Band }) {
   const attended = students.filter((s) => daily[s.id]?.attended);
   const hwDone = attended.filter((s) => daily[s.id]?.hwChecked);
   const notYet = students.filter((s) => !daily[s.id]?.attended);
+  const showHw = band !== "elem"; // 초등영어는 숙제 없음
 
   return (
     <div className="eng-dash">
       <div className="eng-stats">
         <Stat label="등원" value={`${attended.length}/${students.length}`} />
-        <Stat label="숙제검사 완료" value={`${hwDone.length}/${attended.length || 0}`} />
+        {showHw && <Stat label="숙제검사 완료" value={`${hwDone.length}/${attended.length || 0}`} />}
         <Stat label="미등원" value={String(notYet.length)} tone="warn" />
       </div>
       <div className="eng-dash-sec">

@@ -1535,6 +1535,11 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .today-late-wrap{display:inline-flex;align-items:center;gap:6px}
 .today-late-input{width:64px;height:30px;border:1px solid var(--line2);border-radius:var(--r-sm);padding:0 8px;font-size:var(--t-sm);background:var(--card);color:var(--ink)}
 .eng-main>.today-stu{margin:0}
+/* 수학 '오늘' 상세 — 영어 일일기록과 같은 라벨+필드 레이아웃(폭은 패널 가득) */
+.today-detail{max-width:none;gap:var(--s5)}
+.today-detail-h h2{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:var(--t-lg);font-weight:700;color:var(--ink)}
+.today-detail-time{font-size:var(--t-sm);font-weight:600;color:var(--ink3)}
+.today-detail .today-seg{display:inline-flex}
 .eng-daily,.eng-panel{display:flex;flex-direction:column;gap:var(--s4);max-width:620px}
 .eng-daily-h{display:flex;align-items:center;justify-content:space-between;gap:var(--s4)}
 .eng-daily-h h2,.eng-panel h2{font-size:var(--t-lg);color:var(--ink);font-weight:700}

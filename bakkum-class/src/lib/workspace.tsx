@@ -39,17 +39,21 @@ const MATH: WsEntry[] = [
 /* ---- 영어 수업관리 (핵심부터) ---- */
 function engEntries(band: "mid" | "elem"): WsEntry[] {
   const sfx = "_" + band;
-  return [
+  const list: WsEntry[] = [
     { key: "eng_today" + sfx, label: "오늘 (일일기록)", icon: "today", kind: "hub" },
     { key: "eng_tt" + sfx, label: "시간표", icon: "cal", kind: "hub" },
     { key: "eng_att" + sfx, label: "출결 기록", icon: "clipboard", kind: "hub" },
-    { key: "eng_hw" + sfx, label: "숙제 기록", icon: "book", kind: "hub" },
+  ];
+  // 초등영어는 숙제를 다루지 않는다 — 숙제 기록 메뉴는 중고등만.
+  if (band === "mid") list.push({ key: "eng_hw" + sfx, label: "숙제 기록", icon: "book", kind: "hub" });
+  list.push(
     { key: "eng_progress" + sfx, label: "진도 기록", icon: "chart", kind: "hub" },
     { key: "eng_test" + sfx, label: "테스트 기록", icon: "cap", kind: "hub" },
     // 학생 명단은 과목별로 나누지 않고 공통 「학생 명단」 하나로 단일화(단일 출처 원칙).
     { key: "eng_makeup" + sfx, label: "보강 관리", icon: "refresh", kind: "hub" },
-    { key: "eng_dash" + sfx, label: "대시보드", icon: "dashboard", kind: "hub" },
-  ];
+    { key: "eng_dash" + sfx, label: "대시보드", icon: "dashboard", kind: "hub" }
+  );
+  return list;
 }
 
 const HOME: WsEntry = { key: "home", label: "홈", icon: "today", kind: "hub" };

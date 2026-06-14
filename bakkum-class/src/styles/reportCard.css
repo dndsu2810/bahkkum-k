@@ -89,12 +89,14 @@
 .r-cal-legend span{ font-size:12.5px; font-weight:600; color:var(--ink-2); display:flex; align-items:center; gap:7px }
 .r-lg{ width:9px; height:9px; border-radius:50%; display:inline-block }
 .r-lg.g{ background:var(--green) } .r-lg.b{ background:var(--blue) } .r-lg.r{ background:var(--red) } .r-lg.n{ background:#D7DCE0 }
-.r-cal{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px }
+/* 고정폭 7열 — html2canvas는 1fr(minmax(auto,1fr)) 트랙을 콘텐츠 최소폭으로 키워
+   달력이 오른쪽으로 넘쳐 잘린다. 시트 768px·본문/카드 패딩 기준 셀폭을 고정해 캡처에서도 안 깨지게. */
+.r-cal{ display:grid; grid-template-columns:repeat(7,86px); gap:6px; justify-content:space-between }
 .r-wd{ text-align:center; font-size:12px; font-weight:700; color:var(--ink-3); padding-bottom:7px; letter-spacing:.04em }
 .r-wd.sun{ color:var(--red) } .r-wd.sat{ color:var(--blue) }
 /* 날짜는 좌상단, 상태 알약은 좌하단 — 달력다운 레이아웃.
    min-height는 html2canvas가 aspect-ratio를 무시할 때의 보정(저장 시 눌림 방지). */
-.r-cell{ aspect-ratio:1/1; min-height:92px; border-radius:13px; border:1px solid var(--line-2); background:#fff; padding:9px 10px 10px; display:flex; flex-direction:column; align-items:flex-start }
+.r-cell{ width:86px; height:86px; border-radius:13px; border:1px solid var(--line-2); background:#fff; padding:9px 10px 10px; display:flex; flex-direction:column; align-items:flex-start; overflow:hidden }
 .r-cell.empty{ border:0; background:transparent }
 .r-cell .r-d{ font-size:14.5px; font-weight:800; color:var(--ink-2); line-height:1 }
 .r-celltag{ font-size:10.5px; font-weight:800; padding:3px 9px; border-radius:999px; letter-spacing:-0.02em; align-self:flex-start }

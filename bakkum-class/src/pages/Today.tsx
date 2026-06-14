@@ -527,68 +527,62 @@ export function Today() {
                 const attOk = lesson ? !!st : mkAllDone;
                 const done = attOk && checkHws.every((h) => h.status === "done") && (assignedHws.length > 0 || none);
                 return (
-                <div key={e.key} className={"today-stu" + (done ? " alldone" : "")}>
-                  <div className="today-stu-head">
-                    <div className="today-time">{e.time}</div>
-                    <div className="today-id">
-                      <div className="today-name">
-                        {done && <span className="today-doneflag"><Icon name="check" /></span>}
-                        <button type="button" className="stu-namelink" onClick={() => openModal(<StudentModal id={s.id} />)} title="학생 상세">{s.name}</button>
-                        <GradeBadge grade={s.grade} />
-                        {e.makeups.length > 0 && <span className="badge b-blue" style={{ marginLeft: 2 }}>보강</span>}
-                        {!!s.birthdate && s.birthdate.slice(5) === day.slice(5) && (
-                          <span className="badge b-pink" style={{ marginLeft: 2 }} title="오늘 생일">🎂 생일</span>
-                        )}
-                      </div>
-                      <div className="today-sub">
-                        {lesson ? lesson.duration + "분" + (st ? " · " + st : " · 미체크") : "보강 " + (e.makeups[0]?.makeupDuration ? e.makeups[0].makeupDuration + "분" : "")}
-                      </div>
-                    </div>
-                    <div className="today-actions">
-                      {lesson && (
-                        <div className="today-seg">
-                          {QUICK.map((q) => (
-                            <button key={q.s} className={st === q.s ? q.cls : ""} onClick={() => mark(lesson, q.s)}>{q.s}</button>
-                          ))}
-                        </div>
+                <div key={e.key} className={"eng-daily today-detail" + (done ? " alldone" : "")}>
+                  {/* 영어 일일기록과 동일한 라벨+필드 세로 레이아웃 (항목은 수학 그대로) */}
+                  <div className="eng-daily-h today-detail-h">
+                    <h2>
+                      <button type="button" className="stu-namelink" onClick={() => openModal(<StudentModal id={s.id} />)} title="학생 상세">{s.name}</button>
+                      <GradeBadge grade={s.grade} />
+                      <span className="today-detail-time">
+                        {e.time || "보강"}
+                        {lesson ? ` · ${lesson.duration}분` : e.makeups[0]?.makeupDuration ? ` · ${e.makeups[0].makeupDuration}분` : ""}
+                      </span>
+                      {done && <span className="badge b-green">완료</span>}
+                      {e.makeups.length > 0 && <span className="badge b-blue">보강</span>}
+                      {!!s.birthdate && s.birthdate.slice(5) === day.slice(5) && (
+                        <span className="badge b-pink" title="오늘 생일">🎂 생일</span>
                       )}
-                      {e.makeups.map((mk) => (
-                        <button
-                          key={mk.id}
-                          className={"btn sm" + (mk.status === "done" ? "" : " primary")}
-                          onClick={() => (mk.status === "done" ? uncompleteMakeup(mk.id) : completeMakeup(mk.id))}
-                          title="보강 완료 표시"
-                        >
-                          <Icon name="check" />{mk.status === "done" ? "보강 완료됨" : "보강 완료"}
-                        </button>
-                      ))}
-                    </div>
+                    </h2>
                   </div>
 
-                  {/* 지각 분 (지각으로 찍은 학생만) — 월말리포트에 반영 */}
-                  {lesson && st === "지각" && (
-                    <div className="today-mood">
-                      <span className="today-mood-label">지각</span>
-                      <span className="today-late-wrap">
-                        <input
-                          className="today-late-input"
-                          type="number"
-                          min={0}
-                          step={5}
-                          placeholder="분"
-                          aria-label="지각 분"
-                          value={data.attendance[keyOf(lesson)]?.lateMinutes ?? ""}
-                          onChange={(ev) => setLateMin(lesson, +ev.target.value || 0)}
-                        />
-                        <span className="today-mood-label">분</span>
-                      </span>
+                  {/* 출결 */}
+                  {lesson && (
+                    <div className="eng-field">
+                      <div className="eng-label">출결</div>
+                      <div className="today-seg">
+                        {QUICK.map((q) => (
+                          <button key={q.s} className={st === q.s ? q.cls : ""} onClick={() => mark(lesson, q.s)}>{q.s}</button>
+                        ))}
+                      </div>
+                      {st === "지각" && (
+                        <label className="eng-late-row">지각 <input className="sm-input" style={{ maxWidth: 90 }} type="number" min={0} step={5} placeholder="분" value={data.attendance[keyOf(lesson)]?.lateMinutes ?? ""} onChange={(ev) => setLateMin(lesson, +ev.target.value || 0)} /> 분</label>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 보강 완료 */}
+                  {e.makeups.length > 0 && (
+                    <div className="eng-field">
+                      <div className="eng-label">보강</div>
+                      <div className="today-actions">
+                        {e.makeups.map((mk) => (
+                          <button
+                            key={mk.id}
+                            className={"btn sm" + (mk.status === "done" ? "" : " primary")}
+                            onClick={() => (mk.status === "done" ? uncompleteMakeup(mk.id) : completeMakeup(mk.id))}
+                            title="보강 완료 표시"
+                          >
+                            <Icon name="check" />{mk.status === "done" ? "보강 완료됨" : "보강 완료"}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
 
                   {/* 수업태도 (정규 출결 찍은 학생만) */}
                   {lesson && st && (
-                    <div className="today-mood">
-                      <span className="today-mood-label">태도</span>
+                    <div className="eng-field">
+                      <div className="eng-label">수업 태도</div>
                       <div className="today-mood-seg">
                         {ATTITUDES.map((a) => {
                           const on = data.attendance[keyOf(lesson)]?.attitude === a;
@@ -599,8 +593,8 @@ export function Today() {
                   )}
 
                   {/* 검사할 숙제 (오늘 마감) */}
-                  <div className="today-hwsec">
-                    <div className="today-sec-tag chk">검사할 숙제</div>
+                  <div className="eng-field today-hwsec">
+                    <div className="eng-label">검사할 숙제</div>
                     {checkHws.length === 0 ? (
                       <div className="today-hwrow-empty">오늘 검사할 숙제 없음</div>
                     ) : (
@@ -642,8 +636,8 @@ export function Today() {
                   </div>
 
                   {/* ✏️ 내줄 숙제 (여러 개 가능) */}
-                  <div className="today-hwsec assign">
-                    <div className="today-sec-tag asn">내줄 숙제</div>
+                  <div className="eng-field today-hwsec assign">
+                    <div className="eng-label">내줄 숙제</div>
                     {none ? (
                       <div className="today-hwitem">
                         <span className="today-hwitem-name"><Icon name="check" /> 숙제 없음으로 정리됨</span>
