@@ -1,0 +1,66 @@
+/* 초등영어 월말리포트 — 3장 분할 양식. 모두 erc3- prefix. 캡처용 고정폭 720px. */
+.erc3{
+  --t:#16808F; --t-deep:#0C5A66; --t-tint:#E6F2F4; --t-soft:#F3F9FA;
+  --ink:#14202B; --ink2:#46535F; --ink3:#8B96A1; --line:#E6EBEE;
+  width:720px; box-sizing:border-box; background:#fff; color:var(--ink);
+  font-family:'Pretendard','Pretendard Variable',-apple-system,system-ui,sans-serif;
+  letter-spacing:-0.01em; padding:0 0 0; border-radius:18px; overflow:hidden;
+  border:1px solid var(--line); margin:0 auto;
+}
+.erc3 *{ box-sizing:border-box }
+
+/* 헤더(파란 배경) */
+.erc3-head{ background:linear-gradient(135deg,var(--t),var(--t-deep)); color:#fff; padding:22px 30px; display:flex; align-items:center; justify-content:space-between; gap:16px }
+.erc3-brand{ display:flex; align-items:center; gap:12px }
+.erc3-brand img{ height:38px; width:auto; filter:brightness(0) invert(1) }
+.erc3-brand b{ display:block; font-size:18px; font-weight:800 }
+.erc3-brand span{ display:block; font-size:11px; opacity:.85; letter-spacing:.02em }
+.erc3-head-card{ text-align:right; background:rgba(255,255,255,.16); border-radius:10px; padding:8px 14px }
+.erc3-head-card b{ display:block; font-size:13px; font-weight:700 }
+.erc3-head-card span{ display:block; font-size:11px; opacity:.9 }
+.erc3-head-right{ font-size:14px; font-weight:700 }
+
+/* 학생 정보 */
+.erc3-info{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; padding:20px 30px 6px }
+.erc3-info-it{ background:var(--t-soft); border:1px solid var(--t-tint); border-radius:10px; padding:10px 12px }
+.erc3-info-it span{ display:block; font-size:11px; color:var(--ink3); font-weight:600; margin-bottom:3px }
+.erc3-info-it b{ font-size:15px; font-weight:700; color:var(--ink) }
+
+/* 섹션 태그 */
+.erc3-table-tag,.erc3-sec-tag{ margin:16px 30px 10px; font-size:13px; font-weight:800; color:var(--t); letter-spacing:.02em }
+
+/* 평가표 */
+.erc3-table{ width:calc(100% - 60px); margin:0 30px 4px; border-collapse:collapse; table-layout:fixed }
+.erc3-table th{ background:var(--t-tint); color:var(--t-deep); font-size:12px; font-weight:800; text-align:left; padding:10px 14px; letter-spacing:.03em }
+.erc3-table th:nth-child(2),.erc3-table td:nth-child(2){ width:90px; text-align:center }
+.erc3-table th:nth-child(3),.erc3-table td:nth-child(3){ width:160px }
+.erc3-table td{ border-bottom:1px solid var(--line); padding:11px 14px; font-size:14px; vertical-align:middle }
+.erc3-cri b{ font-weight:700; color:var(--ink) } .erc3-cri span{ color:var(--ink3); font-size:12px }
+.erc3-full{ color:var(--ink2); font-weight:600 }
+
+/* 등급 배지 */
+.erc3-badge{ display:inline-flex; align-items:center; justify-content:center; min-width:34px; height:24px; padding:0 8px;
+  border-radius:7px; font-size:12px; font-weight:800; color:#fff; background:#9AA8B4 }
+.erc3-badge.g-none{ background:#E2E8EC; color:#9AA8B4 }
+.erc3-badge.g-P{ background:#16808F } .erc3-badge.g-E{ background:#1F9D8B }
+.erc3-badge.g-GR{ background:#3E9E6E } .erc3-badge.g-G{ background:#5AA9C0 }
+.erc3-badge.g-VG{ background:#E0A30C } .erc3-badge.g-NI{ background:#E0696E }
+
+/* 레이더 */
+.erc3-radar{ display:block; margin:0 auto }
+.erc3-axis-l{ font-size:11px; font-weight:700; fill:var(--ink2) }
+
+/* 범례 */
+.erc3-scale{ margin:8px 30px 0; background:var(--t-soft); border:1px solid var(--t-tint); border-radius:12px; padding:14px 16px }
+.erc3-scale-h{ font-size:11px; font-weight:800; color:var(--t-deep); letter-spacing:.06em; margin-bottom:9px }
+.erc3-scale-row{ display:flex; flex-wrap:wrap; gap:10px 16px }
+.erc3-scale-it{ display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--ink2) }
+
+/* 코멘트 */
+.erc3-comment{ margin:4px 30px; min-height:300px; background:var(--t-soft); border:1px solid var(--t-tint); border-radius:12px;
+  padding:22px 24px; font-size:15px; line-height:1.9; color:var(--ink); white-space:pre-wrap }
+
+/* 푸터 */
+.erc3-foot{ display:flex; align-items:center; justify-content:space-between; padding:16px 30px 22px; margin-top:14px;
+  border-top:1px solid var(--line); color:var(--ink3); font-size:11.5px; font-weight:600 }
+.erc3-p1 .erc3-foot,.erc3-p2 .erc3-foot{ margin-top:18px }
