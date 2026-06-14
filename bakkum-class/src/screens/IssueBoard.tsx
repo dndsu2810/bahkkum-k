@@ -90,7 +90,7 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
       <div className="sm-head">
         <div>
           <h1 className="sm-title">오류·개선 요청</h1>
-          <p className="sm-desc">불편하거나 고쳤으면 하는 점을 적어 주세요. 원장님에게 바로 전달됩니다.</p>
+          <p className="sm-desc">불편하거나 고쳤으면 하는 점을 적어 주세요. 지현T에게 바로 전달됩니다.</p>
         </div>
       </div>
 
@@ -120,7 +120,7 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
         <textarea className="input" rows={3} value={body} onChange={(e) => setBody(e.target.value)} placeholder="무슨 문제인지 / 어떻게 개선하면 좋을지 적어 주세요." />
         <div className="issue-form-foot">
           <button className="btn primary" onClick={submit} disabled={!body.trim() || busy}>{busy ? "보내는 중…" : "보내기"}</button>
-          {sent && <span className="issue-sent">접수됐어요 ✓ 원장님께 전달됐습니다.</span>}
+          {sent && <span className="issue-sent">접수됐어요 ✓ 지현T에게 전달됐습니다.</span>}
         </div>
       </div>
 
