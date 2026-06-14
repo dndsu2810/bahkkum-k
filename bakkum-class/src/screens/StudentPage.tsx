@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth";
 import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type CurriculumItem, type StudentLogRow } from "../lib/studentApi";
-import { DOW_ORDER, fmtFull, fmtMDDow, parseD, timeToMin, todayStr } from "../lib/dates";
+import { DOW, DOW_ORDER, fmtFull, fmtMDDow, parseD, timeToMin, todayStr } from "../lib/dates";
 
 /** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
  *  - 학생 본인: studentId 생략(본인). 일지 입력 가능, 커리큘럼 조회.
@@ -68,12 +68,12 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
       {/* 일지 입력 */}
       <section className="sp-card">
         <h3 className="sp-card-h">{canEditCur ? "수업 일지 입력" : "오늘 수업 일지"}</h3>
-        <LogEditor studentId={canEditCur ? s.id : undefined} existing={data.daily} onSaved={load} />
+        <LogEditor studentId={canEditCur ? s.id : undefined} existing={data.daily} slots={data.engSlots} onSaved={load} />
       </section>
 
       {/* 일지 이력 */}
       <section className="sp-card">
-        <h3 className="sp-card-h">지난 일지 ({data.daily.length})</h3>
+        <h3 className="sp-card-h">지난 일지</h3>
         <LogHistory rows={data.daily} />
       </section>
     </div>
@@ -174,7 +174,21 @@ function CurriculumEditor({ studentId, items, onSaved }: { studentId: string; it
 }
 
 /* ---------------- 일지 입력 ---------------- */
-function LogEditor({ studentId, existing, onSaved }: { studentId?: string; existing: StudentLogRow[]; onSaved: () => void }) {
+/** 현재 시각 'HH:MM'. */
+function nowHM(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+/** 'HH:MM' + 분 → 'HH:MM' (수업 길이로 끝시간 계산). */
+function addMin(hm: string, min: number): string {
+  const [h, m] = hm.split(":").map(Number);
+  const t = h * 60 + m + min;
+  const hh = Math.floor((t % 1440) / 60);
+  const mm = t % 60;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; onSaved: () => void }) {
   const [date, setDate] = useState(todayStr());
   const [bookNo, setBookNo] = useState("");
   const [wordTest, setWordTest] = useState("");
@@ -196,6 +210,16 @@ function LogEditor({ studentId, existing, onSaved }: { studentId?: string; exist
     setComment(row?.comment || "");
   }, [date, existing]);
 
+  // 선택한 날짜의 요일에 잡힌 수업시간(자동입력용).
+  const dow = DOW[parseD(date).getDay()];
+  const scheduled = slots.find((s) => s.day === dow);
+
+  function fillScheduled() {
+    if (!scheduled) return;
+    setStartTime(scheduled.time);
+    if (scheduled.duration) setEndTime(addMin(scheduled.time, scheduled.duration));
+  }
+
   async function save() {
     setSaving(true);
     setSavedMsg("");
@@ -212,19 +236,32 @@ function LogEditor({ studentId, existing, onSaved }: { studentId?: string; exist
 
   return (
     <div className="sp-log-edit">
-      <div className="sp-log-top">
-        <label className="sp-f">
-          <span>날짜</span>
-          <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </label>
-        <label className="sp-f">
-          <span>시작</span>
-          <input className="input" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-        </label>
-        <label className="sp-f">
-          <span>끝</span>
-          <input className="input" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-        </label>
+      <div className="sp-f">
+        <span>날짜</span>
+        <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      </div>
+
+      {/* 수업 시간 — '지금' 버튼으로 한 번에 찍기 + 시간표 자동입력 */}
+      <div className="sp-f">
+        <span>수업 시간</span>
+        <div className="sp-time">
+          <div className="sp-time-one">
+            <label>시작</label>
+            <input className="input" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            <button type="button" className="sp-now" onClick={() => setStartTime(nowHM())}>지금</button>
+          </div>
+          <span className="sp-time-tilde">~</span>
+          <div className="sp-time-one">
+            <label>끝</label>
+            <input className="input" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            <button type="button" className="sp-now" onClick={() => setEndTime(nowHM())}>지금</button>
+          </div>
+        </div>
+        {scheduled && (
+          <button type="button" className="sp-time-auto" onClick={fillScheduled}>
+            🕑 오늘 수업시간 자동입력 ({scheduled.time}{scheduled.duration ? `~${addMin(scheduled.time, scheduled.duration)}` : ""})
+          </button>
+        )}
       </div>
 
       <div className="sp-f">
@@ -232,15 +269,22 @@ function LogEditor({ studentId, existing, onSaved }: { studentId?: string; exist
         <input className="input" value={bookNo} onChange={(e) => setBookNo(e.target.value)} placeholder="예: 145" />
       </div>
 
+      {/* 오늘 한 것 — 체크박스, 체크하면 줄이 그어져 '완료' 표시 */}
       <div className="sp-f">
-        <span>오늘 한 것</span>
-        <div className="sp-chips">
+        <span>오늘 한 것 (한 것에 체크!)</span>
+        <div className="sp-checks">
           {STUDENT_LOG_ITEMS.map((it) => {
             const on = doneItems.includes(it);
             return (
-              <button key={it} className={"sp-chip" + (on ? " on" : "")} onClick={() => setDoneItems(on ? doneItems.filter((x) => x !== it) : [...doneItems, it])}>
-                {it}
-              </button>
+              <label key={it} className={"sp-check" + (on ? " on" : "")}>
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() => setDoneItems(on ? doneItems.filter((x) => x !== it) : [...doneItems, it])}
+                />
+                <span className="sp-check-box" aria-hidden="true" />
+                <span className="sp-check-label">{it}</span>
+              </label>
             );
           })}
         </div>
@@ -264,28 +308,56 @@ function LogEditor({ studentId, existing, onSaved }: { studentId?: string; exist
   );
 }
 
-/* ---------------- 일지 이력 ---------------- */
+/* ---------------- 일지 이력(월별) ---------------- */
+/** 'YYYY-MM' → '2026년 6월'. */
+function fmtMonth(ym: string): string {
+  const [y, m] = ym.split("-");
+  return `${y}년 ${Number(m)}월`;
+}
 function LogHistory({ rows }: { rows: StudentLogRow[] }) {
+  // 데이터에 있는 월 목록(최신순).
+  const months = Array.from(new Set(rows.map((r) => r.date.slice(0, 7)))).sort().reverse();
+  const [month, setMonth] = useState<string>(months[0] || "");
+  // 데이터가 바뀌어 선택 월이 사라지면 가장 최근 월로.
+  useEffect(() => {
+    if (months.length && !months.includes(month)) setMonth(months[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
+
   if (!rows.length) return <div className="sp-muted">아직 작성한 일지가 없어요.</div>;
+
+  const shown = rows.filter((r) => r.date.slice(0, 7) === month);
+
   return (
-    <div className="sp-hist">
-      {rows.map((r) => (
-        <div className="sp-hist-row" key={r.date}>
-          <div className="sp-hist-date">
-            <b>{fmtMDDow(r.date)}</b>
-            {(r.startTime || r.endTime) && <span className="sp-hist-time">{r.startTime}{r.endTime ? `~${r.endTime}` : ""}</span>}
-            {r.attStatus && <span className={"sp-att sp-att-" + (r.attStatus === "결석" ? "x" : r.attStatus === "지각" ? "l" : "o")}>{r.attStatus}</span>}
+    <div>
+      <div className="sp-months">
+        {months.map((ym) => (
+          <button key={ym} className={"sp-month" + (ym === month ? " on" : "")} onClick={() => setMonth(ym)}>
+            {fmtMonth(ym)}
+            <em>{rows.filter((r) => r.date.slice(0, 7) === ym).length}</em>
+          </button>
+        ))}
+      </div>
+      <div className="sp-hist">
+        {shown.map((r) => (
+          <div className="sp-hist-row" key={r.date}>
+            <div className="sp-hist-date">
+              <b>{fmtMDDow(r.date)}</b>
+              {(r.startTime || r.endTime) && <span className="sp-hist-time">{r.startTime}{r.endTime ? `~${r.endTime}` : ""}</span>}
+              {r.attStatus && <span className={"sp-att sp-att-" + (r.attStatus === "결석" ? "x" : r.attStatus === "지각" ? "l" : "o")}>{r.attStatus}</span>}
+            </div>
+            <div className="sp-hist-body">
+              {r.bookNo && <span className="sp-tag">원서 {r.bookNo}</span>}
+              {r.wordTest && <span className="sp-tag">단어 {r.wordTest}</span>}
+              {r.doneItems.map((it) => (
+                <span className="sp-tag sp-tag-done" key={it}>✓ {it}</span>
+              ))}
+            </div>
+            {r.comment && <div className="sp-hist-note">{r.comment}</div>}
           </div>
-          <div className="sp-hist-body">
-            {r.bookNo && <span className="sp-tag">원서 {r.bookNo}</span>}
-            {r.wordTest && <span className="sp-tag">단어 {r.wordTest}</span>}
-            {r.doneItems.map((it) => (
-              <span className="sp-tag sp-tag-done" key={it}>{it}</span>
-            ))}
-          </div>
-          {r.comment && <div className="sp-hist-note">{r.comment}</div>}
-        </div>
-      ))}
+        ))}
+        {!shown.length && <div className="sp-muted">이 달에 작성한 일지가 없어요.</div>}
+      </div>
     </div>
   );
 }

@@ -1843,3 +1843,40 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
   padding:var(--s4) var(--s4) var(--s5);opacity:.7;letter-spacing:.02em}
 .content .maker-credit{margin-top:var(--s6)}
 .auth-wrap .maker-credit{position:fixed;left:0;right:0;bottom:0;padding-bottom:var(--s4)}
+
+/* ===== 학생 일지: 오늘 한 것 체크박스 ===== */
+.sp-checks{display:flex;flex-direction:column;gap:2px}
+.sp-check{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-md);
+  cursor:pointer;user-select:none;transition:background .12s}
+.sp-check:hover{background:var(--card2)}
+.sp-check input{position:absolute;opacity:0;width:0;height:0}
+.sp-check-box{flex:none;width:24px;height:24px;border:2px solid var(--line2);border-radius:7px;
+  background:var(--card);display:inline-flex;align-items:center;justify-content:center;transition:all .12s}
+.sp-check-box::after{content:"✓";font-size:16px;font-weight:800;color:#fff;opacity:0;transform:scale(.5);transition:all .12s}
+.sp-check.on .sp-check-box{background:var(--brand);border-color:var(--brand)}
+.sp-check.on .sp-check-box::after{opacity:1;transform:scale(1)}
+.sp-check-label{font-size:var(--t-base);color:var(--ink)}
+.sp-check.on .sp-check-label{text-decoration:line-through;text-decoration-thickness:2px;color:var(--ink3)}
+
+/* ===== 학생 일지: 수업 시간 입력 ===== */
+.sp-time{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}
+.sp-time-one{display:flex;align-items:center;gap:6px}
+.sp-time-one>label{font-size:var(--t-cap);color:var(--ink3);min-width:24px}
+.sp-time-one input[type=time]{width:128px}
+.sp-time-tilde{color:var(--ink3);padding-bottom:8px}
+.sp-now{flex:none;height:38px;padding:0 12px;border:1px solid var(--brand-line);background:var(--brand-soft);
+  color:var(--brand-d);border-radius:var(--r-md);font-size:var(--t-sm);font-weight:700;cursor:pointer}
+.sp-now:hover{background:var(--brand);color:#fff;border-color:var(--brand)}
+.sp-time-auto{margin-top:8px;width:100%;border:1px dashed var(--brand-line);background:var(--card);
+  color:var(--brand-d);border-radius:var(--r-md);padding:10px;font-size:var(--t-sm);font-weight:600;cursor:pointer}
+.sp-time-auto:hover{background:var(--brand-soft)}
+
+/* ===== 학생 일지: 월별 탭 ===== */
+.sp-months{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:var(--s3)}
+.sp-month{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);background:var(--card);
+  border-radius:var(--r-full);padding:5px 12px;font-size:var(--t-sm);color:var(--ink2);cursor:pointer}
+.sp-month:hover{border-color:var(--brand-line)}
+.sp-month.on{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-d);font-weight:700}
+.sp-month em{font-style:normal;font-size:var(--t-cap);background:var(--line);color:var(--ink3);
+  border-radius:var(--r-full);padding:0 7px;line-height:18px}
+.sp-month.on em{background:#fff;color:var(--brand-d)}
