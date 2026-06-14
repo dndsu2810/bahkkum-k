@@ -24,6 +24,7 @@ import { AdminDashboard } from "./screens/AdminDashboard";
 import { ChangeRequests } from "./screens/ChangeRequests";
 import { reqsApi } from "./lib/hubApi";
 import { getRoster, type RosterStudent } from "./lib/rosterApi";
+import { NEW_REQ_EVENT, type ReqPrefill } from "./lib/changeReqLive";
 import { Settings } from "./pages/Settings";
 
 export function Workspace() {
@@ -134,6 +135,20 @@ export function Workspace() {
     setGq("");
     setGqOpen(false);
   }
+
+  // 시간표 변경요청 프리필 — 수학/영어 '오늘'에서 '변경 요청하기'를 누르면
+  // CustomEvent로 도착 → 변경요청 화면을 자동으로 열고 폼을 채운다.
+  const [reqPrefill, setReqPrefill] = useState<(ReqPrefill & { n: number }) | null>(null);
+  useEffect(() => {
+    const onNew = (ev: Event) => {
+      const detail = (ev as CustomEvent<ReqPrefill>).detail;
+      if (!detail) return;
+      setReqPrefill((cur) => ({ ...detail, n: (cur?.n || 0) + 1 }));
+      setView("reqs");
+    };
+    window.addEventListener(NEW_REQ_EVENT, onNew);
+    return () => window.removeEventListener(NEW_REQ_EVENT, onNew);
+  }, []);
 
   function open(e: WsEntry) {
     if (e.kind === "math") {
@@ -307,7 +322,7 @@ export function Workspace() {
           </div>
         </header>
         <main className={"content " + (view === "math" ? "is-math" : "is-hub")}>
-          <Body view={view} cats={cats} jumpStudent={jumpStudent} homeTiles={homeTiles} onOpen={open} onCats={(c) => { setCategories(c); setCats(c); }} />
+          <Body view={view} cats={cats} jumpStudent={jumpStudent} reqPrefill={reqPrefill} homeTiles={homeTiles} onOpen={open} onCats={(c) => { setCategories(c); setCats(c); }} />
         </main>
       </div>
       <ModalHost />
@@ -316,11 +331,11 @@ export function Workspace() {
   );
 }
 
-function Body({ view, cats, jumpStudent, homeTiles, onOpen, onCats }: { view: string; cats: Category[]; jumpStudent: { id: string; n: number } | null; homeTiles: WsEntry[]; onOpen: (e: WsEntry) => void; onCats: (c: Category[]) => void }) {
+function Body({ view, cats, jumpStudent, reqPrefill, homeTiles, onOpen, onCats }: { view: string; cats: Category[]; jumpStudent: { id: string; n: number } | null; reqPrefill: (ReqPrefill & { n: number }) | null; homeTiles: WsEntry[]; onOpen: (e: WsEntry) => void; onCats: (c: Category[]) => void }) {
   if (view === "math") return <MathContent />;
   if (view === "home") return <HubHome tiles={homeTiles} onOpen={onOpen} />;
   if (view === "schedule_hub") return <AcademySchedule />;
-  if (view === "reqs") return <ChangeRequests />;
+  if (view === "reqs") return <ChangeRequests prefill={reqPrefill} />;
   if (view === "board") return <BoardShared />;
   if (view === "notes") return <Notes />;
   if (view === "wiki") return <Wiki />;

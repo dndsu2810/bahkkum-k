@@ -1340,6 +1340,19 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .eas.on.w{background:var(--warn-soft);color:var(--warn);border-color:transparent}
 .eas.on.b{background:var(--bad-soft,#fdeaea);color:var(--bad);border-color:transparent}
 .eng-stu-time{font-size:10px;font-weight:600;color:var(--brand-d);background:var(--brand-soft);border-radius:var(--r-full);padding:0 6px;margin-left:6px}
+/* 승인된 시간 변경 배지 */
+.eng-stu-chg{font-size:10px;font-weight:700;color:var(--warn);background:var(--warn-soft);border-radius:var(--r-full);padding:0 6px;margin-left:5px}
+/* 변경요청 임시반영 배너 + 충돌 팝업 */
+.crl-banner{display:flex;align-items:center;gap:8px;border-radius:var(--r-md);padding:8px 12px;margin-bottom:12px;font-size:var(--t-sm);font-weight:600}
+.crl-banner.ok{background:var(--ok-soft);color:var(--ok)}
+.crl-banner-ic{font-weight:800}
+.crl-banner-tx b{font-weight:700}
+.crl-modal{max-width:480px}
+.crl-conf-list{display:flex;flex-direction:column;gap:8px}
+.crl-conf{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--line);border-radius:var(--r-md);padding:10px 12px;flex-wrap:wrap}
+.crl-conf-info{display:flex;flex-direction:column;gap:2px}
+.crl-conf-time{font-size:var(--t-cap);color:var(--warn);font-weight:600}
+.crl-conf-acts{display:flex;gap:6px}
 .eng-stu-late{font-size:10px;font-weight:700;color:var(--warn);margin-left:5px}
 .eng-add-att{margin-top:8px}
 .eng-late-row{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:var(--t-sm);color:var(--ink2)}

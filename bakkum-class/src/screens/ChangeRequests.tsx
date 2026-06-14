@@ -5,14 +5,19 @@ import { getRoster, type RosterStudent, type Slot } from "../lib/rosterApi";
 import { listUsers, type UserRow } from "../lib/authApi";
 import { ROLE_LABEL, type Role } from "../lib/roles";
 import { DOW, fmtWhen, parseD, todayStr } from "../lib/dates";
+import type { ReqPrefill } from "../lib/changeReqLive";
 
 type Tab = "in" | "out" | "new";
 const subjLabel = (s: string) => (s === "english" ? "영어" : "수학");
 
 /** 시간표 변경 요청 — 한 학생 수업시간 임시 변경을 담당/지정 강사에게 요청 → 승인. 앱 내 알림(배지). */
-export function ChangeRequests() {
+export function ChangeRequests({ prefill }: { prefill?: (ReqPrefill & { n: number }) | null }) {
   const { user } = useAuth();
-  const [tab, setTab] = useState<Tab>("in");
+  const [tab, setTab] = useState<Tab>(prefill ? "new" : "in");
+  // 충돌 팝업 등에서 프리필이 도착하면 '새 요청' 탭으로 전환.
+  useEffect(() => {
+    if (prefill) setTab("new");
+  }, [prefill?.n]);
   const [reqs, setReqs] = useState<ChangeReq[]>([]);
   const [roster, setRoster] = useState<RosterStudent[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -60,7 +65,7 @@ export function ChangeRequests() {
       {err && <div className="auth-err" style={{ margin: "8px 0" }}>{err}</div>}
 
       {tab === "new" ? (
-        <NewRequest roster={roster} users={users} onCreated={() => { setTab("out"); void load(); }} />
+        <NewRequest roster={roster} users={users} prefill={prefill} onCreated={() => { setTab("out"); void load(); }} />
       ) : (
         <div className="req-list">
           {(tab === "in" ? received : sent).map((r) => (
@@ -105,17 +110,29 @@ function ReqCard({ r, incoming, onRespond }: { r: ChangeReq; incoming: boolean; 
 const subjClass = (s: string) => (s === "english" ? "eng" : "math");
 
 /* ---------------- 새 요청 ---------------- */
-function NewRequest({ roster, users, onCreated }: { roster: RosterStudent[]; users: UserRow[]; onCreated: () => void }) {
-  const [studentId, setStudentId] = useState("");
-  const [studentQ, setStudentQ] = useState("");
-  const [subject, setSubject] = useState<"math" | "english">("math");
-  const [changeDate, setChangeDate] = useState(todayStr());
-  const [fromTime, setFromTime] = useState("");
-  const [toTime, setToTime] = useState("17:00");
+function NewRequest({ roster, users, prefill, onCreated }: { roster: RosterStudent[]; users: UserRow[]; prefill?: (ReqPrefill & { n: number }) | null; onCreated: () => void }) {
+  const [studentId, setStudentId] = useState(prefill?.studentId || "");
+  const [studentQ, setStudentQ] = useState(prefill?.studentName || "");
+  const [subject, setSubject] = useState<"math" | "english">(prefill?.subject || "math");
+  const [changeDate, setChangeDate] = useState(prefill?.changeDate || todayStr());
+  const [fromTime, setFromTime] = useState(prefill?.fromTime || "");
+  const [toTime, setToTime] = useState(prefill?.toTime || "17:00");
   const [reason, setReason] = useState("");
   const [targetId, setTargetId] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+
+  // 프리필이 갱신되면(충돌 팝업에서 다시 열기 등) 폼을 그 값으로 다시 채운다.
+  useEffect(() => {
+    if (!prefill) return;
+    setStudentId(prefill.studentId);
+    setStudentQ(prefill.studentName);
+    setSubject(prefill.subject);
+    setChangeDate(prefill.changeDate);
+    if (prefill.fromTime) setFromTime(prefill.fromTime);
+    if (prefill.toTime) setToTime(prefill.toTime);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.n]);
 
   const student = roster.find((s) => s.id === studentId) || null;
   const teachers = users.filter((u) => (u.role as Role) !== "student");

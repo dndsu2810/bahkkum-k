@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStore } from "../store";
 import type { AttRecord, Attitude, AttStatus, HwLog, Makeup, Student } from "../types";
 import { DOW, fmtFull, fmtMDDow, parseD, timeToMin, todayStr, uid, ymd } from "../lib/dates";
@@ -9,6 +9,9 @@ import { awardPoints, pushAttendanceNotion, pushHomeworkNotion } from "../api";
 import { GradeBadge, Empty } from "../components/ui";
 import { TestModal, StudentModal } from "../components/modals";
 import { Icon } from "../icons";
+import { getRoster, type RosterStudent } from "../lib/rosterApi";
+import { useApprovedChanges, approvedFor, findSlotConflicts } from "../lib/changeReqLive";
+import { ConflictPopup, ApprovedBanner } from "../components/ChangeReqLive";
 
 interface LessonOnDate {
   student: Student;
@@ -59,6 +62,11 @@ export function Today() {
   const [gradeTab, setGradeTab] = useState<"all" | "cho" | "jung">("all");
   // 영어식 마스터-디테일: 왼쪽에서 고른 학생을 오른쪽 상세에 표시.
   const [sel, setSel] = useState<string>("");
+  // 시간표 변경요청 — 그 날짜 승인된 변경(수학) 표시 + 수학↔영어 겹침 자동 감지.
+  const [hubRoster, setHubRoster] = useState<RosterStudent[]>([]);
+  useEffect(() => { getRoster().then(setHubRoster).catch(() => {}); }, []);
+  const approvedChanges = useApprovedChanges(day);
+  const conflicts = useMemo(() => findSlotConflicts(hubRoster, day), [hubRoster, day]);
 
   const lessons: LessonOnDate[] = [];
   // 공휴일(빨간날)에는 수업/등원 없음
@@ -417,6 +425,9 @@ export function Today() {
         </div>
       </div>
 
+      <ApprovedBanner changes={approvedChanges} subject="math" />
+      <ConflictPopup conflicts={conflicts} date={day} />
+
       {/* ✨ 오늘 한 줄 브리핑 (B-6) — 그날 할 일을 한 문장으로 (중복되던 KPI 카드는 제거) */}
       {!holiday && entries.length > 0 && (
         <div className="today-brief">
@@ -505,6 +516,7 @@ export function Today() {
                     <button className="eng-stu-name" onClick={() => setSel(e.key)}>
                       <span className="today-side-nm">{s.name}</span>
                       {e.time && <span className="eng-stu-time">{e.time}</span>}
+                      {(() => { const ch = approvedFor(approvedChanges, s.id, "math"); return ch ? <span className="eng-stu-chg" title="승인된 시간 변경">→{ch.toTime}</span> : null; })()}
                       {lesson && st && <span className={"today-side-st " + stCls}>{st}{st === "지각" && lateMin ? ` ${lateMin}분` : ""}</span>}
                       {!lesson && <span className="today-side-st blue">보강{mkAllDone ? " 완료" : ""}</span>}
                       {done && <span className="eng-dot ok" title="출결·숙제 완료" />}

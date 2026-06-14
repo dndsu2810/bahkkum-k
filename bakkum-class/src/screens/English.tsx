@@ -6,6 +6,8 @@ import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtFull, fmtMD, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
 import { Select } from "../components/ui";
+import { useApprovedChanges, approvedFor, findSlotConflicts } from "../lib/changeReqLive";
+import { ConflictPopup, ApprovedBanner } from "../components/ChangeReqLive";
 
 type Band = "elem" | "mid";
 type Tab = "today" | "tt" | "att" | "hw" | "progress" | "test" | "makeup" | "board";
@@ -134,6 +136,11 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   }, [students, scheduledIds, daily]);
   const addable = students.filter((s) => !scheduledIds.has(s.id) && !(daily[s.id]?.attStatus || daily[s.id]?.attended));
 
+  // 시간표 변경요청 — 그 날짜 승인된 변경(영어) 표시 + 수학↔영어 시간 겹침 자동 감지.
+  const approvedChanges = useApprovedChanges(date);
+  const conflicts = useMemo(() => findSlotConflicts(students, date), [students, date]);
+  const showLive = tab === "today" || tab === "att";
+
   const bandLabel = band === "elem" ? "초등 영어" : "중고등 영어";
   const TITLE: Record<Tab, string> = {
     today: "오늘",
@@ -192,6 +199,8 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
       </div>
 
       {err && <div className="auth-err" style={{ marginBottom: 10 }}>{err}</div>}
+      {showLive && <ApprovedBanner changes={approvedChanges} subject="english" />}
+      {showLive && <ConflictPopup conflicts={conflicts} date={date} />}
       {students.length === 0 && (
         <div className="hub-muted">
           이 반에 배정된 영어 학생이 없어요. <b>학생 명단</b>에서 학생에 영어 + {band === "elem" ? "초등" : "중고등"}을 지정하세요.
@@ -231,6 +240,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                   <button className="eng-stu-name" onClick={() => setSel(s.id)}>
                     {s.name}
                     {tab === "today" && scheduledIds.has(s.id) && slotTimeOf(s) && <span className="eng-stu-time">{slotTimeOf(s)}</span>}
+                    {tab === "today" && (() => { const ch = approvedFor(approvedChanges, s.id, "english"); return ch ? <span className="eng-stu-chg" title="승인된 시간 변경">→{ch.toTime}</span> : null; })()}
                     {tab === "today" && st === "지각" && d?.lateMin ? <span className="eng-stu-late">{d.lateMin}분</span> : null}
                     {tab === "today" && d?.hwChecked && <span className="eng-dot ok" title="숙제검사 완료" />}
                   </button>
