@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth";
-import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type CurriculumItem, type StudentLogRow } from "../lib/studentApi";
+import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type Curriculum, type CurriculumSection, type CurriculumRow, type StudentLogRow } from "../lib/studentApi";
 import { DOW, DOW_ORDER, fmtFull, fmtMDDow, parseD, timeToMin, todayStr } from "../lib/dates";
 
 /** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
@@ -58,9 +58,9 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
         <section className="sp-card">
           <h3 className="sp-card-h">커리큘럼</h3>
           {canEditCur ? (
-            <CurriculumEditor studentId={s.id} items={data.curriculum} onSaved={load} />
+            <CurriculumEditor studentId={s.id} cur={data.curriculum} onSaved={load} />
           ) : (
-            <CurriculumView items={data.curriculum} />
+            <CurriculumView cur={data.curriculum} />
           )}
         </section>
       </div>
@@ -108,65 +108,86 @@ function Timetable({ slots }: { slots: { day: string; time: string; duration: nu
 }
 
 /* ---------------- 커리큘럼(조회) ---------------- */
-function CurriculumView({ items }: { items: CurriculumItem[] }) {
-  if (!items.length) return <div className="sp-muted">아직 커리큘럼이 등록되지 않았어요.</div>;
+function CurriculumView({ cur }: { cur: Curriculum }) {
+  if (!cur.sections.length) return <div className="sp-muted">아직 커리큘럼이 등록되지 않았어요.</div>;
   return (
-    <dl className="sp-cur">
-      {items.map((it, i) => (
-        <div className="sp-cur-row" key={i}>
-          <dt>{it.label}</dt>
-          <dd>{it.value || <span className="sp-muted">—</span>}</dd>
+    <div className="sp-cur">
+      {cur.note && <div className="sp-cur-note">💡 {cur.note}</div>}
+      {cur.sections.map((sec, si) => (
+        <div className="sp-cur-sec" key={si}>
+          {sec.title && <div className="sp-cur-sectitle">{sec.title}</div>}
+          <ol className="sp-cur-rows">
+            {sec.rows.map((r, ri) => (
+              <li className="sp-cur-row" key={ri}>
+                <span className="sp-cur-name">{r.name}</span>
+                {r.amount && <span className="sp-cur-amt">{r.amount}</span>}
+              </li>
+            ))}
+          </ol>
         </div>
       ))}
-    </dl>
+    </div>
   );
 }
 
-/* ---------------- 커리큘럼(편집, 강사) ---------------- */
-function CurriculumEditor({ studentId, items, onSaved }: { studentId: string; items: CurriculumItem[]; onSaved: () => void }) {
-  const [rows, setRows] = useState<CurriculumItem[]>(items);
+/* ---------------- 커리큘럼(편집, 초등영어 권한자) ---------------- */
+function CurriculumEditor({ studentId, cur, onSaved }: { studentId: string; cur: Curriculum; onSaved: () => void }) {
+  const [draft, setDraft] = useState<Curriculum>(cur);
   const [saving, setSaving] = useState(false);
-  useEffect(() => setRows(items), [items]);
+  useEffect(() => setDraft(cur), [cur]);
 
-  const dirty = JSON.stringify(rows) !== JSON.stringify(items);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(cur);
+  const setSec = (si: number, patch: Partial<CurriculumSection>) => setDraft((d) => ({ ...d, sections: d.sections.map((s, i) => (i === si ? { ...s, ...patch } : s)) }));
+  const setRow = (si: number, ri: number, patch: Partial<CurriculumRow>) =>
+    setSec(si, { rows: draft.sections[si].rows.map((r, i) => (i === ri ? { ...r, ...patch } : r)) });
 
   async function save() {
     setSaving(true);
     try {
-      await studentApi.saveCurriculum(studentId, rows.filter((r) => r.label.trim()));
+      await studentApi.saveCurriculum(studentId, draft);
       onSaved();
     } finally {
       setSaving(false);
     }
   }
-  async function fillDefaults() {
-    const defs = await studentApi.curriculumDefaults();
-    const have = new Set(rows.map((r) => r.label));
-    setRows([...rows, ...defs.filter((d) => !have.has(d)).map((label) => ({ label, value: "" }))]);
+  async function loadTemplate() {
+    setDraft(await studentApi.curriculumDefaults());
   }
 
   return (
     <div className="sp-cur-edit">
-      {rows.map((r, i) => (
-        <div className="sp-cur-erow" key={i}>
-          <input
-            className="input sp-cur-label"
-            value={r.label}
-            placeholder="항목 (예: 단어시험)"
-            onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
-          />
-          <input
-            className="input sp-cur-value"
-            value={r.value}
-            placeholder="내용 (예: 30개 / Insight Link)"
-            onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
-          />
-          <button className="sp-x" onClick={() => setRows(rows.filter((_, j) => j !== i))} title="삭제">×</button>
+      <textarea
+        className="input sp-cur-noteinput"
+        rows={2}
+        value={draft.note}
+        placeholder="안내 문구 (예: 1개의 학습을 완전히 마무리 하고 다음 학습으로 넘어가세요.)"
+        onChange={(e) => setDraft({ ...draft, note: e.target.value })}
+      />
+      {draft.sections.map((sec, si) => (
+        <div className="sp-cur-esec" key={si}>
+          <div className="sp-cur-esec-head">
+            <input
+              className="input sp-cur-sectinput"
+              value={sec.title}
+              placeholder="섹션 이름 (예: 매일 반복)"
+              onChange={(e) => setSec(si, { title: e.target.value })}
+            />
+            <button className="sp-x" title="섹션 삭제" onClick={() => setDraft({ ...draft, sections: draft.sections.filter((_, i) => i !== si) })}>×</button>
+          </div>
+          {sec.rows.map((r, ri) => (
+            <div className="sp-cur-erow" key={ri}>
+              <span className="sp-cur-num">{ri + 1}</span>
+              <input className="input sp-cur-name-i" value={r.name} placeholder="학습 (예: 단어시험)" onChange={(e) => setRow(si, ri, { name: e.target.value })} />
+              <input className="input sp-cur-amt-i" value={r.amount} placeholder="내용 (예: 10개씩)" onChange={(e) => setRow(si, ri, { amount: e.target.value })} />
+              <button className="sp-x" title="삭제" onClick={() => setSec(si, { rows: sec.rows.filter((_, i) => i !== ri) })}>×</button>
+            </div>
+          ))}
+          <button className="btn ghost sm" onClick={() => setSec(si, { rows: [...sec.rows, { name: "", amount: "" }] })}>+ 항목</button>
         </div>
       ))}
       <div className="sp-cur-actions">
-        <button className="btn ghost sm" onClick={() => setRows([...rows, { label: "", value: "" }])}>+ 항목</button>
-        {!rows.length && <button className="btn ghost sm" onClick={fillDefaults}>기본 항목 채우기</button>}
+        <button className="btn ghost sm" onClick={() => setDraft({ ...draft, sections: [...draft.sections, { title: "", rows: [{ name: "", amount: "" }] }] })}>+ 섹션</button>
+        {!draft.sections.length && <button className="btn ghost sm" onClick={loadTemplate}>기본 양식 불러오기</button>}
         <button className="btn primary sm" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : dirty ? "커리큘럼 저장" : "저장됨"}</button>
       </div>
     </div>

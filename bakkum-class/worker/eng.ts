@@ -283,22 +283,80 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
    - 학생: 본인 페이지만(시간표·커리큘럼 조회 + 본인 일지 입력).
    - 강사/원장: 임의 학생(student_id) 페이지 + 커리큘럼 편집. */
 
-/** 신규 학생 커리큘럼 기본 항목(초등 영어 — 노션 진도표 구성). */
-const CURRICULUM_DEFAULTS = ["단어시험", "class5", "Link 교재", "원서 독서기록", "기초영문법", "필기체"];
-
-interface CurriculumItem {
-  label: string;
-  value: string;
+/* 커리큘럼 구조 — 노션 '수업 내용' 표와 동일.
+   섹션(예: 매일 반복 / 지난 시간에 이어서 학습)별로 항목(이름 + 분량/내용). */
+interface CurriculumRow {
+  name: string;
+  amount: string;
+}
+interface CurriculumSection {
+  title: string;
+  rows: CurriculumRow[];
+}
+interface Curriculum {
+  note: string;
+  sections: CurriculumSection[];
 }
 
-function parseCurriculum(s: unknown): CurriculumItem[] {
+/** 신규/빈 학생 기본 양식(노션 초등 진도표 표준 구성). */
+const CURRICULUM_DEFAULT: Curriculum = {
+  note: "1개의 학습을 완전히 마무리 하고 다음 학습으로 넘어가세요.",
+  sections: [
+    {
+      title: "⭐ 매일 반복",
+      rows: [
+        { name: "단어시험", amount: "10개씩" },
+        { name: "스냅파닉스", amount: "1개" },
+        { name: "Practice Book", amount: "하루에 한 개 꼭!" },
+      ],
+    },
+    {
+      title: "지난 시간에 이어서 학습",
+      rows: [
+        { name: "class 5", amount: "1개 학습 완료 후 Link 온라인 학습" },
+        { name: "Link 교재", amount: "1 Unit" },
+        { name: "원서 읽고 독서기록장 쓰기", amount: "1개" },
+        { name: "필기체 쓰기", amount: "1개" },
+      ],
+    },
+  ],
+};
+
+/** 초등영어 페이지 권한 보유자만 커리큘럼 편집 가능(원장 포함). */
+function canEditCurriculum(me: SessionUser): boolean {
+  if (me.role === "admin") return true;
+  const scope = me.scope || [];
+  if (scope.length) return scope.includes("eng_elem"); // 원장이 지정한 화면 권한
+  return me.role === "english_elem"; // 별도 지정 없으면 역할 기본값
+}
+
+function cleanRows(v: unknown): CurriculumRow[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((x) => ({ name: String((x as Record<string, unknown>)?.name ?? "").trim(), amount: String((x as Record<string, unknown>)?.amount ?? "").trim() }))
+    .filter((r) => r.name || r.amount)
+    .slice(0, 30);
+}
+
+function parseCurriculum(s: unknown): Curriculum {
   try {
-    const a = JSON.parse(String(s ?? "[]"));
-    if (Array.isArray(a)) return a.map((x) => ({ label: String((x as Record<string, unknown>)?.label ?? ""), value: String((x as Record<string, unknown>)?.value ?? "") })).filter((x) => x.label);
+    const v = JSON.parse(String(s ?? ""));
+    // 구버전: [{label,value}] 배열 → 단일 섹션으로 변환.
+    if (Array.isArray(v)) {
+      const rows = v.map((x) => ({ name: String((x as Record<string, unknown>)?.label ?? "").trim(), amount: String((x as Record<string, unknown>)?.value ?? "").trim() })).filter((r) => r.name);
+      return { note: "", sections: rows.length ? [{ title: "커리큘럼", rows }] : [] };
+    }
+    if (v && typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      const sections = Array.isArray(o.sections)
+        ? (o.sections as unknown[]).map((sec) => ({ title: String((sec as Record<string, unknown>)?.title ?? "").trim(), rows: cleanRows((sec as Record<string, unknown>)?.rows) })).filter((sec) => sec.title || sec.rows.length).slice(0, 12)
+        : [];
+      return { note: String(o.note ?? ""), sections };
+    }
   } catch {
     /* ignore */
   }
-  return [];
+  return { note: "", sections: [] };
 }
 
 export async function handleStudent(env: Env, request: Request, p: string, me: SessionUser): Promise<Response | null> {
@@ -348,7 +406,7 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
 
     return json({
       role: me.role,
-      canEditCurriculum: isStaff,
+      canEditCurriculum: canEditCurriculum(me),
       student: { id: String(sRow.id), name: String(sRow.name ?? ""), grade: String(sRow.grade ?? ""), school: String(sRow.school ?? ""), band, photo },
       engSlots,
       curriculum,
@@ -375,25 +433,26 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
     return json({ ok: true });
   }
 
-  /* ---- 커리큘럼 저장(강사·원장 전용) ---- */
+  /* ---- 커리큘럼 저장(초등영어 권한자·원장) ---- */
   if (p === "/api/student/curriculum" && m === "POST") {
-    if (!isStaff) return json({ error: "forbidden" }, 403);
+    if (!canEditCurriculum(me)) return json({ error: "forbidden" }, 403);
     const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const sid = String(b.studentId || "").trim();
     if (!sid) return json({ error: "student_required" }, 400);
-    const items = Array.isArray(b.items)
-      ? (b.items as unknown[]).map((x) => ({ label: String((x as Record<string, unknown>)?.label ?? "").trim(), value: String((x as Record<string, unknown>)?.value ?? "") })).filter((x) => x.label).slice(0, 40)
+    const sections = Array.isArray(b.sections)
+      ? (b.sections as unknown[]).map((sec) => ({ title: String((sec as Record<string, unknown>)?.title ?? "").trim(), rows: cleanRows((sec as Record<string, unknown>)?.rows) })).filter((sec) => sec.title || sec.rows.length).slice(0, 12)
       : [];
+    const payload: Curriculum = { note: String(b.note || ""), sections };
     await env.DB
       .prepare("INSERT INTO class_eng_curriculum(student_id,items,updated_at) VALUES(?,?,?) ON CONFLICT(student_id) DO UPDATE SET items=excluded.items, updated_at=excluded.updated_at")
-      .bind(sid, JSON.stringify(items), Date.now())
+      .bind(sid, JSON.stringify(payload), Date.now())
       .run();
     return json({ ok: true });
   }
 
-  /* ---- 커리큘럼 기본 항목 시드(강사가 '기본 항목 채우기') ---- */
+  /* ---- 커리큘럼 기본 양식(강사가 '기본 양식 불러오기') ---- */
   if (p === "/api/student/curriculum/defaults" && m === "GET") {
-    return json({ defaults: CURRICULUM_DEFAULTS });
+    return json({ defaults: CURRICULUM_DEFAULT });
   }
 
   return null;

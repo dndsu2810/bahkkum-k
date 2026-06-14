@@ -23,9 +23,18 @@ export interface StudentSlot {
   time: string;
   duration: number;
 }
-export interface CurriculumItem {
-  label: string;
-  value: string;
+/* 커리큘럼 — 노션 '수업 내용' 표 구조(섹션별 항목). */
+export interface CurriculumRow {
+  name: string;
+  amount: string;
+}
+export interface CurriculumSection {
+  title: string;
+  rows: CurriculumRow[];
+}
+export interface Curriculum {
+  note: string;
+  sections: CurriculumSection[];
 }
 export interface StudentLogRow {
   date: string;
@@ -43,7 +52,7 @@ export interface StudentPageData {
   canEditCurriculum: boolean;
   student: { id: string; name: string; grade: string; school: string; band: string; photo: string };
   engSlots: StudentSlot[];
-  curriculum: CurriculumItem[];
+  curriculum: Curriculum;
   daily: StudentLogRow[];
 }
 
@@ -56,8 +65,8 @@ export const studentApi = {
   /** 일지 입력. 학생은 본인(studentId 무시), 강사는 studentId 지정. */
   saveLog: (d: { studentId?: string; date: string; bookNo?: string; wordTest?: string; doneItems?: string[]; startTime?: string; endTime?: string; comment?: string }) =>
     jpost("/api/student/log", d),
-  /** 커리큘럼 저장(강사·원장). */
-  saveCurriculum: (studentId: string, items: CurriculumItem[]) => jpost("/api/student/curriculum", { studentId, items }),
-  /** 기본 커리큘럼 항목 라벨. */
-  curriculumDefaults: () => jget<{ defaults: string[] }>("/api/student/curriculum/defaults").then((j) => j.defaults),
+  /** 커리큘럼 저장(초등영어 권한자·원장). */
+  saveCurriculum: (studentId: string, cur: Curriculum) => jpost("/api/student/curriculum", { studentId, note: cur.note, sections: cur.sections }),
+  /** 기본 커리큘럼 양식. */
+  curriculumDefaults: () => jget<{ defaults: Curriculum }>("/api/student/curriculum/defaults").then((j) => j.defaults),
 };

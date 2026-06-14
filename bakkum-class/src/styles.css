@@ -1784,17 +1784,29 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
   padding:3px 10px;font-size:var(--t-sm);color:var(--ink)}
 .sp-tt-chip em{color:var(--ink3);font-style:normal}
 
-/* 커리큘럼 조회 */
-.sp-cur{margin:0;display:flex;flex-direction:column}
-.sp-cur-row{display:flex;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line)}
+/* 커리큘럼 조회 — 섹션별 순서·내용 */
+.sp-cur{display:flex;flex-direction:column;gap:var(--s3)}
+.sp-cur-note{font-size:var(--t-sm);color:var(--ink2);background:var(--warn-soft);
+  border-radius:var(--r-md);padding:8px 10px;line-height:1.45}
+.sp-cur-sectitle{font-size:var(--t-sm);font-weight:700;color:var(--brand-d);margin-bottom:4px}
+.sp-cur-rows{list-style:none;margin:0;padding:0;counter-reset:cur;display:flex;flex-direction:column;gap:2px}
+.sp-cur-row{display:flex;align-items:baseline;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line);counter-increment:cur}
 .sp-cur-row:last-child{border-bottom:none}
-.sp-cur-row dt{flex:none;width:96px;font-weight:600;color:var(--ink2);font-size:var(--t-sm)}
-.sp-cur-row dd{margin:0;color:var(--ink);font-size:var(--t-sm)}
+.sp-cur-row::before{content:counter(cur);flex:none;width:20px;height:20px;border-radius:50%;
+  background:var(--brand-soft);color:var(--brand-d);font-size:11px;font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center;align-self:center}
+.sp-cur-name{flex:none;font-weight:600;color:var(--ink);font-size:var(--t-sm)}
+.sp-cur-amt{color:var(--ink3);font-size:var(--t-sm)}
 /* 커리큘럼 편집 */
-.sp-cur-edit{display:flex;flex-direction:column;gap:7px}
+.sp-cur-edit{display:flex;flex-direction:column;gap:8px}
+.sp-cur-noteinput{font-size:var(--t-sm)}
+.sp-cur-esec{border:1px solid var(--line);border-radius:var(--r-md);padding:10px;background:var(--card2);display:flex;flex-direction:column;gap:6px}
+.sp-cur-esec-head{display:flex;gap:6px;align-items:center}
+.sp-cur-sectinput{flex:1;font-weight:600}
 .sp-cur-erow{display:flex;gap:6px;align-items:center}
-.sp-cur-label{flex:none;width:120px}
-.sp-cur-value{flex:1}
+.sp-cur-num{flex:none;width:18px;text-align:center;color:var(--ink3);font-size:var(--t-cap)}
+.sp-cur-name-i{flex:none;width:42%}
+.sp-cur-amt-i{flex:1}
 .sp-cur-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
 .sp-x{flex:none;width:28px;height:28px;border:1px solid var(--line2);background:var(--card);border-radius:8px;
   color:var(--ink3);cursor:pointer;font-size:16px;line-height:1}
