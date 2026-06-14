@@ -1321,6 +1321,15 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
   border-radius:var(--r-md);padding:9px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .req-conflict.warn{color:var(--bad);background:var(--bad-soft,#fdeaea);border-color:#f6cccc;font-weight:600}
 .req-conflict-chip{font-size:var(--t-cap);font-weight:600;background:var(--card);border:1px solid var(--line);border-radius:var(--r-full);padding:1px 9px;color:var(--ink2)}
+/* 옮길 수업 선택 칩 */
+.req-class-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.req-class-chip{border:1px solid var(--line2);background:var(--card);color:var(--ink2);border-radius:var(--r-full);
+  padding:6px 12px;font-size:var(--t-sm);font-weight:600;cursor:pointer;transition:.12s}
+.req-class-chip:hover{border-color:var(--brand-line)}
+.req-class-chip.on{background:var(--brand-soft);color:var(--brand-d);border-color:var(--brand-line)}
+.req-class-chip.english.on{background:var(--purple-bg,#efe9fb);color:var(--purple,#7c3aed);border-color:transparent}
+.req-summary{margin-top:12px;font-size:var(--t-sm);color:var(--ink2);background:var(--brand-soft);border-radius:var(--r-md);padding:9px 12px}
+.req-summary b{color:var(--brand-d);font-weight:700}
 /* 영어 출결 그리드 · 숙제 기록 */
 .eng-att-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
 .eng-att-cell{display:flex;flex-direction:column;align-items:flex-start;gap:2px;border:1px solid var(--line);background:var(--card);

@@ -48,6 +48,9 @@ export async function ensureHubTables(env: Env): Promise<void> {
     "ALTER TABLE class_events ADD COLUMN src TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_tasks ADD COLUMN assignee TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'",
+    // 시간표 변경요청 — 1회성 수업 이동(원래 날짜 → 변경 날짜). 기존 change_date=변경 날짜.
+    "ALTER TABLE class_change_reqs ADD COLUMN from_date TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_change_reqs ADD COLUMN to_date TEXT NOT NULL DEFAULT ''",
   ]) {
     try {
       await env.DB.prepare(a).run();
@@ -149,12 +152,15 @@ export async function handleHub(
     const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const sid = String(b.studentId || "");
     const subject = String(b.subject) === "english" ? "english" : "math";
-    if (!sid || !b.changeDate || !b.toTime) return json({ error: "bad_input" }, 400);
+    // 변경 날짜(=수업이 새로 잡히는 날). 호환: changeDate 또는 toDate.
+    const toDate = String(b.toDate || b.changeDate || "");
+    const fromDate = String(b.fromDate || toDate);
+    if (!sid || !toDate || !b.toTime) return json({ error: "bad_input" }, 400);
     const id = newId("req");
     const now = Date.now();
     await env.DB
-      .prepare("INSERT INTO class_change_reqs(id,student_id,student_name,subject,change_date,from_time,to_time,reason,requester_id,requester_name,target_id,target_name,status,response,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-      .bind(id, sid, String(b.studentName || ""), subject, String(b.changeDate), String(b.fromTime || ""), String(b.toTime), String(b.reason || "").slice(0, 1000), me.sub, me.name, String(b.targetId || ""), String(b.targetName || ""), "pending", "", now, now)
+      .prepare("INSERT INTO class_change_reqs(id,student_id,student_name,subject,change_date,from_date,to_date,from_time,to_time,reason,requester_id,requester_name,target_id,target_name,status,response,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(id, sid, String(b.studentName || ""), subject, toDate, fromDate, toDate, String(b.fromTime || ""), String(b.toTime), String(b.reason || "").slice(0, 1000), me.sub, me.name, String(b.targetId || ""), String(b.targetName || ""), "pending", "", now, now)
       .run();
     return json({ ok: true, id });
   }
@@ -165,6 +171,16 @@ export async function handleHub(
     await env.DB
       .prepare("UPDATE class_change_reqs SET status=?, response=?, updated_at=? WHERE id=?")
       .bind(status, String(b.response || "").slice(0, 1000), Date.now(), b.id)
+      .run();
+    return json({ ok: true });
+  }
+  // 철회 — 요청한 사람만 자기 요청을 취소(철회) 가능.
+  if (p === "/api/reqs/withdraw" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string };
+    if (!b.id) return json({ error: "id_required" }, 400);
+    await env.DB
+      .prepare("UPDATE class_change_reqs SET status='withdrawn', updated_at=? WHERE id=? AND requester_id=?")
+      .bind(Date.now(), b.id, me.sub)
       .run();
     return json({ ok: true });
   }
@@ -338,6 +354,8 @@ function reqRow(r: Record<string, unknown>) {
     studentName: String(r.student_name ?? ""),
     subject: String(r.subject ?? "math"),
     changeDate: String(r.change_date ?? ""),
+    fromDate: String(r.from_date ?? r.change_date ?? ""),
+    toDate: String(r.to_date ?? r.change_date ?? ""),
     fromTime: String(r.from_time ?? ""),
     toTime: String(r.to_time ?? ""),
     reason: String(r.reason ?? ""),

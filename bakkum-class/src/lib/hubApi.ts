@@ -140,7 +140,9 @@ export interface ChangeReq {
   studentId: string;
   studentName: string;
   subject: string; // math | english
-  changeDate: string; // YYYY-MM-DD
+  changeDate: string; // = toDate (호환)
+  fromDate: string; // 원래 수업 날짜
+  toDate: string; // 변경(새) 수업 날짜
   fromTime: string;
   toTime: string;
   reason: string;
@@ -148,7 +150,7 @@ export interface ChangeReq {
   requesterName: string;
   targetId: string;
   targetName: string;
-  status: string; // pending | approved | rejected
+  status: string; // pending | approved | rejected | withdrawn
   response: string;
   createdAt: number;
   updatedAt: number;
@@ -156,9 +158,11 @@ export interface ChangeReq {
 export const reqsApi = {
   list: () => jget<{ reqs: ChangeReq[] }>("/api/reqs").then((j) => j.reqs),
   create: (r: {
-    studentId: string; studentName: string; subject: string; changeDate: string;
-    fromTime?: string; toTime: string; reason?: string; targetId?: string; targetName?: string;
+    studentId: string; studentName: string; subject: string;
+    fromDate: string; toDate: string; fromTime?: string; toTime: string;
+    reason?: string; targetId?: string; targetName?: string;
   }) => jpost("/api/reqs", r),
   respond: (id: string, status: "approved" | "rejected", response?: string) =>
     jpost("/api/reqs/respond", { id, status, response }),
+  withdraw: (id: string) => jpost("/api/reqs/withdraw", { id }),
 };

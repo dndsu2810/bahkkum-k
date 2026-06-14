@@ -1,4 +1,4 @@
-// 시간표 변경 요청 — '오늘/시간표'에서의 임시 반영(승인 배지) · 충돌 감지 · 새 요청 프리필 브리지.
+// 시간표 변경 요청 — 1회성 수업 이동을 '오늘'에 반영 · 충돌 감지 · 새 요청 프리필 브리지.
 // 수학(store nav)과 허브(view nav) 양쪽에서 같은 방식으로 쓰기 위해 CustomEvent로 변경요청 화면을 연다.
 import { useEffect, useState } from "react";
 import { reqsApi, type ChangeReq } from "./hubApi";
@@ -9,7 +9,8 @@ export interface ReqPrefill {
   studentId: string;
   studentName: string;
   subject: ReqSubject;
-  changeDate: string;
+  fromDate?: string;
+  toDate?: string;
   fromTime?: string;
   toTime?: string;
 }
@@ -21,7 +22,7 @@ export function openChangeRequest(prefill: ReqPrefill): void {
   window.dispatchEvent(new CustomEvent<ReqPrefill>(NEW_REQ_EVENT, { detail: prefill }));
 }
 
-/** 선택 날짜에 '승인된' 변경요청만. 학생별 임시 시간 변경 반영용. */
+/** 그 날짜에 영향을 주는 '승인된' 변경요청(원래날짜=date 또는 변경날짜=date). */
 export function useApprovedChanges(date: string): ChangeReq[] {
   const [list, setList] = useState<ChangeReq[]>([]);
   useEffect(() => {
@@ -29,7 +30,10 @@ export function useApprovedChanges(date: string): ChangeReq[] {
     const load = () =>
       reqsApi
         .list()
-        .then((rs) => { if (alive) setList(rs.filter((r) => r.status === "approved" && r.changeDate === date)); })
+        .then((rs) => {
+          if (!alive) return;
+          setList(rs.filter((r) => r.status === "approved" && (r.toDate === date || r.fromDate === date || r.changeDate === date)));
+        })
         .catch(() => {});
     void load();
     const iv = setInterval(load, 30000);
@@ -38,9 +42,17 @@ export function useApprovedChanges(date: string): ChangeReq[] {
   return list;
 }
 
-/** 한 학생의 그 날짜 승인된 변경(과목별). 없으면 null. */
-export function approvedFor(changes: ChangeReq[], studentId: string, subject: ReqSubject): ChangeReq | null {
-  return changes.find((c) => c.studentId === studentId && c.subject === subject) || null;
+/** 그 날짜에 '들어오는'(이 날로 옮겨온) 변경 — 그 학생을 그날 오늘에 추가. */
+export function arrivalOf(changes: ChangeReq[], studentId: string, subject: ReqSubject, date: string): ChangeReq | null {
+  return changes.find((c) => c.studentId === studentId && c.subject === subject && (c.toDate || c.changeDate) === date) || null;
+}
+/** 그 날짜에서 '나가는'(다른 날로 옮겨간) 변경 — 그 학생을 그날 원래 자리에서 제외. */
+export function departureOf(changes: ChangeReq[], studentId: string, subject: ReqSubject, date: string): ChangeReq | null {
+  return changes.find((c) => c.studentId === studentId && c.subject === subject && c.fromDate === date && (c.toDate || c.changeDate) !== date) || null;
+}
+/** 그 날짜로 옮겨온(원래 다른 날) 학생 목록 — 오늘 목록에 추가용. */
+export function arrivalsOn(changes: ChangeReq[], subject: ReqSubject, date: string): ChangeReq[] {
+  return changes.filter((c) => c.subject === subject && (c.toDate || c.changeDate) === date && c.fromDate && c.fromDate !== date);
 }
 
 export interface SlotConflict {

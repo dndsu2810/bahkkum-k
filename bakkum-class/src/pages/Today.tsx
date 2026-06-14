@@ -10,7 +10,7 @@ import { GradeBadge, Empty } from "../components/ui";
 import { TestModal, StudentModal } from "../components/modals";
 import { Icon } from "../icons";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
-import { useApprovedChanges, approvedFor, findSlotConflicts } from "../lib/changeReqLive";
+import { useApprovedChanges, arrivalOf, findSlotConflicts } from "../lib/changeReqLive";
 import { ConflictPopup, ApprovedBanner } from "../components/ChangeReqLive";
 
 interface LessonOnDate {
@@ -77,6 +77,19 @@ export function Today() {
         if (l.day === dow) lessons.push({ student: s, time: l.time, duration: l.duration });
       });
     });
+  // 1회성 이동 반영(수학): 이 날에서 다른 날로 빠진 학생 제거 + 이 날로 옮겨온 학생 추가.
+  if (!holiday && approvedChanges.length) {
+    const movedOut = new Set(
+      approvedChanges.filter((c) => c.subject === "math" && c.fromDate === day && (c.toDate || c.changeDate) !== day).map((c) => c.studentId)
+    );
+    for (let i = lessons.length - 1; i >= 0; i--) if (movedOut.has(lessons[i].student.id)) lessons.splice(i, 1);
+    for (const c of approvedChanges.filter((c) => c.subject === "math" && (c.toDate || c.changeDate) === day && c.fromDate && c.fromDate !== day)) {
+      const s = studentById(data.students, c.studentId);
+      if (s && !lessons.some((l) => l.student.id === s.id && l.time === c.toTime)) {
+        lessons.push({ student: s, time: c.toTime, duration: 60 });
+      }
+    }
+  }
   lessons.sort((a, b) => timeToMin(a.time) - timeToMin(b.time));
 
   const keyOf = (it: LessonOnDate) => day + "|" + it.student.id + "|" + it.time;
@@ -425,7 +438,7 @@ export function Today() {
         </div>
       </div>
 
-      <ApprovedBanner changes={approvedChanges} subject="math" />
+      <ApprovedBanner changes={approvedChanges} subject="math" date={day} />
       <ConflictPopup conflicts={conflicts} date={day} />
 
       {/* ✨ 오늘 한 줄 브리핑 (B-6) — 그날 할 일을 한 문장으로 (중복되던 KPI 카드는 제거) */}
@@ -516,7 +529,7 @@ export function Today() {
                     <button className="eng-stu-name" onClick={() => setSel(e.key)}>
                       <span className="today-side-nm">{s.name}</span>
                       {e.time && <span className="eng-stu-time">{e.time}</span>}
-                      {(() => { const ch = approvedFor(approvedChanges, s.id, "math"); return ch ? <span className="eng-stu-chg" title="승인된 시간 변경">→{ch.toTime}</span> : null; })()}
+                      {(() => { const ch = arrivalOf(approvedChanges, s.id, "math", day); return ch && ch.fromDate && ch.fromDate !== day ? <span className="eng-stu-chg" title="다른 날에서 옮겨온 수업">이동</span> : null; })()}
                       {lesson && st && <span className={"today-side-st " + stCls}>{st}{st === "지각" && lateMin ? ` ${lateMin}분` : ""}</span>}
                       {!lesson && <span className="today-side-st blue">보강{mkAllDone ? " 완료" : ""}</span>}
                       {done && <span className="eng-dot ok" title="출결·숙제 완료" />}

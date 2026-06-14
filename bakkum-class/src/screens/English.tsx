@@ -6,7 +6,7 @@ import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtFull, fmtMD, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
 import { Select } from "../components/ui";
-import { useApprovedChanges, approvedFor, findSlotConflicts } from "../lib/changeReqLive";
+import { useApprovedChanges, arrivalOf, findSlotConflicts } from "../lib/changeReqLive";
 import { ConflictPopup, ApprovedBanner } from "../components/ChangeReqLive";
 
 type Band = "elem" | "mid";
@@ -123,21 +123,38 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     setDate(ymd(d));
   };
 
-  // 오늘 등원 예정(선택 날짜의 요일에 영어 수업이 있는) 학생 우선.
+  // 시간표 변경요청 — 그 날짜 승인된 1회성 변경(영어) 반영 + 수학↔영어 겹침 감지.
+  const approvedChanges = useApprovedChanges(date);
+  // 이 날짜로 옮겨온(원래 다른 날) 학생 / 이 날짜에서 다른 날로 빠진 학생.
+  const arrivedIds = useMemo(
+    () => new Set(approvedChanges.filter((c) => c.subject === "english" && (c.toDate || c.changeDate) === date && c.fromDate && c.fromDate !== date).map((c) => c.studentId)),
+    [approvedChanges, date]
+  );
+  const departedIds = useMemo(
+    () => new Set(approvedChanges.filter((c) => c.subject === "english" && c.fromDate === date && (c.toDate || c.changeDate) !== date).map((c) => c.studentId)),
+    [approvedChanges, date]
+  );
+
+  // 오늘 등원 예정 = 그 요일 영어 수업 학생 − 빠진 학생 + 옮겨온 학생.
   const dowSel = DOW[parseD(date).getDay()];
-  const scheduledIds = useMemo(() => new Set(students.filter((s) => s.engSlots.some((sl) => sl.day === dowSel)).map((s) => s.id)), [students, dowSel]);
-  const slotTimeOf = (s: RosterStudent) => s.engSlots.find((sl) => sl.day === dowSel)?.time || "";
+  const scheduledIds = useMemo(() => {
+    const base = new Set(students.filter((s) => s.engSlots.some((sl) => sl.day === dowSel)).map((s) => s.id));
+    for (const id of departedIds) base.delete(id);
+    for (const id of arrivedIds) base.add(id);
+    return base;
+  }, [students, dowSel, departedIds, arrivedIds]);
+  // 변경 시간(이 날로 잡힌 시간)이 있으면 그걸, 없으면 원래 요일 슬롯 시간.
+  const slotTimeOf = (s: RosterStudent) =>
+    arrivalOf(approvedChanges, s.id, "english", date)?.toTime || s.engSlots.find((sl) => sl.day === dowSel)?.time || "";
   // 예정 학생 먼저(수업 시간순), 그다음 '추가 등원'(예정 아니지만 기록 있는 학생).
   const todayList = useMemo(() => {
     const sched = students.filter((s) => scheduledIds.has(s.id)).sort((a, b) => slotTimeOf(a).localeCompare(slotTimeOf(b)));
     const extra = students.filter((s) => !scheduledIds.has(s.id) && (daily[s.id]?.attStatus || daily[s.id]?.attended));
     return [...sched, ...extra];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, scheduledIds, daily]);
+  }, [students, scheduledIds, daily, approvedChanges]);
   const addable = students.filter((s) => !scheduledIds.has(s.id) && !(daily[s.id]?.attStatus || daily[s.id]?.attended));
 
-  // 시간표 변경요청 — 그 날짜 승인된 변경(영어) 표시 + 수학↔영어 시간 겹침 자동 감지.
-  const approvedChanges = useApprovedChanges(date);
   const conflicts = useMemo(() => findSlotConflicts(students, date), [students, date]);
   const showLive = tab === "today" || tab === "att";
 
@@ -199,7 +216,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
       </div>
 
       {err && <div className="auth-err" style={{ marginBottom: 10 }}>{err}</div>}
-      {showLive && <ApprovedBanner changes={approvedChanges} subject="english" />}
+      {showLive && <ApprovedBanner changes={approvedChanges} subject="english" date={date} />}
       {showLive && <ConflictPopup conflicts={conflicts} date={date} />}
       {students.length === 0 && (
         <div className="hub-muted">
@@ -240,7 +257,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                   <button className="eng-stu-name" onClick={() => setSel(s.id)}>
                     {s.name}
                     {tab === "today" && scheduledIds.has(s.id) && slotTimeOf(s) && <span className="eng-stu-time">{slotTimeOf(s)}</span>}
-                    {tab === "today" && (() => { const ch = approvedFor(approvedChanges, s.id, "english"); return ch ? <span className="eng-stu-chg" title="승인된 시간 변경">→{ch.toTime}</span> : null; })()}
+                    {tab === "today" && (() => { const ch = arrivalOf(approvedChanges, s.id, "english", date); return ch ? <span className="eng-stu-chg" title="승인된 시간 변경">{arrivedIds.has(s.id) ? "이동 " : ""}{ch.toTime}</span> : null; })()}
                     {tab === "today" && st === "지각" && d?.lateMin ? <span className="eng-stu-late">{d.lateMin}분</span> : null}
                     {tab === "today" && d?.hwChecked && <span className="eng-dot ok" title="숙제검사 완료" />}
                   </button>
