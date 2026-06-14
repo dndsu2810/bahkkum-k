@@ -51,6 +51,10 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "ALTER TABLE class_eng_daily ADD COLUMN point_reasons TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE class_eng_daily ADD COLUMN points INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE class_eng_daily ADD COLUMN note TEXT NOT NULL DEFAULT ''",
+    // 초등영어 수업일지 — 원서진도번호·단어시험·활동 체크리스트.
+    "ALTER TABLE class_eng_daily ADD COLUMN book_no TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_eng_daily ADD COLUMN word_test TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_eng_daily ADD COLUMN done_items TEXT NOT NULL DEFAULT '[]'",
   ]) {
     try {
       await env.DB.prepare(a).run();
@@ -111,11 +115,12 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     // 포인트: 사유 라벨들의 끝 숫자(±) 합으로 계산(노션 포인트 공식과 동일).
     const reasons = Array.isArray(b.pointReasons) ? (b.pointReasons as unknown[]).map((x) => String(x)) : [];
     const points = reasons.reduce((n, r) => { const m = /(-?\d+)\s*$/.exec(r); return n + (m ? parseInt(m[1], 10) : 0); }, 0);
+    const doneItems = Array.isArray(b.doneItems) ? (b.doneItems as unknown[]).map((x) => String(x)) : [];
     await env.DB
       .prepare(
-        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,comment,materials,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, comment=excluded.comment, materials=excluded.materials, updated_at=excluded.updated_at"
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,book_no,word_test,done_items,comment,materials,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, book_no=excluded.book_no, word_test=excluded.word_test, done_items=excluded.done_items, comment=excluded.comment, materials=excluded.materials, updated_at=excluded.updated_at"
       )
-      .bind(sid, date, attended, status, lateMin, reason, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwSt(b.hwWord), hwSt(b.hwReading), hwSt(b.hwGrammar), b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(reasons), points, String(b.note || ""), String(b.comment || ""), String(b.materials || ""), Date.now())
+      .bind(sid, date, attended, status, lateMin, reason, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwSt(b.hwWord), hwSt(b.hwReading), hwSt(b.hwGrammar), b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(reasons), points, String(b.note || ""), String(b.bookNo || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.comment || ""), String(b.materials || ""), Date.now())
       .run();
     // 결석 → 보강 관리로 연결: 같은 학생·결석일의 보강이 없으면 '예정'으로 자동 생성.
     if (status === "결석") {
@@ -329,6 +334,9 @@ function dailyRow(r: Record<string, unknown>) {
     pointReasons: (() => { try { const a = JSON.parse(String(r.point_reasons ?? "[]")); return Array.isArray(a) ? a.map(String) : []; } catch { return []; } })(),
     points: Number(r.points ?? 0),
     note: String(r.note ?? ""),
+    bookNo: String(r.book_no ?? ""),
+    wordTest: String(r.word_test ?? ""),
+    doneItems: (() => { try { const a = JSON.parse(String(r.done_items ?? "[]")); return Array.isArray(a) ? a.map(String) : []; } catch { return []; } })(),
     comment: String(r.comment ?? ""),
     materials: String(r.materials ?? ""),
     updatedAt: Number(r.updated_at ?? 0),

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
-import { engApi, hwProgress, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, pointsOf, type EngDaily, type EngMakeup, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
+import { engApi, hwProgress, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, ELEM_LOG_ITEMS, pointsOf, type EngDaily, type EngMakeup, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtFull, fmtMD, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
@@ -53,6 +53,9 @@ const blankDaily = (studentId: string, date: string): EngDaily => ({
   pointReasons: [],
   points: 0,
   note: "",
+  bookNo: "",
+  wordTest: "",
+  doneItems: [],
   comment: "",
   materials: "",
   updatedAt: 0,
@@ -86,6 +89,19 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     } finally {
       setSyncing(false);
     }
+  }
+  // 노션 '초등 수업일지' 1회 가져오기(원장 전용).
+  async function syncElem() {
+    if (syncing) return;
+    if (!window.confirm("노션 '초등 수업일지'(원서진도·활동·단어시험·특이사항)를 이름으로 매칭해 가져옵니다. 진행할까요?")) return;
+    setSyncing(true); setSyncMsg("");
+    try {
+      const r = await engApi.syncElemLog();
+      setSyncMsg(`가져오기 완료 · ${r.imported}건 반영` + (r.unmatched.length ? ` · 미매칭 ${r.unmatched.length}명: ${r.unmatched.slice(0, 10).join(", ")}` : ""));
+      engApi.dailyByDate(date).then((list) => { const m: Record<string, EngDaily> = {}; for (const dd of list) m[dd.studentId] = dd; setDaily(m); }).catch(() => {});
+    } catch (e) {
+      setErr("가져오기 실패: " + String((e as Error).message));
+    } finally { setSyncing(false); }
   }
   // 노션 '수업기록(출결+포인트)' 1회 가져오기(원장 전용).
   async function syncAtt() {
@@ -251,6 +267,9 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
           )}
           {tab === "att" && user?.role === "admin" && (
             <button className="btn ghost" disabled={syncing} onClick={syncAtt}>{syncing ? "가져오는 중…" : "노션 출결·포인트 가져오기"}</button>
+          )}
+          {tab === "today" && band === "elem" && user?.role === "admin" && (
+            <button className="btn ghost" disabled={syncing} onClick={syncElem}>{syncing ? "가져오는 중…" : "노션 초등 수업일지 가져오기"}</button>
           )}
           {(tab === "today" || tab === "att") && (
             <div className="date-nav">
@@ -437,6 +456,31 @@ function DailyEditor({ student, band, value, onSave }: { student: string; band: 
           </div>
           <label className="eng-check"><input type="checkbox" checked={d.wrongCheck} onChange={(e) => setD({ ...d, wrongCheck: e.target.checked })} /> 틀단확인 (틀린 단어 확인)</label>
         </div>
+      )}
+
+      {/* 초등영어 수업일지 — 원서 진도·활동·단어시험 */}
+      {!showHw && (
+        <>
+          <div className="eng-field">
+            <div className="eng-label">원서 진도번호</div>
+            <input className="input" value={d.bookNo} onChange={(e) => setD({ ...d, bookNo: e.target.value })} placeholder="예: 145" />
+          </div>
+          <div className="eng-field">
+            <div className="eng-label">오늘 한 것</div>
+            <div className="eng-pts">
+              {ELEM_LOG_ITEMS.map((it) => {
+                const on = d.doneItems.includes(it);
+                return (
+                  <button key={it} className={"eng-pt" + (on ? " on" : "")} onClick={() => setD({ ...d, doneItems: on ? d.doneItems.filter((x) => x !== it) : [...d.doneItems, it] })}>{it}</button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="eng-field">
+            <div className="eng-label">단어시험</div>
+            <input className="input" value={d.wordTest} onChange={(e) => setD({ ...d, wordTest: e.target.value })} placeholder="예: 18/20" />
+          </div>
+        </>
       )}
 
       <div className="eng-field">

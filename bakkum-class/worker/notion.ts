@@ -681,6 +681,59 @@ export async function fetchEngAttendance(env: NotionEnv): Promise<NotionEngAtt[]
   return out;
 }
 
+// 초등 수업일지 데이터소스. 제목 "이름 M/D" + 수업날짜 + 진도/단어시험/체크박스/특이사항.
+const ELEM_LOG_DS = "32c66817-e061-8010-b620-000bfb07dd86";
+const ELEM_CHECK_ITEMS = ["준비", "Practice Book", "영문법", "자판연습", "core phonics", "아카데미 주니어 프린트", "판다라이팅"];
+export interface NotionElemLog {
+  studentName: string;
+  date: string;
+  bookNo: string;
+  wordTest: string;
+  doneItems: string[];
+  note: string;
+  comment: string; // class5/Link교재/스냅파닉스/필기체/텍스트 모음
+  time: string; // 시작~끝
+}
+/** 초등 수업일지 DB의 행. 이름은 제목 첫 토큰, 날짜는 '수업 날짜'. */
+export async function fetchElemLog(env: NotionEnv): Promise<NotionElemLog[]> {
+  if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
+  const out: NotionElemLog[] = [];
+  let cursor: string | undefined;
+  do {
+    const res = await queryDataSource(env, ELEM_LOG_DS, { page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error("notion " + res.status + ": " + t.slice(0, 300));
+    }
+    const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+    for (const pg of j.results) {
+      const props = (pg.properties || {}) as Record<string, Prop>;
+      const title = findTitle(props).trim(); // "김예담 3/3"
+      const name = title.split(/\s+/)[0] || "";
+      const date = propText(props["수업 날짜"]).slice(0, 10);
+      if (!name || !date) continue;
+      const done = ELEM_CHECK_ITEMS.filter((k) => checkboxVal(props[k]));
+      const extras = ["class 5", "Link 교재", "스냅파닉스", "필기체", "텍스트"]
+        .map((k) => { const v = propText(props[k]); return v ? `${k}: ${v}` : ""; })
+        .filter(Boolean)
+        .join(" · ");
+      const start = propText(props["시작"]); const end = propText(props["끝"]);
+      out.push({
+        studentName: name,
+        date,
+        bookNo: propText(props["원서진도번호"]),
+        wordTest: propText(props["⭐단어시험"]),
+        doneItems: done,
+        note: propText(props["특이사항"]),
+        comment: extras,
+        time: start || end ? `${start}${end ? "~" + end : ""}` : "",
+      });
+    }
+    cursor = j.has_more ? j.next_cursor : undefined;
+  } while (cursor);
+  return out;
+}
+
 /** TEMP inspect: schema(속성명/타입) + 샘플 of a Notion DB (구현 점검용). */
 export async function inspectDb(env: NotionEnv, which: string): Promise<unknown> {
   if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");

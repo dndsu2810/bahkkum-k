@@ -39,6 +39,7 @@ import {
   fetchSnsPages,
   fetchEngHomework,
   fetchEngAttendance,
+  fetchElemLog,
 } from "./notion";
 import { NOTION_CFG } from "./notion";
 import { isHoliday, holidayName } from "../src/lib/holidays";
@@ -273,6 +274,12 @@ export default {
           const me = await readSession(env, request);
           if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
           return await importEngAttendance(env);
+        }
+        // 노션 '초등 수업일지' → class_eng_daily 초등 일지 가져오기.
+        if (p === "/api/sync/eng-elem-log" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await importElemLog(env);
         }
 
         // ---- 허브 공유 영역(특이사항·위키·SNS·업무보드) ----
@@ -1365,6 +1372,36 @@ async function importEngAttendance(env: Env): Promise<Response> {
       /* 청크 실패는 건너뜀 */
     }
   }
+  return json({ ok: true, total: rows.length, imported, unmatched: [...unmatched] });
+}
+
+// 노션 초등 수업일지 → class_eng_daily 초등 일지 칸만 upsert(이름 매칭, 출석으로 기록).
+async function importElemLog(env: Env): Promise<Response> {
+  await ensureEngTables(env);
+  let rows;
+  try {
+    rows = await fetchElemLog(env);
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+  const nameRows = await env.DB.prepare("SELECT id, name FROM students WHERE hidden IS NULL OR hidden = 0").all<{ id: number; name: string }>();
+  const idByName = new Map<string, string>();
+  for (const r of nameRows.results || []) idByName.set(String(r.name).trim(), String(r.id));
+  const stmts: D1PreparedStatement[] = [];
+  let imported = 0;
+  const unmatched = new Set<string>();
+  for (const a of rows) {
+    const sid = idByName.get(a.studentName.trim());
+    if (!sid) { unmatched.add(a.studentName); continue; }
+    imported++;
+    const comment = [a.comment, a.time ? `시간 ${a.time}` : ""].filter(Boolean).join(" · ");
+    stmts.push(
+      env.DB.prepare(
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,book_no,word_test,done_items,note,comment,updated_at) VALUES(?,?,1,'출석',?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=1, att_status=CASE WHEN class_eng_daily.att_status='' THEN '출석' ELSE class_eng_daily.att_status END, book_no=excluded.book_no, word_test=excluded.word_test, done_items=excluded.done_items, note=excluded.note, comment=excluded.comment, updated_at=excluded.updated_at"
+      ).bind(sid, a.date, a.bookNo, a.wordTest, JSON.stringify(a.doneItems), a.note, comment, Date.now())
+    );
+  }
+  for (let i = 0; i < stmts.length; i += 50) { try { await env.DB.batch(stmts.slice(i, i + 50)); } catch { /* skip */ } }
   return json({ ok: true, total: rows.length, imported, unmatched: [...unmatched] });
 }
 

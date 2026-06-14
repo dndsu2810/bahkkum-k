@@ -51,6 +51,10 @@ export interface EngDaily {
   pointReasons: string[];
   points: number;
   note: string;
+  // 초등영어 수업일지 — 원서진도번호·단어시험·활동 체크리스트.
+  bookNo: string;
+  wordTest: string;
+  doneItems: string[];
   comment: string;
   materials: string;
   updatedAt: number;
@@ -69,6 +73,8 @@ export const POINT_REASONS: { name: string; value: number }[] = [
   { name: "협동 300", value: 300 },
 ];
 export const ENG_ATTITUDES = ["매우좋음", "보통", "미흡", "매우나쁨"];
+// 초등영어 수업일지 활동 체크리스트(노션 초등 수업일지 DB의 체크박스 항목).
+export const ELEM_LOG_ITEMS = ["준비", "Practice Book", "영문법", "자판연습", "core phonics", "아카데미 주니어 프린트", "판다라이팅"];
 /** 사유 라벨들에서 끝 숫자(±) 합 = 포인트. */
 export function pointsOf(reasons: string[]): number {
   return (reasons || []).reduce((n, r) => {
@@ -157,6 +163,8 @@ export const engApi = {
   syncDaily: () => jpost<{ ok: boolean; total: number; imported: number; unmatched: string[] }>("/api/sync/eng-daily", {}),
   /** 노션 '수업기록(출결+포인트)' 1회 가져오기(원장 전용). */
   syncAttendance: () => jpost<{ ok: boolean; total: number; imported: number; unmatched: string[] }>("/api/sync/eng-attendance", {}),
+  /** 노션 '초등 수업일지' 1회 가져오기(원장 전용). */
+  syncElemLog: () => jpost<{ ok: boolean; total: number; imported: number; unmatched: string[] }>("/api/sync/eng-elem-log", {}),
   /** 학생 포인트 랭킹(누적 합). */
   ranking: () => jget<{ ranking: EngRanking[] }>("/api/eng/ranking").then((j) => j.ranking),
 
