@@ -86,7 +86,7 @@ export function Desk({ tab: initialTab }: { tab?: Tab } = {}) {
             수학·영어 통합 시간표입니다. <span className="tt-dot math" /> 수학 <span className="tt-dot eng" /> 영어
           </p>
           <div className="desk-tt">
-            {DOW_ORDER.map((d) => (
+            {DOW_ORDER.filter((d) => (d !== "토" && d !== "일") || (byDay[d] || []).length > 0).map((d) => (
               <div className="desk-tt-col" key={d}>
                 <div className="desk-tt-h">{d}</div>
                 {(byDay[d] || []).map((slot, i) => (
