@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { TONES, type Category, type Tone } from "../lib/categories";
 import { useStore } from "../store";
 import { importRecords } from "../api";
-import { getConfig, setConfig, uploadImage } from "../lib/configApi";
+import { getConfig, setConfig, getSecretSet, uploadImage } from "../lib/configApi";
+import { feedbackApi, type Notice } from "../lib/feedbackApi";
 import { Icon } from "../icons";
 
 /** 학원 로고 업로드 — 사이드바 "바" 자리에 쓰임(원장). 없으면 기본 박스 유지. */
@@ -103,6 +104,117 @@ function OneTimeImport() {
   );
 }
 
+/** 공지 배너 — 원장이 강사에게 띄우는 상단 띠. 있을 때만 노출. */
+function NoticeSetting() {
+  const [list, setList] = useState<Notice[]>([]);
+  const [text, setText] = useState("");
+  const [level, setLevel] = useState<"info" | "warn">("info");
+  const [busy, setBusy] = useState(false);
+
+  async function reload() {
+    try {
+      setList(await feedbackApi.noticesAll());
+    } catch {
+      /* ignore */
+    }
+  }
+  useEffect(() => { void reload(); }, []);
+
+  async function post() {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    try {
+      await feedbackApi.saveNotice({ text: text.trim(), level, active: true });
+      setText("");
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function toggle(n: Notice) {
+    await feedbackApi.saveNotice({ id: n.id, text: n.text, level: n.level, active: !n.active });
+    await reload();
+  }
+  async function remove(n: Notice) {
+    await feedbackApi.removeNotice(n.id);
+    await reload();
+  }
+
+  return (
+    <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
+      <div className="card-title" style={{ marginBottom: 6 }}>공지 배너 (강사에게)</div>
+      <div className="page-desc" style={{ marginBottom: 12 }}>올리면 강사·데스크 화면 상단에 한 줄로 떠요. 끄거나 지우면 사라집니다(없으면 아예 안 보임).</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <input className="input" style={{ flex: 1, minWidth: 200 }} value={text} onChange={(e) => setText(e.target.value)} placeholder="공지 문구 (예: 오늘 6시 회의 있습니다)" onKeyDown={(e) => e.key === "Enter" && post()} />
+        <select className="input" style={{ width: 100 }} value={level} onChange={(e) => setLevel(e.target.value as "info" | "warn")}>
+          <option value="info">공지(파랑)</option>
+          <option value="warn">중요(주황)</option>
+        </select>
+        <button className="btn primary" onClick={post} disabled={!text.trim() || busy}>게시</button>
+      </div>
+      {list.length > 0 && (
+        <div className="rep-list" style={{ marginTop: 12 }}>
+          {list.map((n) => (
+            <div className="rep-itemrow" key={n.id}>
+              <span className={"notice-dot " + (n.level === "warn" ? "warn" : "info")} />
+              <span style={{ flex: 1, minWidth: 140, opacity: n.active ? 1 : 0.5 }}>{n.text}</span>
+              <button className="btn ghost sm" onClick={() => toggle(n)}>{n.active ? "내리기" : "올리기"}</button>
+              <button className="rep-x" onClick={() => remove(n)} title="삭제"><Icon name="trash" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 오류 요청 알림용 카카오워크 웹훅 URL(노출 안 됨, 설정 여부만 표시). */
+function KakaoWebhookSetting() {
+  const [set, setSet] = useState(false);
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function reload() {
+    try {
+      const s = await getSecretSet();
+      setSet(s.includes("secret_kakao_webhook"));
+    } catch {
+      /* ignore */
+    }
+  }
+  useEffect(() => { void reload(); }, []);
+
+  async function save() {
+    setBusy(true);
+    setMsg("");
+    try {
+      await setConfig({ secret_kakao_webhook: url.trim() });
+      setUrl("");
+      setMsg(url.trim() ? "저장됐어요 ✓" : "비웠어요");
+      await reload();
+    } catch {
+      setMsg("저장에 실패했어요.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
+      <div className="card-title" style={{ marginBottom: 6 }}>오류 요청 알림 (카카오워크 웹훅)</div>
+      <div className="page-desc" style={{ marginBottom: 12 }}>
+        오류·개선 요청이 등록되면 이 웹훅으로 알림이 가요. {set ? <b style={{ color: "var(--ok)" }}>설정됨 ✓</b> : <b style={{ color: "var(--ink3)" }}>아직 미설정</b>} (값은 보안상 표시되지 않아요.)
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <input className="input" style={{ flex: 1, minWidth: 240 }} value={url} onChange={(e) => setUrl(e.target.value)} placeholder={set ? "새 URL로 교체하려면 붙여넣기 (비우면 끔)" : "카카오워크 Incoming Webhook URL"} />
+        <button className="btn" onClick={save} disabled={busy}>{busy ? "저장 중…" : "저장"}</button>
+      </div>
+      {msg && <div className="page-desc" style={{ marginTop: 10 }}>{msg}</div>}
+    </div>
+  );
+}
+
 export function Settings({
   categories,
   onCategoriesChange,
@@ -181,6 +293,8 @@ export function Settings({
         </div>
       </div>
 
+      <NoticeSetting />
+      <KakaoWebhookSetting />
       <LogoSetting />
       <OneTimeImport />
     </section>

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../auth";
 import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type Curriculum, type CurriculumSection, type CurriculumRow, type StudentLogRow } from "../lib/studentApi";
 import { DOW, DOW_ORDER, fmtFull, fmtMDDow, parseD, timeToMin, todayStr } from "../lib/dates";
+import { NoticeBanner } from "../components/NoticeBanner";
+import { IssueBoard } from "./IssueBoard";
 
 /** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
  *  - 학생 본인: studentId 생략(본인). 일지 입력 가능, 커리큘럼 조회.
@@ -386,6 +388,7 @@ function LogHistory({ rows }: { rows: StudentLogRow[] }) {
 /* ---------------- 학생 본인 셸(로그인 후 첫 화면) ---------------- */
 export function StudentHome() {
   const { user, logout } = useAuth();
+  const [showIssue, setShowIssue] = useState(false);
   return (
     <div className="sp-shell">
       <header className="sp-shell-top">
@@ -396,13 +399,26 @@ export function StudentHome() {
             <span>{fmtFull(parseD(todayStr()))}</span>
           </div>
         </div>
-        <button className="btn ghost" onClick={() => logout()}>로그아웃</button>
+        <div className="sp-shell-actions">
+          <button className="btn ghost sm" onClick={() => setShowIssue(true)}>🐞 오류 신고</button>
+          <button className="btn ghost" onClick={() => logout()}>로그아웃</button>
+        </div>
       </header>
       <main className="sp-shell-body">
+        <NoticeBanner />
         <StudentPage />
       </main>
       {user && <div className="sp-shell-foot">{user.name} 학생 · 본인 기록</div>}
       <footer className="maker-credit">제작자 EZ</footer>
+
+      {showIssue && (
+        <div className="prof-overlay sp-overlay" onClick={() => setShowIssue(false)}>
+          <div className="sp-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-x sp-modal-x" onClick={() => setShowIssue(false)} aria-label="닫기">✕</button>
+            <IssueBoard defaultPage="학생 화면" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

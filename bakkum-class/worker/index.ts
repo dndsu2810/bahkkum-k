@@ -63,6 +63,7 @@ import {
 } from "./auth";
 import { handleHub, ensureHubTables } from "./hub";
 import { handleEng, handleStudent, ensureEngTables } from "./eng";
+import { handleFeedback } from "./feedback";
 
 const DEFAULT_APP_URL = "https://bakkum-class.dndsu2810.workers.dev";
 
@@ -124,8 +125,13 @@ export default {
           await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_config (k TEXT PRIMARY KEY, v TEXT NOT NULL DEFAULT '')").run();
           const r = await env.DB.prepare("SELECT k,v FROM class_config").all<{ k: string; v: string }>();
           const cfg: Record<string, string> = {};
-          for (const row of r.results || []) cfg[row.k] = row.v;
-          return json({ config: cfg });
+          const secretSet: string[] = []; // secret_* 키는 값 미노출, 설정 여부만.
+          for (const row of r.results || []) {
+            if (row.k.startsWith("secret_")) {
+              if (row.v) secretSet.push(row.k);
+            } else cfg[row.k] = row.v;
+          }
+          return json({ config: cfg, secretSet });
         }
         if (p === "/api/config" && request.method === "POST") {
           const me = await readSession(env, request);
@@ -287,6 +293,14 @@ export default {
           const me = await readSession(env, request);
           if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
           const res = await handleHub(env, request, p, me);
+          if (res) return res;
+        }
+
+        // ---- 공지 배너 + 오류·개선 요청 — 로그인 누구나(학생 포함). 작성/조회 권한은 핸들러에서 ----
+        if (p.startsWith("/api/notice") || p.startsWith("/api/issue")) {
+          const me = await readSession(env, request);
+          if (!me) return json({ error: "forbidden" }, 403);
+          const res = await handleFeedback(env, request, p, me);
           if (res) return res;
         }
 

@@ -7,6 +7,14 @@ export async function getConfig(): Promise<Record<string, string>> {
   return j.config || {};
 }
 
+/** secret_* 키 중 값이 설정된 키 목록(값은 노출 안 됨). */
+export async function getSecretSet(): Promise<string[]> {
+  const r = await fetch("/api/config", { cache: "no-store" });
+  if (!r.ok) return [];
+  const j = (await r.json()) as { secretSet?: string[] };
+  return j.secretSet || [];
+}
+
 export async function setConfig(patch: Record<string, string>): Promise<void> {
   const r = await fetch("/api/config", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) });
   if (!r.ok) throw new Error("HTTP " + r.status);

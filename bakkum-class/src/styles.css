@@ -1911,3 +1911,54 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .maker-copy:hover{border-color:var(--brand-line);color:var(--brand-d)}
 .maker-card-actions{display:flex;gap:8px;flex-wrap:wrap}
 .maker-card-actions .btn{text-decoration:none}
+
+/* ===== 공지 배너 ===== */
+.notice-wrap{display:flex;flex-direction:column;gap:6px;margin-bottom:var(--s4)}
+.notice-band{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r-md);
+  font-size:var(--t-sm);font-weight:500;border:1px solid}
+.notice-band.info{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-d)}
+.notice-band.warn{background:var(--warn-soft);border-color:#fcd9a3;color:var(--warn)}
+.notice-ic{flex:none}
+.notice-text{flex:1;min-width:0;white-space:pre-wrap}
+.notice-x{flex:none;border:none;background:transparent;cursor:pointer;font-size:13px;color:inherit;opacity:.6;padding:2px 4px}
+.notice-x:hover{opacity:1}
+.notice-dot{flex:none;width:12px;height:12px;border-radius:50%}
+.notice-dot.info{background:var(--brand)}
+.notice-dot.warn{background:var(--warn)}
+.sp-shell-actions{display:flex;align-items:center;gap:8px}
+
+/* ===== 오류·개선 요청 ===== */
+.issue-form{padding:var(--s4) var(--s5);display:flex;flex-direction:column;gap:10px}
+.issue-form-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.issue-f{display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px}
+.issue-f>span{font-size:var(--t-cap);font-weight:600;color:var(--ink2)}
+.issue-shot-btn{flex:none;border:1px solid var(--line2);background:var(--card);border-radius:var(--r-md);
+  padding:9px 12px;font-size:var(--t-sm);color:var(--ink2);cursor:pointer}
+.issue-shot-btn:hover{border-color:var(--brand-line);color:var(--brand-d)}
+.issue-shot-prev{position:relative;width:120px}
+.issue-shot-prev img{width:120px;height:90px;object-fit:cover;border-radius:var(--r-sm);border:1px solid var(--line)}
+.issue-shot-x{position:absolute;top:3px;right:3px;width:22px;height:22px;border:none;border-radius:50%;
+  background:rgba(0,0,0,.6);color:#fff;font-size:15px;line-height:1;cursor:pointer}
+.issue-form-foot{display:flex;align-items:center;gap:10px}
+.issue-sent{font-size:var(--t-sm);color:var(--ok)}
+.issue-empty{padding:var(--s8);text-align:center;color:var(--ink3);background:var(--card2);border-radius:var(--r-md)}
+.issue-list{display:flex;flex-direction:column;gap:10px}
+.issue-row{padding:12px 14px}
+.issue-row-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
+.issue-st{font-size:var(--t-cap);font-weight:700;padding:2px 9px;border-radius:var(--r-full)}
+.issue-st.new{background:var(--brand-soft);color:var(--brand-d)}
+.issue-st.doing{background:var(--warn-soft);color:var(--warn)}
+.issue-st.done{background:var(--ok-soft);color:var(--ok)}
+.issue-page{font-size:var(--t-cap);background:var(--card2);border:1px solid var(--line);border-radius:var(--r-sm);padding:1px 8px;color:var(--ink2)}
+.issue-meta{font-size:var(--t-cap);color:var(--ink3);margin-left:auto}
+.issue-del{flex:none;border:none;background:transparent;color:var(--ink3);cursor:pointer;font-size:16px;line-height:1}
+.issue-del:hover{color:var(--bad)}
+.issue-body{font-size:var(--t-sm);color:var(--ink);white-space:pre-wrap;line-height:1.5}
+.issue-shot-link{display:inline-block;margin-top:8px}
+.issue-shot-link img{max-width:200px;max-height:150px;border-radius:var(--r-sm);border:1px solid var(--line)}
+.issue-actions{display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.issue-stbtn{border:1px solid var(--line2);background:var(--card);border-radius:var(--r-full);padding:3px 12px;font-size:var(--t-cap);cursor:pointer;color:var(--ink2)}
+.issue-stbtn:hover{border-color:var(--brand-line)}
+.issue-stbtn.on.new{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-d);font-weight:700}
+.issue-stbtn.on.doing{background:var(--warn-soft);border-color:#fcd9a3;color:var(--warn);font-weight:700}
+.issue-stbtn.on.done{background:var(--ok-soft);border-color:#bbf7d0;color:var(--ok);font-weight:700}

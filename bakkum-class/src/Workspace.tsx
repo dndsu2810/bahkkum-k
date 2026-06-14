@@ -23,6 +23,8 @@ import { AdminAccounts } from "./screens/AdminAccounts";
 import { AdminDashboard } from "./screens/AdminDashboard";
 import { ChangeRequests } from "./screens/ChangeRequests";
 import { PointRanking } from "./screens/PointRanking";
+import { IssueBoard } from "./screens/IssueBoard";
+import { NoticeBanner } from "./components/NoticeBanner";
 import { reqsApi } from "./lib/hubApi";
 import { getRoster, type RosterStudent } from "./lib/rosterApi";
 import { getConfig } from "./lib/configApi";
@@ -336,6 +338,7 @@ export function Workspace() {
           </div>
         </header>
         <main className={"content " + (view === "math" ? "is-math" : "is-hub")}>
+          <NoticeBanner />
           <Body view={view} cats={cats} jumpStudent={jumpStudent} reqPrefill={reqPrefill} homeTiles={homeTiles} onOpen={open} onCats={(c) => { setCategories(c); setCats(c); }} />
           <footer className="maker-credit">제작자 EZ</footer>
         </main>
@@ -352,6 +355,7 @@ function Body({ view, cats, jumpStudent, reqPrefill, homeTiles, onOpen, onCats }
   if (view === "schedule_hub") return <AcademySchedule />;
   if (view === "reqs") return <ChangeRequests prefill={reqPrefill} />;
   if (view === "ranking") return <PointRanking />;
+  if (view === "issues") return <IssueBoard />;
   if (view === "board") return <BoardShared />;
   if (view === "notes") return <Notes />;
   if (view === "wiki") return <Wiki />;
