@@ -10,7 +10,12 @@ import {
   saveStudentMeta,
   saveStudentSlots,
   syncRosterFromNotion,
+  fillGrades,
+  promoteGrades,
+  bulkGrades,
+  type PromoteBefore,
 } from "../lib/rosterApi";
+import { GRADE_DIVS, DIV_MAX, makeGrade, parseGrade } from "../lib/grade";
 
 type FilterKey = "all" | "math" | "english" | "elem" | "mid";
 
@@ -46,6 +51,38 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
   const [filter, setFilter] = useState<FilterKey>("all");
   const [syncing, setSyncing] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [schoolF, setSchoolF] = useState("");
+  const [gradeF, setGradeF] = useState("");
+  const [gradeBusy, setGradeBusy] = useState(false);
+  const [gradeMsg, setGradeMsg] = useState("");
+  const [lastPromote, setLastPromote] = useState<PromoteBefore[] | null>(null);
+
+  // 생년월일로 세부학년 1회 자동채움.
+  async function doFill() {
+    if (gradeBusy) return;
+    if (!window.confirm("세부학년이 비어 있는 학생을 생년월일 기준 학년으로 1회 채웁니다. 진행할까요?")) return;
+    setGradeBusy(true); setGradeMsg("");
+    try { const r = await fillGrades(); await reloadRows(); setGradeMsg(`학년 자동채움 완료 · ${r.filled}명`); }
+    catch { setErr("학년 자동채움 실패"); } finally { setGradeBusy(false); }
+  }
+  // 전체 학년 올리기(+1, 고3→졸업). 직후 되돌리기 가능.
+  async function doPromote() {
+    if (gradeBusy) return;
+    if (!window.confirm("재원 학생 전체 학년을 +1 올립니다(초6→중1, 중3→고1, 고3→졸업). 진행할까요?")) return;
+    setGradeBusy(true); setGradeMsg("");
+    try {
+      const r = await promoteGrades(false);
+      await reloadRows();
+      setLastPromote(r.before);
+      setGradeMsg(`${r.promoted}명 승급 · 고3 ${r.graduated}명 졸업 처리. 잘못됐으면 ‘되돌리기’.`);
+    } catch { setErr("일괄 승급 실패"); } finally { setGradeBusy(false); }
+  }
+  async function doUndo() {
+    if (!lastPromote || gradeBusy) return;
+    setGradeBusy(true);
+    try { await bulkGrades(lastPromote); await reloadRows(); setLastPromote(null); setGradeMsg("직전 승급을 되돌렸어요."); }
+    catch { setErr("되돌리기 실패"); } finally { setGradeBusy(false); }
+  }
   // 전역 검색에서 넘어오면 해당 학생 프로필을 바로 연다. (검색·필터는 초기화)
   useEffect(() => {
     if (jumpTo?.id) {
@@ -104,13 +141,20 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
       }
       if (kw && !r.name.includes(kw) && !(r.school || "").includes(kw) && !(r.onlineId || "").includes(kw)) return false;
       if (bandLock) return true;
-      if (filter === "math") return r.subjects.includes("math");
-      if (filter === "english") return r.subjects.includes("english");
-      if (filter === "elem") return r.subjects.includes("english") && r.englishBand === "elem";
-      if (filter === "mid") return r.subjects.includes("english") && r.englishBand === "mid";
+      // 겹쳐 보기 — 과목/구분 + 학교 + 학년 동시 적용.
+      if (schoolF && (r.school || "") !== schoolF) return false;
+      if (gradeF && (r.grade || "") !== gradeF) return false;
+      if (filter === "math" && !r.subjects.includes("math")) return false;
+      if (filter === "english" && !r.subjects.includes("english")) return false;
+      if (filter === "elem" && !(r.subjects.includes("english") && r.englishBand === "elem")) return false;
+      if (filter === "mid" && !(r.subjects.includes("english") && r.englishBand === "mid")) return false;
       return true;
     });
-  }, [rows, q, filter, bandLock]);
+  }, [rows, q, filter, bandLock, schoolF, gradeF]);
+
+  // 필터 옵션 — 실제 데이터에서 학교 목록, 학년은 초1~고3.
+  const schools = useMemo(() => [...new Set(rows.map((r) => r.school).filter(Boolean))].sort(), [rows]);
+  const gradeOpts = useMemo(() => GRADE_DIVS.flatMap((d) => Array.from({ length: d.max }, (_, i) => d.key + (i + 1))), []);
 
   const openStudent = rows.find((r) => r.id === openId) || null;
 
@@ -129,7 +173,14 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
             학생을 누르면 {canEdit ? "프로필에서 자세히 보고 수정할 수 있어요." : "프로필을 볼 수 있어요."}
           </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {isAdmin && !bandLock && (
+            <>
+              <button className="btn ghost" onClick={doFill} disabled={gradeBusy}>학년 채우기</button>
+              <button className="btn ghost" onClick={doPromote} disabled={gradeBusy}>전체 학년 올리기</button>
+              {lastPromote && <button className="btn ghost" onClick={doUndo} disabled={gradeBusy}>되돌리기</button>}
+            </>
+          )}
           {isAdmin && (
             <button className="btn ghost" onClick={syncNotion} disabled={syncing}>
               {syncing ? "동기화 중…" : "노션 동기화"}
@@ -138,6 +189,7 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
           <div className="sm-count">{list.length}명</div>
         </div>
       </div>
+      {gradeMsg && <div className="hub-muted" style={{ marginBottom: 8 }}>{gradeMsg}</div>}
 
       <div className="sm-toolbar">
         <input
@@ -153,9 +205,23 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
                 {f.label}
               </button>
             ))}
+            <select className="sm-input" style={{ maxWidth: 130 }} value={schoolF} onChange={(e) => setSchoolF(e.target.value)}>
+              <option value="">학교 전체</option>
+              {schools.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select className="sm-input" style={{ maxWidth: 100 }} value={gradeF} onChange={(e) => setGradeF(e.target.value)}>
+              <option value="">학년 전체</option>
+              {gradeOpts.map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+            {(schoolF || gradeF) && <button className="sm-fchip" onClick={() => { setSchoolF(""); setGradeF(""); }}>필터 해제</button>}
           </div>
         )}
       </div>
+      {!bandLock && (schoolF || gradeF || filter !== "all") && (
+        <div className="hub-muted" style={{ marginBottom: 8 }}>
+          {[schoolF, gradeF, filter !== "all" ? FILTERS.find((f) => f.key === filter)?.label : ""].filter(Boolean).join(" · ")} · <b>{list.length}명</b>
+        </div>
+      )}
 
       {err && <div className="auth-err" style={{ marginBottom: 12 }}>{err}</div>}
 
@@ -309,7 +375,9 @@ function ProfileModal({
 
         <div className="prof-body">
           <Section title="기본 정보">
-            <Field label="학년"><Txt ro={ro} value={f.grade} onChange={(v) => set("grade", v)} placeholder="예: 초5 / 중2" /></Field>
+            <Field label="학년">
+              {ro ? <span className="prof-val">{f.grade || "—"}</span> : <GradeSelect value={f.grade} onChange={(v) => set("grade", v)} />}
+            </Field>
             <Field label="상태">
               {ro ? <span className="prof-val">{f.status || "—"}</span> : (
                 <select className="inline-select" value={f.status || "재원"} onChange={(e) => set("status", e.target.value)}>
@@ -411,6 +479,26 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Txt({ ro, value, onChange, placeholder }: { ro: boolean; value: string; onChange: (v: string) => void; placeholder?: string }) {
   if (ro) return <span className="prof-val">{value || "—"}</span>;
   return <input className="inline-input" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />;
+}
+
+/** 학년 = 구분(초/중/고) + 세부학년(N) 선택 → "초6" 형태로 저장. */
+function GradeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const p = parseGrade(value);
+  const div = p?.div || "";
+  const n = p?.n || 0;
+  const max = DIV_MAX[div] || 0;
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <select className="inline-select" style={{ maxWidth: 90 }} value={div} onChange={(e) => onChange(makeGrade(e.target.value, 0))}>
+        <option value="">구분</option>
+        {GRADE_DIVS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+      </select>
+      <select className="inline-select" style={{ maxWidth: 90 }} value={n || ""} disabled={!div} onChange={(e) => onChange(makeGrade(div, Number(e.target.value)))}>
+        <option value="">학년</option>
+        {Array.from({ length: max }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}학년</option>)}
+      </select>
+    </div>
+  );
 }
 
 /** 과목별 수업 슬롯 편집 — 요일·시작시간·수업시간(분). 수학 슬롯은 시간표·수학 학생관리와 공유. */

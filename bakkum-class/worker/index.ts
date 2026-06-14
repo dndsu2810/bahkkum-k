@@ -179,6 +179,14 @@ export default {
           if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
           return await rosterSlotsUpdate(env, request);
         }
+        // 학년 일괄: 생년월일 자동채움 · 전체 승급 · 일괄 되돌리기(원장 전용).
+        if ((p === "/api/roster/grade-fill" || p === "/api/roster/promote" || p === "/api/roster/grade-bulk") && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          if (p === "/api/roster/grade-fill") return await rosterGradeFill(env);
+          if (p === "/api/roster/promote") return await rosterPromote(env, request);
+          return await rosterGradeBulk(env, request);
+        }
         // 원장 대시보드 — 등록 현황·지각결석·특이사항 집계(원장 전용).
         if (p === "/api/admin/overview" && request.method === "GET") {
           const me = await readSession(env, request);
@@ -625,6 +633,88 @@ async function rosterCoreUpdate(env: Env, request: Request): Promise<Response> {
     /* overrides 실패해도 본 저장은 유지 */
   }
   return json({ ok: true });
+}
+
+/* ---------------- 학년 일괄 처리(원장) ---------------- */
+// "초6"→{div,n}. 레거시 "초등"→n:0. 못읽으면 null.
+function parseGradeW(g: string): { div: string; n: number } | null {
+  const s = (g || "").trim();
+  const m = /^(초|중|고)\s*(\d+)/.exec(s);
+  if (m) return { div: m[1], n: Number(m[2]) };
+  if (s.startsWith("초")) return { div: "초", n: 0 };
+  if (s.startsWith("중")) return { div: "중", n: 0 };
+  if (s.startsWith("고")) return { div: "고", n: 0 };
+  return null;
+}
+function gradeFromBirthW(birth: string, year: number): string {
+  const m = /^(\d{4})/.exec((birth || "").trim());
+  if (!m) return "";
+  const g = year - Number(m[1]) - 6;
+  if (g < 1 || g > 12) return "";
+  if (g <= 6) return "초" + g;
+  if (g <= 9) return "중" + (g - 6);
+  return "고" + (g - 9);
+}
+function promoteGradeW(g: string): string | null {
+  const p = parseGradeW(g);
+  if (!p || p.n <= 0) return null;
+  if (p.div === "초") return p.n < 6 ? "초" + (p.n + 1) : "중1";
+  if (p.div === "중") return p.n < 3 ? "중" + (p.n + 1) : "고1";
+  if (p.div === "고") return p.n < 3 ? "고" + (p.n + 1) : "";
+  return null;
+}
+// 생년월일 → 세부학년 1회 자동채움(세부학년 이미 있는 학생은 건너뜀).
+async function rosterGradeFill(env: Env): Promise<Response> {
+  const year = new Date().getFullYear();
+  const r = await env.DB.prepare("SELECT id,grade,birth_date FROM students WHERE hidden IS NULL OR hidden=0").all<{ id: number; grade: string; birth_date: string }>();
+  let filled = 0;
+  const stmts: D1PreparedStatement[] = [];
+  for (const s of r.results || []) {
+    const p = parseGradeW(String(s.grade || ""));
+    if (p && p.n > 0) continue; // 이미 세부학년 있음
+    const g = gradeFromBirthW(String(s.birth_date || ""), year);
+    if (!g) continue;
+    stmts.push(env.DB.prepare("UPDATE students SET grade=? WHERE id=?").bind(g, s.id));
+    filled++;
+  }
+  for (let i = 0; i < stmts.length; i += 50) { try { await env.DB.batch(stmts.slice(i, i + 50)); } catch { /* skip */ } }
+  return json({ ok: true, filled });
+}
+// 전체 학년 +1 승급. 고3→졸업(status). before 스냅샷 반환(되돌리기용).
+async function rosterPromote(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json().catch(() => ({}))) as { includeAll?: boolean };
+  const r = await env.DB.prepare("SELECT id,grade,status FROM students WHERE hidden IS NULL OR hidden=0").all<{ id: number; grade: string; status: string }>();
+  let promoted = 0, graduated = 0;
+  const before: { id: number; grade: string; status: string }[] = [];
+  const stmts: D1PreparedStatement[] = [];
+  for (const s of r.results || []) {
+    const status = String(s.status || "재원");
+    if (!b.includeAll && status !== "재원") continue;
+    const ng = promoteGradeW(String(s.grade || ""));
+    if (ng === null) continue; // 세부학년 없는 값은 제외
+    before.push({ id: s.id, grade: String(s.grade || ""), status });
+    if (ng === "") {
+      stmts.push(env.DB.prepare("UPDATE students SET status='졸업' WHERE id=?").bind(s.id));
+      graduated++;
+    } else {
+      stmts.push(env.DB.prepare("UPDATE students SET grade=? WHERE id=?").bind(ng, s.id));
+      promoted++;
+    }
+  }
+  for (let i = 0; i < stmts.length; i += 50) { try { await env.DB.batch(stmts.slice(i, i + 50)); } catch { /* skip */ } }
+  return json({ ok: true, promoted, graduated, before });
+}
+// 일괄 학년/상태 세팅(되돌리기용). items=[{id,grade,status}].
+async function rosterGradeBulk(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json().catch(() => ({}))) as { items?: { id?: number; grade?: string; status?: string }[] };
+  const items = Array.isArray(b.items) ? b.items : [];
+  const stmts: D1PreparedStatement[] = [];
+  for (const it of items) {
+    if (!it.id) continue;
+    stmts.push(env.DB.prepare("UPDATE students SET grade=?, status=? WHERE id=?").bind(String(it.grade ?? ""), String(it.status ?? "재원"), Number(it.id)));
+  }
+  for (let i = 0; i < stmts.length; i += 50) { try { await env.DB.batch(stmts.slice(i, i + 50)); } catch { /* skip */ } }
+  return json({ ok: true, reverted: items.length });
 }
 
 /* 학생 1명의 과목별 수업 슬롯(요일·시간·수업시간)을 교체 저장.

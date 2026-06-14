@@ -117,3 +117,18 @@ export async function saveStudentCore(input: {
     throw new Error(j.error || "save_failed");
   }
 }
+
+async function rosterPost<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const j = (await r.json().catch(() => ({}))) as T & { error?: string };
+  if (!r.ok) throw new Error((j as { error?: string }).error || "HTTP " + r.status);
+  return j;
+}
+/** 생년월일로 세부학년 1회 자동채움(원장). */
+export const fillGrades = () => rosterPost<{ ok: boolean; filled: number }>("/api/roster/grade-fill", {});
+export interface PromoteBefore { id: number; grade: string; status: string }
+/** 전체 학년 +1 승급(고3→졸업). before 반환(되돌리기용). */
+export const promoteGrades = (includeAll = false) =>
+  rosterPost<{ ok: boolean; promoted: number; graduated: number; before: PromoteBefore[] }>("/api/roster/promote", { includeAll });
+/** 일괄 학년/상태 복원(되돌리기). */
+export const bulkGrades = (items: PromoteBefore[]) => rosterPost<{ ok: boolean }>("/api/roster/grade-bulk", { items });
