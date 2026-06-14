@@ -1525,6 +1525,15 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .today-side-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .today-side-mk{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
   background:var(--brand-soft);color:var(--brand-d);font-size:var(--t-cap);font-weight:700}
+/* 좌측 목록 출결 상태 칩(읽기전용) — 마킹은 우측 상세에서 */
+.today-side-st{font-size:10px;font-weight:700;border-radius:var(--r-full);padding:1px 7px;margin-left:auto;flex-shrink:0}
+.today-side-st.g{color:var(--ok);background:var(--ok-soft)}
+.today-side-st.w{color:var(--warn);background:var(--warn-soft)}
+.today-side-st.b{color:var(--bad);background:var(--bad-soft,#fdeaea)}
+.today-side-st.blue{color:var(--brand-d);background:var(--brand-soft)}
+/* 지각 분 입력 */
+.today-late-wrap{display:inline-flex;align-items:center;gap:6px}
+.today-late-input{width:64px;height:30px;border:1px solid var(--line2);border-radius:var(--r-sm);padding:0 8px;font-size:var(--t-sm);background:var(--card);color:var(--ink)}
 .eng-main>.today-stu{margin:0}
 .eng-daily,.eng-panel{display:flex;flex-direction:column;gap:var(--s4);max-width:620px}
 .eng-daily-h{display:flex;align-items:center;justify-content:space-between;gap:var(--s4)}

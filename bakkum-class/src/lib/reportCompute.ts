@@ -20,6 +20,7 @@ export function computeAtt(data: DataSnapshot, studentId: string, year: number, 
   let total = 0;
   let outroEarly = 0; // 조퇴 (counts toward present-ish, but not into rate numerator)
   let late = 0;
+  let lateMin = 0; // 지각 누적 분
   let pure = 0; // 출석
   const days: Record<number, DayBucket[]> = {};
 
@@ -33,7 +34,7 @@ export function computeAtt(data: DataSnapshot, studentId: string, year: number, 
     if (!b) return;
     total++;
     if (status === "출석") pure++;
-    else if (status === "지각") late++;
+    else if (status === "지각") { late++; lateMin += Number(data.attendance[key].lateMinutes) || 0; }
     else if (status === "조퇴") outroEarly++;
     if (b === "p") present++;
     else if (b === "m") makeup++;
@@ -50,7 +51,7 @@ export function computeAtt(data: DataSnapshot, studentId: string, year: number, 
 
   void outroEarly;
   const rate = total ? Math.round(((pure + late) / total) * 100) : 0;
-  return { total, present, makeup, absent, rate, days };
+  return { total, present, makeup, absent, late, lateMin, rate, days };
 }
 
 /** Build default 출결 특이사항 from the student's month attendance (editable later). */
@@ -61,7 +62,7 @@ export function deriveNotes(
   month: number
 ): NoteItem[] {
   const prefix = year + "-" + pad(month) + "-";
-  const rows: { date: string; status: string; note: string; time: string }[] = [];
+  const rows: { date: string; status: string; note: string; time: string; lateMin: number }[] = [];
   Object.keys(data.attendance).forEach((key) => {
     const parts = key.split("|");
     const date = parts[0];
@@ -70,7 +71,7 @@ export function deriveNotes(
     if (sid !== studentId || date.indexOf(prefix) !== 0) return;
     const rec = data.attendance[key];
     if (rec.status === "출석" && !rec.note) return; // 평범한 출석은 특이사항 아님
-    rows.push({ date, status: rec.status, note: rec.note || "", time });
+    rows.push({ date, status: rec.status, note: rec.note || "", time, lateMin: Number(rec.lateMinutes) || 0 });
   });
   rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.time < b.time ? -1 : 1));
   return rows.map((r, i) => {
@@ -85,7 +86,12 @@ export function deriveNotes(
     // 보강은 '몇 시부터' 했는지 같이 표기 — 단, 시간 자리가 실제 시각(HH:MM)일 때만.
     // (가져온 기록은 시간 자리가 내부 식별자라 시각이 아님 → 시각 생략)
     const isClock = /^\d{1,2}:\d{2}$/.test(r.time);
-    const head = r.status === "보강" && isClock ? "보강 " + r.time + "~" : r.status;
+    const head =
+      r.status === "보강" && isClock
+        ? "보강 " + r.time + "~"
+        : r.status === "지각" && r.lateMin
+          ? "지각 " + r.lateMin + "분"
+          : r.status;
     const text = r.note ? head + " — " + r.note : head;
     return { id: "n" + i + "_" + r.date + "_" + r.time, dateLabel, tone, text };
   });

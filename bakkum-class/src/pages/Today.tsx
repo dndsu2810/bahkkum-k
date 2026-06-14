@@ -213,6 +213,22 @@ export function Today() {
     }
   }
 
+  // 지각 분 입력 — 지각으로 찍은 학생만. 노션에도 lateMinutes 반영.
+  function setLateMin(it: LessonOnDate, min: number) {
+    const key = keyOf(it);
+    const v = Math.max(0, Math.round(min) || 0);
+    let synced: AttRecord | null = null;
+    mutate((d) => {
+      const r = d.attendance[key];
+      if (r) r.lateMinutes = v;
+      synced = d.attendance[key] ? { ...d.attendance[key] } : null;
+    });
+    if (synced) {
+      const r: AttRecord = synced;
+      pushAttendanceNotion(it.student.id, { date: day, status: r.status, attitude: r.attitude || "", lateMinutes: r.lateMinutes || 0, note: r.note || "" });
+    }
+  }
+
   /* ---------- 검사 줄 (오늘 검사 대상 숙제) ---------- */
   // 노션은 확인완료 체크 + 완성도 + 숙제현황(N차 밀림)만 갱신 (내용/특이사항 보존)
   function pushCheck(rec: HwLog) {
@@ -482,22 +498,15 @@ export function Today() {
                 const mkAllDone = e.makeups.length > 0 && e.makeups.every((m) => m.status === "done");
                 const attOk = lesson ? !!st : mkAllDone;
                 const done = attOk && checkHws.every((h) => h.status === "done") && (assignedHws.length > 0 || none);
+                const lateMin = lesson ? data.attendance[keyOf(lesson)]?.lateMinutes : undefined;
+                const stCls = st === "출석" ? "g" : st === "지각" ? "w" : st === "결석" ? "b" : "";
                 return (
                   <div key={e.key} className={"eng-stu today-side-row" + (activeEntry?.key === e.key ? " on" : "")}>
-                    <div className="eng-att-seg">
-                      {lesson ? (
-                        <>
-                          <button className={"eas" + (st === "출석" ? " on g" : "")} onClick={() => mark(lesson, "출석")} title={st === "출석" ? "출석 취소" : "출석"}>출</button>
-                          <button className={"eas" + (st === "지각" ? " on w" : "")} onClick={() => mark(lesson, "지각")} title={st === "지각" ? "지각 취소" : "지각"}>지</button>
-                          <button className={"eas" + (st === "결석" ? " on b" : "")} onClick={() => mark(lesson, "결석")} title={st === "결석" ? "결석 취소" : "결석"}>결</button>
-                        </>
-                      ) : (
-                        <span className="today-side-mk" title="보강">보</span>
-                      )}
-                    </div>
                     <button className="eng-stu-name" onClick={() => setSel(e.key)}>
                       <span className="today-side-nm">{s.name}</span>
                       {e.time && <span className="eng-stu-time">{e.time}</span>}
+                      {lesson && st && <span className={"today-side-st " + stCls}>{st}{st === "지각" && lateMin ? ` ${lateMin}분` : ""}</span>}
+                      {!lesson && <span className="today-side-st blue">보강{mkAllDone ? " 완료" : ""}</span>}
                       {done && <span className="eng-dot ok" title="출결·숙제 완료" />}
                     </button>
                   </div>
@@ -555,6 +564,26 @@ export function Today() {
                       ))}
                     </div>
                   </div>
+
+                  {/* 지각 분 (지각으로 찍은 학생만) — 월말리포트에 반영 */}
+                  {lesson && st === "지각" && (
+                    <div className="today-mood">
+                      <span className="today-mood-label">지각</span>
+                      <span className="today-late-wrap">
+                        <input
+                          className="today-late-input"
+                          type="number"
+                          min={0}
+                          step={5}
+                          placeholder="분"
+                          aria-label="지각 분"
+                          value={data.attendance[keyOf(lesson)]?.lateMinutes ?? ""}
+                          onChange={(ev) => setLateMin(lesson, +ev.target.value || 0)}
+                        />
+                        <span className="today-mood-label">분</span>
+                      </span>
+                    </div>
+                  )}
 
                   {/* 수업태도 (정규 출결 찍은 학생만) */}
                   {lesson && st && (

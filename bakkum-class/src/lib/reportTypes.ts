@@ -53,6 +53,8 @@ export interface AttSummary {
   present: number; // 출석+지각+조퇴 (calendar/legend 출석)
   makeup: number; // 보강
   absent: number; // 결석+무단결석
+  late: number; // 지각 횟수
+  lateMin: number; // 지각 누적 분
   rate: number; // (출석+지각)/total*100
   /** 하루에 정규 출석 + 보강이 함께 있을 수 있으므로 버킷 배열 (출석 p → 보강 m → 결석 a 순). */
   days: Record<number, DayBucket[]>;

@@ -156,6 +156,9 @@ export function ReportCard({ data }: { data: ReportData }) {
               <span><i className="r-dot g" />출석 {att.present}</span>
               <span><i className="r-dot b" />보강 {att.makeup}</span>
               <span><i className="r-dot r" />결석 {att.absent}</span>
+              {(att.late || 0) > 0 && (
+                <span><i className="r-dot w" />지각 {att.late}{(att.lateMin || 0) > 0 ? ` · ${att.lateMin}분` : ""}</span>
+              )}
             </div>
           </div>
           <div className="r-kpi">
