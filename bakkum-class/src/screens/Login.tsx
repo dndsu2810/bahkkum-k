@@ -122,6 +122,7 @@ export function Login() {
           {busy ? "확인 중…" : "로그인"}
         </button>
       </form>
+      <footer className="maker-credit">제작자 EZ쌤</footer>
     </div>
   );
 }

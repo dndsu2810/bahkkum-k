@@ -1837,3 +1837,9 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
   max-height:92vh;overflow:auto;padding:var(--s5);box-shadow:var(--sh-lg)}
 .sp-modal-x{position:absolute;top:12px;right:12px;z-index:2}
 .sp.is-embed{margin-top:6px}
+
+/* ===== 제작자 크레딧 푸터(모든 페이지) ===== */
+.maker-credit{text-align:center;color:var(--ink3);font-size:var(--t-cap);
+  padding:var(--s4) var(--s4) var(--s5);opacity:.7;letter-spacing:.02em}
+.content .maker-credit{margin-top:var(--s6)}
+.auth-wrap .maker-credit{position:fixed;left:0;right:0;bottom:0;padding-bottom:var(--s4)}

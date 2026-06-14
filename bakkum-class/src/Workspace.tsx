@@ -337,6 +337,7 @@ export function Workspace() {
         </header>
         <main className={"content " + (view === "math" ? "is-math" : "is-hub")}>
           <Body view={view} cats={cats} jumpStudent={jumpStudent} reqPrefill={reqPrefill} homeTiles={homeTiles} onOpen={open} onCats={(c) => { setCategories(c); setCats(c); }} />
+          <footer className="maker-credit">제작자 EZ쌤</footer>
         </main>
       </div>
       <ModalHost />

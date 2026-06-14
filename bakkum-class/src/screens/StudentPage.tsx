@@ -309,6 +309,7 @@ export function StudentHome() {
         <StudentPage />
       </main>
       {user && <div className="sp-shell-foot">{user.name} 학생 · 본인 기록</div>}
+      <footer className="maker-credit">제작자 EZ쌤</footer>
     </div>
   );
 }
