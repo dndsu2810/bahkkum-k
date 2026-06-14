@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { adminApi, type AdminOverview, type StudentReport } from "../lib/adminApi";
 import { todayStr, pad, fmtWhen } from "../lib/dates";
 
+type AttFilter = "all" | "math" | "elem" | "mid";
+
 const delta = (a: number, b: number) => {
   const d = a - b;
   if (d === 0) return { txt: "지난달과 동일", cls: "flat" };
@@ -16,6 +18,7 @@ export function AdminDashboard() {
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [attF, setAttF] = useState<AttFilter>("all");
 
   useEffect(() => {
     setLoading(true);
@@ -84,21 +87,35 @@ export function AdminDashboard() {
           <div className="dash-grid">
             <section className="card dash-card">
               <h3 className="dash-h">지각·결석 현황</h3>
-              {ov.perStudent.length === 0 ? (
-                <div className="hub-muted">이번 달 지각·결석 기록이 없어요.</div>
-              ) : (
-                <div className="dash-rows">
-                  {ov.perStudent.map((p) => (
-                    <button className="dash-row" key={p.id} onClick={() => setOpenId(p.id)}>
-                      <span className="dash-row-nm">{p.name}</span>
-                      <span className="dash-row-tags">
-                        {p.late > 0 && <span className="dash-tag late">지각 {p.late}</span>}
-                        {p.absent > 0 && <span className="dash-tag absent">결석 {p.absent}</span>}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="sm-filters" style={{ marginBottom: 10 }}>
+                {([["all", "전체"], ["math", "수학"], ["elem", "초등영어"], ["mid", "중고등영어"]] as [AttFilter, string][]).map(([k, label]) => (
+                  <button key={k} className={"sm-fchip" + (attF === k ? " on" : "")} onClick={() => setAttF(k)}>{label}</button>
+                ))}
+              </div>
+              {(() => {
+                const pick = (p: AdminOverview["perStudent"][number]) =>
+                  attF === "all"
+                    ? { late: p.math.late + p.elem.late + p.mid.late, absent: p.math.absent + p.elem.absent + p.mid.absent }
+                    : p[attF];
+                const rows = ov.perStudent
+                  .map((p) => ({ p, v: pick(p) }))
+                  .filter((x) => x.v.late > 0 || x.v.absent > 0)
+                  .sort((a, b) => b.v.late + b.v.absent - (a.v.late + a.v.absent));
+                if (rows.length === 0) return <div className="hub-muted">이번 달 지각·결석 기록이 없어요.</div>;
+                return (
+                  <div className="dash-rows">
+                    {rows.map(({ p, v }) => (
+                      <button className="dash-row" key={p.id} onClick={() => setOpenId(p.id)}>
+                        <span className="dash-row-nm">{p.name}</span>
+                        <span className="dash-row-tags">
+                          {v.late > 0 && <span className="dash-tag late">지각 {v.late}</span>}
+                          {v.absent > 0 && <span className="dash-tag absent">결석 {v.absent}</span>}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
             </section>
 
             <section className="card dash-card">

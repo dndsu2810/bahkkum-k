@@ -14,7 +14,13 @@ export interface AdminOverview {
   newLast: number;
   late: number;
   absent: number;
-  perStudent: { id: string; name: string; late: number; absent: number }[];
+  perStudent: {
+    id: string;
+    name: string;
+    math: { late: number; absent: number };
+    elem: { late: number; absent: number };
+    mid: { late: number; absent: number };
+  }[];
   notes: { studentId: string; studentName: string; author: string; body: string; createdAt: number }[];
   students: { id: string; name: string; grade: string; status: string; subjects: string[]; englishBand: string }[];
 }

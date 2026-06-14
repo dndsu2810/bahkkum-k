@@ -823,35 +823,40 @@ async function adminOverview(env: Env, url: URL): Promise<Response> {
 
   let late = 0;
   let absent = 0;
-  const per: Record<string, { late: number; absent: number }> = {};
-  // 같은 학생·같은 날짜·같은 상태는 1회만(중복 키로 인한 이중집계 방지).
+  // 과목별(math/elem/mid)로 분리 집계. 같은 학생·날짜·과목·상태는 1회만(중복 키 방지).
+  type Cat = "math" | "elem" | "mid";
+  type LA = { late: number; absent: number };
+  const blank = (): Record<Cat, LA> => ({ math: { late: 0, absent: 0 }, elem: { late: 0, absent: 0 }, mid: { late: 0, absent: 0 } });
+  const per: Record<string, Record<Cat, LA>> = {};
   const seen = new Set<string>();
-  const bump = (sid: string, date: string, st: string) => {
-    const k = sid + "|" + date + "|" + st;
+  const bandOf: Record<string, string> = {};
+  for (const s of roster) bandOf[s.id] = s.englishBand;
+  const bump = (sid: string, date: string, st: string, cat: Cat) => {
+    const k = sid + "|" + date + "|" + cat + "|" + st;
     if (seen.has(k)) return;
     seen.add(k);
-    if (st === "지각") { late++; (per[sid] ||= { late: 0, absent: 0 }).late++; }
-    else if (st === "결석" || st === "무단결석") { absent++; (per[sid] ||= { late: 0, absent: 0 }).absent++; }
+    if (st === "지각") { late++; (per[sid] ||= blank())[cat].late++; }
+    else if (st === "결석" || st === "무단결석") { absent++; (per[sid] ||= blank())[cat].absent++; }
   };
   try {
-    // 수학 출결
     const aRes = await env.DB.prepare("SELECT att_key,status FROM class_attendance WHERE att_key LIKE ?").bind(month + "%").all<Record<string, unknown>>();
     for (const r of aRes.results || []) {
       const parts = String(r.att_key).split("|");
-      bump(parts[1], parts[0], String(r.status));
+      bump(parts[1], parts[0], String(r.status), "math");
     }
-    // 영어 출결(class_eng_daily) — 영어도 지각·결석 반영.
     const eRes = await env.DB.prepare("SELECT student_id,date,att_status FROM class_eng_daily WHERE date LIKE ?").bind(month + "%").all<Record<string, unknown>>();
     for (const r of eRes.results || []) {
-      bump(String(r.student_id), String(r.date), String(r.att_status ?? ""));
+      const sid = String(r.student_id);
+      bump(sid, String(r.date), String(r.att_status ?? ""), bandOf[sid] === "elem" ? "elem" : "mid");
     }
   } catch {
     /* ignore */
   }
+  const tot = (c: Record<Cat, LA>) => c.math.late + c.math.absent + c.elem.late + c.elem.absent + c.mid.late + c.mid.absent;
   const perStudent = Object.keys(per)
     .filter((sid) => nameOf[sid])
-    .map((sid) => ({ id: sid, name: nameOf[sid], late: per[sid].late, absent: per[sid].absent }))
-    .sort((a, b) => b.late + b.absent - (a.late + a.absent));
+    .map((sid) => ({ id: sid, name: nameOf[sid], math: per[sid].math, elem: per[sid].elem, mid: per[sid].mid }))
+    .sort((a, b) => tot(per[b.id]) - tot(per[a.id]));
 
   let notes: unknown[] = [];
   try {
