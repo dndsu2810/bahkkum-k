@@ -648,8 +648,18 @@ function EngHomework({ students }: { students: RosterStudent[] }) {
 
   const withHw = list.filter((d) => d.hwWord || d.hwReading || d.hwGrammar || d.wrongCheck || d.homework || d.hwChecked);
   const name = students.find((s) => s.id === sel)?.name || "";
-  const hwBadge = (label: string, s: HwStatus) =>
-    s ? <span className={"eng-hwb " + (s === "완료" ? "g" : s === "미흡" ? "w" : "b")}>{label} {s}</span> : null;
+  // 표 셀용 상태 배지(컴팩트).
+  const hwCell = (s: HwStatus) =>
+    s ? <span className={"eng-hwc " + (s === "완료" ? "g" : s === "미흡" ? "w" : s === "안함" ? "b" : "n")}>{s}</span> : <span className="eng-hwc-empty">·</span>;
+  // 월별 그룹(최근 월 먼저), 월 안에서는 날짜 오름차순.
+  const byMonth = new Map<string, EngDaily[]>();
+  for (const d of withHw) {
+    const ym = d.date.slice(0, 7);
+    if (!byMonth.has(ym)) byMonth.set(ym, []);
+    byMonth.get(ym)!.push(d);
+  }
+  const months = [...byMonth.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  for (const [, rows] of months) rows.sort((a, b) => (a.date < b.date ? -1 : 1));
 
   return (
     <div className="eng-split">
@@ -669,19 +679,32 @@ function EngHomework({ students }: { students: RosterStudent[] }) {
             {withHw.length === 0 ? (
               <div className="hub-muted">숙제 기록이 없어요. ‘오늘’에서 단어·리딩·문법 숙제를 입력하면 여기 누적됩니다.</div>
             ) : (
-              <div className="eng-hw-list">
-                {withHw.map((d) => {
-                  const p = hwProgress(d);
+              <div className="eng-hwm-list">
+                {months.map(([ym, rows]) => {
+                  const [y, mo] = ym.split("-");
                   return (
-                    <div className="eng-hw-row2" key={d.date}>
-                      <div className="eng-hw-date">{d.date}{p !== null ? <span className="eng-hw-prog"> · {p}%</span> : null}</div>
-                      <div className="eng-hwb-row">
-                        {hwBadge("단어", d.hwWord)}
-                        {hwBadge("리딩", d.hwReading)}
-                        {hwBadge("문법", d.hwGrammar)}
-                        {d.wrongCheck && <span className="eng-hwb ok">틀단확인</span>}
-                        {d.homework && <span className="eng-hwb plain">{d.homework}</span>}
-                      </div>
+                    <div className="eng-hwm" key={ym}>
+                      <div className="eng-hwm-h">{y}년 {Number(mo)}월 <span>{rows.length}회</span></div>
+                      <table className="eng-hwt">
+                        <thead>
+                          <tr><th>날짜</th><th>단어</th><th>리딩</th><th>문법</th><th>틀단</th><th>진행</th></tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((d) => {
+                            const p = hwProgress(d);
+                            return (
+                              <tr key={d.date}>
+                                <td className="eng-hwt-date">{Number(mo)}/{Number(d.date.slice(8, 10))}</td>
+                                <td>{hwCell(d.hwWord)}</td>
+                                <td>{hwCell(d.hwReading)}</td>
+                                <td>{hwCell(d.hwGrammar)}</td>
+                                <td className="eng-hwt-chk">{d.wrongCheck ? "✓" : ""}</td>
+                                <td className="eng-hwt-prog">{p === null ? "" : p + "%"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   );
                 })}

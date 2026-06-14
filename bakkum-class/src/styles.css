@@ -1372,14 +1372,21 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .rank-pts{font-size:var(--t-lg);font-weight:800;color:var(--brand-d);min-width:72px;text-align:right}
 .rank-pts span{font-size:var(--t-cap);font-weight:600;color:var(--ink3);margin-left:2px}
 .rank-pts.minus{color:var(--bad)}
-/* 숙제 기록 탭 — 분류 배지 */
-.eng-hw-row2{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:var(--r-md);padding:10px 12px}
-.eng-hw-prog{font-size:var(--t-cap);font-weight:700;color:var(--brand-d)}
-.eng-hwb-row{display:flex;flex-wrap:wrap;gap:6px}
-.eng-hwb{font-size:11px;font-weight:700;border-radius:var(--r-full);padding:2px 9px}
-.eng-hwb.g{color:var(--ok);background:var(--ok-soft)} .eng-hwb.w{color:var(--warn);background:var(--warn-soft)}
-.eng-hwb.b{color:var(--bad);background:var(--bad-soft,#fdeaea)} .eng-hwb.ok{color:var(--brand-d);background:var(--brand-soft)}
-.eng-hwb.plain{color:var(--ink2);background:var(--card2);font-weight:500}
+/* 숙제 기록 탭 — 월별 그룹 + 컴팩트 표 */
+.eng-hwm-list{display:flex;flex-direction:column;gap:18px}
+.eng-hwm-h{display:flex;align-items:center;gap:8px;font-size:var(--t-md);font-weight:700;color:var(--ink);margin-bottom:8px}
+.eng-hwm-h span{font-size:var(--t-cap);font-weight:600;color:var(--ink3)}
+.eng-hwt{width:100%;border-collapse:collapse;font-size:var(--t-sm);max-width:520px}
+.eng-hwt th{font-size:var(--t-cap);font-weight:600;color:var(--ink3);text-align:center;padding:6px 8px;border-bottom:1px solid var(--line)}
+.eng-hwt th:first-child{text-align:left}
+.eng-hwt td{padding:7px 8px;border-bottom:1px solid var(--line2);text-align:center;vertical-align:middle}
+.eng-hwt-date{text-align:left;font-weight:600;color:var(--ink2);white-space:nowrap}
+.eng-hwt-prog{font-weight:700;color:var(--brand-d)}
+.eng-hwt-chk{color:var(--ok);font-weight:800}
+.eng-hwc{font-size:11px;font-weight:700;border-radius:var(--r-sm);padding:2px 8px}
+.eng-hwc.g{color:var(--ok);background:var(--ok-soft)} .eng-hwc.w{color:var(--warn);background:var(--warn-soft)}
+.eng-hwc.b{color:var(--bad);background:var(--bad-soft,#fdeaea)} .eng-hwc.n{color:var(--ink3);background:var(--card2)}
+.eng-hwc-empty{color:var(--ink4,#c2c9d2)}
 .eng-stu-time{font-size:10px;font-weight:600;color:var(--brand-d);background:var(--brand-soft);border-radius:var(--r-full);padding:0 6px;margin-left:6px}
 /* 승인된 시간 변경 배지 */
 .eng-stu-chg{font-size:10px;font-weight:700;color:var(--warn);background:var(--warn-soft);border-radius:var(--r-full);padding:0 6px;margin-left:5px}
