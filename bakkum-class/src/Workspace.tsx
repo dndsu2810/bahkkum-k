@@ -97,11 +97,12 @@ export function Workspace() {
     });
   }
 
-  // 학원 로고(설정에서 업로드). 없으면 기본 "바" 박스.
+  // 학원 로고(설정에서 업로드·크기). 없으면 기본 "바" 박스.
   const [logoUrl, setLogoUrl] = useState("");
+  const [logoSize, setLogoSize] = useState(0);
   useEffect(() => {
     if (noBackend) return;
-    getConfig().then((c) => setLogoUrl(c.logoUrl || "")).catch(() => {});
+    getConfig().then((c) => { setLogoUrl(c.logoUrl || ""); setLogoSize(Number(c.logoSize) || 0); }).catch(() => {});
   }, [noBackend]);
 
   // 시간표 변경 요청 — 나에게 온 대기 건수(사이드바 알림 배지)
@@ -233,7 +234,11 @@ export function Workspace() {
     <div className="app">
       <aside className="side">
         <div className="brand" style={{ cursor: "default" }}>
-          {logoUrl ? <img className="logo logo-img" src={logoUrl} alt="바꿈" /> : <div className="logo">바</div>}
+          {logoUrl ? (
+            <img className="logo logo-img" src={logoUrl} alt="바꿈" style={logoSize ? { width: logoSize, height: logoSize, borderRadius: Math.round(logoSize * 0.26) } : undefined} />
+          ) : (
+            <div className="logo" style={logoSize ? { width: logoSize, height: logoSize } : undefined}>바</div>
+          )}
           <div>
             <b>바꿈영수학원</b>
             <span>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TONES, type Category, type Tone } from "../lib/categories";
 import { useStore } from "../store";
 import { importRecords } from "../api";
@@ -6,11 +6,16 @@ import { getConfig, setConfig, uploadImage } from "../lib/configApi";
 import { Icon } from "../icons";
 
 /** 학원 로고 업로드 — 사이드바 "바" 자리에 쓰임(원장). 없으면 기본 박스 유지. */
+const DEFAULT_LOGO_SIZE = 38;
 function LogoSetting() {
   const [logo, setLogo] = useState("");
+  const [size, setSize] = useState(DEFAULT_LOGO_SIZE);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  useEffect(() => { getConfig().then((c) => setLogo(c.logoUrl || "")).catch(() => {}); }, []);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    getConfig().then((c) => { setLogo(c.logoUrl || ""); setSize(Number(c.logoSize) || DEFAULT_LOGO_SIZE); }).catch(() => {});
+  }, []);
 
   async function onPick(file?: File | null) {
     if (!file || busy) return;
@@ -28,18 +33,31 @@ function LogoSetting() {
     try { await setConfig({ logoUrl: "" }); setLogo(""); setMsg("기본 로고로 되돌렸어요."); }
     catch { setMsg("실패"); } finally { setBusy(false); }
   }
+  // 크기 변경은 슬라이더 조작 중엔 미리보기만, 멈추면(디바운스) 저장.
+  function onSize(v: number) {
+    setSize(v);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => { void setConfig({ logoSize: String(v) }).then(() => setMsg("로고 크기를 저장했어요. 새로고침하면 반영됩니다.")).catch(() => {}); }, 500);
+  }
 
   return (
     <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
       <div className="card-title" style={{ marginBottom: 6 }}>학원 로고</div>
       <div className="page-desc" style={{ marginBottom: 12 }}>사이드바 좌상단 “바” 자리에 들어갈 로고예요. 정사각형 이미지가 가장 보기 좋아요(없으면 기본 “바” 박스).</div>
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        {logo ? <img src={logo} alt="로고" style={{ width: 48, height: 48, borderRadius: 12, objectFit: "cover", border: "1px solid var(--line)" }} /> : <div className="logo">바</div>}
+        <div style={{ width: 72, height: 72, display: "grid", placeItems: "center", border: "1px dashed var(--line)", borderRadius: 12 }}>
+          {logo ? <img src={logo} alt="로고" style={{ width: size, height: size, borderRadius: Math.round(size * 0.26), objectFit: "cover" }} /> : <div className="logo" style={{ width: size, height: size }}>바</div>}
+        </div>
         <label className="btn ghost">
           {busy ? "올리는 중…" : "로고 업로드"}
           <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => onPick(e.target.files?.[0])} disabled={busy} />
         </label>
         {logo && <button className="btn ghost" onClick={clearLogo} disabled={busy}>기본으로</button>}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, maxWidth: 360 }}>
+        <span className="page-desc" style={{ whiteSpace: "nowrap" }}>로고 크기</span>
+        <input type="range" min={24} max={72} step={1} value={size} onChange={(e) => onSize(Number(e.target.value))} style={{ flex: 1 }} />
+        <span className="page-desc" style={{ minWidth: 42, textAlign: "right" }}>{size}px</span>
       </div>
       {msg && <div className="page-desc" style={{ marginTop: 10 }}>{msg}</div>}
     </div>
