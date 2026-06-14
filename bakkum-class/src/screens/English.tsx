@@ -100,7 +100,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     }
   }
   // 출결 상태 지정 — 지각은 분, 결석은 사유를 받는다. 결석은 백엔드에서 보강 자동연결.
-  function setStatus(sid: string, status: "등원" | "지각" | "결석" | "") {
+  function setStatus(sid: string, status: "출석" | "지각" | "결석" | "") {
     const d = getDaily(sid);
     if (status === "지각") {
       const m = Number(window.prompt("지각 몇 분?", String(d.lateMin || 10)) || 0);
@@ -109,7 +109,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
       const r = window.prompt("결석 사유", d.absentReason || "") ?? "";
       void saveDaily({ ...d, attStatus: "결석", absentReason: r, attended: false });
     } else {
-      void saveDaily({ ...d, attStatus: status, attended: status === "등원" });
+      void saveDaily({ ...d, attStatus: status, attended: status === "출석" });
     }
   }
 
@@ -223,7 +223,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                 <div key={s.id} className={"eng-stu" + (sel === s.id ? " on" : "")}>
                   {tab === "today" && (
                     <div className="eng-att-seg">
-                      <button className={"eas" + (st === "등원" ? " on g" : "")} onClick={() => setStatus(s.id, st === "등원" ? "" : "등원")} title={st === "등원" ? "등원 취소" : "등원"}>등</button>
+                      <button className={"eas" + (st === "출석" ? " on g" : "")} onClick={() => setStatus(s.id, st === "출석" ? "" : "출석")} title={st === "출석" ? "출석 취소" : "출석"}>출</button>
                       <button className={"eas" + (st === "지각" ? " on w" : "")} onClick={() => setStatus(s.id, st === "지각" ? "" : "지각")} title={st === "지각" ? "지각 취소" : "지각"}>지</button>
                       <button className={"eas" + (st === "결석" ? " on b" : "")} onClick={() => setStatus(s.id, st === "결석" ? "" : "결석")} title={st === "결석" ? "결석 취소" : "결석"}>결</button>
                     </div>
@@ -239,7 +239,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
             })}
             {tab === "today" && addable.length > 0 && (
               <div className="eng-add-att">
-                <select className="sm-input" value="" onChange={(e) => { if (e.target.value) setStatus(e.target.value, "등원"); }}>
+                <select className="sm-input" value="" onChange={(e) => { if (e.target.value) setStatus(e.target.value, "출석"); }}>
                   <option value="">+ 추가 등원</option>
                   {addable.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
@@ -301,7 +301,7 @@ function DailyEditor({ student, studentId, band, value, onSave }: { student: str
       <div className="eng-field">
         <div className="eng-label">출결</div>
         <div className="sm-subj">
-          <button className={"sm-subj-chip" + (d.attStatus === "등원" ? " on" : "")} onClick={() => setD({ ...d, attStatus: d.attStatus === "등원" ? "" : "등원", attended: d.attStatus !== "등원" })}>등원</button>
+          <button className={"sm-subj-chip" + (d.attStatus === "출석" ? " on" : "")} onClick={() => setD({ ...d, attStatus: d.attStatus === "출석" ? "" : "출석", attended: d.attStatus !== "출석" })}>출석</button>
           <button className={"sm-subj-chip" + (d.attStatus === "지각" ? " on" : "")} onClick={() => setD({ ...d, attStatus: d.attStatus === "지각" ? "" : "지각", attended: d.attStatus !== "지각" })}>지각</button>
           <button className={"sm-subj-chip" + (d.attStatus === "결석" ? " on" : "")} onClick={() => setD({ ...d, attStatus: d.attStatus === "결석" ? "" : "결석", attended: false })}>결석</button>
         </div>
@@ -455,7 +455,7 @@ function TestPanel({ studentId, name }: { studentId: string; name: string }) {
   );
 }
 
-/* ---------------- 출결 기록 (등원/지각/결석, 예정 우선) ---------------- */
+/* ---------------- 출결 기록 (출석/지각/결석, 예정 우선) ---------------- */
 function EngAttendance({
   list, addable, date, daily, scheduledIds, slotTimeOf, onStatus,
 }: {
@@ -465,10 +465,10 @@ function EngAttendance({
   daily: Record<string, EngDaily>;
   scheduledIds: Set<string>;
   slotTimeOf: (s: RosterStudent) => string;
-  onStatus: (sid: string, status: "등원" | "지각" | "결석" | "") => void;
+  onStatus: (sid: string, status: "출석" | "지각" | "결석" | "") => void;
 }) {
   const cnt = (st: string) => list.filter((s) => daily[s.id]?.attStatus === st).length;
-  // 키보드 단축키 — 현재 행에 1 등원·2 지각·3 결석, Enter/↓ 다음·↑ 이전.
+  // 키보드 단축키 — 현재 행에 1 출석·2 지각·3 결석, Enter/↓ 다음·↑ 이전.
   const [cur, setCur] = useState(0);
   useEffect(() => { if (cur > list.length - 1) setCur(Math.max(0, list.length - 1)); }, [list.length, cur]);
   useEffect(() => {
@@ -478,7 +478,7 @@ function EngAttendance({
       if (!list.length) return;
       const s = list[Math.min(cur, list.length - 1)];
       const cs = daily[s.id]?.attStatus || ""; // 같은 키 다시 누르면 취소(토글)
-      if (e.key === "1") { onStatus(s.id, cs === "등원" ? "" : "등원"); e.preventDefault(); }
+      if (e.key === "1") { onStatus(s.id, cs === "출석" ? "" : "출석"); e.preventDefault(); }
       else if (e.key === "2") { onStatus(s.id, cs === "지각" ? "" : "지각"); e.preventDefault(); }
       else if (e.key === "3") { onStatus(s.id, cs === "결석" ? "" : "결석"); e.preventDefault(); }
       else if (e.key === "Enter" || e.key === "ArrowDown") { setCur((c) => Math.min(c + 1, list.length - 1)); e.preventDefault(); }
@@ -489,10 +489,10 @@ function EngAttendance({
   }, [list, cur, onStatus, daily]);
   return (
     <div className="eng-attp">
-      <p className="hub-muted" style={{ marginBottom: 10 }}>{date} · 등원 예정 학생이 위에 옵니다. 등원/지각/결석을 표시하세요. 결석은 보강 관리로 연결됩니다.</p>
-      <p className="eng-att-hint">키보드: <b>1</b> 등원 · <b>2</b> 지각 · <b>3</b> 결석 · <b>Enter/↓</b> 다음 · <b>↑</b> 이전</p>
+      <p className="hub-muted" style={{ marginBottom: 10 }}>{date} · 등원 예정 학생이 위에 옵니다. 출석/지각/결석을 표시하세요. 결석은 보강 관리로 연결됩니다.</p>
+      <p className="eng-att-hint">키보드: <b>1</b> 출석 · <b>2</b> 지각 · <b>3</b> 결석 · <b>Enter/↓</b> 다음 · <b>↑</b> 이전</p>
       <div className="dash-kpis" style={{ gridTemplateColumns: "repeat(3,1fr)", maxWidth: 480, marginBottom: 14 }}>
-        <div className="kpi"><div className="kpi-v">{cnt("등원") + cnt("지각")}<span className="kpi-u">명</span></div><div className="kpi-l">등원</div></div>
+        <div className="kpi"><div className="kpi-v">{cnt("출석") + cnt("지각")}<span className="kpi-u">명</span></div><div className="kpi-l">출석</div></div>
         <div className="kpi"><div className="kpi-v" style={{ color: "var(--warn)" }}>{cnt("지각")}<span className="kpi-u">명</span></div><div className="kpi-l">지각</div></div>
         <div className="kpi"><div className="kpi-v" style={{ color: "var(--bad)" }}>{cnt("결석")}<span className="kpi-u">명</span></div><div className="kpi-l">결석</div></div>
       </div>
@@ -509,7 +509,7 @@ function EngAttendance({
                 {st === "결석" && <span className="eng-att-detail bad">결석{d?.absentReason ? ` · ${d.absentReason}` : ""}</span>}
               </div>
               <div className="eng-att-seg">
-                <button className={"eas" + (st === "등원" ? " on g" : "")} onClick={() => onStatus(s.id, st === "등원" ? "" : "등원")}>등</button>
+                <button className={"eas" + (st === "출석" ? " on g" : "")} onClick={() => onStatus(s.id, st === "출석" ? "" : "출석")}>출</button>
                 <button className={"eas" + (st === "지각" ? " on w" : "")} onClick={() => onStatus(s.id, st === "지각" ? "" : "지각")}>지</button>
                 <button className={"eas" + (st === "결석" ? " on b" : "")} onClick={() => onStatus(s.id, st === "결석" ? "" : "결석")}>결</button>
               </div>
@@ -520,7 +520,7 @@ function EngAttendance({
       </div>
       {addable.length > 0 && (
         <div className="eng-add-att" style={{ marginTop: 12, maxWidth: 240 }}>
-          <select className="sm-input" value="" onChange={(e) => { if (e.target.value) onStatus(e.target.value, "등원"); }}>
+          <select className="sm-input" value="" onChange={(e) => { if (e.target.value) onStatus(e.target.value, "출석"); }}>
             <option value="">+ 추가 등원</option>
             {addable.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
@@ -853,18 +853,18 @@ function EngDashboard({ students, daily, band }: { students: RosterStudent[]; da
   return (
     <div className="eng-dash">
       <div className="eng-stats">
-        <Stat label="등원" value={`${attended.length}/${students.length}`} />
+        <Stat label="출석" value={`${attended.length}/${students.length}`} />
         {showHw && <Stat label="숙제검사 완료" value={`${hwDone.length}/${attended.length || 0}`} />}
-        <Stat label="미등원" value={String(notYet.length)} tone="warn" />
+        <Stat label="미출석" value={String(notYet.length)} tone="warn" />
       </div>
       <div className="eng-dash-sec">
-        <h3>오늘 미등원</h3>
+        <h3>오늘 미출석</h3>
         <div className="eng-chiprow">
           {notYet.length === 0 ? <span className="hub-muted">없음</span> : notYet.map((s) => <span className="eng-chip" key={s.id}>{s.name}</span>)}
         </div>
       </div>
       <div className="eng-dash-sec">
-        <h3>등원 학생</h3>
+        <h3>출석 학생</h3>
         <div className="eng-chiprow">
           {attended.length === 0 ? <span className="hub-muted">아직 없음</span> : attended.map((s) => (
             <span className={"eng-chip" + (daily[s.id]?.hwChecked ? " ok" : "")} key={s.id}>{s.name}</span>

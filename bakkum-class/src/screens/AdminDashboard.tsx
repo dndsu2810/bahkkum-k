@@ -191,7 +191,7 @@ function StudentReportModal({ id, month, onClose }: { id: string; month: string;
                 <section className="rep-sec">
                   <h4 className="rep-h">영어</h4>
                   <div className="rep-stats">
-                    <span className="rep-stat">등원 {rep.english.attended}일</span>
+                    <span className="rep-stat">출석 {rep.english.attended}일</span>
                     <span className="rep-stat">숙제검사 {rep.english.hwChecked}회</span>
                   </div>
                   {rep.english.tests.length > 0 && (

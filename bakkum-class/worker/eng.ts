@@ -36,7 +36,7 @@ export async function ensureEngTables(env: Env): Promise<void> {
       /* ignore */
     }
   }
-  // 출결 상태 확장 — 등원/지각/결석 + 지각 분 + 결석 사유. (기존 attended 0/1과 병행)
+  // 출결 상태 확장 — 출석/지각/결석 + 지각 분 + 결석 사유. (기존 attended 0/1과 병행)
   for (const a of [
     "ALTER TABLE class_eng_daily ADD COLUMN att_status TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_eng_daily ADD COLUMN late_min INTEGER NOT NULL DEFAULT 0",
@@ -47,6 +47,12 @@ export async function ensureEngTables(env: Env): Promise<void> {
     } catch {
       /* 이미 있으면 무시 */
     }
+  }
+  // 출결 용어 통일(수학에 맞춤): 기존 '등원' 저장값을 '출석'으로 1회 마이그레이션.
+  try {
+    await env.DB.prepare("UPDATE class_eng_daily SET att_status='출석' WHERE att_status='등원'").run();
+  } catch {
+    /* ignore */
   }
 }
 
@@ -72,11 +78,13 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     const date = String(b.date || "");
     if (!sid || !date) return json({ error: "bad_input" }, 400);
     const goals = JSON.stringify(Array.isArray(b.goals) ? b.goals : []);
-    const status = ["등원", "지각", "결석"].includes(String(b.attStatus)) ? String(b.attStatus) : "";
+    // 출결 상태 — '출석/지각/결석'. 구버전 '등원'은 '출석'으로 정규화.
+    let status = ["출석", "등원", "지각", "결석"].includes(String(b.attStatus)) ? String(b.attStatus) : "";
+    if (status === "등원") status = "출석";
     const lateMin = Number(b.lateMin) || 0;
     const reason = String(b.absentReason || "");
-    // 상태가 있으면 그걸로 등원여부 판단(등원·지각=등원). 없으면 기존 attended 불린.
-    const attended = status ? (status === "등원" || status === "지각" ? 1 : 0) : b.attended ? 1 : 0;
+    // 상태가 있으면 그걸로 출석여부 판단(출석·지각=출석). 없으면 기존 attended 불린.
+    const attended = status ? (status === "출석" || status === "지각" ? 1 : 0) : b.attended ? 1 : 0;
     await env.DB
       .prepare(
         "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,goals,homework,hw_checked,comment,materials,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, comment=excluded.comment, materials=excluded.materials, updated_at=excluded.updated_at"

@@ -20,7 +20,7 @@ export interface Goal {
   text: string;
   done: boolean;
 }
-export type AttStatus = "" | "등원" | "지각" | "결석";
+export type AttStatus = "" | "출석" | "지각" | "결석";
 export interface EngDaily {
   studentId: string;
   date: string;
