@@ -543,8 +543,30 @@ export async function fetchSnsPages(env: NotionEnv): Promise<NotionSns[]> {
   return out;
 }
 
-// 중고등영어 '과제기록 입력' DB. 학생 선택(relation)·날짜·단어/리딩/문법 숙제·틀단확인.
-const ENG_HOMEWORK_DB = "2e766817e06181d3ae8fd12e793cc28b";
+// 중고등영어 DB — 데이터소스(소스) id를 써야 쿼리됨(뷰 id 아님).
+const ENG_HOMEWORK_DB = "2e766817e061811180a0000ba707cf4f"; // 과제 기록DB(소스)
+const ENG_ATTENDANCE_DB = "2e766817e06181ad92d8000bf18c1be3"; // 수업 기록 및 출결+포인트DB(소스)
+
+// relation 페이지id → 학생 이름(제목) 해석기(캐시).
+function makeNameResolver(env: NotionEnv) {
+  const cache = new Map<string, string>();
+  return async function nameOf(pageId: string): Promise<string> {
+    if (cache.has(pageId)) return cache.get(pageId)!;
+    let nm = "";
+    try {
+      const res = await notionReq(env, "GET", `/v1/pages/${pageId}`);
+      if (res.ok) {
+        const j = (await res.json()) as { properties?: Record<string, Prop> };
+        nm = findTitle((j.properties || {}) as Record<string, Prop>).trim();
+      }
+    } catch {
+      /* ignore */
+    }
+    cache.set(pageId, nm);
+    return nm;
+  };
+}
+
 export interface NotionEngHw {
   studentName: string;
   date: string; // YYYY-MM-DD
@@ -558,22 +580,7 @@ export async function fetchEngHomework(env: NotionEnv): Promise<NotionEngHw[]> {
   if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
   const norm = (v: string) => (v === "안 함" ? "안함" : v); // 옵션 중복 정리
   const valid = new Set(["완료", "미흡", "안함", "없음"]);
-  const nameCache = new Map<string, string>();
-  async function nameOf(pageId: string): Promise<string> {
-    if (nameCache.has(pageId)) return nameCache.get(pageId)!;
-    let nm = "";
-    try {
-      const res = await notionReq(env, "GET", `/v1/pages/${pageId}`);
-      if (res.ok) {
-        const j = (await res.json()) as { properties?: Record<string, Prop> };
-        nm = findTitle((j.properties || {}) as Record<string, Prop>).trim();
-      }
-    } catch {
-      /* ignore */
-    }
-    nameCache.set(pageId, nm);
-    return nm;
-  }
+  const nameOf = makeNameResolver(env);
   const out: NotionEngHw[] = [];
   let cursor: string | undefined;
   do {
@@ -601,6 +608,60 @@ export async function fetchEngHomework(env: NotionEnv): Promise<NotionEngHw[]> {
         reading: pick("리딩숙제"),
         grammar: pick("문법숙제"),
         wrongCheck: checkboxVal(props["틀단확인"]),
+      });
+    }
+    cursor = j.has_more ? j.next_cursor : undefined;
+  } while (cursor);
+  return out;
+}
+
+export interface NotionEngAtt {
+  studentName: string;
+  date: string;
+  attStatus: string; // 출석|지각|결석|"" (우리 모델로 매핑)
+  lateMin: number;
+  attitude: string; // 매우좋음|보통|미흡|매우나쁨|""
+  reasons: string[]; // 적립이나 차감사유 라벨들
+  points: number; // 라벨 끝 숫자 합
+  note: string; // 특이사항
+}
+/** 수업기록(출결+포인트) DB의 영어 행. 출결·지각분·수업태도·적립차감사유·포인트·특이사항. */
+export async function fetchEngAttendance(env: NotionEnv): Promise<NotionEngAtt[]> {
+  if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
+  // 노션 출결 → 우리 attStatus(출석/지각/결석). 조퇴·보강=출석류, 무단결석=결석, 등원전="".
+  const mapAtt = (v: string) =>
+    v === "출석" || v === "조퇴" || v === "보강" ? "출석" : v === "지각" ? "지각" : v === "결석" || v === "무단결석" ? "결석" : "";
+  const nameOf = makeNameResolver(env);
+  const out: NotionEngAtt[] = [];
+  let cursor: string | undefined;
+  do {
+    const res = await notionReq(env, "POST", `/v1/databases/${ENG_ATTENDANCE_DB}/query`, {
+      page_size: 100,
+      ...(cursor ? { start_cursor: cursor } : {}),
+    });
+    if (!res.ok) throw new Error("notion query failed: " + res.status);
+    const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+    for (const pg of j.results) {
+      const props = (pg.properties || {}) as Record<string, Prop>;
+      const title = findTitle(props); // 수업(자동): '영어…'만
+      if (!title.includes("영어")) continue;
+      const date = propText(props["날짜"]).slice(0, 10);
+      const sid = relationIds(props["이름"])[0];
+      if (!date || !sid) continue;
+      const name = await nameOf(sid);
+      if (!name) continue;
+      const reasons = propValues(props["적립이나 차감사유"]);
+      const points = reasons.reduce((n, r) => { const m = /(-?\d+)\s*$/.exec(r); return n + (m ? parseInt(m[1], 10) : 0); }, 0);
+      const lateRaw = propText(props["지각(숫자만)"]);
+      out.push({
+        studentName: name,
+        date,
+        attStatus: mapAtt(propText(props["출결"])),
+        lateMin: parseInt(lateRaw.replace(/[^0-9]/g, ""), 10) || 0,
+        attitude: propText(props["수업태도"]),
+        reasons,
+        points,
+        note: propText(props["특이사항"]),
       });
     }
     cursor = j.has_more ? j.next_cursor : undefined;

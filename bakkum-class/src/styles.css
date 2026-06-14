@@ -1354,6 +1354,24 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .eng-hw3-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .eng-hw3-l{font-size:var(--t-sm);font-weight:600;color:var(--ink2);min-width:64px}
 .eng-hw3-seg{display:inline-flex;gap:4px}
+/* 포인트 적립/차감 사유 칩 */
+.eng-pts{display:flex;flex-wrap:wrap;gap:6px}
+.eng-pt{border:1px solid var(--line2);background:var(--card);color:var(--ink2);border-radius:var(--r-full);
+  padding:5px 11px;font-size:var(--t-sm);font-weight:600;cursor:pointer;transition:.12s}
+.eng-pt:hover{border-color:var(--brand-line)}
+.eng-pt.on{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.eng-pt.minus.on{background:var(--bad-soft,#fdeaea);color:var(--bad)}
+/* 포인트 랭킹 */
+.rank-list{display:flex;flex-direction:column;gap:6px;max-width:560px}
+.rank-row{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);padding:11px 14px}
+.rank-row.top{border-color:var(--brand-line);background:var(--brand-soft)}
+.rank-no{width:30px;text-align:center;font-size:var(--t-md);font-weight:800;color:var(--ink2)}
+.rank-name{flex:1;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px}
+.rank-grade{font-size:var(--t-cap);font-weight:600;color:var(--ink3);background:var(--card2);border-radius:var(--r-full);padding:1px 8px}
+.rank-days{font-size:var(--t-cap);color:var(--ink3)}
+.rank-pts{font-size:var(--t-lg);font-weight:800;color:var(--brand-d);min-width:72px;text-align:right}
+.rank-pts span{font-size:var(--t-cap);font-weight:600;color:var(--ink3);margin-left:2px}
+.rank-pts.minus{color:var(--bad)}
 /* 숙제 기록 탭 — 분류 배지 */
 .eng-hw-row2{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:var(--r-md);padding:10px 12px}
 .eng-hw-prog{font-size:var(--t-cap);font-weight:700;color:var(--brand-d)}

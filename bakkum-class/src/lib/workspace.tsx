@@ -63,6 +63,7 @@ const BOARD: WsEntry = { key: "board", label: "강사 업무 보드", icon: "boa
 const WIKI: WsEntry = { key: "wiki", label: "바꿈 매뉴얼", icon: "book", kind: "hub" };
 const SNS: WsEntry = { key: "sns", label: "SNS 관리", icon: "copy", kind: "hub" };
 const MASTER: WsEntry = { key: "master", label: "학생 명단", icon: "students", kind: "hub" };
+const RANKING: WsEntry = { key: "ranking", label: "포인트 랭킹", icon: "chart", kind: "hub" };
 const ENGREPORT: WsEntry = { key: "engreport", label: "영어 월말리포트", icon: "fileText", kind: "hub" };
 const ACCOUNTS: WsEntry = { key: "accounts", label: "강사 관리", icon: "users", kind: "hub" };
 const ADMIN_DASH: WsEntry = { key: "admin_dash", label: "원장 대시보드", icon: "dashboard", kind: "hub" };
@@ -99,6 +100,7 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   // 공통 — 학생 명단(전과목 공통)·변경요청·특이사항·매뉴얼·SNS
   const common: WsEntry[] = [];
   if (areas.has("students")) common.push(MASTER);
+  common.push(RANKING);
   common.push(REQS);
   if (areas.has("wiki")) common.push(WIKI);
   if (areas.has("sns")) common.push(SNS);

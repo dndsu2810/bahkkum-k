@@ -22,6 +22,7 @@ import { AcademySchedule } from "./screens/AcademySchedule";
 import { AdminAccounts } from "./screens/AdminAccounts";
 import { AdminDashboard } from "./screens/AdminDashboard";
 import { ChangeRequests } from "./screens/ChangeRequests";
+import { PointRanking } from "./screens/PointRanking";
 import { reqsApi } from "./lib/hubApi";
 import { getRoster, type RosterStudent } from "./lib/rosterApi";
 import { NEW_REQ_EVENT, type ReqPrefill } from "./lib/changeReqLive";
@@ -336,6 +337,7 @@ function Body({ view, cats, jumpStudent, reqPrefill, homeTiles, onOpen, onCats }
   if (view === "home") return <HubHome tiles={homeTiles} onOpen={onOpen} />;
   if (view === "schedule_hub") return <AcademySchedule />;
   if (view === "reqs") return <ChangeRequests prefill={reqPrefill} />;
+  if (view === "ranking") return <PointRanking />;
   if (view === "board") return <BoardShared />;
   if (view === "notes") return <Notes />;
   if (view === "wiki") return <Wiki />;

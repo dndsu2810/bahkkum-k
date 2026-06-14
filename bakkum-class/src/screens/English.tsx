@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
-import { engApi, hwProgress, HW_STATUSES, type EngDaily, type EngMakeup, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
+import { engApi, hwProgress, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, pointsOf, type EngDaily, type EngMakeup, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtFull, fmtMD, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
@@ -49,6 +49,10 @@ const blankDaily = (studentId: string, date: string): EngDaily => ({
   hwReading: "",
   hwGrammar: "",
   wrongCheck: false,
+  attitude: "",
+  pointReasons: [],
+  points: 0,
+  note: "",
   comment: "",
   materials: "",
   updatedAt: 0,
@@ -77,6 +81,22 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
       const r = await engApi.syncDaily();
       setSyncMsg(`가져오기 완료 · ${r.imported}건 반영` + (r.unmatched.length ? ` · 미매칭 ${r.unmatched.length}명: ${r.unmatched.slice(0, 10).join(", ")}` : ""));
       engApi.dailyByDate(date).then((list) => { const m: Record<string, EngDaily> = {}; for (const d of list) m[d.studentId] = d; setDaily(m); }).catch(() => {});
+    } catch (e) {
+      setErr("가져오기 실패: " + String((e as Error).message));
+    } finally {
+      setSyncing(false);
+    }
+  }
+  // 노션 '수업기록(출결+포인트)' 1회 가져오기(원장 전용).
+  async function syncAtt() {
+    if (syncing) return;
+    if (!window.confirm("노션 수업기록의 출결·지각·수업태도·포인트(적립/차감)를 이름으로 매칭해 가져옵니다. 진행할까요?")) return;
+    setSyncing(true);
+    setSyncMsg("");
+    try {
+      const r = await engApi.syncAttendance();
+      setSyncMsg(`가져오기 완료 · ${r.imported}건 반영` + (r.unmatched.length ? ` · 미매칭 ${r.unmatched.length}명: ${r.unmatched.slice(0, 10).join(", ")}` : ""));
+      engApi.dailyByDate(date).then((list) => { const m: Record<string, EngDaily> = {}; for (const dd of list) m[dd.studentId] = dd; setDaily(m); }).catch(() => {});
     } catch (e) {
       setErr("가져오기 실패: " + String((e as Error).message));
     } finally {
@@ -229,6 +249,9 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
           {tab === "hw" && band === "mid" && user?.role === "admin" && (
             <button className="btn ghost" disabled={syncing} onClick={syncHw}>{syncing ? "가져오는 중…" : "노션 과제기록 가져오기"}</button>
           )}
+          {tab === "att" && user?.role === "admin" && (
+            <button className="btn ghost" disabled={syncing} onClick={syncAtt}>{syncing ? "가져오는 중…" : "노션 출결·포인트 가져오기"}</button>
+          )}
           {(tab === "today" || tab === "att") && (
             <div className="date-nav">
               <button className="date-arrow" onClick={() => shiftDate(-1)} title="어제" aria-label="어제로">‹</button>
@@ -353,6 +376,38 @@ function DailyEditor({ student, band, value, onSave }: { student: string; band: 
         {d.attStatus === "결석" && (
           <input className="input" style={{ marginTop: 6 }} value={d.absentReason} onChange={(e) => setD({ ...d, absentReason: e.target.value })} placeholder="결석 사유 (보강 관리에 자동 연결됩니다)" />
         )}
+      </div>
+
+      <div className="eng-field">
+        <div className="eng-label">수업 태도</div>
+        <div className="sm-subj">
+          {ENG_ATTITUDES.map((a) => (
+            <button key={a} className={"sm-subj-chip" + (d.attitude === a ? " on" : "")} onClick={() => setD({ ...d, attitude: d.attitude === a ? "" : a })}>{a}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="eng-field">
+        <div className="eng-label">포인트 (적립·차감 사유) · 합계 {pointsOf(d.pointReasons)}점</div>
+        <div className="eng-pts">
+          {POINT_REASONS.map((r) => {
+            const on = d.pointReasons.includes(r.name);
+            return (
+              <button
+                key={r.name}
+                className={"eng-pt" + (r.value < 0 ? " minus" : "") + (on ? " on" : "")}
+                onClick={() => setD({ ...d, pointReasons: on ? d.pointReasons.filter((x) => x !== r.name) : [...d.pointReasons, r.name] })}
+              >
+                {r.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="eng-field">
+        <div className="eng-label">특이사항</div>
+        <input className="input" value={d.note} onChange={(e) => setD({ ...d, note: e.target.value })} placeholder="특이사항 (예: 컨디션·전달사항)" />
       </div>
 
       <div className="eng-field">

@@ -46,9 +46,35 @@ export interface EngDaily {
   hwReading: HwStatus;
   hwGrammar: HwStatus;
   wrongCheck: boolean;
+  // 포인트 제도(노션 수업기록과 동일): 적립/차감 사유 + 합계 포인트 + 수업태도 + 특이사항.
+  attitude: string;
+  pointReasons: string[];
+  points: number;
+  note: string;
   comment: string;
   materials: string;
   updatedAt: number;
+}
+
+// 적립/차감 사유 카탈로그(노션 '적립이나 차감사유' 옵션과 동일). 라벨 끝 숫자가 점수.
+export const POINT_REASONS: { name: string; value: number }[] = [
+  { name: "출석 100", value: 100 },
+  { name: "지각 -100", value: -100 },
+  { name: "칭찬 200", value: 200 },
+  { name: "단어숙제 50", value: 50 },
+  { name: "독해숙제 50", value: 50 },
+  { name: "문법숙제 50", value: 50 },
+  { name: "숙제 50", value: 50 },
+  { name: "숙제 -100", value: -100 },
+  { name: "협동 300", value: 300 },
+];
+export const ENG_ATTITUDES = ["매우좋음", "보통", "미흡", "매우나쁨"];
+/** 사유 라벨들에서 끝 숫자(±) 합 = 포인트. */
+export function pointsOf(reasons: string[]): number {
+  return (reasons || []).reduce((n, r) => {
+    const m = /(-?\d+)\s*$/.exec(r);
+    return n + (m ? parseInt(m[1], 10) : 0);
+  }, 0);
 }
 export interface EngProgress {
   id: string;
@@ -108,6 +134,14 @@ export interface EngMakeup {
   createdAt: number;
 }
 
+export interface EngRanking {
+  studentId: string;
+  name: string;
+  grade: string;
+  points: number;
+  days: number;
+}
+
 export const engApi = {
   reportsByMonth: (month: string) =>
     jget<{ reports: EngReport[] }>("/api/eng/report?month=" + encodeURIComponent(month)).then((j) => j.reports),
@@ -121,6 +155,10 @@ export const engApi = {
   saveDaily: (d: Partial<EngDaily> & { studentId: string; date: string }) => jpost("/api/eng/daily", d),
   /** 노션 '과제기록 입력'(중고등 단어·리딩·문법 숙제) 1회 가져오기(원장 전용). */
   syncDaily: () => jpost<{ ok: boolean; total: number; imported: number; unmatched: string[] }>("/api/sync/eng-daily", {}),
+  /** 노션 '수업기록(출결+포인트)' 1회 가져오기(원장 전용). */
+  syncAttendance: () => jpost<{ ok: boolean; total: number; imported: number; unmatched: string[] }>("/api/sync/eng-attendance", {}),
+  /** 학생 포인트 랭킹(누적 합). */
+  ranking: () => jget<{ ranking: EngRanking[] }>("/api/eng/ranking").then((j) => j.ranking),
 
   progress: (studentId: string) =>
     jget<{ progress: EngProgress[] }>("/api/eng/progress?student_id=" + encodeURIComponent(studentId)).then((j) => j.progress),

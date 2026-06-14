@@ -38,6 +38,7 @@ import {
   fetchManualPages,
   fetchSnsPages,
   fetchEngHomework,
+  fetchEngAttendance,
 } from "./notion";
 import { NOTION_CFG } from "./notion";
 import { isHoliday, holidayName } from "../src/lib/holidays";
@@ -238,6 +239,12 @@ export default {
           const me = await readSession(env, request);
           if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
           return await importEngDaily(env);
+        }
+        // 노션 '수업기록(출결+포인트)' → class_eng_daily 출결·포인트 가져오기.
+        if (p === "/api/sync/eng-attendance" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await importEngAttendance(env);
         }
 
         // ---- 허브 공유 영역(특이사항·위키·SNS·업무보드) ----
@@ -1168,6 +1175,45 @@ async function importEngDaily(env: Env): Promise<Response> {
       env.DB.prepare(
         "INSERT INTO class_eng_daily(student_id,date,hw_word,hw_reading,hw_grammar,wrong_check,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, updated_at=excluded.updated_at"
       ).bind(sid, hw.date, hw.word, hw.reading, hw.grammar, hw.wrongCheck ? 1 : 0, Date.now())
+    );
+  }
+  for (let i = 0; i < stmts.length; i += 50) {
+    try {
+      await env.DB.batch(stmts.slice(i, i + 50));
+    } catch {
+      /* 청크 실패는 건너뜀 */
+    }
+  }
+  return json({ ok: true, total: rows.length, imported, unmatched: [...unmatched] });
+}
+
+// 노션 수업기록(출결+포인트) → class_eng_daily 출결·포인트 칸만 upsert(이름 매칭).
+async function importEngAttendance(env: Env): Promise<Response> {
+  await ensureEngTables(env);
+  let rows;
+  try {
+    rows = await fetchEngAttendance(env);
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+  const nameRows = await env.DB.prepare("SELECT id, name FROM students WHERE hidden IS NULL OR hidden = 0").all<{ id: number; name: string }>();
+  const idByName = new Map<string, string>();
+  for (const r of nameRows.results || []) idByName.set(String(r.name).trim(), String(r.id));
+  const stmts: D1PreparedStatement[] = [];
+  let imported = 0;
+  const unmatched = new Set<string>();
+  for (const a of rows) {
+    const sid = idByName.get(a.studentName.trim());
+    if (!sid) {
+      unmatched.add(a.studentName);
+      continue;
+    }
+    imported++;
+    const attended = a.attStatus === "출석" || a.attStatus === "지각" ? 1 : 0;
+    stmts.push(
+      env.DB.prepare(
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,attitude,point_reasons,points,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, updated_at=excluded.updated_at"
+      ).bind(sid, a.date, attended, a.attStatus, a.lateMin, a.attitude, JSON.stringify(a.reasons), a.points, a.note, Date.now())
     );
   }
   for (let i = 0; i < stmts.length; i += 50) {
