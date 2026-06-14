@@ -5,7 +5,7 @@ import { loginStudent, loginTeacher } from "../lib/authApi";
 type Tab = "teacher" | "student";
 
 const ERR_MSG: Record<string, string> = {
-  invalid_credentials: "이름 또는 비밀번호가 맞지 않아요.",
+  invalid_credentials: "정보가 맞지 않아요. 이름과 입력값을 다시 확인해 주세요.",
   name_required: "이름을 입력해 주세요.",
   login_failed: "로그인에 실패했어요. 다시 시도해 주세요.",
 };
@@ -34,7 +34,7 @@ export function Login() {
       setUser(user);
     } catch (e2) {
       const code = String((e2 as Error).message || "");
-      setErr(ERR_MSG[code] || "이름 또는 비밀번호가 맞지 않아요.");
+      setErr(ERR_MSG[code] || (tab === "student" ? "이름 또는 생년월일이 맞지 않아요." : "이름 또는 비밀번호가 맞지 않아요."));
     } finally {
       setBusy(false);
     }
@@ -105,14 +105,18 @@ export function Login() {
           </label>
         ) : (
           <label className="auth-field">
-            <span>생년월일</span>
+            <span>생년월일 6자리</span>
             <input
               className="input"
-              type="date"
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
               value={birth}
-              onChange={(e) => setBirth(e.target.value)}
+              onChange={(e) => setBirth(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="예: 080315"
+              autoComplete="off"
             />
-            <small className="auth-hint">생년월일이 비밀번호예요.</small>
+            <small className="auth-hint">생일이 2008년 3월 15일이면 080315</small>
           </label>
         )}
 
