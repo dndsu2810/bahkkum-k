@@ -21,6 +21,16 @@ export interface Goal {
   done: boolean;
 }
 export type AttStatus = "" | "출석" | "지각" | "결석";
+// 중고등영어 숙제 분류 상태(노션 과제기록과 동일): 완료/미흡/안함/없음.
+export type HwStatus = "" | "완료" | "미흡" | "안함" | "없음";
+export const HW_STATUSES: HwStatus[] = ["완료", "미흡", "안함", "없음"];
+/** 숙제 진행률(%) — 완료 100·미흡 50·안함 0, '없음'/미입력은 제외. */
+export function hwProgress(d: { hwWord: HwStatus; hwReading: HwStatus; hwGrammar: HwStatus }): number | null {
+  const vals = [d.hwWord, d.hwReading, d.hwGrammar].filter((s) => s && s !== "없음");
+  if (!vals.length) return null;
+  const score = vals.reduce((n, s) => n + (s === "완료" ? 1 : s === "미흡" ? 0.5 : 0), 0);
+  return Math.round((score / vals.length) * 100);
+}
 export interface EngDaily {
   studentId: string;
   date: string;
@@ -31,6 +41,11 @@ export interface EngDaily {
   goals: Goal[];
   homework: string;
   hwChecked: boolean;
+  // 중고등영어 숙제 3분류 + 틀린 단어 확인(틀단확인).
+  hwWord: HwStatus;
+  hwReading: HwStatus;
+  hwGrammar: HwStatus;
+  wrongCheck: boolean;
   comment: string;
   materials: string;
   updatedAt: number;

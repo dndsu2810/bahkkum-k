@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
-import { engApi, type EngDaily, type EngMakeup, type EngProgress, type EngTest, type Goal } from "../lib/engApi";
+import { engApi, hwProgress, HW_STATUSES, type EngDaily, type EngMakeup, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtFull, fmtMD, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
@@ -45,6 +45,10 @@ const blankDaily = (studentId: string, date: string): EngDaily => ({
   goals: [],
   homework: "",
   hwChecked: false,
+  hwWord: "",
+  hwReading: "",
+  hwGrammar: "",
+  wrongCheck: false,
   comment: "",
   materials: "",
   updatedAt: 0,
@@ -259,7 +263,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                     {tab === "today" && scheduledIds.has(s.id) && slotTimeOf(s) && <span className="eng-stu-time">{slotTimeOf(s)}</span>}
                     {tab === "today" && (() => { const ch = arrivalOf(approvedChanges, s.id, "english", date); return ch ? <span className="eng-stu-chg" title="승인된 시간 변경">{arrivedIds.has(s.id) ? "이동 " : ""}{ch.toTime}</span> : null; })()}
                     {tab === "today" && st === "지각" && d?.lateMin ? <span className="eng-stu-late">{d.lateMin}분</span> : null}
-                    {tab === "today" && d?.hwChecked && <span className="eng-dot ok" title="숙제검사 완료" />}
+                    {tab === "today" && d && (d.hwChecked || hwProgress(d) !== null) && <span className="eng-dot ok" title="숙제 기록됨" />}
                   </button>
                 </div>
               );
@@ -284,7 +288,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                     : "왼쪽에서 학생을 선택하면 테스트 점수를 기록할 수 있어요."}
               </div>
             ) : tab === "today" ? (
-              <DailyEditor key={sel + date} student={nameOf[sel] || ""} studentId={sel} band={band} value={getDaily(sel)} onSave={saveDaily} />
+              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} />
             ) : tab === "progress" ? (
               <ProgressPanel studentId={sel} name={nameOf[sel] || ""} />
             ) : (
@@ -298,22 +302,10 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
 }
 
 /* ---------------- 일일 학습일지 편집 ---------------- */
-function DailyEditor({ student, studentId, band, value, onSave }: { student: string; studentId: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void }) {
+function DailyEditor({ student, band, value, onSave }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void }) {
   const showHw = band !== "elem"; // 초등영어는 숙제 없음
   const [d, setD] = useState<EngDaily>(value);
-  const [prevHw, setPrevHw] = useState<{ date: string; homework: string } | null>(null);
   const dirty = JSON.stringify(d) !== JSON.stringify(value);
-
-  // 지난 숙제 = 그 학생의 직전(오늘 이전) 기록 중 숙제가 있는 가장 최근 것.
-  useEffect(() => {
-    engApi
-      .dailyByStudent(studentId)
-      .then((list) => {
-        const prev = list.filter((x) => x.date < value.date && x.homework.trim()).sort((a, b) => b.date.localeCompare(a.date))[0];
-        setPrevHw(prev ? { date: prev.date, homework: prev.homework } : null);
-      })
-      .catch(() => {});
-  }, [studentId, value.date]);
 
   function setGoals(goals: Goal[]) {
     setD({ ...d, goals });
@@ -359,16 +351,13 @@ function DailyEditor({ student, studentId, band, value, onSave }: { student: str
 
       {showHw && (
         <div className="eng-field">
-          <div className="eng-label">지난 숙제{prevHw ? ` · ${prevHw.date}` : ""}</div>
-          <div className="eng-prev-hw">{prevHw ? prevHw.homework : "지난 숙제 없음"}</div>
-          <label className="eng-check"><input type="checkbox" checked={d.hwChecked} onChange={(e) => setD({ ...d, hwChecked: e.target.checked })} /> 숙제검사 완료 (지난 숙제 확인)</label>
-        </div>
-      )}
-
-      {showHw && (
-        <div className="eng-field">
-          <div className="eng-label">오늘 내줄 숙제</div>
-          <textarea className="input" rows={2} value={d.homework} onChange={(e) => setD({ ...d, homework: e.target.value })} placeholder="오늘 내줄 숙제 (다음 시간에 ‘지난 숙제’로 표시됩니다)" />
+          <div className="eng-label">숙제{(() => { const p = hwProgress(d); return p === null ? "" : ` · 진행률 ${p}%`; })()}</div>
+          <div className="eng-hw3">
+            <HwRow label="단어숙제" value={d.hwWord} onChange={(v) => setD({ ...d, hwWord: v })} />
+            <HwRow label="리딩숙제" value={d.hwReading} onChange={(v) => setD({ ...d, hwReading: v })} />
+            <HwRow label="문법숙제" value={d.hwGrammar} onChange={(v) => setD({ ...d, hwGrammar: v })} />
+          </div>
+          <label className="eng-check"><input type="checkbox" checked={d.wrongCheck} onChange={(e) => setD({ ...d, wrongCheck: e.target.checked })} /> 틀단확인 (틀린 단어 확인)</label>
         </div>
       )}
 
@@ -383,6 +372,21 @@ function DailyEditor({ student, studentId, band, value, onSave }: { student: str
       </div>
 
       <button className="btn primary" onClick={() => onSave(d)} disabled={!dirty}>{dirty ? "저장" : "저장됨"}</button>
+    </div>
+  );
+}
+
+/* 숙제 분류 한 줄 — 완료/미흡/안함/없음 토글(같은 값 다시 누르면 해제). */
+function HwRow({ label, value, onChange }: { label: string; value: HwStatus; onChange: (v: HwStatus) => void }) {
+  const cls = (s: HwStatus) => (s === "완료" ? "g" : s === "미흡" ? "w" : s === "안함" ? "b" : "");
+  return (
+    <div className="eng-hw3-row">
+      <span className="eng-hw3-l">{label}</span>
+      <div className="eng-hw3-seg">
+        {HW_STATUSES.map((s) => (
+          <button key={s} className={"eas hw " + cls(s) + (value === s ? " on " + cls(s) : "")} onClick={() => onChange(value === s ? "" : s)}>{s}</button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -564,13 +568,10 @@ function EngHomework({ students }: { students: RosterStudent[] }) {
   const reload = () => { if (sel) engApi.dailyByStudent(sel).then(setList).catch(() => {}); };
   useEffect(() => { setList([]); reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [sel]);
 
-  async function patch(d: EngDaily, p: Partial<EngDaily>) {
-    const next = { ...d, ...p };
-    setList((cur) => cur.map((x) => (x.date === d.date ? next : x)));
-    try { await engApi.saveDaily(next); } catch { /* ignore */ }
-  }
-  const withHw = list.filter((d) => d.homework || d.hwChecked);
+  const withHw = list.filter((d) => d.hwWord || d.hwReading || d.hwGrammar || d.wrongCheck || d.homework || d.hwChecked);
   const name = students.find((s) => s.id === sel)?.name || "";
+  const hwBadge = (label: string, s: HwStatus) =>
+    s ? <span className={"eng-hwb " + (s === "완료" ? "g" : s === "미흡" ? "w" : "b")}>{label} {s}</span> : null;
 
   return (
     <div className="eng-split">
@@ -588,16 +589,24 @@ function EngHomework({ students }: { students: RosterStudent[] }) {
           <div className="eng-panel">
             <h2>{name} · 숙제 기록</h2>
             {withHw.length === 0 ? (
-              <div className="hub-muted">숙제 기록이 없어요. ‘오늘(일일기록)’에서 숙제를 입력하면 여기 누적됩니다.</div>
+              <div className="hub-muted">숙제 기록이 없어요. ‘오늘’에서 단어·리딩·문법 숙제를 입력하면 여기 누적됩니다.</div>
             ) : (
               <div className="eng-hw-list">
-                {withHw.map((d) => (
-                  <div className="eng-hw-row" key={d.date}>
-                    <div className="eng-hw-date">{d.date}</div>
-                    <textarea className="input" rows={2} value={d.homework} onChange={(e) => patch(d, { homework: e.target.value })} placeholder="숙제 내용" />
-                    <label className="eng-check"><input type="checkbox" checked={d.hwChecked} onChange={(e) => patch(d, { hwChecked: e.target.checked })} /> 숙제검사 완료</label>
-                  </div>
-                ))}
+                {withHw.map((d) => {
+                  const p = hwProgress(d);
+                  return (
+                    <div className="eng-hw-row2" key={d.date}>
+                      <div className="eng-hw-date">{d.date}{p !== null ? <span className="eng-hw-prog"> · {p}%</span> : null}</div>
+                      <div className="eng-hwb-row">
+                        {hwBadge("단어", d.hwWord)}
+                        {hwBadge("리딩", d.hwReading)}
+                        {hwBadge("문법", d.hwGrammar)}
+                        {d.wrongCheck && <span className="eng-hwb ok">틀단확인</span>}
+                        {d.homework && <span className="eng-hwb plain">{d.homework}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -873,7 +882,7 @@ function MakeupRow({ mk, name, onStatus, onRemove }: { mk: EngMakeup; name: stri
 /* ---------------- 현황 대시보드 ---------------- */
 function EngDashboard({ students, daily, band }: { students: RosterStudent[]; daily: Record<string, EngDaily>; band: Band }) {
   const attended = students.filter((s) => daily[s.id]?.attended);
-  const hwDone = attended.filter((s) => daily[s.id]?.hwChecked);
+  const hwDone = attended.filter((s) => { const d = daily[s.id]; return d && (d.hwChecked || hwProgress(d) === 100); });
   const notYet = students.filter((s) => !daily[s.id]?.attended);
   const showHw = band !== "elem"; // 초등영어는 숙제 없음
 
@@ -881,7 +890,7 @@ function EngDashboard({ students, daily, band }: { students: RosterStudent[]; da
     <div className="eng-dash">
       <div className="eng-stats">
         <Stat label="출석" value={`${attended.length}/${students.length}`} />
-        {showHw && <Stat label="숙제검사 완료" value={`${hwDone.length}/${attended.length || 0}`} />}
+        {showHw && <Stat label="숙제 완료" value={`${hwDone.length}/${attended.length || 0}`} />}
         <Stat label="미출석" value={String(notYet.length)} tone="warn" />
       </div>
       <div className="eng-dash-sec">

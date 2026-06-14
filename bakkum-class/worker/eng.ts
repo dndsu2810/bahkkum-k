@@ -41,6 +41,11 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "ALTER TABLE class_eng_daily ADD COLUMN att_status TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_eng_daily ADD COLUMN late_min INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE class_eng_daily ADD COLUMN absent_reason TEXT NOT NULL DEFAULT ''",
+    // 중고등영어 숙제 3분류(단어·리딩·문법) + 틀단확인. (노션 과제기록과 동일)
+    "ALTER TABLE class_eng_daily ADD COLUMN hw_word TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_eng_daily ADD COLUMN hw_reading TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_eng_daily ADD COLUMN hw_grammar TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_eng_daily ADD COLUMN wrong_check INTEGER NOT NULL DEFAULT 0",
   ]) {
     try {
       await env.DB.prepare(a).run();
@@ -85,11 +90,12 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     const reason = String(b.absentReason || "");
     // 상태가 있으면 그걸로 출석여부 판단(출석·지각=출석). 없으면 기존 attended 불린.
     const attended = status ? (status === "출석" || status === "지각" ? 1 : 0) : b.attended ? 1 : 0;
+    const hwSt = (v: unknown) => (["완료", "미흡", "안함", "없음"].includes(String(v)) ? String(v) : "");
     await env.DB
       .prepare(
-        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,goals,homework,hw_checked,comment,materials,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, comment=excluded.comment, materials=excluded.materials, updated_at=excluded.updated_at"
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,comment,materials,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, comment=excluded.comment, materials=excluded.materials, updated_at=excluded.updated_at"
       )
-      .bind(sid, date, attended, status, lateMin, reason, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, String(b.comment || ""), String(b.materials || ""), Date.now())
+      .bind(sid, date, attended, status, lateMin, reason, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwSt(b.hwWord), hwSt(b.hwReading), hwSt(b.hwGrammar), b.wrongCheck ? 1 : 0, String(b.comment || ""), String(b.materials || ""), Date.now())
       .run();
     // 결석 → 보강 관리로 연결: 같은 학생·결석일의 보강이 없으면 '예정'으로 자동 생성.
     if (status === "결석") {
@@ -295,6 +301,10 @@ function dailyRow(r: Record<string, unknown>) {
     goals,
     homework: String(r.homework ?? ""),
     hwChecked: Number(r.hw_checked) === 1,
+    hwWord: String(r.hw_word ?? ""),
+    hwReading: String(r.hw_reading ?? ""),
+    hwGrammar: String(r.hw_grammar ?? ""),
+    wrongCheck: Number(r.wrong_check ?? 0) === 1,
     comment: String(r.comment ?? ""),
     materials: String(r.materials ?? ""),
     updatedAt: Number(r.updated_at ?? 0),
