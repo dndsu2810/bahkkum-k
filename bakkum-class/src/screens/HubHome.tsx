@@ -1,14 +1,32 @@
 import { useAuth } from "../auth";
-import { dutyLabel } from "../lib/workspace";
+import { dutyLabel, type WsEntry } from "../lib/workspace";
+import { Icon } from "../icons";
 
-/** 허브 홈 — 환영 + 안내. 실제 이동은 좌측 사이드바로. */
-export function HubHome() {
+/** 허브 홈 — 인사 + 한 줄 목적 + 바로가기 타일. 실제 이동은 타일/사이드바로. */
+export function HubHome({ tiles, onOpen }: { tiles: WsEntry[]; onOpen: (e: WsEntry) => void }) {
   const { user } = useAuth();
   if (!user) return null;
+  // 원장은 전체 관리자 — '담당 과목' 문구를 표시하지 않는다.
+  const purpose =
+    user.role === "admin"
+      ? "바꿈영수학원을 한 곳에서 관리하는 공간이에요."
+      : `담당: ${dutyLabel(user)} · 자주 쓰는 곳으로 바로 들어가세요.`;
   return (
     <div className="hubhome">
       <h1 className="sm-title">안녕하세요, {user.name} 님</h1>
-      <p className="sm-desc">담당: {dutyLabel(user)} · 왼쪽 메뉴에서 화면을 선택하세요.</p>
+      <p className="sm-desc">{purpose}</p>
+
+      {tiles.length > 0 && (
+        <div className="home-tiles">
+          {tiles.map((e) => (
+            <button key={e.key} className="home-tile" onClick={() => onOpen(e)}>
+              <span className="home-tile-ic"><Icon name={e.icon} /></span>
+              <span className="home-tile-l">{e.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="hub-card" style={{ marginTop: 20, maxWidth: 520 }}>
         <div className="hub-card-tag">바꿈 통합 허브</div>
         <p className="hub-muted">

@@ -3,7 +3,7 @@ import { useAuth } from "../auth";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { engApi, type EngDaily, type EngMakeup, type EngProgress, type EngTest, type Goal } from "../lib/engApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
-import { DOW, DOW_ORDER, TODAY, fmtDayBand, fmtMD, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
+import { DOW, DOW_ORDER, TODAY, fmtFull, fmtMD, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
 import { Select } from "../components/ui";
 
@@ -136,7 +136,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
 
   const bandLabel = band === "elem" ? "초등 영어" : "중고등 영어";
   const TITLE: Record<Tab, string> = {
-    today: "오늘 (일일기록)",
+    today: "오늘",
     tt: "주간 시간표",
     att: "출결 기록",
     hw: "숙제 기록",
@@ -182,7 +182,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
           {(tab === "today" || tab === "att") && (
             <div className="date-nav">
               <button className="date-arrow" onClick={() => shiftDate(-1)} title="어제" aria-label="어제로">‹</button>
-              <div className="date-cur">{fmtDayBand(date)}{!isToday && <span className="date-off"> · 오늘 아님</span>}</div>
+              <div className="date-cur">{fmtFull(parseD(date))}{!isToday && <span className="date-off"> · 오늘 아님</span>}</div>
               <button className="date-arrow" onClick={() => shiftDate(1)} title="내일" aria-label="내일로">›</button>
               {!isToday && <button className="btn ghost sm date-today" onClick={() => setDate(todayStr())}>오늘로</button>}
             </div>
@@ -212,7 +212,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
             {(tab === "today" ? todayList : students).length === 0 && (
               <div className="eng-side-empty">
                 {tab === "today"
-                  ? "오늘 등원 예정 학생이 없어요. 아래에서 등원 학생을 추가하거나, 시간표에서 수업 요일을 확인하세요."
+                  ? "오늘 등원 예정 학생이 없어요. 아래 ‘추가 등원’으로 학생을 추가하세요."
                   : "표시할 학생이 없어요."}
               </div>
             )}

@@ -114,6 +114,11 @@ body,.side,.topbar,.card,.board-col,.today-brief,.nav-item{transition:background
 .gsearch-meta{font-size:var(--t-cap);color:var(--ink3)}
 .gsearch-empty{padding:9px 10px;font-size:var(--t-sm);color:var(--ink3)}
 @media(max-width:760px){.gsearch{display:none}}
+/* 상단 알림 벨 (시간표 변경 요청) */
+.topbell{position:relative;width:36px;height:36px;border-radius:var(--r-full);border:1px solid var(--line2);background:var(--card);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:16px;line-height:1}
+.topbell:hover{background:var(--brand-soft);border-color:var(--brand-line)}
+.topbell-ic{filter:grayscale(.2)}
+.topbell-badge{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:var(--bad,#e04a4f);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--card)}
 .pill-date{display:flex;align-items:center;gap:6px;min-height:38px;padding:0 var(--s4);border:1px solid var(--line2);border-radius:var(--r-full);background:var(--card);font-size:var(--t-sm);font-weight:600;color:var(--ink2)}
 .pill-date .dot{width:7px;height:7px;border-radius:var(--r-full);background:var(--ok)}
 .content{padding:var(--s8);max-width:1180px;width:100%;margin:0 auto}
@@ -934,6 +939,14 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
   background:var(--brand-soft);border-radius:var(--r-full);padding:4px 12px;margin-bottom:var(--s4)}
 .hub-card h2{font-size:var(--t-xl);color:var(--ink);margin-bottom:var(--s2)}
 .hub-muted{color:var(--ink3);font-size:var(--t-base);line-height:1.6}
+/* 홈 바로가기 타일 — 자주 쓰는 곳으로 직행 */
+.home-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s4);margin-top:var(--s6);max-width:680px}
+.home-tile{display:flex;flex-direction:column;align-items:flex-start;gap:10px;text-align:left;border:1px solid var(--line);
+  background:var(--card);border-radius:var(--r-lg);padding:var(--s5);cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s}
+.home-tile:hover{transform:translateY(-2px);box-shadow:var(--sh);border-color:var(--brand-line)}
+.home-tile-ic{width:38px;height:38px;border-radius:var(--r-md);display:grid;place-items:center;background:var(--brand-soft);color:var(--brand-d)}
+.home-tile-ic svg{width:20px;height:20px;stroke-width:2}
+.home-tile-l{font-size:var(--t-md);font-weight:700;color:var(--ink)}
 .hub-list{text-align:left;margin:var(--s5) auto 0;max-width:320px;display:flex;flex-direction:column;gap:var(--s2)}
 .hub-list li{list-style:none;padding-left:24px;position:relative;color:var(--ink2);font-size:var(--t-base)}
 .hub-list li::before{content:"";position:absolute;left:6px;top:9px;width:6px;height:6px;

@@ -152,6 +152,19 @@ export function Workspace() {
   const favSet = new Set(favorites.filter((k) => byKey.has(k)));
   const favEntries = entries.filter((e) => favSet.has(e.key));
 
+  // 홈 바로가기 타일 — 역할별 자주 쓰는 4곳(접근 가능한 것만).
+  const homeTiles = useMemo(() => {
+    const keysByRole: Record<string, string[]> = {
+      admin: ["today", "master", "board", "admin_dash"],
+      math: ["today", "master", "board", "timetable"],
+      english_mid: ["eng_today_mid", "eng_tt_mid", "master", "board"],
+      english_elem: ["eng_today_elem", "eng_tt_elem", "master", "board"],
+      desk: ["desk_today", "desk_tt", "desk_students", "board"],
+    };
+    const keys = keysByRole[user?.role || ""] || [];
+    return keys.map((k) => byKey.get(k)).filter((e): e is WsEntry => !!e);
+  }, [user, byKey]);
+
   // 현재 위치(브레드크럼)
   const activeEntry =
     view === "math" ? entries.find((e) => e.kind === "math" && e.page === store.page) : byKey.get(view);
@@ -275,6 +288,15 @@ export function Workspace() {
             </div>
           )}
           <div className="top-actions">
+            <button
+              className="topbell"
+              onClick={() => setView("reqs")}
+              title={reqPending > 0 ? `받은 시간표 변경 요청 ${reqPending}건` : "시간표 변경 요청"}
+              aria-label="시간표 변경 요청 알림"
+            >
+              <span className="topbell-ic">🔔</span>
+              {reqPending > 0 && <span className="topbell-badge">{reqPending}</span>}
+            </button>
             <ThemeToggle />
             <span className="acct-chip">
               {user.name} · <span className="role">{ROLE_LABEL[user.role]}</span>
@@ -285,7 +307,7 @@ export function Workspace() {
           </div>
         </header>
         <main className={"content " + (view === "math" ? "is-math" : "is-hub")}>
-          <Body view={view} cats={cats} jumpStudent={jumpStudent} onCats={(c) => { setCategories(c); setCats(c); }} />
+          <Body view={view} cats={cats} jumpStudent={jumpStudent} homeTiles={homeTiles} onOpen={open} onCats={(c) => { setCategories(c); setCats(c); }} />
         </main>
       </div>
       <ModalHost />
@@ -294,9 +316,9 @@ export function Workspace() {
   );
 }
 
-function Body({ view, cats, jumpStudent, onCats }: { view: string; cats: Category[]; jumpStudent: { id: string; n: number } | null; onCats: (c: Category[]) => void }) {
+function Body({ view, cats, jumpStudent, homeTiles, onOpen, onCats }: { view: string; cats: Category[]; jumpStudent: { id: string; n: number } | null; homeTiles: WsEntry[]; onOpen: (e: WsEntry) => void; onCats: (c: Category[]) => void }) {
   if (view === "math") return <MathContent />;
-  if (view === "home") return <HubHome />;
+  if (view === "home") return <HubHome tiles={homeTiles} onOpen={onOpen} />;
   if (view === "schedule_hub") return <AcademySchedule />;
   if (view === "reqs") return <ChangeRequests />;
   if (view === "board") return <BoardShared />;
@@ -331,5 +353,5 @@ function Body({ view, cats, jumpStudent, onCats }: { view: string; cats: Categor
     const tab = view === "desk_students" ? "students" : view === "desk_accounts" ? "accounts" : view === "desk_today" ? "today" : "timetable";
     return <Desk key={view} tab={tab} />;
   }
-  return <HubHome />;
+  return <HubHome tiles={homeTiles} onOpen={onOpen} />;
 }

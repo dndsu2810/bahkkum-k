@@ -162,7 +162,7 @@ export function BoardShared() {
                     </div>
                   </div>
                 ))}
-                {items.length === 0 && <div className="board2-empty">비어 있음</div>}
+                {items.length === 0 && <div className="board2-empty">아직 없어요</div>}
               </div>
             </div>
           );

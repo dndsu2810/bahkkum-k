@@ -40,7 +40,7 @@ const MATH: WsEntry[] = [
 function engEntries(band: "mid" | "elem"): WsEntry[] {
   const sfx = "_" + band;
   const list: WsEntry[] = [
-    { key: "eng_today" + sfx, label: "오늘 (일일기록)", icon: "today", kind: "hub" },
+    { key: "eng_today" + sfx, label: "오늘", icon: "today", kind: "hub" },
     { key: "eng_tt" + sfx, label: "시간표", icon: "cal", kind: "hub" },
     { key: "eng_att" + sfx, label: "출결 기록", icon: "clipboard", kind: "hub" },
   ];
@@ -89,8 +89,8 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   if (areas.has("math")) groups.push({ label: "수학 수업관리", entries: MATH });
 
   // 영어 수업관리 — 영어 강사 + 원장(전체 열람). 원장은 초등·중고등 모두 본다.
-  if (role === "english_mid" || role === "admin") groups.push({ label: "영어 수업관리 — 중고등", entries: engEntries("mid") });
-  if (role === "english_elem" || role === "admin") groups.push({ label: "영어 수업관리 — 초등", entries: engEntries("elem") });
+  if (role === "english_mid" || role === "admin") groups.push({ label: "영어 수업관리 (중고등)", entries: engEntries("mid") });
+  if (role === "english_elem" || role === "admin") groups.push({ label: "영어 수업관리 (초등)", entries: engEntries("elem") });
 
   // 데스크
   if (role === "desk") groups.push({ label: "데스크", entries: [DESK_TODAY, DESK_TT, DESK_STU, DESK_ACC] });
