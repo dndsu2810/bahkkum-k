@@ -223,9 +223,9 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                 <div key={s.id} className={"eng-stu" + (sel === s.id ? " on" : "")}>
                   {tab === "today" && (
                     <div className="eng-att-seg">
-                      <button className={"eas" + (st === "등원" ? " on g" : "")} onClick={() => setStatus(s.id, st === "등원" ? "" : "등원")} title="등원">등</button>
-                      <button className={"eas" + (st === "지각" ? " on w" : "")} onClick={() => setStatus(s.id, "지각")} title="지각">지</button>
-                      <button className={"eas" + (st === "결석" ? " on b" : "")} onClick={() => setStatus(s.id, "결석")} title="결석">결</button>
+                      <button className={"eas" + (st === "등원" ? " on g" : "")} onClick={() => setStatus(s.id, st === "등원" ? "" : "등원")} title={st === "등원" ? "등원 취소" : "등원"}>등</button>
+                      <button className={"eas" + (st === "지각" ? " on w" : "")} onClick={() => setStatus(s.id, st === "지각" ? "" : "지각")} title={st === "지각" ? "지각 취소" : "지각"}>지</button>
+                      <button className={"eas" + (st === "결석" ? " on b" : "")} onClick={() => setStatus(s.id, st === "결석" ? "" : "결석")} title={st === "결석" ? "결석 취소" : "결석"}>결</button>
                     </div>
                   )}
                   <button className="eng-stu-name" onClick={() => setSel(s.id)}>
@@ -300,9 +300,9 @@ function DailyEditor({ student, studentId, value, onSave }: { student: string; s
       <div className="eng-field">
         <div className="eng-label">출결</div>
         <div className="sm-subj">
-          <button className={"sm-subj-chip" + (d.attStatus === "등원" ? " on" : "")} onClick={() => setD({ ...d, attStatus: "등원", attended: true })}>등원</button>
-          <button className={"sm-subj-chip" + (d.attStatus === "지각" ? " on" : "")} onClick={() => setD({ ...d, attStatus: "지각", attended: true })}>지각</button>
-          <button className={"sm-subj-chip" + (d.attStatus === "결석" ? " on" : "")} onClick={() => setD({ ...d, attStatus: "결석", attended: false })}>결석</button>
+          <button className={"sm-subj-chip" + (d.attStatus === "등원" ? " on" : "")} onClick={() => setD({ ...d, attStatus: d.attStatus === "등원" ? "" : "등원", attended: d.attStatus !== "등원" })}>등원</button>
+          <button className={"sm-subj-chip" + (d.attStatus === "지각" ? " on" : "")} onClick={() => setD({ ...d, attStatus: d.attStatus === "지각" ? "" : "지각", attended: d.attStatus !== "지각" })}>지각</button>
+          <button className={"sm-subj-chip" + (d.attStatus === "결석" ? " on" : "")} onClick={() => setD({ ...d, attStatus: d.attStatus === "결석" ? "" : "결석", attended: false })}>결석</button>
         </div>
         {d.attStatus === "지각" && (
           <label className="eng-late-row">지각 <input className="sm-input" style={{ maxWidth: 90 }} type="number" min={0} step={5} value={d.lateMin || 0} onChange={(e) => setD({ ...d, lateMin: Number(e.target.value) || 0 })} /> 분</label>
@@ -472,15 +472,16 @@ function EngAttendance({
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")) return;
       if (!list.length) return;
       const s = list[Math.min(cur, list.length - 1)];
-      if (e.key === "1") { onStatus(s.id, "등원"); e.preventDefault(); }
-      else if (e.key === "2") { onStatus(s.id, "지각"); e.preventDefault(); }
-      else if (e.key === "3") { onStatus(s.id, "결석"); e.preventDefault(); }
+      const cs = daily[s.id]?.attStatus || ""; // 같은 키 다시 누르면 취소(토글)
+      if (e.key === "1") { onStatus(s.id, cs === "등원" ? "" : "등원"); e.preventDefault(); }
+      else if (e.key === "2") { onStatus(s.id, cs === "지각" ? "" : "지각"); e.preventDefault(); }
+      else if (e.key === "3") { onStatus(s.id, cs === "결석" ? "" : "결석"); e.preventDefault(); }
       else if (e.key === "Enter" || e.key === "ArrowDown") { setCur((c) => Math.min(c + 1, list.length - 1)); e.preventDefault(); }
       else if (e.key === "ArrowUp") { setCur((c) => Math.max(c - 1, 0)); e.preventDefault(); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [list, cur, onStatus]);
+  }, [list, cur, onStatus, daily]);
   return (
     <div className="eng-attp">
       <p className="hub-muted" style={{ marginBottom: 10 }}>{date} · 등원 예정 학생이 위에 옵니다. 등원/지각/결석을 표시하세요. 결석은 보강 관리로 연결됩니다.</p>
@@ -504,8 +505,8 @@ function EngAttendance({
               </div>
               <div className="eng-att-seg">
                 <button className={"eas" + (st === "등원" ? " on g" : "")} onClick={() => onStatus(s.id, st === "등원" ? "" : "등원")}>등</button>
-                <button className={"eas" + (st === "지각" ? " on w" : "")} onClick={() => onStatus(s.id, "지각")}>지</button>
-                <button className={"eas" + (st === "결석" ? " on b" : "")} onClick={() => onStatus(s.id, "결석")}>결</button>
+                <button className={"eas" + (st === "지각" ? " on w" : "")} onClick={() => onStatus(s.id, st === "지각" ? "" : "지각")}>지</button>
+                <button className={"eas" + (st === "결석" ? " on b" : "")} onClick={() => onStatus(s.id, st === "결석" ? "" : "결석")}>결</button>
               </div>
             </div>
           );

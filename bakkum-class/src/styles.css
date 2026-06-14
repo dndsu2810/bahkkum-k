@@ -1520,6 +1520,12 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .eng-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .eng-dot.ok{background:var(--ok)}
 .eng-main{min-width:0}
+/* 수학 '오늘' — 영어식 마스터-디테일 왼쪽 목록 */
+.today-side-row .eng-stu-name{gap:5px}
+.today-side-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.today-side-mk{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
+  background:var(--brand-soft);color:var(--brand-d);font-size:var(--t-cap);font-weight:700}
+.eng-main>.today-stu{margin:0}
 .eng-daily,.eng-panel{display:flex;flex-direction:column;gap:var(--s4);max-width:620px}
 .eng-daily-h{display:flex;align-items:center;justify-content:space-between;gap:var(--s4)}
 .eng-daily-h h2,.eng-panel h2{font-size:var(--t-lg);color:var(--ink);font-weight:700}

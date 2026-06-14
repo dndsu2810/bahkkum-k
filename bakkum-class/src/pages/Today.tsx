@@ -57,6 +57,8 @@ export function Today() {
   const [tagDraft, setTagDraft] = useState<Record<string, string[]>>({});
   const [pctDraft, setPctDraft] = useState<Record<string, string>>({});
   const [gradeTab, setGradeTab] = useState<"all" | "cho" | "jung">("all");
+  // 영어식 마스터-디테일: 왼쪽에서 고른 학생을 오른쪽 상세에 표시.
+  const [sel, setSel] = useState<string>("");
 
   const lessons: LessonOnDate[] = [];
   // 공휴일(빨간날)에는 수업/등원 없음
@@ -381,6 +383,8 @@ export function Today() {
   const choEntries = entries.filter(entryIsCho).length;
   const shownEntries = gradeTab === "all" ? entries : entries.filter((e) => (gradeTab === "cho" ? entryIsCho(e) : !entryIsCho(e)));
   const todayCount = new Set(entries.map((e) => e.student.id)).size;
+  // 선택된 학생(없거나 필터에서 빠지면 첫 학생). 오른쪽 상세에 표시.
+  const activeEntry = shownEntries.find((e) => e.key === sel) || shownEntries[0] || null;
 
   return (
     <section className="page active">
@@ -466,18 +470,54 @@ export function Today() {
             <button className="btn ghost sm empty-cta" onClick={() => navigate("timetable")}><Icon name="cal" />시간표 보기</button>
           </Empty>
         ) : (
-          <div className="today-list">
-            {shownEntries.map((e) => {
-              const s = e.student;
-              const lesson = e.lesson;
-              const st = lesson ? data.attendance[keyOf(lesson)]?.status : undefined;
-              const checkHws = todayHwsOf(s.id);
-              const assignedHws = assignedHwsOf(s.id);
-              const none = isNone(s.id);
-              const mkAllDone = e.makeups.length > 0 && e.makeups.every((m) => m.status === "done");
-              const attOk = lesson ? !!st : mkAllDone;
-              const done = attOk && checkHws.every((h) => h.status === "done") && (assignedHws.length > 0 || none);
-              return (
+          <div className="today-split eng-split">
+            <div className="eng-side">
+              {shownEntries.map((e) => {
+                const s = e.student;
+                const lesson = e.lesson;
+                const st = lesson ? data.attendance[keyOf(lesson)]?.status : undefined;
+                const checkHws = todayHwsOf(s.id);
+                const assignedHws = assignedHwsOf(s.id);
+                const none = isNone(s.id);
+                const mkAllDone = e.makeups.length > 0 && e.makeups.every((m) => m.status === "done");
+                const attOk = lesson ? !!st : mkAllDone;
+                const done = attOk && checkHws.every((h) => h.status === "done") && (assignedHws.length > 0 || none);
+                return (
+                  <div key={e.key} className={"eng-stu today-side-row" + (activeEntry?.key === e.key ? " on" : "")}>
+                    <div className="eng-att-seg">
+                      {lesson ? (
+                        <>
+                          <button className={"eas" + (st === "출석" ? " on g" : "")} onClick={() => mark(lesson, "출석")} title={st === "출석" ? "출석 취소" : "출석"}>출</button>
+                          <button className={"eas" + (st === "지각" ? " on w" : "")} onClick={() => mark(lesson, "지각")} title={st === "지각" ? "지각 취소" : "지각"}>지</button>
+                          <button className={"eas" + (st === "결석" ? " on b" : "")} onClick={() => mark(lesson, "결석")} title={st === "결석" ? "결석 취소" : "결석"}>결</button>
+                        </>
+                      ) : (
+                        <span className="today-side-mk" title="보강">보</span>
+                      )}
+                    </div>
+                    <button className="eng-stu-name" onClick={() => setSel(e.key)}>
+                      <span className="today-side-nm">{s.name}</span>
+                      {e.time && <span className="eng-stu-time">{e.time}</span>}
+                      {done && <span className="eng-dot ok" title="출결·숙제 완료" />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="eng-main">
+              {!activeEntry ? (
+                <div className="hub-muted" style={{ padding: 20 }}>왼쪽에서 학생을 선택하면 출결·태도·숙제를 기록할 수 있어요.</div>
+              ) : ((e) => {
+                const s = e.student;
+                const lesson = e.lesson;
+                const st = lesson ? data.attendance[keyOf(lesson)]?.status : undefined;
+                const checkHws = todayHwsOf(s.id);
+                const assignedHws = assignedHwsOf(s.id);
+                const none = isNone(s.id);
+                const mkAllDone = e.makeups.length > 0 && e.makeups.every((m) => m.status === "done");
+                const attOk = lesson ? !!st : mkAllDone;
+                const done = attOk && checkHws.every((h) => h.status === "done") && (assignedHws.length > 0 || none);
+                return (
                 <div key={e.key} className={"today-stu" + (done ? " alldone" : "")}>
                   <div className="today-stu-head">
                     <div className="today-time">{e.time}</div>
@@ -622,8 +662,9 @@ export function Today() {
                     )}
                   </div>
                 </div>
-              );
-            })}
+                );
+              })(activeEntry)}
+            </div>
           </div>
         )}
       </div>
