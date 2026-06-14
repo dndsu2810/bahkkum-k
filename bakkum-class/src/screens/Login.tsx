@@ -113,10 +113,10 @@ export function Login() {
               maxLength={6}
               value={birth}
               onChange={(e) => setBirth(e.target.value.replace(/[^0-9]/g, ""))}
-              placeholder="예: 080315"
+              placeholder="010703"
               autoComplete="off"
             />
-            <small className="auth-hint">생일이 2008년 3월 15일이면 080315</small>
+            <small className="auth-hint">생일이 2001년 7월 3일이면 010703</small>
           </label>
         )}
 

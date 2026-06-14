@@ -4,6 +4,43 @@ import { fmtWhen } from "../lib/dates";
 import { ImageGrid } from "../components/ImageGrid";
 
 const CHANNELS = ["블로그", "인스타", "카카오톡채널"];
+
+// 마케팅 뚝딱 메이커 — 별도 BYOK 앱. 새 탭 바로가기 + 노션 가이드 + 입장코드.
+const MAKER_URL = "https://marketing-ttukddak-maker.dndsu2810.workers.dev/";
+const MAKER_GUIDE_URL = "https://app.notion.com/p/37a66817e0618123a5e0ed544ed1006f";
+const MAKER_CODE = "bahkkum";
+
+function MarketingMakerCard() {
+  const [copied, setCopied] = useState(false);
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(MAKER_CODE);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* 클립보드 실패는 무시 */
+    }
+  }
+  return (
+    <div className="maker-card card">
+      <div className="maker-card-main">
+        <div className="maker-card-ic">✨</div>
+        <div className="maker-card-text">
+          <b>마케팅 뚝딱 메이커</b>
+          <span>학원 블로그 글·카드뉴스를 우리 학원 색·말투로 자동 생성</span>
+          <div className="maker-card-code">
+            입장코드 <code>{MAKER_CODE}</code>
+            <button className="maker-copy" onClick={copyCode}>{copied ? "복사됨 ✓" : "복사"}</button>
+          </div>
+        </div>
+      </div>
+      <div className="maker-card-actions">
+        <a className="btn primary" href={MAKER_URL} target="_blank" rel="noopener noreferrer">열기 ↗</a>
+        <a className="btn ghost" href={MAKER_GUIDE_URL} target="_blank" rel="noopener noreferrer">사용 가이드 ↗</a>
+      </div>
+    </div>
+  );
+}
 const splitCh = (s: string): string[] => s.split(/[,·]/).map((x) => x.trim()).filter(Boolean);
 
 const STATUS: { v: SnsStatus; label: string }[] = [
@@ -133,6 +170,9 @@ export function Sns() {
           글 등록
         </button>
       </div>
+
+      <MarketingMakerCard />
+
       <div className="sm-filters" style={{ margin: "4px 0 12px" }}>
         {FILTERS.map((f) => (
           <button key={f.v} className={"sm-fchip" + (filter === f.v ? " on" : "")} onClick={() => setFilter(f.v)}>

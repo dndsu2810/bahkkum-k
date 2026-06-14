@@ -1892,3 +1892,22 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .sp-month em{font-style:normal;font-size:var(--t-cap);background:var(--line);color:var(--ink3);
   border-radius:var(--r-full);padding:0 7px;line-height:18px}
 .sp-month.on em{background:#fff;color:var(--brand-d)}
+
+/* ===== SNS: 마케팅 뚝딱 메이커 바로가기 카드 ===== */
+.maker-card{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);flex-wrap:wrap;
+  padding:var(--s4) var(--s5);margin:4px 0 12px;
+  background:linear-gradient(100deg,var(--brand-soft),var(--card));border:1px solid var(--brand-line)}
+.maker-card-main{display:flex;align-items:center;gap:14px;min-width:0}
+.maker-card-ic{flex:none;width:46px;height:46px;border-radius:var(--r-md);background:var(--card);
+  border:1px solid var(--brand-line);display:flex;align-items:center;justify-content:center;font-size:24px}
+.maker-card-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.maker-card-text>b{font-size:var(--t-md);color:var(--ink)}
+.maker-card-text>span{font-size:var(--t-sm);color:var(--ink2)}
+.maker-card-code{display:flex;align-items:center;gap:7px;margin-top:4px;font-size:var(--t-cap);color:var(--ink3)}
+.maker-card-code code{font-family:inherit;font-weight:700;color:var(--brand-d);background:var(--card);
+  border:1px solid var(--brand-line);border-radius:var(--r-sm);padding:1px 8px;letter-spacing:.03em}
+.maker-copy{border:1px solid var(--line2);background:var(--card);border-radius:var(--r-sm);
+  padding:1px 8px;font-size:var(--t-cap);color:var(--ink2);cursor:pointer}
+.maker-copy:hover{border-color:var(--brand-line);color:var(--brand-d)}
+.maker-card-actions{display:flex;gap:8px;flex-wrap:wrap}
+.maker-card-actions .btn{text-decoration:none}
