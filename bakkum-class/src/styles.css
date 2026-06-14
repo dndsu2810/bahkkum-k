@@ -1568,7 +1568,8 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 
 /* 데스크 */
 .desk-tabs{display:flex;gap:8px;margin:var(--s4) 0}
-.desk-tt{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+/* 보이는 요일 수에 맞춰 폭을 꽉 채우고, 좁아지면 줄바꿈되며 넉넉해진다. */
+.desk-tt{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
 .desk-tt-col{background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);padding:8px;min-height:120px}
 .desk-tt-h{text-align:center;font-weight:700;font-size:var(--t-sm);color:var(--ink);padding-bottom:6px;border-bottom:1px solid var(--line);margin-bottom:6px}
 .desk-tt-row{display:flex;gap:8px;font-size:var(--t-cap);padding:5px 0;align-items:baseline;border-top:1px solid var(--line)}
