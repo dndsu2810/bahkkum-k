@@ -34,6 +34,9 @@ export interface StudentReport {
   english: {
     attended: number;
     hwChecked: number;
+    late: number;
+    absent: number;
+    points: number;
     comments: { date: string; comment: string }[];
     tests: { date: string; name: string; score: number; total: number }[];
     progress: { book: string; level: string; status: string }[];

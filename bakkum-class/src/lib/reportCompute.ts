@@ -24,6 +24,8 @@ export function computeAtt(data: DataSnapshot, studentId: string, year: number, 
   let pure = 0; // 출석
   const days: Record<number, DayBucket[]> = {};
 
+  // 같은 날짜·같은 상태는 1회만(중복 출결 키로 인한 이중집계 방지).
+  const counted = new Set<string>();
   Object.keys(data.attendance).forEach((key) => {
     const parts = key.split("|");
     const date = parts[0];
@@ -32,6 +34,9 @@ export function computeAtt(data: DataSnapshot, studentId: string, year: number, 
     const status = data.attendance[key].status;
     const b = bucketOf(status);
     if (!b) return;
+    const dk = date + "|" + status;
+    if (counted.has(dk)) return;
+    counted.add(dk);
     total++;
     if (status === "출석") pure++;
     else if (status === "지각") { late++; lateMin += Number(data.attendance[key].lateMinutes) || 0; }

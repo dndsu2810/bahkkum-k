@@ -709,13 +709,26 @@ async function adminOverview(env: Env, url: URL): Promise<Response> {
   let late = 0;
   let absent = 0;
   const per: Record<string, { late: number; absent: number }> = {};
+  // 같은 학생·같은 날짜·같은 상태는 1회만(중복 키로 인한 이중집계 방지).
+  const seen = new Set<string>();
+  const bump = (sid: string, date: string, st: string) => {
+    const k = sid + "|" + date + "|" + st;
+    if (seen.has(k)) return;
+    seen.add(k);
+    if (st === "지각") { late++; (per[sid] ||= { late: 0, absent: 0 }).late++; }
+    else if (st === "결석" || st === "무단결석") { absent++; (per[sid] ||= { late: 0, absent: 0 }).absent++; }
+  };
   try {
+    // 수학 출결
     const aRes = await env.DB.prepare("SELECT att_key,status FROM class_attendance WHERE att_key LIKE ?").bind(month + "%").all<Record<string, unknown>>();
     for (const r of aRes.results || []) {
-      const sid = String(r.att_key).split("|")[1];
-      const st = String(r.status);
-      if (st === "지각") { late++; (per[sid] ||= { late: 0, absent: 0 }).late++; }
-      else if (st === "결석") { absent++; (per[sid] ||= { late: 0, absent: 0 }).absent++; }
+      const parts = String(r.att_key).split("|");
+      bump(parts[1], parts[0], String(r.status));
+    }
+    // 영어 출결(class_eng_daily) — 영어도 지각·결석 반영.
+    const eRes = await env.DB.prepare("SELECT student_id,date,att_status FROM class_eng_daily WHERE date LIKE ?").bind(month + "%").all<Record<string, unknown>>();
+    for (const r of eRes.results || []) {
+      bump(String(r.student_id), String(r.date), String(r.att_status ?? ""));
     }
   } catch {
     /* ignore */
@@ -764,11 +777,16 @@ async function adminStudentReport(env: Env, url: URL): Promise<Response> {
   let mPresent = 0, mLate = 0, mAbsent = 0;
   try {
     const aRes = await env.DB.prepare("SELECT att_key,status FROM class_attendance WHERE att_key LIKE ?").bind(month + "%").all<Record<string, unknown>>();
+    const seen = new Set<string>(); // 날짜·상태 중복 제거(중복 키 이중집계 방지)
     for (const r of aRes.results || []) {
-      if (String(r.att_key).split("|")[1] !== id) continue;
+      const parts = String(r.att_key).split("|");
+      if (parts[1] !== id) continue;
       const st = String(r.status);
+      const k = parts[0] + "|" + st;
+      if (seen.has(k)) continue;
+      seen.add(k);
       if (st === "지각") mLate++;
-      else if (st === "결석") mAbsent++;
+      else if (st === "결석" || st === "무단결석") mAbsent++;
       else mPresent++;
     }
   } catch {
@@ -784,13 +802,17 @@ async function adminStudentReport(env: Env, url: URL): Promise<Response> {
   const mathTests = await rowsRecent(env, "SELECT * FROM class_tests WHERE student_id=? ORDER BY date DESC LIMIT 5", id, (r) => ({ date: String(r.date ?? ""), type: String(r.type ?? ""), score: Number(r.score ?? 0), status: String(r.status ?? "") }));
   const mathProg = await rowsRecent(env, "SELECT * FROM class_progress WHERE student_id=? ORDER BY date DESC LIMIT 5", id, (r) => ({ date: String(r.date ?? ""), unit: String(r.unit ?? ""), area: String(r.area ?? ""), pct: Number(r.pct ?? 0) }));
 
-  let engAttend = 0, engHw = 0;
+  let engAttend = 0, engHw = 0, engLate = 0, engAbsent = 0, engPoints = 0;
   const engComments: { date: string; comment: string }[] = [];
   try {
     const eRes = await env.DB.prepare("SELECT * FROM class_eng_daily WHERE student_id=? AND date LIKE ? ORDER BY date DESC").bind(id, month + "%").all<Record<string, unknown>>();
     for (const r of eRes.results || []) {
       if (Number(r.attended) === 1) engAttend++;
       if (Number(r.hw_checked) === 1) engHw++;
+      const ast = String(r.att_status ?? "");
+      if (ast === "지각") engLate++;
+      else if (ast === "결석") engAbsent++;
+      engPoints += Number(r.points ?? 0);
       if (r.comment) engComments.push({ date: String(r.date), comment: String(r.comment) });
     }
   } catch {
@@ -805,7 +827,7 @@ async function adminStudentReport(env: Env, url: URL): Promise<Response> {
     month,
     student: stu ? { name: stu.name, grade: stu.grade, school: stu.school, status: stu.status, subjects: stu.subjects, englishBand: stu.englishBand } : null,
     math: { present: mPresent, late: mLate, absent: mAbsent, homework: mathHw, tests: mathTests, progress: mathProg },
-    english: { attended: engAttend, hwChecked: engHw, comments: engComments.slice(0, 5), tests: engTests, progress: engProg },
+    english: { attended: engAttend, hwChecked: engHw, late: engLate, absent: engAbsent, points: engPoints, comments: engComments.slice(0, 5), tests: engTests, progress: engProg },
     notes,
   });
 }

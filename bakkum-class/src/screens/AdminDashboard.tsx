@@ -192,7 +192,10 @@ function StudentReportModal({ id, month, onClose }: { id: string; month: string;
                   <h4 className="rep-h">영어</h4>
                   <div className="rep-stats">
                     <span className="rep-stat">출석 {rep.english.attended}일</span>
+                    {rep.english.late > 0 && <span className="rep-stat warn">지각 {rep.english.late}</span>}
+                    {rep.english.absent > 0 && <span className="rep-stat bad">결석 {rep.english.absent}</span>}
                     <span className="rep-stat">숙제검사 {rep.english.hwChecked}회</span>
+                    <span className="rep-stat">포인트 {rep.english.points}점</span>
                   </div>
                   {rep.english.tests.length > 0 && (
                     <div className="rep-list">
