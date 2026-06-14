@@ -21,6 +21,8 @@ export interface SessionUser {
   scope?: string[];
   /** 표시용 역할(실효 role과 다를 때). 개발자 계정 = 'developer'. */
   displayRole?: Role;
+  /** 담당 과목(개발자/원장 등). 예: ["math"], ["math","eng_elem"]. */
+  duty?: string[];
 }
 
 export interface UserRow {
@@ -28,6 +30,7 @@ export interface UserRow {
   name: string;
   role: Role;
   scope: string[];
+  duty: string[];
   createdAt: number;
 }
 
@@ -48,6 +51,12 @@ export async function ensureUsersTable(env: Env): Promise<void> {
   // 컬럼 추가는 IF NOT EXISTS가 없어 try/catch(이미 있으면 무시).
   try {
     await env.DB.prepare("ALTER TABLE class_users ADD COLUMN prefs TEXT NOT NULL DEFAULT ''").run();
+  } catch {
+    /* 이미 있으면 무시 */
+  }
+  // 담당 과목(개발자·원장처럼 역할이 과목을 안 정하는 계정용). JSON 배열: math/eng_mid/eng_elem.
+  try {
+    await env.DB.prepare("ALTER TABLE class_users ADD COLUMN duty TEXT NOT NULL DEFAULT '[]'").run();
   } catch {
     /* 이미 있으면 무시 */
   }
@@ -155,7 +164,7 @@ export async function readSession(env: Env, request: Request): Promise<SessionUs
   try {
     const p = JSON.parse(b64urlDecode(body)) as SessionUser & { exp: number };
     if (!p.exp || p.exp < Date.now()) return null;
-    return { sub: p.sub, role: p.role, name: p.name, scope: p.scope, displayRole: p.displayRole };
+    return { sub: p.sub, role: p.role, name: p.name, scope: p.scope, displayRole: p.displayRole, duty: p.duty };
   } catch {
     return null;
   }
@@ -172,11 +181,12 @@ export function clearCookie(): string {
 /* ---------------- 강사 계정 CRUD 헬퍼 ---------------- */
 export async function listUsers(env: Env): Promise<UserRow[]> {
   await ensureUsersTable(env);
-  const r = await env.DB.prepare("SELECT id,name,role,scope,created_at FROM class_users ORDER BY created_at").all<{
+  const r = await env.DB.prepare("SELECT id,name,role,scope,duty,created_at FROM class_users ORDER BY created_at").all<{
     id: string;
     name: string;
     role: string;
     scope: string;
+    duty: string;
     created_at: number;
   }>();
   return (r.results || []).map((row) => ({
@@ -184,6 +194,7 @@ export async function listUsers(env: Env): Promise<UserRow[]> {
     name: String(row.name),
     role: row.role as Role,
     scope: parseScope(row.scope),
+    duty: parseScope(row.duty),
     createdAt: Number(row.created_at),
   }));
 }
@@ -204,24 +215,25 @@ function newUserId(): string {
 
 export async function createUser(
   env: Env,
-  input: { name: string; role: Role; scope: string[]; pin: string }
+  input: { name: string; role: Role; scope: string[]; pin: string; duty?: string[] }
 ): Promise<UserRow> {
   await ensureUsersTable(env);
   const { hash, salt } = await hashPin(input.pin);
   const id = newUserId();
   const createdAt = Date.now();
+  const duty = input.duty || [];
   await env.DB.prepare(
-    "INSERT INTO class_users(id,name,role,scope,pin_hash,salt,created_at) VALUES(?,?,?,?,?,?,?)"
+    "INSERT INTO class_users(id,name,role,scope,duty,pin_hash,salt,created_at) VALUES(?,?,?,?,?,?,?,?)"
   )
-    .bind(id, input.name, input.role, JSON.stringify(input.scope), hash, salt, createdAt)
+    .bind(id, input.name, input.role, JSON.stringify(input.scope), JSON.stringify(duty), hash, salt, createdAt)
     .run();
-  return { id, name: input.name, role: input.role, scope: input.scope, createdAt };
+  return { id, name: input.name, role: input.role, scope: input.scope, duty, createdAt };
 }
 
 export async function updateUser(
   env: Env,
   id: string,
-  patch: { name?: string; role?: Role; scope?: string[]; pin?: string }
+  patch: { name?: string; role?: Role; scope?: string[]; pin?: string; duty?: string[] }
 ): Promise<void> {
   await ensureUsersTable(env);
   if (patch.name != null)
@@ -230,6 +242,8 @@ export async function updateUser(
     await env.DB.prepare("UPDATE class_users SET role=? WHERE id=?").bind(patch.role, id).run();
   if (patch.scope != null)
     await env.DB.prepare("UPDATE class_users SET scope=? WHERE id=?").bind(JSON.stringify(patch.scope), id).run();
+  if (patch.duty != null)
+    await env.DB.prepare("UPDATE class_users SET duty=? WHERE id=?").bind(JSON.stringify(patch.duty), id).run();
   if (patch.pin) {
     const { hash, salt } = await hashPin(patch.pin);
     await env.DB.prepare("UPDATE class_users SET pin_hash=?, salt=? WHERE id=?").bind(hash, salt, id).run();
@@ -272,17 +286,18 @@ export async function setUserPrefs(env: Env, sub: string, prefs: string): Promis
 /** 강사 로그인: 이름 + PIN. 동명이인은 PIN이 맞는 첫 계정. */
 export async function loginTeacher(env: Env, name: string, pin: string): Promise<SessionUser | null> {
   await ensureUsersTable(env);
-  const r = await env.DB.prepare("SELECT id,name,role,scope,pin_hash,salt FROM class_users WHERE name=?")
+  const r = await env.DB.prepare("SELECT id,name,role,scope,duty,pin_hash,salt FROM class_users WHERE name=?")
     .bind(name.trim())
-    .all<{ id: string; name: string; role: string; scope: string; pin_hash: string; salt: string }>();
+    .all<{ id: string; name: string; role: string; scope: string; duty: string; pin_hash: string; salt: string }>();
   for (const row of r.results || []) {
     if (await verifyPin(pin.trim(), String(row.pin_hash), String(row.salt))) {
       const real = String(row.role) as Role;
+      const duty = parseScope(row.duty);
       // 개발자 계정은 원장(admin)과 동일 권한 — 실효 role은 admin, 표시만 developer.
       if (real === "developer") {
-        return { sub: String(row.id), role: "admin", name: String(row.name), scope: parseScope(row.scope), displayRole: "developer" };
+        return { sub: String(row.id), role: "admin", name: String(row.name), scope: parseScope(row.scope), displayRole: "developer", duty };
       }
-      return { sub: String(row.id), role: real, name: String(row.name), scope: parseScope(row.scope) };
+      return { sub: String(row.id), role: real, name: String(row.name), scope: parseScope(row.scope), duty };
     }
   }
   return null;

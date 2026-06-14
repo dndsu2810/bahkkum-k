@@ -17,11 +17,25 @@ export interface AuthUser {
   scope?: string[];
   /** 표시용 역할(실효 role과 다를 때). 개발자 = 'developer'. */
   displayRole?: Role;
+  /** 담당 과목(개발자/원장 등). 예: ["math"], ["math","eng_elem"]. */
+  duty?: string[];
 }
 
 /** 화면 표시용 역할(개발자 등 별칭 반영). */
 export function shownRole(user: { role: Role; displayRole?: Role }): Role {
   return user.displayRole || user.role;
+}
+
+/** 담당 과목 선택지(개발자·원장 등 역할이 과목을 안 정하는 계정용). */
+export const SUBJECTS: { key: string; label: string }[] = [
+  { key: "math", label: "수학" },
+  { key: "eng_mid", label: "영어(중고등)" },
+  { key: "eng_elem", label: "영어(초등)" },
+];
+const SUBJECT_LABEL: Record<string, string> = SUBJECTS.reduce((m, s) => ((m[s.key] = s.label), m), {} as Record<string, string>);
+/** 담당 과목 라벨 문자열. 예: ["math","eng_elem"] → "수학 · 영어(초등)". */
+export function dutyText(duty?: string[]): string {
+  return (duty || []).map((k) => SUBJECT_LABEL[k] || k).join(" · ");
 }
 
 /** 역할 한글 라벨. */

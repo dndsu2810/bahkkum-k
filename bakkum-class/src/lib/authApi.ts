@@ -8,6 +8,7 @@ export interface UserRow {
   name: string;
   role: Role;
   scope: string[];
+  duty: string[];
   createdAt: number;
 }
 
@@ -83,7 +84,7 @@ export async function listUsers(): Promise<UserRow[]> {
   return j.users || [];
 }
 
-export async function createUser(input: { name: string; role: Role; pin: string; scope?: string[] }): Promise<void> {
+export async function createUser(input: { name: string; role: Role; pin: string; scope?: string[]; duty?: string[] }): Promise<void> {
   const r = await fetch("/api/users", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -101,6 +102,7 @@ export async function updateUser(input: {
   role?: Role;
   pin?: string;
   scope?: string[];
+  duty?: string[];
 }): Promise<void> {
   const r = await fetch("/api/users/update", {
     method: "POST",

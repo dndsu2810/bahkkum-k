@@ -6,7 +6,7 @@ import { Icon, StarIcon } from "./icons";
 import { ThemeToggle } from "./components/Header";
 import { ModalHost, ToastHost } from "./components/ModalHost";
 import { type Category, getCategories, setCategories } from "./lib/categories";
-import { ROLE_LABEL, shownRole } from "./lib/roles";
+import { ROLE_LABEL, shownRole, dutyText } from "./lib/roles";
 import { sidebarFor, defaultEntry, dutyLabel, type WsEntry } from "./lib/workspace";
 import { MathContent } from "./screens/MathContent";
 import { HubHome } from "./screens/HubHome";
@@ -44,18 +44,62 @@ export function Workspace() {
   });
   const [cats, setCats] = useState<Category[]>(getCategories());
 
-  // 즐겨찾기(계정별 서버 저장)
+  // 계정별 서버 저장 prefs: 즐겨찾기 + 사이드바 순서(카테고리·세부항목 드래그 정렬)
   const [favorites, setFavorites] = useState<string[]>([]);
-  const favDirty = useRef(false);
+  const [groupOrder, setGroupOrder] = useState<string[]>([]); // 카테고리(라벨) 순서
+  const [entryOrder, setEntryOrder] = useState<Record<string, string[]>>({}); // 그룹라벨 → 항목키 순서
+  const prefsDirty = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 항상 최신값을 저장하도록 ref 미러.
+  const favRef = useRef(favorites); favRef.current = favorites;
+  const goRef = useRef(groupOrder); goRef.current = groupOrder;
+  const eoRef = useRef(entryOrder); eoRef.current = entryOrder;
+  // 저장된 순서를 적용한 사이드바 그룹(미지정 항목은 원래 순서 유지).
+  const orderedGroups = useMemo(() => {
+    const rank = (arr: string[], v: string, fallback: number) => {
+      const i = arr.indexOf(v);
+      return i < 0 ? 1000 + fallback : i;
+    };
+    const unlabeled = groups.filter((g) => !g.label);
+    const labeled = groups.filter((g) => g.label);
+    const sortedLabeled = labeled
+      .map((g, i) => ({ g, i }))
+      .sort((a, b) => rank(groupOrder, a.g.label as string, a.i) - rank(groupOrder, b.g.label as string, b.i))
+      .map((x) => x.g);
+    const applyEntries = (g: (typeof groups)[number]) => {
+      const ord = entryOrder[g.label || ""];
+      if (!ord) return g;
+      const sorted = g.entries
+        .map((e, i) => ({ e, i }))
+        .sort((a, b) => rank(ord, a.e.key, a.i) - rank(ord, b.e.key, b.i))
+        .map((x) => x.e);
+      return { ...g, entries: sorted };
+    };
+    return [...unlabeled, ...sortedLabeled].map(applyEntries);
+  }, [groups, groupOrder, entryOrder]);
+
+  // 드래그 상태(그룹/항목).
+  const dragRef = useRef<{ type: "group" | "entry"; group: string; key: string } | null>(null);
+
+  function persistPrefs() {
+    if (noBackend) return;
+    prefsDirty.current = true;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(
+      () => void saveMyPrefs(JSON.stringify({ favorites: favRef.current, groupOrder: goRef.current, entryOrder: eoRef.current })),
+      500
+    );
+  }
   useEffect(() => {
     if (noBackend) return;
     let alive = true;
     getMyPrefs().then((raw) => {
-      if (!alive || favDirty.current || !raw) return;
+      if (!alive || prefsDirty.current || !raw) return;
       try {
-        const p = JSON.parse(raw) as { favorites?: string[] };
+        const p = JSON.parse(raw) as { favorites?: string[]; groupOrder?: string[]; entryOrder?: Record<string, string[]> };
         if (Array.isArray(p.favorites)) setFavorites(p.favorites);
+        if (Array.isArray(p.groupOrder)) setGroupOrder(p.groupOrder);
+        if (p.entryOrder && typeof p.entryOrder === "object") setEntryOrder(p.entryOrder);
       } catch {
         /* ignore */
       }
@@ -65,15 +109,36 @@ export function Workspace() {
     };
   }, [noBackend]);
   function toggleFav(key: string) {
-    favDirty.current = true;
-    setFavorites((cur) => {
-      const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
-      if (!noBackend) {
-        if (saveTimer.current) clearTimeout(saveTimer.current);
-        saveTimer.current = setTimeout(() => void saveMyPrefs(JSON.stringify({ favorites: next })), 600);
-      }
-      return next;
-    });
+    setFavorites((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
+    persistPrefs();
+  }
+  // 드래그로 카테고리(그룹) 순서 바꾸기.
+  function moveGroup(fromLabel: string, toLabel: string) {
+    if (fromLabel === toLabel) return;
+    const labels = orderedGroups.filter((g) => g.label).map((g) => g.label as string);
+    const from = labels.indexOf(fromLabel);
+    const to = labels.indexOf(toLabel);
+    if (from < 0 || to < 0) return;
+    const next = [...labels];
+    next.splice(from, 1);
+    next.splice(to, 0, fromLabel);
+    setGroupOrder(next);
+    persistPrefs();
+  }
+  // 드래그로 같은 그룹 안 세부항목 순서 바꾸기.
+  function moveEntry(groupLabel: string, fromKey: string, toKey: string) {
+    if (fromKey === toKey) return;
+    const g = orderedGroups.find((x) => (x.label || "") === groupLabel);
+    if (!g) return;
+    const keys = g.entries.map((e) => e.key);
+    const from = keys.indexOf(fromKey);
+    const to = keys.indexOf(toKey);
+    if (from < 0 || to < 0) return;
+    const next = [...keys];
+    next.splice(from, 1);
+    next.splice(to, 0, fromKey);
+    setEntryOrder((cur) => ({ ...cur, [groupLabel]: next }));
+    persistPrefs();
   }
 
   // 사이드바 카테고리 접기/펼치기(브라우저에 저장)
@@ -207,10 +272,20 @@ export function Workspace() {
     return null;
   }
 
-  function row(e: WsEntry) {
+  function row(e: WsEntry, groupLabel?: string) {
     const fav = favSet.has(e.key);
+    const drag = !!groupLabel; // 즐겨찾기 그룹(라벨 없음)은 드래그 정렬 제외
     return (
-      <div className="nav-row" key={e.key}>
+      <div
+        className="nav-row"
+        key={e.key}
+        draggable={drag}
+        onDragStart={drag ? (ev) => { dragRef.current = { type: "entry", group: groupLabel!, key: e.key }; ev.dataTransfer.effectAllowed = "move"; } : undefined}
+        onDragOver={drag ? (ev) => { const d = dragRef.current; if (d?.type === "entry" && d.group === groupLabel) { ev.preventDefault(); ev.currentTarget.classList.add("drag-over"); } } : undefined}
+        onDragLeave={drag ? (ev) => ev.currentTarget.classList.remove("drag-over") : undefined}
+        onDrop={drag ? (ev) => { ev.preventDefault(); ev.currentTarget.classList.remove("drag-over"); const d = dragRef.current; if (d?.type === "entry" && d.group === groupLabel) moveEntry(groupLabel!, d.key, e.key); dragRef.current = null; } : undefined}
+        onDragEnd={drag ? () => { dragRef.current = null; } : undefined}
+      >
         <button className={"nav-item" + (isActive(e) ? " active" : "")} onClick={() => open(e)}>
           <span className="ic">
             <Icon name={e.icon} />
@@ -244,7 +319,7 @@ export function Workspace() {
           <div>
             <b>바꿈영수학원</b>
             <span>
-              {user.name}님{user.role === "admin" ? ` · ${ROLE_LABEL[shownRole(user)]}` : `, 담당: ${dutyLabel(user)}`}
+              {user.name}님{user.role === "admin" ? ` · ${ROLE_LABEL[shownRole(user)]}${user.duty?.length ? ` · ${dutyText(user.duty)}` : ""}` : `, 담당: ${dutyLabel(user)}`}
             </span>
           </div>
         </div>
@@ -253,23 +328,38 @@ export function Workspace() {
           {favEntries.length > 0 && (
             <div className="nav-group">
               <div className="nav-label">즐겨찾기</div>
-              {favEntries.map(row)}
+              {favEntries.map((e) => row(e))}
             </div>
           )}
-          {groups.map((g, i) => {
+          {orderedGroups.map((g, i) => {
             const items = g.entries.filter((e) => !favSet.has(e.key));
             if (!items.length) return null;
-            // 라벨 없는 상단 그룹(홈·일정 등)은 항상 펼침. 라벨 있는 카테고리는 토글.
+            // 라벨 없는 상단 그룹(홈·일정 등)은 항상 펼침. 라벨 있는 카테고리는 토글·드래그.
             const isCollapsed = g.label ? collapsed.has(g.label) : false;
+            const lbl = g.label;
             return (
-              <div className={"nav-group" + (isCollapsed ? " collapsed" : "")} key={g.label || "top" + i}>
-                {g.label && (
-                  <button className="nav-label toggle" onClick={() => toggleGroup(g.label!)} aria-expanded={!isCollapsed}>
+              <div
+                className={"nav-group" + (isCollapsed ? " collapsed" : "")}
+                key={lbl || "top" + i}
+                onDragOver={lbl ? (ev) => { const d = dragRef.current; if (d?.type === "group") { ev.preventDefault(); ev.currentTarget.classList.add("group-drop"); } } : undefined}
+                onDragLeave={lbl ? (ev) => ev.currentTarget.classList.remove("group-drop") : undefined}
+                onDrop={lbl ? (ev) => { ev.preventDefault(); ev.currentTarget.classList.remove("group-drop"); const d = dragRef.current; if (d?.type === "group") moveGroup(d.group, lbl); dragRef.current = null; } : undefined}
+              >
+                {lbl && (
+                  <button
+                    className="nav-label toggle"
+                    onClick={() => toggleGroup(lbl)}
+                    aria-expanded={!isCollapsed}
+                    draggable
+                    onDragStart={(ev) => { dragRef.current = { type: "group", group: lbl, key: "" }; ev.dataTransfer.effectAllowed = "move"; }}
+                    onDragEnd={() => { dragRef.current = null; }}
+                    title="드래그해서 순서 바꾸기"
+                  >
                     <span className={"nav-caret" + (isCollapsed ? " closed" : "")}>▾</span>
-                    {g.label}
+                    {lbl}
                   </button>
                 )}
-                {!isCollapsed && items.map(row)}
+                {!isCollapsed && items.map((e) => row(e, lbl))}
               </div>
             );
           })}

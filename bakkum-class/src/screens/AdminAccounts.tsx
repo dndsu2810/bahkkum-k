@@ -7,6 +7,8 @@ import {
   DEFAULT_AREAS,
   ROLE_DESC,
   ROLE_LABEL,
+  SUBJECTS,
+  dutyText,
   type AreaKey,
   type Role,
 } from "../lib/roles";
@@ -36,6 +38,7 @@ export function AdminAccounts() {
   const [role, setRole] = useState<Role>("english_elem");
   const [pin, setPin] = useState("");
   const [areas, setAreas] = useState<AreaKey[]>(DEFAULT_AREAS.english_elem);
+  const [duty, setDuty] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
@@ -61,6 +64,22 @@ export function AdminAccounts() {
   function toggleArea(k: AreaKey) {
     setAreas((cur) => (cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]));
   }
+  function toggleDuty(k: string) {
+    setDuty((cur) => (cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]));
+  }
+  // 행(기존 계정)의 담당 과목 즉시 변경.
+  async function toggleRowDuty(row: UserRow, k: string) {
+    const cur = new Set(row.duty || []);
+    if (cur.has(k)) cur.delete(k);
+    else cur.add(k);
+    setErr("");
+    try {
+      await updateUser({ id: row.id, duty: [...cur] });
+      await refresh();
+    } catch (e2) {
+      setErr(msg(e2));
+    }
+  }
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -70,9 +89,10 @@ export function AdminAccounts() {
     if (!/^\d{4,}$/.test(pin)) return setErr("비밀번호는 숫자 4자리 이상이어야 해요.");
     setBusy(true);
     try {
-      await createUser({ name: name.trim(), role, pin, scope: areas });
+      await createUser({ name: name.trim(), role, pin, scope: areas, duty: role === "developer" ? duty : [] });
       setName("");
       setPin("");
+      setDuty([]);
       await refresh();
     } catch (e2) {
       setErr(msg(e2));
@@ -151,7 +171,7 @@ export function AdminAccounts() {
               <div className="acct-row col" key={r.id}>
                 <div className="acct-row-top">
                   <span className="nm">{r.name}</span>
-                  <span className="rl">{ROLE_LABEL[r.role]}</span>
+                  <span className="rl">{ROLE_LABEL[r.role]}{r.role === "developer" && r.duty?.length ? ` · ${dutyText(r.duty)}` : ""}</span>
                   <div className="sp">
                     <select
                       className="inline-select"
@@ -192,6 +212,17 @@ export function AdminAccounts() {
                   ))}
                 </div>
                 {isAdmin && <div className="area-note">원장은 모든 화면을 봅니다.</div>}
+                {r.role === "developer" && (
+                  <div className="acct-duty">
+                    <span className="acct-duty-label">담당 과목</span>
+                    {SUBJECTS.map((s) => (
+                      <label key={s.key} className={"area-chip" + ((r.duty || []).includes(s.key) ? " on" : "")}>
+                        <input type="checkbox" checked={(r.duty || []).includes(s.key)} onChange={() => toggleRowDuty(r, s.key)} />
+                        {s.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -223,6 +254,19 @@ export function AdminAccounts() {
             ))}
           </select>
         </label>
+        {role === "developer" && (
+          <div className="full">
+            <div className="acct-form-sub">담당 과목 (개발자가 같이 맡는 과목)</div>
+            <div className="area-chips">
+              {SUBJECTS.map((s) => (
+                <label key={s.key} className={"area-chip" + (duty.includes(s.key) ? " on" : "")}>
+                  <input type="checkbox" checked={duty.includes(s.key)} onChange={() => toggleDuty(s.key)} />
+                  {s.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="full">
           <div className="acct-form-sub">이 계정이 볼 화면</div>
           <div className="area-chips">

@@ -436,13 +436,14 @@ async function usersCreate(env: Env, request: Request): Promise<Response> {
     role?: Role;
     scope?: string[];
     pin?: string;
+    duty?: string[];
   };
   const name = (b.name || "").trim();
   const role = (b.role && VALID_ROLES.includes(b.role) ? b.role : "math") as Role;
   const pin = (b.pin || "").trim();
   if (!name) return json({ error: "name_required" }, 400);
   if (!/^\d{4,}$/.test(pin)) return json({ error: "pin_min_4_digits" }, 400);
-  const user = await createUser(env, { name, role, scope: b.scope || defaultScope(role), pin });
+  const user = await createUser(env, { name, role, scope: b.scope || defaultScope(role), pin, duty: b.duty || [] });
   return json({ user });
 }
 
@@ -453,11 +454,12 @@ async function usersUpdate(env: Env, request: Request): Promise<Response> {
     role?: Role;
     scope?: string[];
     pin?: string;
+    duty?: string[];
   };
   if (!b.id) return json({ error: "id_required" }, 400);
   if (b.pin != null && b.pin !== "" && !/^\d{4,}$/.test(b.pin)) return json({ error: "pin_min_4_digits" }, 400);
   if (b.role != null && !VALID_ROLES.includes(b.role)) return json({ error: "bad_role" }, 400);
-  await updateUser(env, b.id, { name: b.name, role: b.role, scope: b.scope, pin: b.pin });
+  await updateUser(env, b.id, { name: b.name, role: b.role, scope: b.scope, pin: b.pin, duty: b.duty });
   return json({ ok: true });
 }
 
