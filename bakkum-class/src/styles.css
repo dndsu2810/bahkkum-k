@@ -1745,3 +1745,95 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .sns-draft-x{position:absolute;top:3px;right:3px;width:22px;height:22px;border:none;border-radius:50%;
   background:rgba(0,0,0,.6);color:#fff;font-size:15px;line-height:1;cursor:pointer}
 .sns-draft-x:hover{background:rgba(220,38,38,.9)}
+
+/* ===== 학생 개별 페이지 (StudentPage) ===== */
+.sp-shell{min-height:100vh;background:var(--bg);display:flex;flex-direction:column}
+.sp-shell-top{height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 var(--s5);
+  background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.sp-shell-brand{display:flex;align-items:center;gap:10px}
+.sp-shell-brand b{display:block;font-size:var(--t-md);color:var(--ink)}
+.sp-shell-brand span{font-size:var(--t-cap);color:var(--ink3)}
+.sp-shell-body{flex:1;width:100%;max-width:860px;margin:0 auto;padding:var(--s5)}
+.sp-shell-foot{text-align:center;color:var(--ink3);font-size:var(--t-cap);padding:var(--s4)}
+
+.sp{display:flex;flex-direction:column;gap:var(--s4)}
+.sp-empty{padding:var(--s8);text-align:center;color:var(--ink3)}
+.sp-muted{color:var(--ink3);font-size:var(--t-sm)}
+
+.sp-head{display:flex;align-items:center;gap:14px;padding:var(--s4) var(--s5);
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-sm)}
+.sp-avatar{width:56px;height:56px;border-radius:50%;object-fit:cover;flex:none}
+.sp-avatar-empty{display:flex;align-items:center;justify-content:center;background:var(--brand-soft);
+  color:var(--brand-d);font-weight:700;font-size:var(--t-lg)}
+.sp-head-info h2{font-size:var(--t-xl);margin:0;color:var(--ink)}
+.sp-sub{font-size:var(--t-sm);color:var(--ink3);margin-top:2px}
+
+.sp-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4)}
+@media(max-width:680px){.sp-grid{grid-template-columns:1fr}}
+.sp-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:var(--sh-sm);padding:var(--s5)}
+.sp-card-h{font-size:var(--t-md);margin:0 0 var(--s3);color:var(--ink)}
+
+/* 시간표 */
+.sp-tt{display:flex;flex-direction:column;gap:6px}
+.sp-tt-row{display:flex;align-items:center;gap:10px}
+.sp-tt-day{width:24px;height:24px;flex:none;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:50%;background:var(--brand-soft);color:var(--brand-d);font-weight:700;font-size:var(--t-cap)}
+.sp-tt-times{display:flex;flex-wrap:wrap;gap:6px}
+.sp-tt-chip{background:var(--card2);border:1px solid var(--line);border-radius:var(--r-full);
+  padding:3px 10px;font-size:var(--t-sm);color:var(--ink)}
+.sp-tt-chip em{color:var(--ink3);font-style:normal}
+
+/* 커리큘럼 조회 */
+.sp-cur{margin:0;display:flex;flex-direction:column}
+.sp-cur-row{display:flex;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line)}
+.sp-cur-row:last-child{border-bottom:none}
+.sp-cur-row dt{flex:none;width:96px;font-weight:600;color:var(--ink2);font-size:var(--t-sm)}
+.sp-cur-row dd{margin:0;color:var(--ink);font-size:var(--t-sm)}
+/* 커리큘럼 편집 */
+.sp-cur-edit{display:flex;flex-direction:column;gap:7px}
+.sp-cur-erow{display:flex;gap:6px;align-items:center}
+.sp-cur-label{flex:none;width:120px}
+.sp-cur-value{flex:1}
+.sp-cur-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.sp-x{flex:none;width:28px;height:28px;border:1px solid var(--line2);background:var(--card);border-radius:8px;
+  color:var(--ink3);cursor:pointer;font-size:16px;line-height:1}
+.sp-x:hover{background:var(--bad-soft);color:var(--bad);border-color:var(--bad)}
+
+/* 일지 입력 */
+.sp-log-edit{display:flex;flex-direction:column;gap:var(--s3)}
+.sp-log-top{display:flex;gap:10px;flex-wrap:wrap}
+.sp-f{display:flex;flex-direction:column;gap:4px}
+.sp-f>span{font-size:var(--t-cap);font-weight:600;color:var(--ink2)}
+.sp-log-top .sp-f{flex:1;min-width:120px}
+.sp-chips{display:flex;flex-wrap:wrap;gap:6px}
+.sp-chip{border:1px solid var(--line2);background:var(--card);border-radius:var(--r-full);
+  padding:5px 12px;font-size:var(--t-sm);color:var(--ink2);cursor:pointer;transition:all .12s}
+.sp-chip:hover{border-color:var(--brand-line)}
+.sp-chip.on{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-d);font-weight:600}
+.sp-log-save{display:flex;align-items:center;gap:10px}
+.sp-saved{font-size:var(--t-sm);color:var(--ok)}
+
+/* 일지 이력 */
+.sp-hist{display:flex;flex-direction:column;gap:8px}
+.sp-hist-row{border:1px solid var(--line);border-radius:var(--r-md);padding:10px 12px;background:var(--card2)}
+.sp-hist-date{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sp-hist-date b{font-size:var(--t-sm);color:var(--ink)}
+.sp-hist-time{font-size:var(--t-cap);color:var(--ink3)}
+.sp-att{font-size:var(--t-cap);padding:1px 7px;border-radius:var(--r-full);font-weight:600}
+.sp-att-o{background:var(--ok-soft);color:var(--ok)}
+.sp-att-l{background:var(--warn-soft);color:var(--warn)}
+.sp-att-x{background:var(--bad-soft);color:var(--bad)}
+.sp-hist-body{display:flex;flex-wrap:wrap;gap:5px}
+.sp-tag{font-size:var(--t-cap);padding:2px 8px;border-radius:var(--r-sm);background:var(--card);
+  border:1px solid var(--line2);color:var(--ink2)}
+.sp-tag-done{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-d)}
+.sp-hist-note{margin-top:6px;font-size:var(--t-sm);color:var(--ink2);white-space:pre-wrap}
+
+/* 강사용 개별 페이지 오버레이(프로필 모달 위) */
+.prof-pagebtn{margin-top:8px}
+.sp-overlay{z-index:60}
+.sp-modal{position:relative;background:var(--bg);border-radius:var(--r-lg);width:min(900px,94vw);
+  max-height:92vh;overflow:auto;padding:var(--s5);box-shadow:var(--sh-lg)}
+.sp-modal-x{position:absolute;top:12px;right:12px;z-index:2}
+.sp.is-embed{margin-top:6px}

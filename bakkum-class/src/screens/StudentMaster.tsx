@@ -17,6 +17,7 @@ import {
 } from "../lib/rosterApi";
 import { GRADE_DIVS, DIV_MAX, makeGrade, parseGrade } from "../lib/grade";
 import { uploadImage } from "../lib/configApi";
+import { StudentPage } from "./StudentPage";
 
 type FilterKey = "all" | "math" | "english" | "elem" | "mid";
 
@@ -295,6 +296,7 @@ function ProfileModal({
   const [done, setDone] = useState(false);
   const [err, setErr] = useState("");
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [showPage, setShowPage] = useState(false);
   const hasEng = f.subjects.includes("english");
 
   // 프로필 사진 업로드(선택) — 올리면 즉시 저장.
@@ -391,9 +393,21 @@ function ProfileModal({
               <span className={"prof-badge " + (f.status === "재원" ? "ok" : "off")}>{f.status || "—"}</span>
               <span className="prof-badge brand">{subjLabel(f)}</span>
             </div>
+            {hasEng && (
+              <button className="btn ghost sm prof-pagebtn" onClick={() => setShowPage(true)}>📘 개별 페이지 (시간표·커리큘럼·일지)</button>
+            )}
           </div>
           <button className="modal-x" onClick={onClose} aria-label="닫기">✕</button>
         </div>
+
+        {showPage && (
+          <div className="prof-overlay sp-overlay" onClick={() => setShowPage(false)}>
+            <div className="sp-modal" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-x sp-modal-x" onClick={() => setShowPage(false)} aria-label="닫기">✕</button>
+              <StudentPage studentId={f.id} embedded />
+            </div>
+          </div>
+        )}
 
         <div className="prof-body">
           <Section title="기본 정보">

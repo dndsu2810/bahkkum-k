@@ -1,0 +1,314 @@
+import { useEffect, useState } from "react";
+import { useAuth } from "../auth";
+import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type CurriculumItem, type StudentLogRow } from "../lib/studentApi";
+import { DOW_ORDER, fmtFull, fmtMDDow, parseD, timeToMin, todayStr } from "../lib/dates";
+
+/** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
+ *  - 학생 본인: studentId 생략(본인). 일지 입력 가능, 커리큘럼 조회.
+ *  - 강사/원장: studentId 지정. 커리큘럼 편집 + 일지 대리 입력. */
+export function StudentPage({ studentId, embedded }: { studentId?: string; embedded?: boolean }) {
+  const [data, setData] = useState<StudentPageData | null>(null);
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const d = await studentApi.page(studentId);
+      setData(d);
+      setErr("");
+    } catch (e) {
+      setErr(String((e as Error)?.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentId]);
+
+  if (loading) return <div className="sp-empty">불러오는 중…</div>;
+  if (err || !data) return <div className="sp-empty">불러오지 못했어요{err ? ` (${err})` : ""}.</div>;
+
+  const canEditCur = data.canEditCurriculum;
+  const s = data.student;
+
+  return (
+    <div className={"sp" + (embedded ? " is-embed" : "")}>
+      {/* 헤더 — 학생 프로필 */}
+      <div className="sp-head">
+        {s.photo ? <img className="sp-avatar" src={s.photo} alt="" /> : <div className="sp-avatar sp-avatar-empty">{s.name.slice(0, 1)}</div>}
+        <div className="sp-head-info">
+          <h2>{s.name}</h2>
+          <div className="sp-sub">
+            {[s.grade, s.school, s.band === "elem" ? "초등 영어" : s.band === "mid" ? "중고등 영어" : ""].filter(Boolean).join(" · ")}
+          </div>
+        </div>
+      </div>
+
+      <div className="sp-grid">
+        {/* 시간표 */}
+        <section className="sp-card">
+          <h3 className="sp-card-h">수업 시간표</h3>
+          <Timetable slots={data.engSlots} />
+        </section>
+
+        {/* 커리큘럼 */}
+        <section className="sp-card">
+          <h3 className="sp-card-h">커리큘럼</h3>
+          {canEditCur ? (
+            <CurriculumEditor studentId={s.id} items={data.curriculum} onSaved={load} />
+          ) : (
+            <CurriculumView items={data.curriculum} />
+          )}
+        </section>
+      </div>
+
+      {/* 일지 입력 */}
+      <section className="sp-card">
+        <h3 className="sp-card-h">{canEditCur ? "수업 일지 입력" : "오늘 수업 일지"}</h3>
+        <LogEditor studentId={canEditCur ? s.id : undefined} existing={data.daily} onSaved={load} />
+      </section>
+
+      {/* 일지 이력 */}
+      <section className="sp-card">
+        <h3 className="sp-card-h">지난 일지 ({data.daily.length})</h3>
+        <LogHistory rows={data.daily} />
+      </section>
+    </div>
+  );
+}
+
+/* ---------------- 시간표 ---------------- */
+function Timetable({ slots }: { slots: { day: string; time: string; duration: number }[] }) {
+  if (!slots.length) return <div className="sp-muted">등록된 영어 수업 시간이 없어요.</div>;
+  const byDay: Record<string, { time: string; duration: number }[]> = {};
+  for (const sl of slots) (byDay[sl.day] ||= []).push({ time: sl.time, duration: sl.duration });
+  const days = DOW_ORDER.filter((d) => byDay[d]);
+  return (
+    <div className="sp-tt">
+      {days.map((d) => (
+        <div className="sp-tt-row" key={d}>
+          <span className="sp-tt-day">{d}</span>
+          <span className="sp-tt-times">
+            {byDay[d]
+              .sort((a, b) => timeToMin(a.time) - timeToMin(b.time))
+              .map((t, i) => (
+                <span className="sp-tt-chip" key={i}>
+                  {t.time}
+                  {t.duration ? <em> · {t.duration}분</em> : null}
+                </span>
+              ))}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------- 커리큘럼(조회) ---------------- */
+function CurriculumView({ items }: { items: CurriculumItem[] }) {
+  if (!items.length) return <div className="sp-muted">아직 커리큘럼이 등록되지 않았어요.</div>;
+  return (
+    <dl className="sp-cur">
+      {items.map((it, i) => (
+        <div className="sp-cur-row" key={i}>
+          <dt>{it.label}</dt>
+          <dd>{it.value || <span className="sp-muted">—</span>}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/* ---------------- 커리큘럼(편집, 강사) ---------------- */
+function CurriculumEditor({ studentId, items, onSaved }: { studentId: string; items: CurriculumItem[]; onSaved: () => void }) {
+  const [rows, setRows] = useState<CurriculumItem[]>(items);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setRows(items), [items]);
+
+  const dirty = JSON.stringify(rows) !== JSON.stringify(items);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await studentApi.saveCurriculum(studentId, rows.filter((r) => r.label.trim()));
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function fillDefaults() {
+    const defs = await studentApi.curriculumDefaults();
+    const have = new Set(rows.map((r) => r.label));
+    setRows([...rows, ...defs.filter((d) => !have.has(d)).map((label) => ({ label, value: "" }))]);
+  }
+
+  return (
+    <div className="sp-cur-edit">
+      {rows.map((r, i) => (
+        <div className="sp-cur-erow" key={i}>
+          <input
+            className="input sp-cur-label"
+            value={r.label}
+            placeholder="항목 (예: 단어시험)"
+            onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+          />
+          <input
+            className="input sp-cur-value"
+            value={r.value}
+            placeholder="내용 (예: 30개 / Insight Link)"
+            onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
+          />
+          <button className="sp-x" onClick={() => setRows(rows.filter((_, j) => j !== i))} title="삭제">×</button>
+        </div>
+      ))}
+      <div className="sp-cur-actions">
+        <button className="btn ghost sm" onClick={() => setRows([...rows, { label: "", value: "" }])}>+ 항목</button>
+        {!rows.length && <button className="btn ghost sm" onClick={fillDefaults}>기본 항목 채우기</button>}
+        <button className="btn primary sm" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : dirty ? "커리큘럼 저장" : "저장됨"}</button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- 일지 입력 ---------------- */
+function LogEditor({ studentId, existing, onSaved }: { studentId?: string; existing: StudentLogRow[]; onSaved: () => void }) {
+  const [date, setDate] = useState(todayStr());
+  const [bookNo, setBookNo] = useState("");
+  const [wordTest, setWordTest] = useState("");
+  const [doneItems, setDoneItems] = useState<string[]>([]);
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [comment, setComment] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState("");
+
+  // 선택한 날짜에 이미 기록이 있으면 불러와 이어 적기.
+  useEffect(() => {
+    const row = existing.find((r) => r.date === date);
+    setBookNo(row?.bookNo || "");
+    setWordTest(row?.wordTest || "");
+    setDoneItems(row?.doneItems || []);
+    setStartTime(row?.startTime || "");
+    setEndTime(row?.endTime || "");
+    setComment(row?.comment || "");
+  }, [date, existing]);
+
+  async function save() {
+    setSaving(true);
+    setSavedMsg("");
+    try {
+      await studentApi.saveLog({ studentId, date, bookNo, wordTest, doneItems, startTime, endTime, comment });
+      setSavedMsg("저장됐어요 ✓");
+      onSaved();
+    } catch (e) {
+      setSavedMsg("저장 실패: " + String((e as Error)?.message || e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="sp-log-edit">
+      <div className="sp-log-top">
+        <label className="sp-f">
+          <span>날짜</span>
+          <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+        <label className="sp-f">
+          <span>시작</span>
+          <input className="input" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+        </label>
+        <label className="sp-f">
+          <span>끝</span>
+          <input className="input" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+        </label>
+      </div>
+
+      <div className="sp-f">
+        <span>원서 진도번호</span>
+        <input className="input" value={bookNo} onChange={(e) => setBookNo(e.target.value)} placeholder="예: 145" />
+      </div>
+
+      <div className="sp-f">
+        <span>오늘 한 것</span>
+        <div className="sp-chips">
+          {STUDENT_LOG_ITEMS.map((it) => {
+            const on = doneItems.includes(it);
+            return (
+              <button key={it} className={"sp-chip" + (on ? " on" : "")} onClick={() => setDoneItems(on ? doneItems.filter((x) => x !== it) : [...doneItems, it])}>
+                {it}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="sp-f">
+        <span>단어시험</span>
+        <input className="input" value={wordTest} onChange={(e) => setWordTest(e.target.value)} placeholder="예: 18/20" />
+      </div>
+
+      <div className="sp-f">
+        <span>학습 내용 · 메모</span>
+        <textarea className="input" rows={3} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="오늘 배운 내용, 느낀 점을 적어요." />
+      </div>
+
+      <div className="sp-log-save">
+        <button className="btn primary" onClick={save} disabled={saving}>{saving ? "저장 중…" : "일지 저장"}</button>
+        {savedMsg && <span className="sp-saved">{savedMsg}</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- 일지 이력 ---------------- */
+function LogHistory({ rows }: { rows: StudentLogRow[] }) {
+  if (!rows.length) return <div className="sp-muted">아직 작성한 일지가 없어요.</div>;
+  return (
+    <div className="sp-hist">
+      {rows.map((r) => (
+        <div className="sp-hist-row" key={r.date}>
+          <div className="sp-hist-date">
+            <b>{fmtMDDow(r.date)}</b>
+            {(r.startTime || r.endTime) && <span className="sp-hist-time">{r.startTime}{r.endTime ? `~${r.endTime}` : ""}</span>}
+            {r.attStatus && <span className={"sp-att sp-att-" + (r.attStatus === "결석" ? "x" : r.attStatus === "지각" ? "l" : "o")}>{r.attStatus}</span>}
+          </div>
+          <div className="sp-hist-body">
+            {r.bookNo && <span className="sp-tag">원서 {r.bookNo}</span>}
+            {r.wordTest && <span className="sp-tag">단어 {r.wordTest}</span>}
+            {r.doneItems.map((it) => (
+              <span className="sp-tag sp-tag-done" key={it}>{it}</span>
+            ))}
+          </div>
+          {r.comment && <div className="sp-hist-note">{r.comment}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------- 학생 본인 셸(로그인 후 첫 화면) ---------------- */
+export function StudentHome() {
+  const { user, logout } = useAuth();
+  return (
+    <div className="sp-shell">
+      <header className="sp-shell-top">
+        <div className="sp-shell-brand">
+          <div className="hub-logo">바</div>
+          <div>
+            <b>바꿈 영어</b>
+            <span>{fmtFull(parseD(todayStr()))}</span>
+          </div>
+        </div>
+        <button className="btn ghost" onClick={() => logout()}>로그아웃</button>
+      </header>
+      <main className="sp-shell-body">
+        <StudentPage />
+      </main>
+      {user && <div className="sp-shell-foot">{user.name} 학생 · 본인 기록</div>}
+    </div>
+  );
+}

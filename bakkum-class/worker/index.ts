@@ -62,7 +62,7 @@ import {
   setUserPrefs,
 } from "./auth";
 import { handleHub, ensureHubTables } from "./hub";
-import { handleEng, ensureEngTables } from "./eng";
+import { handleEng, handleStudent, ensureEngTables } from "./eng";
 
 const DEFAULT_APP_URL = "https://bakkum-class.dndsu2810.workers.dev";
 
@@ -287,6 +287,14 @@ export default {
           const me = await readSession(env, request);
           if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
           const res = await handleHub(env, request, p, me);
+          if (res) return res;
+        }
+
+        // ---- 학생 개별 페이지 — 로그인 누구나(학생은 본인만, 강사는 student_id 지정) ----
+        if (p.startsWith("/api/student/")) {
+          const me = await readSession(env, request);
+          if (!me) return json({ error: "forbidden" }, 403);
+          const res = await handleStudent(env, request, p, me);
           if (res) return res;
         }
 

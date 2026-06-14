@@ -28,6 +28,8 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "CREATE TABLE IF NOT EXISTS class_eng_report (student_id TEXT NOT NULL, month TEXT NOT NULL, teacher TEXT NOT NULL DEFAULT '', scores TEXT NOT NULL DEFAULT '{}', comments TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(student_id, month))",
     // 보강 — 결석/빠진 수업 → 보강 일정. 상태: 예정/완료/취소.
     "CREATE TABLE IF NOT EXISTS class_eng_makeup (id TEXT PRIMARY KEY, student_id TEXT NOT NULL, absent_date TEXT NOT NULL DEFAULT '', makeup_date TEXT NOT NULL DEFAULT '', makeup_time TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '예정', memo TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)",
+    // 학생 개별 페이지 커리큘럼 — 학생-1건. 항목 배열 [{label,value}](단어시험·class5·Link교재·원서·기초영문법·필기체 등). 강사 편집.
+    "CREATE TABLE IF NOT EXISTS class_eng_curriculum (student_id TEXT PRIMARY KEY, items TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL DEFAULT 0)",
   ];
   for (const s of stmts) {
     try {
@@ -55,6 +57,9 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "ALTER TABLE class_eng_daily ADD COLUMN book_no TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_eng_daily ADD COLUMN word_test TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_eng_daily ADD COLUMN done_items TEXT NOT NULL DEFAULT '[]'",
+    // 학생이 직접 적는 수업 시작/끝 시간(초등 개별 페이지 일지).
+    "ALTER TABLE class_eng_daily ADD COLUMN start_time TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_eng_daily ADD COLUMN end_time TEXT NOT NULL DEFAULT ''",
   ]) {
     try {
       await env.DB.prepare(a).run();
@@ -273,6 +278,127 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
   return null;
 }
 
+/* ================= 학생 개별 페이지 =================
+   학생 본인(role=student, sub=학생id)과 강사·원장이 함께 쓴다.
+   - 학생: 본인 페이지만(시간표·커리큘럼 조회 + 본인 일지 입력).
+   - 강사/원장: 임의 학생(student_id) 페이지 + 커리큘럼 편집. */
+
+/** 신규 학생 커리큘럼 기본 항목(초등 영어 — 노션 진도표 구성). */
+const CURRICULUM_DEFAULTS = ["단어시험", "class5", "Link 교재", "원서 독서기록", "기초영문법", "필기체"];
+
+interface CurriculumItem {
+  label: string;
+  value: string;
+}
+
+function parseCurriculum(s: unknown): CurriculumItem[] {
+  try {
+    const a = JSON.parse(String(s ?? "[]"));
+    if (Array.isArray(a)) return a.map((x) => ({ label: String((x as Record<string, unknown>)?.label ?? ""), value: String((x as Record<string, unknown>)?.value ?? "") })).filter((x) => x.label);
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
+export async function handleStudent(env: Env, request: Request, p: string, me: SessionUser): Promise<Response | null> {
+  const m = request.method;
+  await ensureEngTables(env);
+  const url = new URL(request.url);
+  const isStaff = me.role !== "student";
+
+  /** 대상 학생 id 결정 — 학생은 무조건 본인, 강사는 파라미터/바디. */
+  function targetId(fromBody?: string): string {
+    if (!isStaff) return me.sub;
+    return String(fromBody || url.searchParams.get("student_id") || "").trim();
+  }
+
+  /* ---- 페이지 데이터(학생 정보 + 시간표 + 커리큘럼 + 일지 이력) ---- */
+  if (p === "/api/student/page" && m === "GET") {
+    const sid = targetId();
+    if (!sid) return json({ error: "student_required" }, 400);
+
+    const sRow = await env.DB
+      .prepare("SELECT id,name,grade,school FROM students WHERE id=? AND (hidden IS NULL OR hidden=0)")
+      .bind(Number(sid))
+      .first<{ id: number; name: string; grade: string; school: string }>();
+    if (!sRow) return json({ error: "not_found" }, 404);
+
+    let band = "";
+    let photo = "";
+    try {
+      const meta = await env.DB.prepare("SELECT english_band, photo FROM class_student_meta WHERE student_id=?").bind(sid).first<{ english_band: string; photo: string }>();
+      band = String(meta?.english_band ?? "");
+      photo = String(meta?.photo ?? "");
+    } catch {
+      /* meta 없으면 기본값 */
+    }
+
+    const slotsRes = await env.DB
+      .prepare("SELECT day, time, duration FROM class_eng_lessons WHERE student_id=?")
+      .bind(sid)
+      .all<{ day: string; time: string; duration: number }>();
+    const engSlots = (slotsRes.results || []).map((r) => ({ day: String(r.day), time: String(r.time), duration: Number(r.duration) }));
+
+    const curRow = await env.DB.prepare("SELECT items FROM class_eng_curriculum WHERE student_id=?").bind(sid).first<{ items: string }>();
+    const curriculum = parseCurriculum(curRow?.items);
+
+    const dRes = await env.DB.prepare("SELECT * FROM class_eng_daily WHERE student_id=? ORDER BY date DESC LIMIT 120").bind(sid).all<Record<string, unknown>>();
+    const daily = (dRes.results || []).map(dailyRow);
+
+    return json({
+      role: me.role,
+      canEditCurriculum: isStaff,
+      student: { id: String(sRow.id), name: String(sRow.name ?? ""), grade: String(sRow.grade ?? ""), school: String(sRow.school ?? ""), band, photo },
+      engSlots,
+      curriculum,
+      daily,
+    });
+  }
+
+  /* ---- 일지 입력(학생 본인 또는 강사) — 학습 로그 칸만 저장, 출결은 건드리지 않음 ---- */
+  if (p === "/api/student/log" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const sid = targetId(b.studentId as string);
+    const date = String(b.date || "");
+    if (!sid || !date) return json({ error: "bad_input" }, 400);
+    const doneItems = Array.isArray(b.doneItems) ? (b.doneItems as unknown[]).map((x) => String(x)) : [];
+    // 학생이 일지를 적으면 그 날 '출석'으로 간주(기존 출결값이 없을 때만 채움 — 강사 출결 보존).
+    await env.DB
+      .prepare(
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,book_no,word_test,done_items,start_time,end_time,comment,updated_at) VALUES(?,?,1,'출석',?,?,?,?,?,?,?) " +
+          "ON CONFLICT(student_id,date) DO UPDATE SET attended=1, att_status=CASE WHEN class_eng_daily.att_status='' THEN '출석' ELSE class_eng_daily.att_status END, " +
+          "book_no=excluded.book_no, word_test=excluded.word_test, done_items=excluded.done_items, start_time=excluded.start_time, end_time=excluded.end_time, comment=excluded.comment, updated_at=excluded.updated_at"
+      )
+      .bind(sid, date, String(b.bookNo || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.startTime || ""), String(b.endTime || ""), String(b.comment || ""), Date.now())
+      .run();
+    return json({ ok: true });
+  }
+
+  /* ---- 커리큘럼 저장(강사·원장 전용) ---- */
+  if (p === "/api/student/curriculum" && m === "POST") {
+    if (!isStaff) return json({ error: "forbidden" }, 403);
+    const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const sid = String(b.studentId || "").trim();
+    if (!sid) return json({ error: "student_required" }, 400);
+    const items = Array.isArray(b.items)
+      ? (b.items as unknown[]).map((x) => ({ label: String((x as Record<string, unknown>)?.label ?? "").trim(), value: String((x as Record<string, unknown>)?.value ?? "") })).filter((x) => x.label).slice(0, 40)
+      : [];
+    await env.DB
+      .prepare("INSERT INTO class_eng_curriculum(student_id,items,updated_at) VALUES(?,?,?) ON CONFLICT(student_id) DO UPDATE SET items=excluded.items, updated_at=excluded.updated_at")
+      .bind(sid, JSON.stringify(items), Date.now())
+      .run();
+    return json({ ok: true });
+  }
+
+  /* ---- 커리큘럼 기본 항목 시드(강사가 '기본 항목 채우기') ---- */
+  if (p === "/api/student/curriculum/defaults" && m === "GET") {
+    return json({ defaults: CURRICULUM_DEFAULTS });
+  }
+
+  return null;
+}
+
 function makeupRow(r: Record<string, unknown>) {
   return {
     id: String(r.id),
@@ -337,6 +463,8 @@ function dailyRow(r: Record<string, unknown>) {
     bookNo: String(r.book_no ?? ""),
     wordTest: String(r.word_test ?? ""),
     doneItems: (() => { try { const a = JSON.parse(String(r.done_items ?? "[]")); return Array.isArray(a) ? a.map(String) : []; } catch { return []; } })(),
+    startTime: String(r.start_time ?? ""),
+    endTime: String(r.end_time ?? ""),
     comment: String(r.comment ?? ""),
     materials: String(r.materials ?? ""),
     updatedAt: Number(r.updated_at ?? 0),
