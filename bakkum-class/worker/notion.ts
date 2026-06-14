@@ -81,12 +81,14 @@ interface NotionEnv {
   NOTION_TOKEN?: string;
 }
 
-async function notionReq(env: NotionEnv, method: string, path: string, body?: unknown, attempt = 0): Promise<Response> {
+// 2025 데이터소스 모델 API용 최신 버전(데이터소스 직접 쿼리 등).
+const NOTION_VERSION_DS = "2025-09-03";
+async function notionReq(env: NotionEnv, method: string, path: string, body?: unknown, attempt = 0, version = NOTION_VERSION): Promise<Response> {
   const res = await fetch("https://api.notion.com" + path, {
     method,
     headers: {
       Authorization: `Bearer ${env.NOTION_TOKEN}`,
-      "Notion-Version": NOTION_VERSION,
+      "Notion-Version": version,
       "Content-Type": "application/json",
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -96,9 +98,13 @@ async function notionReq(env: NotionEnv, method: string, path: string, body?: un
     const ra = parseFloat(res.headers.get("Retry-After") || "");
     const waitMs = Math.min(8000, (ra > 0 ? ra * 1000 : 0) || 400 * Math.pow(2, attempt));
     await new Promise((r) => setTimeout(r, waitMs));
-    return notionReq(env, method, path, body, attempt + 1);
+    return notionReq(env, method, path, body, attempt + 1, version);
   }
   return res;
+}
+/** 2025 데이터소스 쿼리: POST /v1/data_sources/{id}/query (최신 버전). */
+async function queryDataSource(env: NotionEnv, dataSourceId: string, body: unknown): Promise<Response> {
+  return notionReq(env, "POST", `/v1/data_sources/${dataSourceId}/query`, body, 0, NOTION_VERSION_DS);
 }
 
 /* ---------- read helpers ---------- */
@@ -543,10 +549,9 @@ export async function fetchSnsPages(env: NotionEnv): Promise<NotionSns[]> {
   return out;
 }
 
-// 중고등영어 DB — /v1/databases/{id}/query 에는 '데이터베이스 id'(인라인 url)를 쓴다.
-// (collection://… 데이터소스 id가 아님 — 학생DB도 database id≠collection id.)
-const ENG_HOMEWORK_DB = "2e766817e06181d3ae8fd12e793cc28b"; // 과제 기록DB
-const ENG_ATTENDANCE_DB = "31a66817e061803c9d99e52b8d0ee194"; // 수업 기록 및 출결+포인트DB
+// 2025 데이터소스 모델 — /v1/data_sources/{id}/query 로 조회(데이터소스 id 사용).
+const ENG_HOMEWORK_DS = "2e766817-e061-8111-80a0-000ba707cf4f"; // 과제 기록DB 데이터소스
+const ENG_ATTENDANCE_DS = "2e766817-e061-81ad-92d8-000bf18c1be3"; // 수업기록(출결+포인트) 데이터소스
 
 // relation 페이지id → 학생 이름(제목) 해석기(캐시).
 function makeNameResolver(env: NotionEnv) {
@@ -585,7 +590,7 @@ export async function fetchEngHomework(env: NotionEnv): Promise<NotionEngHw[]> {
   const out: NotionEngHw[] = [];
   let cursor: string | undefined;
   do {
-    const res = await notionReq(env, "POST", `/v1/databases/${ENG_HOMEWORK_DB}/query`, {
+    const res = await queryDataSource(env, ENG_HOMEWORK_DS, {
       page_size: 100,
       ...(cursor ? { start_cursor: cursor } : {}),
     });
@@ -639,7 +644,7 @@ export async function fetchEngAttendance(env: NotionEnv): Promise<NotionEngAtt[]
   const out: NotionEngAtt[] = [];
   let cursor: string | undefined;
   do {
-    const res = await notionReq(env, "POST", `/v1/databases/${ENG_ATTENDANCE_DB}/query`, {
+    const res = await queryDataSource(env, ENG_ATTENDANCE_DS, {
       page_size: 100,
       ...(cursor ? { start_cursor: cursor } : {}),
     });
