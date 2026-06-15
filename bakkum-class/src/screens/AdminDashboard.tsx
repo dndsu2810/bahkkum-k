@@ -180,6 +180,7 @@ function AdminTasks() {
   const [tab, setTab] = useState<AdmTab>("todo");
   const [doneMonth, setDoneMonth] = useState(() => todayStr().slice(0, 7));
   const [assignTask, setAssignTask] = useState<BoardTask | null>(null);
+  const [editTask, setEditTask] = useState<BoardTask | null>(null);
 
   async function load() {
     try { setTasks(await tasksApi.list()); } catch { /* ignore */ }
@@ -217,6 +218,9 @@ function AdminTasks() {
   }
   async function setStatus(t: BoardTask, status: AdmTab) {
     try { await tasksApi.save({ ...t, status }); await load(); } catch { /* ignore */ }
+  }
+  async function saveEdit(next: BoardTask) {
+    try { await tasksApi.save(next); setEditTask(null); await load(); } catch { /* ignore */ }
   }
   async function remove(t: BoardTask) {
     if (!window.confirm("이 할일을 삭제할까요?")) return;
@@ -272,13 +276,14 @@ function AdminTasks() {
         <div className="admt-list">
           {shown.map((t) => (
             <div className="admt-row" key={t.id}>
-              <div className="admt-main">
-                <div className="admt-title">{t.title}</div>
+              <button className="admt-main admt-open" onClick={() => setEditTask(t)} title="눌러서 세부 내용 작성·수정">
+                <div className="admt-title">{t.title}{t.priority === "urgent" && <span className="board2-urgent" style={{ marginLeft: 6, marginBottom: 0 }}>급함</span>}</div>
+                {t.memo && <div className="admt-memo">{t.memo}</div>}
                 <div className="admt-meta">
                   {t.assignDate && <span className="board2-assigned">배정 {t.assignDate.slice(5)}</span>}
                   {t.due && <span className="board2-due">~{t.due}</span>}
                 </div>
-              </div>
+              </button>
               {t.status !== "done" ? (
                 <>
                   {t.status === "todo" && <button className="btn ghost sm" onClick={() => setStatus(t, "doing")}>진행</button>}
@@ -295,7 +300,61 @@ function AdminTasks() {
         </div>
       )}
       {assignTask && <AssignModal task={assignTask} users={users} onClose={() => setAssignTask(null)} onAssign={doAssign} />}
+      {editTask && <AdminTaskEditModal task={editTask} onClose={() => setEditTask(null)} onSave={saveEdit} onDelete={(t) => { setEditTask(null); void remove(t); }} />}
     </section>
+  );
+}
+
+/** 원장 전용 할일 세부 작성·수정 — 제목·세부 내용·마감일·우선순위. */
+function AdminTaskEditModal({
+  task,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  task: BoardTask;
+  onClose: () => void;
+  onSave: (t: BoardTask) => void;
+  onDelete: (t: BoardTask) => void;
+}) {
+  const [f, setF] = useState<BoardTask>(task);
+  const set = <K extends keyof BoardTask>(k: K, v: BoardTask[K]) => setF((c) => ({ ...c, [k]: v }));
+
+  return (
+    <div className="prof-overlay" onClick={onClose}>
+      <div className="prof" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+        <div className="prof-top">
+          <div className="prof-top-main"><div className="prof-name">원장 전용 할일</div></div>
+          <button className="modal-x" onClick={onClose} aria-label="닫기">✕</button>
+        </div>
+        <div className="prof-body">
+          <label className="prof-field">
+            <span className="prof-field-l">제목</span>
+            <input className="inline-input" value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="할일 제목" />
+          </label>
+          <label className="prof-field">
+            <span className="prof-field-l">세부 내용</span>
+            <textarea className="input prof-memo" rows={5} value={f.memo} onChange={(e) => set("memo", e.target.value)} placeholder="자세한 내용·메모를 적어두세요(여러 줄)" />
+          </label>
+          <label className="prof-field">
+            <span className="prof-field-l">마감일</span>
+            <DateField value={f.due} onChange={(v) => set("due", v)} placeholder="마감일 없음" />
+          </label>
+          <label className="prof-field">
+            <span className="prof-field-l">우선순위</span>
+            <div className="sm-subj">
+              <button className={"sm-subj-chip" + (f.priority === "urgent" ? " on urgent" : "")} onClick={() => set("priority", "urgent")}>급한 일</button>
+              <button className={"sm-subj-chip" + (f.priority === "normal" ? " on" : "")} onClick={() => set("priority", "normal")}>일반</button>
+            </div>
+          </label>
+        </div>
+        <div className="prof-foot">
+          <button className="btn ghost" style={{ marginRight: "auto", color: "var(--bad)" }} onClick={() => onDelete(f)}>삭제</button>
+          <button className="btn ghost" onClick={onClose}>취소</button>
+          <button className="btn primary" onClick={() => onSave(f)} disabled={!f.title.trim()}>저장</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

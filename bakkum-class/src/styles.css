@@ -1515,6 +1515,8 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .admt-row{display:flex;align-items:center;gap:10px;padding:10px 4px}
 .admt-row+.admt-row{border-top:1px solid var(--line)}
 .admt-main{flex:1;min-width:0}
+.admt-open{text-align:left;background:none;border:1px solid transparent;border-radius:var(--r-sm);padding:6px 8px;cursor:pointer;transition:background .12s,border-color .12s}
+.admt-open:hover{background:var(--brand-soft);border-color:var(--brand-line)}
 .admt-title{font-size:var(--t-sm);font-weight:600;color:var(--ink)}
 .admt-memo{font-size:var(--t-cap);color:var(--ink3);margin-top:2px}
 .admt-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
