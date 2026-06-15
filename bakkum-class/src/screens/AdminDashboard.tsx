@@ -25,7 +25,7 @@ export function AdminDashboard() {
     adminApi
       .overview(ym)
       .then((o) => { setOv(o); setErr(""); })
-      .catch(() => setErr("불러오지 못했어요. (원장 전용 · 배포 환경에서만 동작)"))
+      .catch(() => setErr("불러오지 못했어요. 잠시 후 다시 시도해 주세요."))
       .finally(() => setLoading(false));
   }, [ym]);
 

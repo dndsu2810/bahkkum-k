@@ -28,7 +28,7 @@ export function Desk({ tab: initialTab }: { tab?: Tab } = {}) {
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    getRoster().then(setRoster).catch(() => setErr("명단을 불러오지 못했어요. (배포 환경에서만 동작)"));
+    getRoster().then(setRoster).catch(() => setErr("명단을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."));
     listUsers().then(setUsers).catch(() => {});
     todayApi.list().then(setToday).catch(() => {});
     fetch("/api/timetable", { cache: "no-store" })

@@ -40,7 +40,7 @@ export function BoardShared() {
       setTasks(await tasksApi.list());
       setErr("");
     } catch {
-      setErr("불러오지 못했어요. (배포 환경에서만 동작)");
+      setErr("불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
     }
   }, []);
 

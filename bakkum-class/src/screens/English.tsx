@@ -79,7 +79,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   );
 
   useEffect(() => {
-    getRoster().then(setRoster).catch(() => setErr("명단을 불러오지 못했어요. (배포 환경에서만 동작)"));
+    getRoster().then(setRoster).catch(() => setErr("명단을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."));
   }, []);
 
   // 날짜별 일일기록 로드
@@ -738,7 +738,7 @@ function EngTimetable({
       onImported?.();
       window.alert(`반영 완료 · ${j.matched ?? 0}명` + (j.unmatched && j.unmatched.length ? `\n명단에 없어 건너뜀: ${j.unmatched.join(", ")}` : ""));
     } catch {
-      window.alert("가져오기에 실패했어요. (원장만 가능 · 배포 환경에서만 동작)");
+      window.alert("가져오기에 실패했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
       setImporting(false);
     }

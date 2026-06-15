@@ -108,9 +108,9 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
         setRows(r);
         setLoading(false);
       })
-      .catch((e) => {
+      .catch(() => {
         if (!alive) return;
-        setErr(String((e as Error).message) === "no_backend" ? "배포 환경에서만 동작합니다." : "명단을 불러오지 못했어요.");
+        setErr("명단을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
         setLoading(false);
       });
     return () => {

@@ -27,7 +27,7 @@ export function AcademySchedule() {
       setEvents(await eventsApi.list(ym + "-01"));
       setErr("");
     } catch {
-      setErr("일정을 불러오지 못했어요. (배포 환경에서만 동작)");
+      setErr("일정을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
       setLoading(false);
     }

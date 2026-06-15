@@ -11,7 +11,7 @@ export function PointRanking() {
     engApi
       .ranking()
       .then((r) => { setList(r); setLoading(false); })
-      .catch(() => { setErr("불러오지 못했어요. (배포 환경에서만 동작)"); setLoading(false); });
+      .catch(() => { setErr("불러오지 못했어요. 잠시 후 다시 시도해 주세요."); setLoading(false); });
   }, []);
 
   const ranked = list.filter((r) => r.points !== 0 || r.days > 0);
