@@ -922,8 +922,22 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .auth-err{background:var(--bad-soft);color:var(--bad);border-radius:var(--r-sm);
   padding:10px var(--s3);font-size:var(--t-sm);font-weight:500;text-align:center}
 .auth-submit{height:48px;font-size:var(--t-md);margin-top:var(--s1)}
-.auth-splash{display:flex;flex-direction:column;align-items:center;gap:var(--s4);color:var(--brand)}
-.auth-splash .auth-logo{width:56px;height:56px;font-size:var(--t-xl)}
+.auth-logo-img{background:none!important;box-shadow:0 4px 12px rgba(0,0,0,.12);object-fit:cover}
+
+/* 스플래시 — 입장·로딩·전환 시(흰 깜빡임 대신). */
+.splash{position:fixed;inset:0;display:grid;place-items:center;
+  background:radial-gradient(120% 120% at 50% 0%,var(--brand-soft) 0%,var(--bg) 60%);z-index:9999}
+.splash-in{display:flex;flex-direction:column;align-items:center;gap:var(--s3);animation:splash-fade .4s ease both}
+.splash-logo{width:84px;height:84px;border-radius:22px;background:linear-gradient(135deg,#3b82f6,#2563eb);
+  color:#fff;display:grid;place-items:center;font-weight:700;font-size:34px;box-shadow:0 8px 24px rgba(37,99,235,.3)}
+.splash-logo-img{background:none;object-fit:cover}
+.splash-name{font-size:var(--t-lg);font-weight:700;color:var(--ink);letter-spacing:-.02em}
+.splash-dots{display:flex;gap:6px;margin-top:var(--s2)}
+.splash-dots span{width:7px;height:7px;border-radius:50%;background:var(--brand);opacity:.4;animation:splash-dot 1s ease-in-out infinite}
+.splash-dots span:nth-child(2){animation-delay:.18s}
+.splash-dots span:nth-child(3){animation-delay:.36s}
+@keyframes splash-fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes splash-dot{0%,100%{opacity:.3;transform:scale(.85)}50%{opacity:1;transform:scale(1)}}
 
 /* 역할별 임시 홈 셸 */
 .hub-shell{min-height:100vh;display:flex;flex-direction:column;background:var(--bg)}
@@ -1854,8 +1868,8 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .sp.is-embed{margin-top:6px}
 
 /* ===== 제작자 크레딧 푸터(모든 페이지) ===== */
-.maker-credit{text-align:center;color:var(--ink3);font-size:var(--t-cap);
-  padding:var(--s4) var(--s4) var(--s5);opacity:.7;letter-spacing:.02em}
+.maker-credit{text-align:center;color:var(--ink4);font-size:var(--t-cap);
+  padding:var(--s4) var(--s4) var(--s5);opacity:.55;letter-spacing:.04em}
 .content .maker-credit{margin-top:var(--s6)}
 .auth-wrap .maker-credit{position:fixed;left:0;right:0;bottom:0;padding-bottom:var(--s4)}
 

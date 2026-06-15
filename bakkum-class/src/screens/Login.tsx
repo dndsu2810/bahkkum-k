@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../auth";
 import { loginStudent, loginTeacher } from "../lib/authApi";
+import { getCachedLogo } from "../lib/configApi";
 
 type Tab = "teacher" | "student";
 
@@ -18,6 +19,7 @@ export function Login() {
   const [birth, setBirth] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const logo = getCachedLogo();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,10 +46,10 @@ export function Login() {
     <div className="auth-wrap">
       <form className="auth-card" onSubmit={submit}>
         <div className="auth-brand">
-          <div className="auth-logo">바</div>
+          {logo.url ? <img className="auth-logo auth-logo-img" src={logo.url} alt="바꿈영수학원" /> : <div className="auth-logo">바</div>}
           <div>
-            <b>바꿈 통합 허브</b>
-            <span>바꿈영수학원</span>
+            <b>Hi! 바꿈영수학원</b>
+            <span>선생님·학생 로그인</span>
           </div>
         </div>
 
