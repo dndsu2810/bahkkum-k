@@ -2458,6 +2458,22 @@ async function importRecords(env: Env, url: URL): Promise<Response> {
         ),
       ];
       const lessonsBySid = await buildLessonsBySid(env);
+      // 사용자가 직접 잡아둔 보강 예약(날짜·시간·상태)은 재가져오기 때 보존한다.
+      const prevMk = new Map<string, { status: string; makeup_date: string; makeup_time: string; makeup_duration: number; parent_contacted: number; memo: string }>();
+      try {
+        const pm = await env.DB
+          .prepare("SELECT id,status,makeup_date,makeup_time,makeup_duration,parent_contacted,memo FROM class_makeups WHERE id LIKE 'nm\\_%' ESCAPE '\\' OR id LIKE 'nmr\\_%' ESCAPE '\\'")
+          .all<{ id: string; status: string; makeup_date: string; makeup_time: string; makeup_duration: number; parent_contacted: number; memo: string }>();
+        for (const r of pm.results || [])
+          prevMk.set(String(r.id), { status: String(r.status || ""), makeup_date: String(r.makeup_date || ""), makeup_time: String(r.makeup_time || ""), makeup_duration: Number(r.makeup_duration || 0), parent_contacted: Number(r.parent_contacted || 0), memo: String(r.memo || "") });
+      } catch {
+        /* 없으면 보존할 것 없음 */
+      }
+      // 직접 일정을 잡았거나 진행/완료 처리한 보강이면 그 값을 그대로 유지.
+      const keptSched = (id: string) => {
+        const p = prevMk.get(id);
+        return p && (p.status !== "pending" || p.makeup_date !== "") ? p : null;
+      };
       for (const r of await fetchAttendanceRecords(env, since)) {
         const sid = idByPage[r.studentPageId];
         if (!sid) continue;
@@ -2484,20 +2500,26 @@ async function importRecords(env: Env, url: URL): Promise<Response> {
                   )
                   .bind(attKey, "결석", r.note || `기간결석(${r.date}~${r.dateEnd})`)
               );
+              const mkId = `nmr_${srcKey}_${dstr}_${l.time.replace(":", "")}`;
+              const kept = keptSched(mkId);
               stmts.push(
                 env.DB
                   .prepare(
-                    "INSERT OR REPLACE INTO class_makeups(id,student_id,absent_date,absent_time,absent_duration,att_key,status,makeup_date,makeup_time,makeup_duration,parent_contacted,memo,created_at) VALUES(?,?,?,?,?,?,'pending','','',?,0,?,?)"
+                    "INSERT OR REPLACE INTO class_makeups(id,student_id,absent_date,absent_time,absent_duration,att_key,status,makeup_date,makeup_time,makeup_duration,parent_contacted,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
                   )
                   .bind(
-                    `nmr_${srcKey}_${dstr}_${l.time.replace(":", "")}`,
+                    mkId,
                     sid,
                     dstr,
                     l.time,
                     l.duration,
                     attKey,
-                    l.duration,
-                    r.note || `기간결석(${r.date}~${r.dateEnd})`,
+                    kept ? kept.status : "pending",
+                    kept ? kept.makeup_date : "",
+                    kept ? kept.makeup_time : "",
+                    kept ? kept.makeup_duration : l.duration,
+                    kept ? kept.parent_contacted : 0,
+                    kept ? kept.memo : r.note || `기간결석(${r.date}~${r.dateEnd})`,
                     Date.now()
                   )
               );
@@ -2519,12 +2541,24 @@ async function importRecords(env: Env, url: URL): Promise<Response> {
         );
         // 출결='보강'은 보강 관리(makeups)에도 등록 (보강 진행/완료로 표시)
         if (r.status === "보강") {
+          const mkId = "nm_" + r.srcId;
+          const kept = keptSched(mkId);
           stmts.push(
             env.DB
               .prepare(
-                "INSERT OR REPLACE INTO class_makeups(id,student_id,absent_date,absent_time,absent_duration,att_key,status,makeup_date,makeup_time,makeup_duration,parent_contacted,memo,created_at) VALUES(?,?,'','',0,'','scheduled',?,'',0,0,?,?)"
+                "INSERT OR REPLACE INTO class_makeups(id,student_id,absent_date,absent_time,absent_duration,att_key,status,makeup_date,makeup_time,makeup_duration,parent_contacted,memo,created_at) VALUES(?,?,'','',0,'',?,?,?,?,?,?,?)"
               )
-              .bind("nm_" + r.srcId, sid, r.date, r.note || "", Date.now())
+              .bind(
+                mkId,
+                sid,
+                kept ? kept.status : "scheduled",
+                kept ? kept.makeup_date : r.date,
+                kept ? kept.makeup_time : "",
+                kept ? kept.makeup_duration : 0,
+                kept ? kept.parent_contacted : 0,
+                kept ? kept.memo : r.note || "",
+                Date.now()
+              )
           );
         }
         res.attendance++;

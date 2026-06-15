@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { TONES, type Category, type Tone } from "../lib/categories";
 import { useStore } from "../store";
+import { importRecords } from "../api";
 import { getConfig, setConfig, getSecretSet, uploadImage } from "../lib/configApi";
 import { feedbackApi, type Notice } from "../lib/feedbackApi";
 import { syncAllFromNotion, type SyncStep } from "../lib/syncAll";
@@ -117,6 +118,43 @@ function NotionImport() {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** 수학 기록(출결·숙제·진도·테스트) 최초 1회 가져오기 — 위 '노션에서 가져오기'와 분리.
+ *  ⚠️ 재실행하면 노션 기준으로 덮어써서 보강 예약이 풀리고 진도가 중복될 수 있어 평소엔 쓰지 않음. */
+function MathRecordsImport() {
+  const { reload, toast } = useStore();
+  const [importing, setImporting] = useState(false);
+
+  async function onImport() {
+    if (importing) return;
+    if (!window.confirm("수학 출결·숙제·진도·테스트를 노션에서 가져옵니다.\n\n⚠️ 평소엔 쓰지 마세요. 이 앱이 이미 원본이라, 다시 가져오면 직접 잡아둔 보강 예약이 풀리거나 진도가 중복될 수 있어요. 정말 진행할까요?")) return;
+    setImporting(true);
+    try {
+      const r = await importRecords();
+      if (r.error) toast("가져오기 실패: " + r.error);
+      else {
+        await reload();
+        toast(`수학 기록 가져오기 완료 · 출결 ${r.attendance} · 숙제 ${r.homework} · 진도 ${r.progress} · 테스트 ${r.test}건`);
+      }
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
+      <div className="card-title" style={{ marginBottom: 6 }}>수학 기록 가져오기 (최초 1회용)</div>
+      <div className="page-desc" style={{ marginBottom: 12 }}>
+        예전에 노션에 쌓아둔 <b>수학</b> 출결·숙제·진도·테스트를 처음 한 번만 옮길 때 쓰세요.
+        지금은 이 앱이 원본이라 평소엔 필요 없어요. <b style={{ color: "var(--bad)" }}>다시 누르면 직접 잡아둔 보강 예약이 풀리고 진도가 중복될 수 있어</b> 주의가 필요합니다.
+      </div>
+      <button className="btn ghost" onClick={onImport} disabled={importing}>
+        <span className={importing ? "spin" : undefined}><Icon name="refresh" /></span>
+        {importing ? "가져오는 중…" : "수학 기록 1회 가져오기"}
+      </button>
     </div>
   );
 }
@@ -314,6 +352,7 @@ export function Settings({
       <KakaoWebhookSetting />
       <LogoSetting />
       <NotionImport />
+      <MathRecordsImport />
     </section>
   );
 }

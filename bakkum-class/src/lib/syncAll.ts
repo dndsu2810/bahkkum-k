@@ -1,7 +1,8 @@
 // 노션 → 앱: 모든 연결을 한 번에 가져오기(설정의 단일 버튼).
 // 워커 타임아웃을 피하려고 각 항목을 클라이언트에서 순차 호출하고 진행 상황을 콜백으로 알린다.
 // 중복은 각 가져오기 엔드포인트가 알아서 건너뛰거나 갱신한다(추가된 것만 늘어남).
-import { importRecords } from "../api";
+// ⚠️ 수학 출결·숙제·진도·테스트는 여기 넣지 않는다 — 앱이 단일 출처라 재가져오기 시
+//    보강 예약이 '대기'로 리셋되고 진도가 중복된다. 그건 설정의 '최초 1회' 버튼에서만.
 
 export interface SyncStep {
   key: string;
@@ -28,15 +29,6 @@ async function jget(url: string): Promise<Record<string, number> & { error?: str
 const STEPS: { key: string; label: string; run: () => Promise<number> }[] = [
   { key: "roster", label: "학생 명단·생일", run: async () => (await jget("/api/sync/roster?dry=0")).willInsert ?? 0 },
   { key: "events", label: "학원 일정", run: async () => (await jpost("/api/sync/events")).imported ?? 0 },
-  {
-    key: "records",
-    label: "수학 출결·숙제·진도·테스트",
-    run: async () => {
-      const r = await importRecords();
-      if (r.error) throw new Error(r.error);
-      return (r.attendance || 0) + (r.homework || 0) + (r.progress || 0) + (r.test || 0);
-    },
-  },
   { key: "engDaily", label: "영어(중고등) 숙제", run: async () => (await jpost("/api/sync/eng-daily")).imported ?? 0 },
   { key: "engAtt", label: "영어 출결·포인트", run: async () => (await jpost("/api/sync/eng-attendance")).imported ?? 0 },
   { key: "elemLog", label: "영어(초등) 수업일지", run: async () => (await jpost("/api/sync/eng-elem-log")).imported ?? 0 },
