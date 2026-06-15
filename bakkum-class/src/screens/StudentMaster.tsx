@@ -9,7 +9,6 @@ import {
   saveStudentCore,
   saveStudentMeta,
   saveStudentSlots,
-  syncRosterFromNotion,
   fillGrades,
   promoteGrades,
   bulkGrades,
@@ -52,7 +51,6 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
-  const [syncing, setSyncing] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [schoolF, setSchoolF] = useState("");
   const [gradeF, setGradeF] = useState("");
@@ -102,22 +100,6 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
       /* ignore */
     }
   }
-  async function syncNotion() {
-    if (syncing) return;
-    if (!window.confirm("노션의 재원 학생을 가져옵니다. 수업(수업 선택)으로 과목·반을 구분하고, 앱에 없는 학생은 추가합니다. 진행할까요?")) return;
-    setSyncing(true);
-    setErr("");
-    try {
-      const r = await syncRosterFromNotion(false);
-      await reloadRows();
-      window.alert(`동기화 완료 · 추가 ${r.willInsert}명 · 수학+영어 ${r.both} · 영어만 ${r.englishOnly}` + (r.noClassCount ? ` · 미배정 ${r.noClassCount} 건너뜀` : ""));
-    } catch (e) {
-      setErr("동기화 실패: " + String((e as Error).message));
-    } finally {
-      setSyncing(false);
-    }
-  }
-
   useEffect(() => {
     let alive = true;
     getRoster()
@@ -183,11 +165,6 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
               <button className="btn ghost" onClick={doPromote} disabled={gradeBusy}>전체 학년 올리기</button>
               {lastPromote && <button className="btn ghost" onClick={doUndo} disabled={gradeBusy}>되돌리기</button>}
             </>
-          )}
-          {isAdmin && (
-            <button className="btn ghost" onClick={syncNotion} disabled={syncing}>
-              {syncing ? "동기화 중…" : "노션 동기화"}
-            </button>
           )}
           <div className="sm-count">{list.length}명</div>
         </div>

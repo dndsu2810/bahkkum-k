@@ -145,7 +145,6 @@ export function Wiki() {
   const [sortBy, setSortBy] = useState<"updated" | "importance">("updated");
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
-  const [syncing, setSyncing] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
 
   // 목록에서 글을 고르면 본문 영역을 화면 위로 끌어와, 스크롤을 직접 올릴 필요 없게.
@@ -192,21 +191,6 @@ export function Wiki() {
       setErr("저장에 실패했어요.");
     }
   }
-  async function syncFromNotion() {
-    if (syncing) return;
-    setSyncing(true);
-    setErr("");
-    try {
-      const r = (await wikiApi.sync()) as { ok?: boolean; imported?: number; error?: string };
-      if (r.error) throw new Error(r.error);
-      await reload();
-      window.alert(`노션에서 매뉴얼을 다시 가져왔어요${typeof r.imported === "number" ? ` (${r.imported}건)` : ""}.`);
-    } catch {
-      setErr("동기화에 실패했어요. (원장만 가능 · 배포 환경에서만 동작)");
-    } finally {
-      setSyncing(false);
-    }
-  }
   async function remove(p: WikiPage) {
     if (!window.confirm(`"${p.title}" 글을 삭제할까요?`)) return;
     try {
@@ -242,11 +226,6 @@ export function Wiki() {
             </button>
           )}
         </div>
-        {isAdmin && (
-          <button className="btn ghost sm" style={{ width: "100%", marginBottom: 8 }} onClick={syncFromNotion} disabled={syncing}>
-            {syncing ? "가져오는 중…" : "노션에서 다시 가져오기"}
-          </button>
-        )}
         <div className="wiki-list">
           {sorted.map((p) => (
             <button key={p.id} className={"wiki-item" + (sel === p.id ? " on" : "")} onClick={() => { setSel(p.id); setEdit(null); }}>

@@ -1979,6 +1979,20 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .acct-duty{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
 .acct-duty-label{font-size:var(--t-cap);font-weight:700;color:var(--ink3);margin-right:2px}
 
+/* 노션 가져오기 진행 단계 목록 */
+.sync-steps{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.sync-step{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);font-size:var(--t-sm)}
+.sync-step+.sync-step{border-top:1px solid var(--line)}
+.sync-step-ic{display:inline-flex;width:18px;height:18px;color:var(--ink4);flex:none}
+.sync-step-label{flex:1;color:var(--ink2)}
+.sync-step-count{color:var(--ink3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sync-step.is-running{background:var(--brand-soft)}
+.sync-step.is-running .sync-step-ic{color:var(--brand)}
+.sync-step.is-running .sync-step-label{color:var(--ink);font-weight:600}
+.sync-step.is-done .sync-step-ic{color:var(--ok)}
+.sync-step.is-done .sync-step-count{color:var(--ok);font-weight:700}
+.sync-step.is-error .sync-step-ic,.sync-step.is-error .sync-step-count{color:var(--bad)}
+
 /* 사이드바 드래그 정렬 */
 .nav-label.toggle[draggable="true"]{cursor:grab}
 .nav-label.toggle[draggable="true"]:active{cursor:grabbing}

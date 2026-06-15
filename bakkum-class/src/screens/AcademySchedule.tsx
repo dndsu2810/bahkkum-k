@@ -17,25 +17,7 @@ export function AcademySchedule() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [edit, setEdit] = useState<Editing>(null);
-  const [importing, setImporting] = useState(false);
   const [view, setView] = useState<"cal" | "list">("cal");
-  const isAdmin = user?.role === "admin";
-
-  async function importFromNotion() {
-    if (importing) return;
-    setImporting(true);
-    setErr("");
-    try {
-      const r = (await eventsApi.sync()) as { ok?: boolean; imported?: number; error?: string };
-      if (r.error) throw new Error(r.error);
-      await reload();
-      window.alert(`노션 학원 일정을 가져왔어요${typeof r.imported === "number" ? ` (${r.imported}건)` : ""}.`);
-    } catch {
-      setErr("가져오기에 실패했어요. (원장만 가능 · 배포 환경에서만 동작)");
-    } finally {
-      setImporting(false);
-    }
-  }
 
   async function reload() {
     setLoading(true);
@@ -107,11 +89,6 @@ export function AcademySchedule() {
           <p className="sm-desc">모든 선생님이 함께 보고 추가·수정합니다.</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {isAdmin && (
-            <button className="btn ghost" onClick={importFromNotion} disabled={importing}>
-              {importing ? "가져오는 중…" : "노션 일정 가져오기"}
-            </button>
-          )}
           {canEdit && (
             <button className="btn primary" onClick={() => setEdit({ date: today, endDate: "", title: "", category: "학원", memo: "" })}>
               일정 추가
@@ -145,8 +122,7 @@ export function AcademySchedule() {
         />
       ) : monthEvents.length === 0 ? (
         <div className="hub-muted" style={{ padding: 20 }}>
-          이 달 일정이 없어요. {canEdit && "‘일정 추가’로 등록"}
-          {isAdmin && "하거나, 기존 노션 일정은 ‘노션 일정 가져오기’로 한 번에 불러올 수 있어요."}
+          이 달 일정이 없어요.{canEdit && " ‘일정 추가’로 등록해 보세요."}
         </div>
       ) : (
         <div className="cal-list">
