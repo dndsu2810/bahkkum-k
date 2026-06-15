@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { eventsApi, type EventItem } from "../lib/hubApi";
 import { DOW, pad, parseD, todayStr } from "../lib/dates";
+import { DateField } from "../components/DateControls";
 
 const CATS = ["학원", "학교", "강사", "휴원", "할일"];
 const catClass = (c: string) => "ev-cat ev-cat-" + (CATS.includes(c) ? c : "학원");
@@ -173,11 +174,11 @@ export function AcademySchedule() {
               <div className="prof-grid">
                 <label className="prof-field">
                   <span className="prof-field-l">날짜</span>
-                  <input className="inline-input" type="date" value={edit.date} onChange={(e) => setEdit({ ...edit, date: e.target.value })} />
+                  <DateField value={edit.date} onChange={(v) => setEdit({ ...edit, date: v })} />
                 </label>
                 <label className="prof-field">
                   <span className="prof-field-l">종료일(선택)</span>
-                  <input className="inline-input" type="date" value={edit.endDate} onChange={(e) => setEdit({ ...edit, endDate: e.target.value })} />
+                  <DateField value={edit.endDate} onChange={(v) => setEdit({ ...edit, endDate: v })} placeholder="종료일 없음" />
                 </label>
               </div>
               <label className="prof-field">

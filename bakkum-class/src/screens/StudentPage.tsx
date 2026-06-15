@@ -3,6 +3,7 @@ import { useAuth } from "../auth";
 import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type Curriculum, type CurriculumSection, type CurriculumRow, type StudentLogRow } from "../lib/studentApi";
 import { DOW, DOW_ORDER, fmtFull, fmtMDDow, parseD, timeToMin, todayStr } from "../lib/dates";
 import { NoticeBanner } from "../components/NoticeBanner";
+import { DateField } from "../components/DateControls";
 import { IssueBoard } from "./IssueBoard";
 import { Icon } from "../icons";
 
@@ -262,7 +263,7 @@ function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string
     <div className="sp-log-edit">
       <div className="sp-f">
         <span>날짜</span>
-        <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <DateField value={date} onChange={setDate} />
       </div>
 
       {/* 수업 시간 — '지금' 버튼으로 한 번에 찍기 + 시간표 자동입력 */}

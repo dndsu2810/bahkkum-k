@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { tasksApi, type BoardTask, type TaskStatus } from "../lib/hubApi";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { listUsers, type UserRow } from "../lib/authApi";
+import { DateField } from "../components/DateControls";
 
 const COLS: { key: TaskStatus; label: string }[] = [
   { key: "todo", label: "할 일" },
@@ -219,7 +220,7 @@ function TaskModal({
             </label>
             <label className="prof-field">
               <span className="prof-field-l">마감일</span>
-              <input className="inline-input" type="date" value={f.due} onChange={(e) => set("due", e.target.value)} />
+              <DateField value={f.due} onChange={(v) => set("due", v)} placeholder="마감일 없음" />
             </label>
           </div>
           <label className="prof-field">

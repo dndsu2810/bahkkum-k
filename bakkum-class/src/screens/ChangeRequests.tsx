@@ -6,6 +6,7 @@ import { listUsers, type UserRow } from "../lib/authApi";
 import { ROLE_LABEL, type Role } from "../lib/roles";
 import { DOW, fmtWhen, parseD, todayStr, ymd } from "../lib/dates";
 import type { ReqPrefill } from "../lib/changeReqLive";
+import { DateField } from "../components/DateControls";
 
 type Tab = "log" | "in" | "out" | "new";
 const subjLabel = (s: string) => (s === "english" ? "영어" : "수학");
@@ -292,11 +293,11 @@ function NewRequest({ roster, users, prefill, logMode, onCreated }: { roster: Ro
       <div className="prof-grid" style={{ marginTop: 10 }}>
         <label className="prof-field">
           <span className="prof-field-l">원래 날짜</span>
-          <input className="inline-input" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          <DateField value={fromDate} onChange={setFromDate} />
         </label>
         <label className="prof-field">
           <span className="prof-field-l">→ 변경할 날짜</span>
-          <input className="inline-input" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+          <DateField value={toDate} onChange={setToDate} />
         </label>
         <label className="prof-field">
           <span className="prof-field-l">변경할 시간</span>

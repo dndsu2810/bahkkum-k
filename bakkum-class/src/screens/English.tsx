@@ -3,11 +3,12 @@ import { useAuth } from "../auth";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { engApi, hwProgress, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, ELEM_LOG_ITEMS, pointsOf, type EngDaily, type EngMakeup, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
-import { DOW, DOW_ORDER, TODAY, fmtFull, fmtMD, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
+import { DOW, DOW_ORDER, TODAY, fmtMD, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
 import { Select } from "../components/ui";
 import { useApprovedChanges, arrivalOf, findSlotConflicts } from "../lib/changeReqLive";
 import { ConflictPopup, ApprovedBanner } from "../components/ChangeReqLive";
+import { DateNav, DateField } from "../components/DateControls";
 
 type Band = "elem" | "mid";
 type Tab = "today" | "tt" | "att" | "hw" | "progress" | "test" | "makeup" | "board";
@@ -126,14 +127,6 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     }
   }
 
-  // 날짜 이동 — 수학 '오늘'과 동일하게 화살표(어제/내일) + '오늘로'.
-  const isToday = date === todayStr();
-  const shiftDate = (delta: number) => {
-    const d = parseD(date);
-    d.setDate(d.getDate() + delta);
-    setDate(ymd(d));
-  };
-
   // 시간표 변경요청 — 그 날짜 승인된 1회성 변경(영어) 반영 + 수학↔영어 겹침 감지.
   const approvedChanges = useApprovedChanges(date);
   // 이 날짜로 옮겨온(원래 다른 날) 학생 / 이 날짜에서 다른 날로 빠진 학생.
@@ -214,14 +207,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
           <p className="sm-desc">{DESC[tab]}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {(tab === "today" || tab === "att") && (
-            <div className="date-nav">
-              <button className="date-arrow" onClick={() => shiftDate(-1)} title="어제" aria-label="어제로">‹</button>
-              <div className="date-cur">{fmtFull(parseD(date))}{!isToday && <span className="date-off"> · 오늘 아님</span>}</div>
-              <button className="date-arrow" onClick={() => shiftDate(1)} title="내일" aria-label="내일로">›</button>
-              {!isToday && <button className="btn ghost sm date-today" onClick={() => setDate(todayStr())}>오늘로</button>}
-            </div>
-          )}
+          {(tab === "today" || tab === "att") && <DateNav value={date} onChange={setDate} />}
           <div className="sm-count">{students.length}명</div>
         </div>
       </div>
@@ -915,9 +901,9 @@ function EngMakeupPanel({ students }: { students: RosterStudent[] }) {
               <option value="">학생 선택</option>
               {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            <input className="sm-input" type="date" value={f.absentDate} onChange={(e) => setF({ ...f, absentDate: e.target.value })} title="결석일" />
+            <DateField value={f.absentDate} onChange={(v) => setF({ ...f, absentDate: v })} placeholder="결석일" />
             <span className="eng-slash">→</span>
-            <input className="sm-input" type="date" value={f.makeupDate} onChange={(e) => setF({ ...f, makeupDate: e.target.value })} title="보강일" />
+            <DateField value={f.makeupDate} onChange={(v) => setF({ ...f, makeupDate: v })} placeholder="보강일" />
             <input className="sm-input" type="time" value={f.makeupTime} onChange={(e) => setF({ ...f, makeupTime: e.target.value })} title="보강시간" />
             <input className="input" value={f.memo} onChange={(e) => setF({ ...f, memo: e.target.value })} placeholder="메모(선택)" />
             <button className="btn primary" onClick={add} disabled={!f.studentId}>등록</button>
