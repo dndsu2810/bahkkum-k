@@ -2,8 +2,9 @@ import { useState } from "react";
 import type { ProgLog } from "../types";
 import { useStore } from "../store";
 import { studentById } from "../lib/logic";
-import { fmtDayBand } from "../lib/dates";
+import { fmtDayBand, ymd } from "../lib/dates";
 import { InlineTable, type InlineCol } from "../components/InlineTable";
+import { RecordFilters, EMPTY_FILTER, filterActive } from "../components/RecordFilters";
 import { ProgressModal } from "../components/modals";
 import { TodayLink } from "../components/ui";
 import { Icon } from "../icons";
@@ -18,12 +19,25 @@ const TABS: { v: ProgTab; label: string }[] = [
 export function Progress() {
   const { data, openModal, mutate, mutateAsync, toast } = useStore();
   const [tab, setTab] = useState<ProgTab>("ing");
+  const [flt, setFlt] = useState(EMPTY_FILTER);
 
   const all = data.progressLog.slice().sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
-  const sorted = all.filter((p) => (tab === "all" ? true : tab === "done" ? p.pct >= 100 : p.pct < 100));
+  const q = flt.q.trim().toLowerCase();
+  const sorted = all
+    .filter((p) => (tab === "all" ? true : tab === "done" ? p.pct >= 100 : p.pct < 100))
+    .filter((p) =>
+      (!flt.student || p.studentId === flt.student) &&
+      (!q || ((studentById(data.students, p.studentId)?.name ?? "") + " " + p.unit + " " + p.area + " " + p.memo).toLowerCase().includes(q))
+    );
+  const studentOpts = [...new Map(all.map((p) => [p.studentId, { id: p.studentId, name: studentById(data.students, p.studentId)?.name ?? "(삭제된 학생)" }])).values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
   const ingCount = all.filter((p) => p.pct < 100).length;
   const doneCount = all.length - ingCount;
   const nameOf = (p: ProgLog) => studentById(data.students, p.studentId)?.name ?? "(삭제된 학생)";
+  const yest = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return ymd(d); })();
+  const progSummary = (list: ProgLog[]) => {
+    const ing = list.filter((p) => p.pct < 100).length;
+    return [ing && `진행중 ${ing}`, list.length - ing && `완료 ${list.length - ing}`].filter(Boolean).join(" · ");
+  };
 
   function apply(d: { progressLog: ProgLog[] }, id: string, key: string, v: string) {
     const p = d.progressLog.find((x) => x.id === id);
@@ -105,6 +119,7 @@ export function Progress() {
       </div>
 
       <div className="card">
+        <RecordFilters value={flt} onChange={setFlt} students={studentOpts} />
         <div className="tbl-wrap">
           <InlineTable
             rows={sorted}
@@ -113,6 +128,11 @@ export function Progress() {
             onPatch={onPatch}
             onDelete={onDelete}
             groupBy={(p) => ({ key: p.startDate || "미정", label: p.startDate ? fmtDayBand(p.startDate) + " 시작" : "시작일 미정" })}
+            collapsible
+            groupSummary={progSummary}
+            openInitially={(key) => key >= yest}
+            pageSize={14}
+            forceOpen={filterActive(flt)}
             empty={<div className="empty">{tab === "done" ? "완료된 진도가 없습니다." : tab === "ing" ? "진행중인 진도가 없습니다." : <>아직 진도 기록이 없어요. <TodayLink /> 화면에서 입력하면 여기에 쌓여요.</>}</div>}
           />
         </div>

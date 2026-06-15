@@ -1,7 +1,7 @@
 import { Fragment, useRef, useState } from "react";
 import { useStore } from "../store";
 import type { AttStatus, Attitude, Student } from "../types";
-import { DOW, fmtDayBand, parseD, timeToMin, todayStr } from "../lib/dates";
+import { DOW, fmtDayBand, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import {
   activeStudents,
   attendsOn,
@@ -15,6 +15,10 @@ import { NEEDS_MAKEUP, applyMakeup } from "../lib/attendanceLogic";
 import { holidayName } from "../lib/holidays";
 import { awardPoints, pushAttendanceNotion } from "../api";
 import { GradeBadge, Empty, Select, TodayLink } from "../components/ui";
+import { RecordFilters, EMPTY_FILTER, filterActive } from "../components/RecordFilters";
+import { Icon } from "../icons";
+
+const ATT_STATUS_OPTS = [{ v: "출석", label: "출석" }, { v: "지각", label: "지각" }, { v: "결석", label: "결석" }, { v: "보강", label: "보강" }];
 
 interface LessonOnDate {
   student: Student;
@@ -70,18 +74,41 @@ export function Attendance() {
   const [moreKey, setMoreKey] = useState<string | null>(null);
   // 키보드 단축키용 행 참조 (Enter로 다음 학생 이동) (A-7)
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // 출결 기록 날짜 그룹 접기/더보기 (기록이 쌓여도 안 길어지게)
+  const [recOpen, setRecOpen] = useState<Record<string, boolean>>({});
+  const [recShown, setRecShown] = useState(14);
+  const [flt, setFlt] = useState(EMPTY_FILTER);
+  const recYest = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return ymd(d); })();
+  const attSummary = (rows: { rec: { status: string } }[]) => {
+    let o = 0, l = 0, a = 0;
+    for (const r of rows) r.rec.status === "출석" ? o++ : r.rec.status === "지각" ? l++ : a++;
+    return [o && `출석 ${o}`, l && `지각 ${l}`, a && `결석 ${a}`].filter(Boolean).join(" · ");
+  };
 
   const holiday = holidayName(attDate);
   const lessons = lessonsOnDate(data.students, attDate);
 
   // 출결 기록(월별) — 라이브 체크분 + 노션에서 가져온 기록 모두 포함
+  const recFltActive = filterActive(flt);
+  const recQ = flt.q.trim().toLowerCase();
+  const recStatusMatch = (st: string) =>
+    !flt.status || (flt.status === "결석" ? st === "결석" || st === "무단결석" || st === "조퇴" : st === flt.status);
   const recordRows = Object.keys(data.attendance)
     .map((key) => {
       const parts = key.split("|");
       return { key, date: parts[0], sid: parts[1], time: parts[2] || "", rec: data.attendance[key] };
     })
     .filter((r) => inMonth(r.date, recMonth))
+    .filter((r) => !flt.student || r.sid === flt.student)
+    .filter((r) => recStatusMatch(r.rec.status))
+    .filter((r) => !recQ || ((studentById(data.students, r.sid)?.name ?? "") + " " + (r.rec.note || "")).toLowerCase().includes(recQ))
     .sort((a, b) => (a.date === b.date ? (a.time < b.time ? -1 : 1) : a.date < b.date ? 1 : -1));
+  const recStudentOpts = [...new Map(
+    Object.keys(data.attendance)
+      .map((k) => k.split("|"))
+      .filter((p) => inMonth(p[0], recMonth) && p[1])
+      .map((p) => [p[1], { id: p[1], name: studentById(data.students, p[1])?.name ?? "(삭제된 학생)" }])
+  ).values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
 
   // 날짜별 그룹 (커스텀 테이블도 InlineTable과 동일한 '날짜 띠' 형태로)
   const recordGroups: { date: string; rows: typeof recordRows }[] = (() => {
@@ -372,8 +399,9 @@ export function Attendance() {
           </div>
           <Select value={recMonth} onChange={setRecMonth} options={monthOptions()} />
         </div>
+        <RecordFilters value={flt} onChange={setFlt} students={recStudentOpts} statusOptions={ATT_STATUS_OPTS} />
         {recordRows.length === 0 ? (
-          <Empty>아직 출결 기록이 없어요. <TodayLink /> 화면에서 입력하면 여기에 쌓여요.</Empty>
+          <Empty>{recFltActive ? "조건에 맞는 출결 기록이 없어요." : <>아직 출결 기록이 없어요. <TodayLink /> 화면에서 입력하면 여기에 쌓여요.</>}</Empty>
         ) : (
           <div className="tbl-wrap">
             <table className="tbl tbl-grouped">
@@ -386,34 +414,49 @@ export function Attendance() {
                 </tr>
               </thead>
               <tbody>
-                {recordGroups.map((g) => (
-                  <Fragment key={g.date}>
-                    <tr className="tbl-grouprow">
-                      <td colSpan={4}>
-                        <div className="tbl-band">
-                          <span className="tbl-band-date">{fmtDayBand(g.date)}</span>
-                          <span className="tbl-band-cnt">{g.rows.length}건</span>
-                        </div>
-                      </td>
-                    </tr>
-                    {g.rows.map((r) => {
-                      const s = studentById(data.students, r.sid);
-                      return (
-                        <tr key={r.key}>
-                          <td style={{ fontWeight: 700, color: "var(--text)" }}>{s ? s.name : "(삭제된 학생)"}</td>
-                          <td>
-                            <span className={"badge " + (REC_TONE[r.rec.status] || "b-gray")}>
-                              {r.rec.status}
-                              {r.rec.status === "지각" && r.rec.lateMinutes ? ` ${r.rec.lateMinutes}분` : ""}
-                            </span>
-                          </td>
-                          <td className="muted">{r.rec.attitude || "—"}</td>
-                          <td className="muted">{r.rec.note || "—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </Fragment>
-                ))}
+                {recordGroups.slice(0, recFltActive ? recordGroups.length : recShown).map((g, gi) => {
+                  const def = gi === 0 || g.date >= recYest;
+                  const open = recFltActive ? true : g.date in recOpen ? recOpen[g.date] : def;
+                  return (
+                    <Fragment key={g.date}>
+                      <tr className="tbl-grouprow is-toggle">
+                        <td colSpan={4}>
+                          <button type="button" className="tbl-band tbl-band-btn" onClick={() => setRecOpen((m) => ({ ...m, [g.date]: !(g.date in m ? m[g.date] : def) }))} aria-expanded={open}>
+                            <span className={"tbl-band-arrow" + (open ? " open" : "")}><Icon name="chev" /></span>
+                            <span className="tbl-band-date">{fmtDayBand(g.date)}</span>
+                            <span className="tbl-band-cnt">{g.rows.length}건</span>
+                            {!open && <span className="tbl-band-sum">{attSummary(g.rows)}</span>}
+                          </button>
+                        </td>
+                      </tr>
+                      {open && g.rows.map((r) => {
+                        const s = studentById(data.students, r.sid);
+                        return (
+                          <tr key={r.key}>
+                            <td style={{ fontWeight: 700, color: "var(--text)" }}>{s ? s.name : "(삭제된 학생)"}</td>
+                            <td>
+                              <span className={"badge " + (REC_TONE[r.rec.status] || "b-gray")}>
+                                {r.rec.status}
+                                {r.rec.status === "지각" && r.rec.lateMinutes ? ` ${r.rec.lateMinutes}분` : ""}
+                              </span>
+                            </td>
+                            <td className="muted">{r.rec.attitude || "—"}</td>
+                            <td className="muted">{r.rec.note || "—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })}
+                {!recFltActive && recordGroups.length > recShown && (
+                  <tr className="tbl-morerow">
+                    <td colSpan={4}>
+                      <button type="button" className="tbl-more" onClick={() => setRecShown((n) => n + 14)}>
+                        + 이전 기록 더 보기 ({recordGroups.length - recShown}일 더)
+                      </button>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

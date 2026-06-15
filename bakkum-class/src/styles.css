@@ -264,6 +264,11 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 .tbl-morerow td{padding:0!important;border:none!important;background:transparent!important}
 .tbl-more{width:100%;padding:10px;background:var(--bg);border:none;border-top:1px solid var(--line);color:var(--brand-d);font-weight:600;font-size:var(--t-sm);cursor:pointer;transition:background .12s}
 .tbl-more:hover{background:var(--brand-soft)}
+/* 기록 페이지 공통 필터 바 */
+.recfilter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.recfilter-sel{height:38px;min-width:120px}
+.recfilter-input{height:38px;flex:1;min-width:160px;max-width:280px}
+.recfilter-clear{white-space:nowrap}
 .t-actions{text-align:right}
 .muted{color:var(--ink3)}
 

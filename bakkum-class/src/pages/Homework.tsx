@@ -5,18 +5,28 @@ import { curMonthStr, inMonth, monthOptions, studentById } from "../lib/logic";
 import { fmtDayBand, ymd } from "../lib/dates";
 import { Select, TodayLink } from "../components/ui";
 import { InlineTable, type InlineCol } from "../components/InlineTable";
+import { RecordFilters, EMPTY_FILTER, filterActive } from "../components/RecordFilters";
 import { HomeworkModal } from "../components/modals";
 import { Icon } from "../icons";
 
 const HW_STATUS = ["pending", "done", "late"];
 const HW_STATUS_LABEL: Record<string, string> = { pending: "검사 전", done: "검사완료", late: "지연" };
+const HW_STATUS_OPTS = [{ v: "done", label: "검사완료" }, { v: "pending", label: "검사 전" }, { v: "late", label: "지연" }];
 
 export function Homework() {
   const { data, openModal, mutate, mutateAsync, toast } = useStore();
   const [ym, setYm] = useState(curMonthStr());
+  const [flt, setFlt] = useState(EMPTY_FILTER);
 
-  const rows = data.homeworkLog.filter((h) => inMonth(h.date, ym)).sort((a, b) => (a.date < b.date ? 1 : -1));
+  const monthRows = data.homeworkLog.filter((h) => inMonth(h.date, ym)).sort((a, b) => (a.date < b.date ? 1 : -1));
   const nameOf = (h: HwLog) => studentById(data.students, h.studentId)?.name ?? "(삭제된 학생)";
+  const q = flt.q.trim().toLowerCase();
+  const rows = monthRows.filter((h) =>
+    (!flt.student || h.studentId === flt.student) &&
+    (!flt.status || h.status === flt.status) &&
+    (!q || (nameOf(h) + " " + h.book + " " + h.tags.join(",") + " " + h.memo).toLowerCase().includes(q))
+  );
+  const studentOpts = [...new Map(monthRows.map((h) => [h.studentId, { id: h.studentId, name: nameOf(h) }])).values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
 
   // 날짜 그룹: 오늘·어제만 펼치고 과거는 접기. 접힌 헤더엔 검사 현황 요약.
   const yest = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return ymd(d); })();
@@ -77,6 +87,7 @@ export function Homework() {
       </div>
 
       <div className="card">
+        <RecordFilters value={flt} onChange={setFlt} students={studentOpts} statusOptions={HW_STATUS_OPTS} />
         <div className="tbl-wrap">
           <InlineTable
             rows={rows}
@@ -89,6 +100,7 @@ export function Homework() {
             groupSummary={hwSummary}
             openInitially={(key) => key >= yest}
             pageSize={14}
+            forceOpen={filterActive(flt)}
             empty={<div className="empty">아직 숙제 기록이 없어요. <TodayLink /> 화면에서 입력하면 여기에 쌓여요.</div>}
           />
         </div>

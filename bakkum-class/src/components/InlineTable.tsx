@@ -38,9 +38,11 @@ export interface InlineTableProps<T> {
   openInitially?: (key: string, index: number) => boolean;
   /** 처음에 보여줄 그룹 수. 나머지는 '+ 이전 기록 더 보기'로. */
   pageSize?: number;
+  /** 검색·필터가 켜진 상태 — 모든 그룹을 펼치고 더보기 없이 전부 보여준다(찾는 게 목적). */
+  forceOpen?: boolean;
 }
 
-export function InlineTable<T>({ rows, cols, rowId, onPatch, onDelete, empty, groupBy, collapsible, groupSummary, openInitially, pageSize }: InlineTableProps<T>) {
+export function InlineTable<T>({ rows, cols, rowId, onPatch, onDelete, empty, groupBy, collapsible, groupSummary, openInitially, pageSize, forceOpen }: InlineTableProps<T>) {
   // 그룹 접힘/펼침 사용자 토글(없으면 openInitially 기본값). 데이터 새로고침에도 유지.
   const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
   const [shown, setShown] = useState(pageSize ?? Infinity);
@@ -221,9 +223,9 @@ export function InlineTable<T>({ rows, cols, rowId, onPatch, onDelete, empty, gr
       </thead>
       <tbody>
         {groupBy
-          ? groups.slice(0, shown).map((g, gi) => {
+          ? groups.slice(0, forceOpen ? groups.length : shown).map((g, gi) => {
               const def = collapsible ? (openInitially ? openInitially(g.key, gi) : gi === 0) : true;
-              const open = collapsible ? (g.key in openMap ? openMap[g.key] : def) : true;
+              const open = forceOpen ? true : collapsible ? (g.key in openMap ? openMap[g.key] : def) : true;
               return (
                 <Fragment key={"g_" + g.key}>
                   <tr className={"tbl-grouprow" + (collapsible ? " is-toggle" : "")}>
@@ -248,7 +250,7 @@ export function InlineTable<T>({ rows, cols, rowId, onPatch, onDelete, empty, gr
               );
             })
           : rows.map(renderRow)}
-        {groupBy && groups.length > shown && (
+        {groupBy && !forceOpen && groups.length > shown && (
           <tr className="tbl-morerow">
             <td colSpan={totalCols}>
               <button type="button" className="tbl-more" onClick={() => setShown((n) => n + (pageSize ?? 14))}>

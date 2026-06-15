@@ -2,21 +2,36 @@ import { useState } from "react";
 import type { TestLog } from "../types";
 import { useStore } from "../store";
 import { curMonthStr, inMonth, monthOptions, studentById } from "../lib/logic";
-import { fmtDayBand } from "../lib/dates";
+import { fmtDayBand, ymd } from "../lib/dates";
 import { Select, TodayLink } from "../components/ui";
 import { InlineTable, type InlineCol } from "../components/InlineTable";
+import { RecordFilters, EMPTY_FILTER, filterActive } from "../components/RecordFilters";
 import { TestModal } from "../components/modals";
 import { pushTestNotion } from "../api";
 import { Icon } from "../icons";
 
 const TEST_STATUS = ["예정", "완료"];
+const TEST_STATUS_OPTS = [{ v: "완료", label: "완료" }, { v: "예정", label: "예정" }];
 
 export function Tests() {
   const { data, openModal, mutate, mutateAsync, toast } = useStore();
   const [ym, setYm] = useState(curMonthStr());
+  const [flt, setFlt] = useState(EMPTY_FILTER);
 
-  const rows = data.testLog.filter((t) => inMonth(t.date, ym)).sort((a, b) => (a.date < b.date ? 1 : -1));
+  const monthRows = data.testLog.filter((t) => inMonth(t.date, ym)).sort((a, b) => (a.date < b.date ? 1 : -1));
   const nameOf = (t: TestLog) => studentById(data.students, t.studentId)?.name ?? "(삭제된 학생)";
+  const q = flt.q.trim().toLowerCase();
+  const rows = monthRows.filter((t) =>
+    (!flt.student || t.studentId === flt.student) &&
+    (!flt.status || t.status === flt.status) &&
+    (!q || (nameOf(t) + " " + t.type + " " + t.round + " " + t.range + " " + t.memo).toLowerCase().includes(q))
+  );
+  const studentOpts = [...new Map(monthRows.map((t) => [t.studentId, { id: t.studentId, name: nameOf(t) }])).values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  const yest = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return ymd(d); })();
+  const testSummary = (list: TestLog[]) => {
+    const done = list.filter((t) => t.status === "완료").length;
+    return [done && `완료 ${done}`, list.length - done && `예정 ${list.length - done}`].filter(Boolean).join(" · ");
+  };
 
   function apply(d: { testLog: TestLog[] }, id: string, key: string, v: string) {
     const t = d.testLog.find((x) => x.id === id);
@@ -74,6 +89,7 @@ export function Tests() {
       </div>
 
       <div className="card">
+        <RecordFilters value={flt} onChange={setFlt} students={studentOpts} statusOptions={TEST_STATUS_OPTS} />
         <div className="tbl-wrap">
           <InlineTable
             rows={rows}
@@ -82,6 +98,11 @@ export function Tests() {
             onPatch={onPatch}
             onDelete={onDelete}
             groupBy={(t) => ({ key: t.date || "미정", label: t.date ? fmtDayBand(t.date) : "시험일 미정" })}
+            collapsible
+            groupSummary={testSummary}
+            openInitially={(key) => key >= yest}
+            pageSize={14}
+            forceOpen={filterActive(flt)}
             empty={<div className="empty">아직 테스트 기록이 없어요. <TodayLink /> 화면에서 입력하면 여기에 쌓여요.</div>}
           />
         </div>
