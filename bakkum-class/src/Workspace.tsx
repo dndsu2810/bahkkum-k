@@ -9,7 +9,8 @@ import { type Category, getCategories, setCategories } from "./lib/categories";
 import { ROLE_LABEL, shownRole, dutyText } from "./lib/roles";
 import { sidebarFor, defaultEntry, dutyLabel, type WsEntry } from "./lib/workspace";
 import { MathContent } from "./screens/MathContent";
-import { HubHome } from "./screens/HubHome";
+import { HubHome, type HomeStat } from "./screens/HubHome";
+import { MessageSend } from "./screens/MessageSend";
 import { Notes } from "./screens/Notes";
 import { BoardShared } from "./screens/BoardShared";
 import { Desk } from "./screens/Desk";
@@ -27,6 +28,8 @@ import { IssueBoard } from "./screens/IssueBoard";
 import { NoticeBanner } from "./components/NoticeBanner";
 import { reqsApi } from "./lib/hubApi";
 import { getRoster, type RosterStudent } from "./lib/rosterApi";
+import { engApi } from "./lib/engApi";
+import { messageApi } from "./lib/messageApi";
 import { getConfig } from "./lib/configApi";
 import { NEW_REQ_EVENT, type ReqPrefill } from "./lib/changeReqLive";
 import { Settings } from "./pages/Settings";
@@ -257,6 +260,70 @@ export function Workspace() {
     return keys.map((k) => byKey.get(k)).filter((e): e is WsEntry => !!e);
   }, [user, byKey]);
 
+  // 영어 보강 '대기' 건수(밴드별) — 사이드바 배지(수학과 동일하게 노란 숫자).
+  const engBandRef = useRef<Record<string, string>>({});
+  const [engWait, setEngWait] = useState<{ mid: number; elem: number }>({ mid: 0, elem: 0 });
+  function refreshEngWait() {
+    engApi.makeups().then((mks) => {
+      const bandOf = engBandRef.current;
+      let mid = 0, elem = 0;
+      for (const mk of mks) {
+        if (mk.status === "대기" || !mk.makeupDate) {
+          const b = bandOf[mk.studentId];
+          if (b === "mid") mid++;
+          else if (b === "elem") elem++;
+        }
+      }
+      setEngWait({ mid, elem });
+    }).catch(() => {});
+  }
+  useEffect(() => {
+    getRoster().then((roster) => {
+      const m: Record<string, string> = {};
+      for (const s of roster) if (s.subjects.includes("english")) m[s.id] = s.englishBand;
+      engBandRef.current = m;
+      refreshEngWait();
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // 화면 이동 시 갱신 — 보강 등록/상태변경 후 사이드바 배지가 따라오도록.
+  useEffect(() => {
+    refreshEngWait();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  // 학생 답장 미확인 수 — '학생에게 메시지 보내기' 사이드바 빨간 배지(원장·수학만).
+  const canMessage = !!user && (user.role === "admin" || user.role === "math");
+  const [replyUnseen, setReplyUnseen] = useState(0);
+  const refreshReplyCount = () => { if (canMessage) messageApi.replyCount().then(setReplyUnseen).catch(() => {}); };
+  useEffect(() => {
+    refreshReplyCount();
+    const onSeen = () => setReplyUnseen(0);
+    window.addEventListener("msg-replies-seen", onSeen);
+    const iv = window.setInterval(refreshReplyCount, 30000);
+    return () => { window.removeEventListener("msg-replies-seen", onSeen); window.clearInterval(iv); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canMessage]);
+  // 화면 이동 시 갱신(단, 발송 화면에선 화면이 '확인함' 처리하므로 제외 — 깜빡임 방지).
+  useEffect(() => {
+    if (view !== "messages_send") refreshReplyCount();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  // 홈 대시보드 — 키로 이동(접근 가능한 뷰만), 오늘 요약 카드, 오늘 수업 CTA 대상.
+  function goKey(key: string) {
+    const e = byKey.get(key);
+    if (e) open(e);
+  }
+  const homeSummary = useMemo<HomeStat[]>(() => {
+    const out: HomeStat[] = [];
+    if (byKey.has("reqs")) out.push({ key: "reqs", label: "받은 변경 요청", value: reqPending, icon: "bell", tone: "warn" });
+    if (byKey.has("makeup")) out.push({ key: "makeup", label: "보강 대기", value: store.data.makeups.filter((k) => k.status === "pending").length, icon: "refresh", tone: "warn" });
+    if (byKey.has("master")) out.push({ key: "master", label: "재원 학생", value: store.data.students.filter((s) => s.status === "재원").length, icon: "students" });
+    return out;
+  }, [byKey, reqPending, store.data.makeups, store.data.students]);
+  const ctaKey = user ? defaultEntry(user) : "home";
+
   // 현재 위치(브레드크럼)
   const activeEntry =
     view === "math" ? entries.find((e) => e.kind === "math" && e.page === store.page) : byKey.get(view);
@@ -269,6 +336,9 @@ export function Workspace() {
       return n > 0 ? <span className="nav-badge warn">{n}</span> : null;
     }
     if (e.key === "reqs") return reqPending > 0 ? <span className="nav-badge warn">{reqPending}</span> : null;
+    if (e.key === "eng_makeup_mid") return engWait.mid > 0 ? <span className="nav-badge warn">{engWait.mid}</span> : null;
+    if (e.key === "eng_makeup_elem") return engWait.elem > 0 ? <span className="nav-badge warn">{engWait.elem}</span> : null;
+    if (e.key === "messages_send") return replyUnseen > 0 ? <span className="nav-badge bad">{replyUnseen}</span> : null;
     return null;
   }
 
@@ -429,7 +499,7 @@ export function Workspace() {
         </header>
         <main className={"content " + (view === "math" ? "is-math" : "is-hub")}>
           <NoticeBanner />
-          <Body view={view} cats={cats} jumpStudent={jumpStudent} reqPrefill={reqPrefill} homeTiles={homeTiles} onOpen={open} onCats={(c) => { setCategories(c); setCats(c); }} />
+          <Body view={view} cats={cats} jumpStudent={jumpStudent} reqPrefill={reqPrefill} homeTiles={homeTiles} homeSummary={homeSummary} ctaKey={ctaKey} onGo={goKey} onOpen={open} onCats={(c) => { setCategories(c); setCats(c); }} />
           <footer className="maker-credit">제작자 EZ</footer>
         </main>
       </div>
@@ -439,9 +509,10 @@ export function Workspace() {
   );
 }
 
-function Body({ view, cats, jumpStudent, reqPrefill, homeTiles, onOpen, onCats }: { view: string; cats: Category[]; jumpStudent: { id: string; n: number } | null; reqPrefill: (ReqPrefill & { n: number }) | null; homeTiles: WsEntry[]; onOpen: (e: WsEntry) => void; onCats: (c: Category[]) => void }) {
+function Body({ view, cats, jumpStudent, reqPrefill, homeTiles, homeSummary, ctaKey, onGo, onOpen, onCats }: { view: string; cats: Category[]; jumpStudent: { id: string; n: number } | null; reqPrefill: (ReqPrefill & { n: number }) | null; homeTiles: WsEntry[]; homeSummary: HomeStat[]; ctaKey: string; onGo: (key: string) => void; onOpen: (e: WsEntry) => void; onCats: (c: Category[]) => void }) {
   if (view === "math") return <MathContent />;
-  if (view === "home") return <HubHome tiles={homeTiles} onOpen={onOpen} />;
+  if (view === "home") return <HubHome tiles={homeTiles} onOpen={onOpen} summary={homeSummary} ctaKey={ctaKey} onGo={onGo} />;
+  if (view === "messages_send") return <MessageSend />;
   if (view === "schedule_hub") return <AcademySchedule />;
   if (view === "reqs") return <ChangeRequests prefill={reqPrefill} />;
   if (view === "ranking") return <PointRanking />;
@@ -482,5 +553,5 @@ function Body({ view, cats, jumpStudent, reqPrefill, homeTiles, onOpen, onCats }
     const tab = view === "desk_students" ? "students" : view === "desk_accounts" ? "accounts" : view === "desk_today" ? "today" : "timetable";
     return <Desk key={view} tab={tab} />;
   }
-  return <HubHome tiles={homeTiles} onOpen={onOpen} />;
+  return <HubHome tiles={homeTiles} onOpen={onOpen} summary={homeSummary} ctaKey={ctaKey} onGo={onGo} />;
 }

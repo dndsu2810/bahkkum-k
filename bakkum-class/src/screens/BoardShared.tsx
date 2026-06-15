@@ -76,6 +76,12 @@ export function BoardShared() {
 
   // 보관(archived)·원장 전용은 제외. 완료는 칸에서 월별로 따로 거른다(아래).
   const visible = useMemo(() => tasks.filter((t) => !t.archived && !t.adminOnly), [tasks]);
+  // 전체보기 / 내 담당 보기 — 로그인 사용자가 담당자로 지정된 것만.
+  const [mine, setMine] = useState(false);
+  const myName = user?.name || "";
+  const isMine = (t: BoardTask) => t.assignee.split(",").map((s) => s.trim()).includes(myName);
+  const scoped = useMemo(() => (mine ? visible.filter(isMine) : visible), [visible, mine, myName]); // eslint-disable-line react-hooks/exhaustive-deps
+  const myCount = useMemo(() => visible.filter(isMine).length, [visible, myName]); // eslint-disable-line react-hooks/exhaustive-deps
   // 완료가 있는 달 목록(최신순) — 월 이동 버튼 활성화 판단용.
   const doneMonths = useMemo(() => {
     const set = new Set<string>();
@@ -165,6 +171,10 @@ export function BoardShared() {
           <h1 className="sm-title">강사 업무 보드</h1>
           <p className="sm-desc">모든 선생님이 함께 보는 보드예요. 카드를 누르면 상세·담당·마감을 수정할 수 있어요.</p>
         </div>
+        <div className="seg-toggle">
+          <button className={mine ? "" : "on"} onClick={() => setMine(false)}>전체보기</button>
+          <button className={mine ? "on" : ""} onClick={() => setMine(true)}>내 담당 {myCount > 0 && <span className="seg-count">{myCount}</span>}</button>
+        </div>
       </div>
 
       <div className="board2-add">
@@ -183,7 +193,7 @@ export function BoardShared() {
 
       <div className="board2-cols">
         {ACTIVE_COLS.map((c) => {
-          const items = sortTasks(visible.filter((t) => t.status === c.key));
+          const items = sortTasks(scoped.filter((t) => t.status === c.key));
           return (
             <div className="board2-col" key={c.key}>
               <div className="board2-col-h">
@@ -198,7 +208,7 @@ export function BoardShared() {
         })}
         {/* 완료 — 월별로 정리해서 봄(쌓이지 않게). 월 이동으로 지난 완료도 확인. */}
         {(() => {
-          const items = sortTasks(visible.filter((t) => t.status === "done" && monthOf(t) === doneMonth));
+          const items = sortTasks(scoped.filter((t) => t.status === "done" && monthOf(t) === doneMonth));
           return (
             <div className="board2-col" key="done">
               <div className="board2-col-h">

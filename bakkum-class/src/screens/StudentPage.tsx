@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth";
 import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type Curriculum, type CurriculumSection, type CurriculumRow, type StudentLogRow } from "../lib/studentApi";
-import { DOW, DOW_ORDER, fmtFull, fmtMDDow, parseD, timeToMin, todayStr } from "../lib/dates";
+import { messageApi, type Message } from "../lib/messageApi";
+import { DOW, DOW_ORDER, fmtFull, fmtMDDow, fmtWhen, parseD, timeToMin, todayStr } from "../lib/dates";
 import { NoticeBanner } from "../components/NoticeBanner";
 import { DateField } from "../components/DateControls";
 import { getCachedLogo } from "../lib/configApi";
@@ -432,6 +433,7 @@ export function StudentHome() {
           </div>
         </div>
         <div className="sp-shell-actions">
+          <StudentMessages />
           <button className="btn ghost sm" onClick={() => setShowIssue(true)}><Icon name="alert" /> 오류 신고</button>
           <button className="btn ghost" onClick={() => logout()}>로그아웃</button>
         </div>
@@ -451,6 +453,150 @@ export function StudentHome() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------------- 학생 메시지함 (종 + 배지 + 일시 강조 + 답장 1회) ---------------- */
+function StudentMessages() {
+  const [list, setList] = useState<Message[]>([]);
+  const [open, setOpen] = useState(false);
+  const [popup, setPopup] = useState(false);
+  const firstLoad = useRef(true);
+  const lastTs = useRef(0); // 지금까지 본 가장 최신 메시지 시각
+  const popupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flashPopup = () => {
+    setPopup(true);
+    if (popupTimer.current) clearTimeout(popupTimer.current);
+    popupTimer.current = setTimeout(() => setPopup(false), 6000);
+  };
+  const reload = () =>
+    messageApi.inbox().then((msgs) => {
+      setList(msgs);
+      const newestAll = msgs.reduce((mx, m) => Math.max(mx, m.createdAt), 0);
+      // 첫 로드에 안 읽은 게 있거나, 이전에 못 본 새 안읽음 메시지가 오면 강조 팝업.
+      if (firstLoad.current) {
+        firstLoad.current = false;
+        if (msgs.some((m) => m.readAt === 0)) flashPopup();
+      } else if (msgs.some((m) => m.readAt === 0 && m.createdAt > lastTs.current)) {
+        flashPopup();
+      }
+      lastTs.current = Math.max(lastTs.current, newestAll);
+    }).catch(() => {});
+  useEffect(() => {
+    void reload();
+    // 새로고침 없이도 곧 보이도록 자주 확인(15초). 새 탭 포커스 시에도 즉시 갱신.
+    const iv = window.setInterval(() => void reload(), 15000);
+    const onFocus = () => void reload();
+    window.addEventListener("focus", onFocus);
+    return () => { window.clearInterval(iv); window.removeEventListener("focus", onFocus); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const unread = list.filter((m) => m.readAt === 0).length;
+
+  function openBox() { setOpen(true); setPopup(false); }
+  async function markRead(m: Message) {
+    if (m.readAt) return;
+    setList((cur) => cur.map((x) => (x.id === m.id ? { ...x, readAt: Date.now() } : x)));
+    await messageApi.read(m.id).catch(() => {});
+  }
+  async function reply(m: Message, text: string) {
+    await messageApi.reply(m.id, text);
+    setList((cur) => cur.map((x) => (x.id === m.id ? { ...x, replyBody: text, replyAt: Date.now(), readAt: x.readAt || Date.now() } : x)));
+  }
+
+  // 날짜별 묶음(최신 날짜 먼저).
+  const groups = useMemo(() => {
+    const m = new Map<string, Message[]>();
+    for (const x of list) {
+      const d = new Date(x.createdAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const arr = m.get(key);
+      if (arr) arr.push(x);
+      else m.set(key, [x]);
+    }
+    return [...m.entries()];
+  }, [list]);
+
+  return (
+    <>
+      <button className="topbell" onClick={openBox} aria-label="메시지" title="메시지">
+        <Icon name="bell" />
+        {unread > 0 && <span className="topbell-badge">{unread}</span>}
+      </button>
+      {popup && (
+        <button className="msg-pop" onClick={openBox}>
+          <Icon name="bell" /> 선생님이 메시지를 보냈어요
+        </button>
+      )}
+      {open && (
+        <div className="prof-overlay sp-overlay" onClick={() => setOpen(false)}>
+          <div className="sp-modal msg-inbox" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-x sp-modal-x" onClick={() => setOpen(false)} aria-label="닫기">✕</button>
+            <h2 className="msg-inbox-h">메시지함</h2>
+            {list.length === 0 ? (
+              <div className="hub-muted" style={{ padding: "20px 4px" }}>받은 메시지가 없어요.</div>
+            ) : (
+              groups.map(([day, msgs]) => (
+                <div className="msg-day" key={day}>
+                  <div className="msg-day-h">{fmtMDDow(day)}</div>
+                  {msgs.map((m) => <StudentMsgCard key={m.id} m={m} onRead={() => markRead(m)} onReply={(t) => reply(m, t)} />)}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function StudentMsgCard({ m, onRead, onReply }: { m: Message; onRead: () => void; onReply: (text: string) => Promise<void> }) {
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState("");
+  const replied = m.replyAt > 0;
+  const unread = m.readAt === 0;
+  async function doReply() {
+    const body = text.trim();
+    if (!body || sending) return;
+    setSending(true);
+    setErr("");
+    try {
+      await onReply(body);
+      setText("");
+    } catch {
+      setErr("이미 답장했거나 보내지 못했어요.");
+    } finally {
+      setSending(false);
+    }
+  }
+  return (
+    <div className={"msg-card" + (unread ? " unread" : "")}>
+      <div className="msg-card-top">
+        {unread && <span className="msg-card-dot" />}
+        <span className="msg-card-from">{m.senderName || "선생님"}</span>
+        <span className="msg-card-when">{fmtWhen(m.createdAt)}</span>
+      </div>
+      <div className="msg-card-body">{m.body}</div>
+      {replied ? (
+        <div className="msg-card-replied"><span className="msg-card-replied-l">내 답장</span> {m.replyBody}</div>
+      ) : (
+        <div className="msg-card-reply">
+          <input
+            className="input"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="답장 (한 번만 보낼 수 있어요)"
+            onKeyDown={(e) => { if (e.key === "Enter") void doReply(); }}
+          />
+          <button className="btn primary sm" onClick={doReply} disabled={!text.trim() || sending}>{sending ? "보내는 중…" : "답장"}</button>
+          {unread && <button className="btn ghost sm" onClick={onRead}>읽음</button>}
+        </div>
+      )}
+      {err && <div className="auth-err" style={{ marginTop: 6 }}>{err}</div>}
     </div>
   );
 }

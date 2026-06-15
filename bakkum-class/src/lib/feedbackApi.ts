@@ -21,6 +21,7 @@ export interface Notice {
   endDate: string;
   createdAt: number;
   createdBy: string;
+  audience: "all" | "staff"; // all=학생 포함 전체, staff=강사만
 }
 export interface Issue {
   id: string;
@@ -44,7 +45,7 @@ export const feedbackApi = {
   notices: () => jget<{ notices: Notice[] }>("/api/notice").then((j) => j.notices),
   /** 전체 공지(원장). */
   noticesAll: () => jget<{ notices: Notice[] }>("/api/notice/all").then((j) => j.notices),
-  saveNotice: (n: { id?: string; text: string; level: "info" | "warn"; active: boolean; startDate?: string; endDate?: string }) =>
+  saveNotice: (n: { id?: string; text: string; level: "info" | "warn"; active: boolean; audience?: "all" | "staff"; startDate?: string; endDate?: string }) =>
     jpost("/api/notice", n),
   removeNotice: (id: string) => jpost("/api/notice/delete", { id }),
 

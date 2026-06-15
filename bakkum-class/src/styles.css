@@ -94,6 +94,7 @@ body,.side,.topbar,.card,.board-col,.today-brief,.nav-item{transition:background
 .nav-badge{margin-left:auto;font-size:11px;font-weight:700;background:#eef1f6;color:var(--ink2);padding:1px 8px;border-radius:var(--r-full);min-width:22px;text-align:center}
 .nav-item.active .nav-badge{background:#fff;color:var(--brand-d)}
 .nav-badge.warn{background:var(--warn-soft);color:var(--warn)}
+.nav-badge.bad{background:var(--bad);color:#fff}
 .side-foot{margin-top:auto;padding:var(--s3);border-radius:var(--r-md);background:#f5f7fb;border:1px solid var(--line)}
 .side-foot .h{display:flex;align-items:center;gap:6px;font-size:var(--t-sm);font-weight:600;color:var(--ink2)}
 .side-foot p{font-size:var(--t-cap);color:var(--ink3);margin-top:4px;line-height:1.5}
@@ -244,7 +245,7 @@ table.tbl th{
 }
 table.tbl td{padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:middle;color:var(--ink2)}
 table.tbl tbody tr{transition:.1s}
-table.tbl tbody tr:hover{background:#fafbfd}
+table.tbl tbody tr:hover{background:var(--card2)}
 table.tbl tbody tr:last-child td{border-bottom:none}
 .t-name{font-weight:700;color:var(--ink);display:flex;align-items:center;gap:10px}
 
@@ -331,7 +332,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 .mk-list{display:flex;flex-direction:column}
 .mk-item{display:flex;align-items:center;gap:13px;padding:var(--s4) var(--s6);border-bottom:1px solid var(--line);transition:.1s}
 .mk-item:last-child{border-bottom:none}
-.mk-item:hover{background:#fafbfd}
+.mk-item:hover{background:var(--card2)}
 .mk-main{flex:1;min-width:0}
 .mk-name{font-weight:700;font-size:var(--t-base);display:flex;align-items:center;gap:8px}
 .mk-meta{font-size:var(--t-cap);color:var(--ink3);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
@@ -715,6 +716,76 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .mk-grouphead .gcnt{color:var(--ink3);font-weight:600}
 .mk-item.pending{background:rgba(217,119,6,.05)}
 .mk-actions{display:flex;gap:7px;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+/* 영어 보강관리 — 등록 버튼 바 + 등록/수정 모달 폼 */
+.mk-addbar{display:flex;justify-content:flex-end;margin-bottom:14px}
+.mk-flabel{display:block;font-size:var(--t-sm);font-weight:700;color:var(--ink2);margin:14px 0 6px}
+.modal-body>.mk-flabel:first-child{margin-top:0}
+.mk-flabel-opt{font-size:var(--t-cap);font-weight:600;color:var(--ink4)}
+.mk-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.mk-form-grid .mk-flabel{margin-top:0}
+.mk-form-grid .input,.mk-form-grid .ctrl,.mk-form-grid .datefield{width:100%}
+.mk-form-grid .datefield{white-space:nowrap}
+/* 초등영어 대시보드 — 클릭 가능한 행 + 학생 오늘 상세 모달 */
+.tbl tbody tr.tbl-click{cursor:pointer}
+.eng-dash-hint{font-size:var(--t-cap);font-weight:500;color:var(--ink3);margin-left:8px}
+.elem-detail-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px}
+.elem-detail-cell{display:flex;flex-direction:column;gap:4px;padding:12px 14px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md)}
+.elem-detail-l{font-size:var(--t-sm);font-weight:700;color:var(--ink3)}
+.elem-detail-v{font-size:var(--t-md);font-weight:700;color:var(--ink)}
+.elem-detail-block{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.elem-detail-chips{display:flex;flex-wrap:wrap;gap:6px}
+.elem-detail-p{font-size:var(--t-base);color:var(--ink);line-height:1.55;white-space:pre-wrap}
+/* 학생 메시지 — 발송 화면 */
+.msg-compose{padding:var(--s5);margin-bottom:var(--s6)}
+.msg-search{margin-bottom:10px}
+.msg-sub{font-weight:500;color:var(--ink3)}
+.msg-target-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.msg-label{font-size:var(--t-sm);font-weight:600;color:var(--ink2)}
+.msg-label b{color:var(--brand-d)}
+.msg-targets{display:flex;flex-wrap:wrap;gap:7px;max-height:220px;overflow:auto;padding:2px}
+.msg-chip{display:inline-flex;align-items:center;gap:5px;min-height:36px;padding:0 13px;border:1px solid var(--line2);border-radius:var(--r-full);background:var(--card);font-size:var(--t-sm);font-weight:600;color:var(--ink2);transition:.12s}
+.msg-chip:hover{border-color:var(--brand-line)}
+.msg-chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.msg-chip svg{width:14px;height:14px;stroke-width:2.4}
+.msg-body{margin-top:14px}
+.msg-foot{display:flex;align-items:center;gap:12px;margin-top:14px}
+.msg-ok{display:inline-flex;align-items:center;gap:5px;font-size:var(--t-sm);font-weight:600;color:var(--ok)}
+.msg-ok svg{width:15px;height:15px;stroke-width:2.4}
+.msg-sec-h{font-size:var(--t-sm);font-weight:700;color:var(--ink2);margin:0 0 10px 2px}
+.msg-sent-list{display:flex;flex-direction:column;gap:12px}
+.msg-batch{padding:16px 18px}
+.msg-batch-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.msg-batch-when{font-size:var(--t-cap);color:var(--ink3);font-weight:600}
+.msg-batch-stat{font-size:var(--t-cap);color:var(--ink2);font-weight:700}
+.msg-batch-body{font-size:var(--t-base);color:var(--ink);line-height:1.55;white-space:pre-wrap;padding:10px 12px;background:var(--card2);border-radius:var(--r-md);margin-bottom:10px}
+.msg-recips{display:flex;flex-direction:column;gap:6px}
+.msg-recip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:var(--t-sm)}
+.msg-recip-name{font-weight:700;color:var(--ink)}
+.msg-recip-st{font-size:var(--t-cap);font-weight:700;color:var(--ink4);background:var(--card2);border-radius:var(--r-full);padding:1px 9px}
+.msg-recip.read .msg-recip-st{color:var(--brand-d);background:var(--brand-soft)}
+.msg-recip.replied .msg-recip-st{color:var(--ok);background:var(--ok-soft)}
+.msg-recip-reply{color:var(--ink2);font-style:italic}
+/* 학생 메시지 — 일시 강조 팝업 + 메시지함 */
+.msg-pop{position:fixed;top:64px;right:20px;z-index:60;display:inline-flex;align-items:center;gap:8px;
+  padding:12px 16px;border:none;border-radius:var(--r-md);background:var(--brand);color:#fff;font-size:var(--t-sm);font-weight:700;
+  box-shadow:var(--sh-lg);cursor:pointer;animation:msgpop .25s ease}
+.msg-pop svg{width:16px;height:16px;stroke-width:2.2}
+@keyframes msgpop{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.msg-inbox{max-width:540px}
+.msg-inbox-h{font-size:var(--t-lg);font-weight:700;color:var(--ink);margin-bottom:14px}
+.msg-day{margin-bottom:16px}
+.msg-day-h{font-size:var(--t-cap);font-weight:700;color:var(--ink3);margin:0 0 8px 2px}
+.msg-card{border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;margin-bottom:10px;background:var(--card)}
+.msg-card.unread{border-color:var(--brand-line);background:var(--brand-soft)}
+.msg-card-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.msg-card-dot{width:8px;height:8px;border-radius:var(--r-full);background:var(--brand);flex:none}
+.msg-card-from{font-size:var(--t-sm);font-weight:700;color:var(--ink)}
+.msg-card-when{margin-left:auto;font-size:var(--t-cap);color:var(--ink3)}
+.msg-card-body{font-size:var(--t-base);color:var(--ink);line-height:1.55;white-space:pre-wrap}
+.msg-card-reply{display:flex;gap:7px;align-items:center;margin-top:12px}
+.msg-card-reply .input{flex:1}
+.msg-card-replied{margin-top:12px;padding:10px 12px;background:var(--card2);border-radius:var(--r-md);font-size:var(--t-sm);color:var(--ink2)}
+.msg-card-replied-l{font-weight:700;color:var(--ink3);margin-right:6px}
 .mk-parent{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;border-radius:var(--r-full);padding:3px 8px}
 .mk-parent svg{width:12px;height:12px;stroke-width:2.2}
 .mk-parent.ok{background:var(--ok-soft);color:var(--ok)}
@@ -982,7 +1053,29 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .hub-card h2{font-size:var(--t-xl);color:var(--ink);margin-bottom:var(--s2)}
 .hub-muted{color:var(--ink3);font-size:var(--t-base);line-height:1.6}
 /* 홈 바로가기 타일 — 자주 쓰는 곳으로 직행 */
-.home-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s4);margin-top:var(--s6);max-width:680px}
+/* 홈 — 오늘 수업 CTA */
+.home-cta{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;max-width:680px;margin-top:var(--s6);
+  padding:18px 22px;border:none;border-radius:var(--r-lg);background:linear-gradient(135deg,var(--brand),var(--brand-d));
+  color:#fff;box-shadow:var(--sh);cursor:pointer;text-align:left;transition:transform .15s,box-shadow .15s}
+.home-cta:hover{transform:translateY(-2px);box-shadow:var(--sh-lg)}
+.home-cta-l{display:flex;flex-direction:column;gap:2px}
+.home-cta-date{font-size:var(--t-sm);font-weight:600;opacity:.9}
+.home-cta-l b{font-size:var(--t-lg);font-weight:700}
+.home-cta-ic{width:44px;height:44px;border-radius:var(--r-md);background:rgba(255,255,255,.18);display:grid;place-items:center;flex:none}
+.home-cta-ic svg{width:24px;height:24px;stroke-width:2}
+/* 홈 — 오늘 요약 카드(클릭 이동) */
+.home-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s3);margin-top:var(--s4);max-width:680px}
+.home-stat{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:16px 18px;border:1px solid var(--line);
+  border-radius:var(--r-md);background:var(--card);text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s}
+.home-stat:hover{border-color:var(--brand-line);box-shadow:var(--sh-sm);transform:translateY(-1px)}
+.home-stat-ic{width:30px;height:30px;border-radius:var(--r-sm);background:var(--card2);color:var(--ink3);display:grid;place-items:center;margin-bottom:2px}
+.home-stat-ic svg{width:17px;height:17px;stroke-width:2}
+.home-stat-v{font-size:var(--t-num);font-weight:800;color:var(--ink);line-height:1}
+.home-stat-l{font-size:var(--t-sm);color:var(--ink3);font-weight:600}
+.home-stat.warn .home-stat-v{color:var(--warn)}
+.home-stat.warn .home-stat-ic{background:var(--warn-soft);color:var(--warn)}
+.home-sec-h{font-size:var(--t-sm);font-weight:700;color:var(--ink2);margin:var(--s6) 0 0 2px}
+.home-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s4);margin-top:var(--s3);max-width:680px}
 .home-tile{display:flex;flex-direction:column;align-items:flex-start;gap:10px;text-align:left;border:1px solid var(--line);
   background:var(--card);border-radius:var(--r-lg);padding:var(--s5);cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s}
 .home-tile:hover{transform:translateY(-2px);box-shadow:var(--sh);border-color:var(--brand-line)}
@@ -1229,8 +1322,8 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .cg{border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:var(--card)}
 .cg-head{display:grid;grid-template-columns:repeat(7,1fr);background:var(--card2)}
 .cg-hd{text-align:center;font-size:var(--t-cap);font-weight:700;color:var(--ink3);padding:8px 0;border-bottom:1px solid var(--line)}
-.cg-hd.sun{color:#dc2626}
-.cg-hd.sat{color:#2563eb}
+.cg-hd.sun{color:var(--bad)}
+.cg-hd.sat{color:var(--brand)}
 .cg-grid{display:grid;grid-template-columns:repeat(7,1fr)}
 .cg-cell{min-height:104px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:4px 5px;
   display:flex;flex-direction:column;gap:3px;cursor:pointer;transition:background .1s}
@@ -1239,8 +1332,8 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .cg-cell.empty{background:var(--bg);cursor:default}
 .cg-cell.today{background:var(--brand-soft)}
 .cg-dnum{font-size:var(--t-sm);font-weight:700;color:var(--ink2);align-self:flex-start;padding:1px 2px}
-.cg-dnum.sun{color:#dc2626}
-.cg-dnum.sat{color:#2563eb}
+.cg-dnum.sun{color:var(--bad)}
+.cg-dnum.sat{color:var(--brand)}
 .cg-cell.today .cg-dnum{color:#fff;background:var(--brand);border-radius:var(--r-full);min-width:20px;height:20px;
   display:grid;place-items:center;padding:0}
 .cg-evs{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -1249,7 +1342,7 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .cg-ev-학원{color:var(--brand-d);background:var(--brand-soft)}
 .cg-ev-학교{color:#9333ea;background:#f5edff}
 .cg-ev-강사{color:#0891b2;background:#e6f7fb}
-.cg-ev-휴원{color:#dc2626;background:#fdeaea}
+.cg-ev-휴원{color:var(--bad);background:#fdeaea}
 .cg-ev-할일{color:#ca8a04;background:#fdf6e3}
 .cg-more{font-size:10px;color:var(--ink3);font-weight:600;padding-left:4px}
 @media(max-width:680px){.cg-cell{min-height:72px}.cg-ev{font-size:10px;padding:1px 4px}}
@@ -1689,20 +1782,47 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 /* 연간 수업 계획표 (네이티브 표) */
 .plan-tbl{border-collapse:collapse;font-size:var(--t-cap);min-width:920px}
 .plan-tbl th,.plan-tbl td{border:1px solid var(--line);padding:0}
-.plan-tbl thead th{background:#f4f6f9;font-weight:700;color:var(--ink2);padding:6px 4px;text-align:center;position:sticky;top:0;z-index:2}
+.plan-tbl thead th{background:#f4f6f9;font-weight:700;color:var(--ink2);padding:10px 8px;text-align:center;vertical-align:top;position:sticky;top:0;z-index:2}
 [data-theme="dark"] .plan-tbl thead th{background:var(--card2)}
-.plan-q{font-weight:800;color:var(--ink)}
-.plan-m{font-weight:600;min-width:68px}
-.plan-cat-h{left:0;z-index:3}
-.plan-rowh{position:sticky;left:0;background:var(--card);z-index:1;text-align:left;padding:6px 10px;white-space:nowrap;min-width:150px}
-.plan-cat{display:block;font-size:10px;font-weight:800;color:var(--brand-d)}
+.plan-q{font-weight:800;color:var(--ink);padding-bottom:8px!important}
+.plan-m{font-weight:600;min-width:90px}
+/* '항목' 헤더는 아래로 정렬해 월 라벨과 같은 줄에 맞춤 */
+.plan-cat-h{left:0;z-index:3;vertical-align:bottom}
+.plan-rowh{position:sticky;left:0;background:var(--card);z-index:1;text-align:left;padding:12px 14px;line-height:1.5;white-space:nowrap;min-width:152px;vertical-align:middle}
+.plan-cat{display:block;font-size:10px;font-weight:800;color:var(--brand-d);margin-bottom:3px}
 .plan-item{font-weight:600;color:var(--ink)}
 .plan-catstart th,.plan-catstart td{border-top:2px solid var(--line2)}
-.plan-cell{vertical-align:middle}
+.plan-cell{vertical-align:top}
 .plan-cell.filled{background:var(--brand-soft)}
-.plan-input{width:100%;min-width:64px;border:0;background:transparent;padding:6px 5px;font-size:11px;color:var(--ink);text-align:center}
-.plan-input:focus{outline:2px solid var(--brand);outline-offset:-2px;background:var(--card)}
-.plan-val{display:block;padding:6px 5px;font-size:11px;color:var(--ink);text-align:center;min-height:18px}
+/* 칸 내용 — 잘리지 않고 줄바꿈으로 모두 보이게, 여백 확보 */
+.plan-val{display:block;padding:10px 11px;font-size:var(--t-cap);line-height:1.55;color:var(--ink);text-align:center;min-height:22px;white-space:pre-wrap;word-break:break-word}
+/* 편집자용: 칸 전체가 버튼. 누르면 일정명·상세설명 입력 모달 */
+.plan-cellbtn{width:100%;min-width:64px;min-height:44px;border:0;background:transparent;padding:10px 11px;font-size:var(--t-cap);line-height:1.55;color:var(--ink);text-align:center;white-space:pre-wrap;word-break:break-word;border-radius:var(--r-sm);transition:background .12s}
+.plan-cellbtn:hover{background:var(--brand-line)}
+/* 빈 칸의 + 는 평소엔 거의 안 보이게(과밀 정리), 칸 위에 올리면 또렷 */
+.plan-cellbtn.empty{color:var(--ink4);opacity:.14}
+.plan-cellbtn.empty:hover{opacity:1;color:var(--brand-d)}
+.plan-cellbtn.empty svg{width:14px;height:14px;stroke-width:2}
+/* 상세설명 있음 표시 점 */
+.plan-dot{display:inline-block;width:5px;height:5px;border-radius:var(--r-full);background:var(--brand);margin-left:5px;vertical-align:middle}
+.plan-cell-ta{width:100%;min-height:120px;resize:vertical;line-height:1.5;white-space:pre-wrap}
+/* 모달 폼 라벨 */
+.plan-flabel{display:block;font-size:var(--t-sm);font-weight:700;color:var(--ink2);margin-bottom:6px}
+.plan-flabel-opt{font-size:var(--t-cap);font-weight:600;color:var(--ink4)}
+/* 연도 네비게이션 */
+.plan-head-actions{display:flex;align-items:center;gap:var(--s3)}
+.plan-yearnav{display:inline-flex;align-items:center;gap:var(--s1);background:var(--card);border:1px solid var(--line2);border-radius:var(--r-full);padding:2px 4px}
+.plan-yearnav .btn.ghost.sm{min-width:30px;padding:0;font-size:var(--t-md);line-height:1;border:none}
+.plan-year{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--ink);font-size:var(--t-sm);padding:0 var(--s2);white-space:nowrap}
+.plan-year-now{font-size:10px;font-weight:800;color:#fff;background:var(--brand);border-radius:var(--r-full);padding:1px 7px}
+/* 분기 구분선(2·3·4분기 시작 칸) */
+.plan-tbl th.qstart,.plan-tbl td.qstart{border-left:2px solid var(--line2)}
+/* 현재 월 강조 — 헤더는 채움, 칼럼은 양옆 테두리로 한 줄 강조 */
+.plan-m.now{background:var(--brand);color:#fff}
+.plan-now-tag{display:block;font-size:9px;font-weight:800;letter-spacing:.02em;margin-top:1px;opacity:.95}
+.plan-tbl th.now,.plan-tbl td.now{box-shadow:inset 2px 0 0 var(--brand),inset -2px 0 0 var(--brand)}
+.plan-cell.now{background:var(--brand-soft)}
+.plan-cell.now.filled{background:var(--brand-line)}
 .eng-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .eng-pt-add{border-style:dashed!important;color:var(--ink3);font-weight:600}
 /* '오늘 한 것' 항목 관리 */
@@ -1856,7 +1976,7 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .sp-head-info h2{font-size:var(--t-xl);margin:0;color:var(--ink)}
 .sp-sub{font-size:var(--t-sm);color:var(--ink3);margin-top:2px}
 
-.sp-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4)}
+.sp-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);align-items:start}
 @media(max-width:680px){.sp-grid{grid-template-columns:1fr}}
 .sp-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
   box-shadow:var(--sh-sm);padding:var(--s5)}

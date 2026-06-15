@@ -37,6 +37,9 @@ const MATH: WsEntry[] = [
   { key: "plan", label: "연간 수업 계획표", icon: "cal", kind: "math", page: "plan" },
 ];
 
+/* ---- 학생 메시지 보내기 (원장·수학 담당) ---- */
+const MSG: WsEntry = { key: "messages_send", label: "학생에게 메시지 보내기", icon: "megaphone", kind: "hub" };
+
 /* ---- 영어 수업관리 (핵심부터) ---- */
 function engEntries(band: "mid" | "elem"): WsEntry[] {
   const sfx = "_" + band;
@@ -113,6 +116,9 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   if (areas.has("sns")) common.push(SNS);
   common.push(ISSUES); // 오류·개선 요청 — 모두 접근.
   if (common.length) groups.push({ label: "공통", entries: common });
+
+  // 학생 메시지 — 원장·수학 담당 공통, 별도 카테고리(동일 위치).
+  if (role === "admin" || role === "math") groups.push({ label: "학생 메시지", entries: [MSG] });
 
   // 원장 전용
   if (role === "admin") {

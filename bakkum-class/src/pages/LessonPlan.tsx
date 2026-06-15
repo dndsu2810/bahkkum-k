@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth";
+import { useStore } from "../store";
+import { Icon } from "../icons";
 import { getConfig, setConfig } from "../lib/configApi";
 
 // 연간 수업 계획표 — 원장 시트 구조를 앱 자체 표로. 분기→월 타임라인 × 항목(카테고리·세부).
@@ -54,41 +56,113 @@ const DEFAULT_CELLS: Record<string, string> = {
   "학기 마무리|학기 진도 마무리|6": "학기 마무리(A)", "학기 마무리|학기 진도 마무리|11": "학기 마무리(A)",
 };
 
+// 칸 값: 일정명(n) + 상세설명(d). 구버전은 문자열(=일정명)만 저장됐으므로 호환 처리.
+type CellRaw = string | { n: string; d: string };
+const cellName = (v: CellRaw | undefined): string => (typeof v === "string" ? v : v?.n || "");
+const cellDetail = (v: CellRaw | undefined): string => (typeof v === "string" ? "" : v?.d || "");
+
+// 연도별 저장 키. 해당 연도 키가 없으면 구버전 단일 키(LEGACY_KEY)를 기본값으로 사용해
+// 기존에 저장해 둔 계획이 사라지지 않게 한다(읽기 전용 fallback, 덮어쓰지 않음).
+const LEGACY_KEY = "math_year_plan";
+const yearKey = (y: number) => `${LEGACY_KEY}_${y}`;
+function cellsFor(cfg: Record<string, string>, y: number): Record<string, CellRaw> {
+  const raw = cfg[yearKey(y)] ?? cfg[LEGACY_KEY];
+  if (raw) { try { return JSON.parse(raw); } catch { return DEFAULT_CELLS; } }
+  return DEFAULT_CELLS;
+}
+
+// 칸 상세 입력 모달 — 일정명과 상세설명을 분리해 입력.
+function PlanCellModal({ item, sub, name, detail, onSave }: { item: string; sub: string; name: string; detail: string; onSave: (n: string, d: string) => void }) {
+  const { closeModal } = useStore();
+  const [n, setN] = useState(name);
+  const [d, setD] = useState(detail);
+  return (
+    <>
+      <div className="modal-head">
+        <div>
+          <div className="modal-title">{item}</div>
+          <div className="page-desc" style={{ marginTop: 2 }}>{sub}</div>
+        </div>
+        <button className="modal-x" onClick={closeModal} aria-label="닫기"><Icon name="x" /></button>
+      </div>
+      <div className="modal-body">
+        <label className="plan-flabel">일정명</label>
+        <input className="input" value={n} onChange={(e) => setN(e.target.value)} placeholder="예: 1학기 중간고사" autoFocus />
+        <label className="plan-flabel" style={{ marginTop: 14 }}>상세설명 <span className="plan-flabel-opt">선택</span></label>
+        <textarea className="input plan-cell-ta" value={d} onChange={(e) => setD(e.target.value)} rows={5} placeholder="범위·일정·준비물 등 자세한 내용 (줄바꿈 가능)" />
+      </div>
+      <div className="modal-foot">
+        <button className="btn ghost" onClick={closeModal}>취소</button>
+        <button className="btn primary" onClick={() => { onSave(n, d); closeModal(); }}>저장</button>
+      </div>
+    </>
+  );
+}
+
 export function LessonPlan() {
   const { user } = useAuth();
+  const { openModal } = useStore();
   const canEdit = user?.role === "admin";
-  const [cells, setCells] = useState<Record<string, string>>({});
+  const now = new Date();
+  const nowYear = now.getFullYear();
+  const nowMonth = now.getMonth(); // 0~11
+
+  const cfgRef = useRef<Record<string, string>>({});
+  const [year, setYear] = useState(nowYear);
+  const [cells, setCells] = useState<Record<string, CellRaw>>({});
   const [loaded, setLoaded] = useState(false);
   const [savedAt, setSavedAt] = useState("");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const nowThRef = useRef<HTMLTableCellElement | null>(null);
 
   useEffect(() => {
     getConfig()
-      .then((c) => {
-        const raw = c.math_year_plan;
-        if (raw) { try { setCells(JSON.parse(raw)); } catch { setCells(DEFAULT_CELLS); } }
-        else setCells(DEFAULT_CELLS);
-      })
+      .then((c) => { cfgRef.current = c; setCells(cellsFor(c, nowYear)); })
       .catch(() => setCells(DEFAULT_CELLS))
       .finally(() => setLoaded(true));
-  }, []);
+  }, [nowYear]);
 
-  function edit(k: string, v: string) {
+  // 현재 연도를 보고 있을 때, 표를 열면 이번 달 칸이 보이도록 가로 스크롤.
+  useEffect(() => {
+    if (!loaded || year !== nowYear) return;
+    const c = scrollRef.current, th = nowThRef.current;
+    if (c && th) c.scrollLeft = Math.max(0, th.offsetLeft - c.clientWidth / 2 + th.clientWidth / 2);
+  }, [loaded, year, nowYear]);
+
+  function changeYear(delta: number) {
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+    const ny = year + delta;
+    setYear(ny);
+    setCells(cellsFor(cfgRef.current, ny));
+  }
+
+  function scheduleSave(next: Record<string, CellRaw>) {
+    const y = year;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const json = JSON.stringify(next);
+      cfgRef.current = { ...cfgRef.current, [yearKey(y)]: json };
+      void setConfig({ [yearKey(y)]: json }).then(() => setSavedAt("저장됨 " + new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }))).catch(() => setSavedAt("저장 실패"));
+    }, 700);
+  }
+  // 칸을 눌러 일정명·상세설명 입력(모달). 저장 시 즉시 반영 + 자동 저장 예약.
+  // 상세설명이 없으면 문자열(일정명)로 컴팩트 저장 → 구버전과 동일 포맷 유지.
+  function editCell(k: string, name: string, detail: string) {
+    const n = name.trim(), d = detail.trim();
     setCells((cur) => {
       const next = { ...cur };
-      if (v.trim()) next[k] = v; else delete next[k];
+      if (!n && !d) delete next[k];
+      else if (!d) next[k] = n;
+      else next[k] = { n, d };
+      scheduleSave(next);
       return next;
     });
   }
-  function scheduleSave(next: Record<string, string>) {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      void setConfig({ math_year_plan: JSON.stringify(next) }).then(() => setSavedAt("저장됨 " + new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }))).catch(() => setSavedAt("저장 실패"));
-    }, 700);
-  }
-  function onBlurCell() {
-    // 최신 cells로 저장 예약 (setCells가 비동기라 다음 틱에 읽기 위해 함수형 사용)
-    setCells((cur) => { scheduleSave(cur); return cur; });
+  function openCell(k: string, r: PlanRow, m: number) {
+    if (!canEdit) return;
+    const cur = cells[k];
+    openModal(<PlanCellModal item={r.item} sub={`${r.cat} · ${MONTHS[m]}`} name={cellName(cur)} detail={cellDetail(cur)} onSave={(n, d) => editCell(k, n, d)} />);
   }
 
   // 카테고리별 그룹(첫 행에 카테고리명 표시용)
@@ -103,10 +177,17 @@ export function LessonPlan() {
           <h1 className="page-title">수학 연간 수업 계획표</h1>
           <div className="page-desc">분기·월별 수업 계획을 한 곳에서. {canEdit ? "칸을 눌러 바로 입력하면 자동 저장돼요." : "원장이 작성한 연간 계획이에요."}</div>
         </div>
-        {savedAt && <div className="head-actions"><span className="page-desc">{savedAt}</span></div>}
+        <div className="head-actions plan-head-actions">
+          {savedAt && <span className="page-desc">{savedAt}</span>}
+          <div className="plan-yearnav">
+            <button className="btn ghost sm" onClick={() => changeYear(-1)} aria-label="이전 연도">‹</button>
+            <span className="plan-year">{year}년{year === nowYear && <span className="plan-year-now">올해</span>}</span>
+            <button className="btn ghost sm" onClick={() => changeYear(1)} aria-label="다음 연도">›</button>
+          </div>
+        </div>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: "auto" }}>
+      <div className="card" style={{ padding: 0, overflow: "auto" }} ref={scrollRef}>
         {!loaded ? (
           <div className="hub-muted" style={{ padding: 20 }}>불러오는 중…</div>
         ) : (
@@ -114,10 +195,22 @@ export function LessonPlan() {
             <thead>
               <tr>
                 <th className="plan-cat-h" rowSpan={2}>항목</th>
-                {QUARTERS.map((q) => <th key={q.label} colSpan={q.span} className="plan-q">{q.label}</th>)}
+                {QUARTERS.map((q, qi) => <th key={q.label} colSpan={q.span} className={"plan-q" + (qi > 0 ? " qstart" : "")}>{q.label}</th>)}
               </tr>
               <tr>
-                {MONTHS.map((m) => <th key={m} className="plan-m">{m}</th>)}
+                {MONTHS.map((m, mi) => {
+                  const isNow = year === nowYear && mi === nowMonth;
+                  return (
+                    <th
+                      key={m}
+                      ref={isNow ? nowThRef : undefined}
+                      className={"plan-m" + (mi % 3 === 0 && mi > 0 ? " qstart" : "") + (isNow ? " now" : "")}
+                    >
+                      {m}
+                      {isNow && <span className="plan-now-tag">이번 달</span>}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -131,19 +224,19 @@ export function LessonPlan() {
                     </th>
                     {MONTHS.map((_, m) => {
                       const k = key(r, m);
-                      const v = cells[k] || "";
+                      const v = cells[k];
+                      const name = cellName(v);
+                      const detail = cellDetail(v);
+                      const has = !!(name || detail);
+                      const isNow = year === nowYear && m === nowMonth;
                       return (
-                        <td key={m} className={"plan-cell" + (v ? " filled" : "")}>
+                        <td key={m} className={"plan-cell" + (has ? " filled" : "") + (m % 3 === 0 && m > 0 ? " qstart" : "") + (isNow ? " now" : "")}>
                           {canEdit ? (
-                            <input
-                              className="plan-input"
-                              value={v}
-                              onChange={(e) => edit(k, e.target.value)}
-                              onBlur={onBlurCell}
-                              title={v}
-                            />
+                            <button type="button" className={"plan-cellbtn" + (has ? "" : " empty")} onClick={() => openCell(k, r, m)} title={detail || "눌러서 일정 입력"}>
+                              {has ? (<>{name}{detail && <span className="plan-dot" aria-label="상세설명 있음" />}</>) : <Icon name="plus" />}
+                            </button>
                           ) : (
-                            <span className="plan-val" title={v}>{v}</span>
+                            <span className="plan-val" title={detail || undefined}>{name}{detail && <span className="plan-dot" aria-label="상세설명 있음" />}</span>
                           )}
                         </td>
                       );

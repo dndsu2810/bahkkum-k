@@ -18,8 +18,10 @@ const ISSUE_STATUS = ["접수", "해결중", "완료"];
 
 export async function ensureFeedbackTables(env: Env): Promise<void> {
   const stmts = [
-    // 공지 배너 — 원장이 올리는 상단 띠. 활성·기간으로 노출 제어.
-    "CREATE TABLE IF NOT EXISTS class_notice (id TEXT PRIMARY KEY, text TEXT NOT NULL DEFAULT '', level TEXT NOT NULL DEFAULT 'info', active INTEGER NOT NULL DEFAULT 1, start_date TEXT NOT NULL DEFAULT '', end_date TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL DEFAULT '')",
+    // 공지 배너 — 원장이 올리는 상단 띠. 활성·기간·대상(audience)으로 노출 제어.
+    "CREATE TABLE IF NOT EXISTS class_notice (id TEXT PRIMARY KEY, text TEXT NOT NULL DEFAULT '', level TEXT NOT NULL DEFAULT 'info', active INTEGER NOT NULL DEFAULT 1, start_date TEXT NOT NULL DEFAULT '', end_date TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL DEFAULT '', audience TEXT NOT NULL DEFAULT 'staff')",
+    // 기존 공지에 audience 추가 — 기본 'staff'(강사만). '강사에게'로 만들던 기존 동작 유지 + 학생 화면 노출 방지.
+    "ALTER TABLE class_notice ADD COLUMN audience TEXT NOT NULL DEFAULT 'staff'",
     // 오류·개선 요청 — 누구나 작성, 원장이 상태 변경.
     "CREATE TABLE IF NOT EXISTS class_issue (id TEXT PRIMARY KEY, page TEXT NOT NULL DEFAULT '', author_sub TEXT NOT NULL DEFAULT '', author_name TEXT NOT NULL DEFAULT '', author_role TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '', shot TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '접수', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)",
   ];
@@ -54,12 +56,13 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
 
   /* ============ 공지 배너 ============ */
   if (p === "/api/notice" && m === "GET") {
-    // 활성 + 오늘이 기간 안인 공지(최신순). 모든 로그인 사용자.
+    // 활성 + 오늘이 기간 안인 공지(최신순). 학생은 대상이 '전체'(all)인 공지만 본다.
     const today = todayStr();
     const r = await env.DB.prepare("SELECT * FROM class_notice WHERE active=1 ORDER BY created_at DESC").all<Record<string, unknown>>();
-    const list = (r.results || [])
+    let list = (r.results || [])
       .map(noticeRow)
       .filter((n) => (!n.startDate || n.startDate <= today) && (!n.endDate || n.endDate >= today));
+    if (me.role === "student") list = list.filter((n) => n.audience === "all");
     return json({ notices: list });
   }
   if (p === "/api/notice/all" && m === "GET") {
@@ -72,15 +75,16 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
     const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const id = String(b.id || "") || newId("ntc");
     const level = ["info", "warn"].includes(String(b.level)) ? String(b.level) : "info";
+    const audience = String(b.audience) === "all" ? "all" : "staff";
     const active = b.active ? 1 : 0;
     const exists = await env.DB.prepare("SELECT id FROM class_notice WHERE id=?").bind(id).first();
     if (exists) {
-      await env.DB.prepare("UPDATE class_notice SET text=?, level=?, active=?, start_date=?, end_date=? WHERE id=?")
-        .bind(String(b.text || ""), level, active, String(b.startDate || ""), String(b.endDate || ""), id)
+      await env.DB.prepare("UPDATE class_notice SET text=?, level=?, active=?, start_date=?, end_date=?, audience=? WHERE id=?")
+        .bind(String(b.text || ""), level, active, String(b.startDate || ""), String(b.endDate || ""), audience, id)
         .run();
     } else {
-      await env.DB.prepare("INSERT INTO class_notice(id,text,level,active,start_date,end_date,created_at,created_by) VALUES(?,?,?,?,?,?,?,?)")
-        .bind(id, String(b.text || ""), level, active, String(b.startDate || ""), String(b.endDate || ""), Date.now(), me.name)
+      await env.DB.prepare("INSERT INTO class_notice(id,text,level,active,start_date,end_date,created_at,created_by,audience) VALUES(?,?,?,?,?,?,?,?,?)")
+        .bind(id, String(b.text || ""), level, active, String(b.startDate || ""), String(b.endDate || ""), Date.now(), me.name, audience)
         .run();
     }
     return json({ ok: true, id });
@@ -163,6 +167,7 @@ function noticeRow(r: Record<string, unknown>) {
     endDate: String(r.end_date ?? ""),
     createdAt: Number(r.created_at ?? 0),
     createdBy: String(r.created_by ?? ""),
+    audience: String(r.audience ?? "staff"),
   };
 }
 function issueRow(r: Record<string, unknown>) {

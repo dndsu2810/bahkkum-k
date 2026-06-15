@@ -67,6 +67,7 @@ import {
 import { handleHub, ensureHubTables } from "./hub";
 import { handleEng, handleStudent, ensureEngTables } from "./eng";
 import { handleFeedback } from "./feedback";
+import { handleMessages } from "./message";
 
 const DEFAULT_APP_URL = "https://bakkum-class.dndsu2810.workers.dev";
 
@@ -316,6 +317,14 @@ export default {
           const me = await readSession(env, request);
           if (!me) return json({ error: "forbidden" }, 403);
           const res = await handleFeedback(env, request, p, me);
+          if (res) return res;
+        }
+
+        // ---- 학생 메시지 — 로그인 누구나(발송=원장·수학, 수신=학생 본인. 권한은 핸들러에서) ----
+        if (p.startsWith("/api/messages")) {
+          const me = await readSession(env, request);
+          if (!me) return json({ error: "forbidden" }, 403);
+          const res = await handleMessages(env, request, p, me);
           if (res) return res;
         }
 

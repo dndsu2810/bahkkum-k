@@ -159,59 +159,12 @@ function MathRecordsImport() {
   );
 }
 
-/** 복구: 앱에 남아있는 학생 명단을 노션 학생 DB로 되살림. 이미 있는 학생은 건너뜀(중복 방지). */
-function RestoreStudents() {
-  const { toast } = useStore();
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-
-  async function run() {
-    if (busy) return;
-    setBusy(true);
-    setMsg("");
-    try {
-      // 1) 미리보기(dry) — 몇 명이 새로 만들어질지 확인.
-      const pre = await fetch("/api/restore/students-to-notion?dry=1", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-      const pj = (await pre.json().catch(() => ({}))) as { total?: number; existing?: number; wouldCreate?: string[]; error?: string };
-      if (!pre.ok || pj.error) { setMsg("미리보기 실패: " + (pj.error || pre.status)); return; }
-      const willCreate = pj.wouldCreate?.length || 0;
-      if (willCreate === 0) { setMsg(`새로 만들 학생이 없어요. (앱 재원 ${pj.total}명 · 노션에 이미 ${pj.existing}명 있음)`); return; }
-      if (!window.confirm(`앱 재원 학생 ${pj.total}명 중,\n노션에 없는 ${willCreate}명을 노션 학생 DB에 새로 만듭니다.\n(이미 있는 ${pj.existing}명은 건너뜀 · 중복 안 생김)\n\n진행할까요?`)) return;
-      // 2) 실제 복구.
-      const r = await fetch("/api/restore/students-to-notion", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-      const j = (await r.json().catch(() => ({}))) as { created?: unknown[]; skipped?: string[]; error?: string };
-      if (!r.ok || j.error) { setMsg("복구 실패: " + (j.error || r.status)); return; }
-      const n = j.created?.length || 0;
-      setMsg(`완료 · ${n}명을 노션에 되살렸어요.` + (j.skipped?.length ? ` (건너뜀 ${j.skipped.length})` : ""));
-      toast(`노션 학생 명단 복구 완료 · ${n}명`);
-    } catch (e) {
-      setMsg("실패: " + String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
-      <div className="card-title" style={{ marginBottom: 6 }}>노션 학생 명단 복구 (앱 → 노션)</div>
-      <div className="page-desc" style={{ marginBottom: 12 }}>
-        노션 학생 DB가 비었을 때, <b>앱에 남아있는 재원 학생</b>을 노션으로 다시 만들어 줍니다.
-        이미 노션에 있는 학생은 건너뛰어 <b>중복이 생기지 않아요</b>. 이름·학교·생년월일·연락처·첫수업일·ID·수업(가능한 경우)을 채웁니다.
-      </div>
-      <button className="btn" onClick={run} disabled={busy}>
-        <span className={busy ? "spin" : undefined}><Icon name="undo" /></span>
-        {busy ? "복구 중…" : "노션으로 학생 명단 되살리기"}
-      </button>
-      {msg && <div className="page-desc" style={{ marginTop: 10 }}>{msg}</div>}
-    </div>
-  );
-}
-
 /** 공지 배너 — 원장이 강사에게 띄우는 상단 띠. 있을 때만 노출. */
 function NoticeSetting() {
   const [list, setList] = useState<Notice[]>([]);
   const [text, setText] = useState("");
   const [level, setLevel] = useState<"info" | "warn">("info");
+  const [audience, setAudience] = useState<"all" | "staff">("staff");
   const [busy, setBusy] = useState(false);
 
   async function reload() {
@@ -227,7 +180,7 @@ function NoticeSetting() {
     if (!text.trim() || busy) return;
     setBusy(true);
     try {
-      await feedbackApi.saveNotice({ text: text.trim(), level, active: true });
+      await feedbackApi.saveNotice({ text: text.trim(), level, audience, active: true });
       setText("");
       await reload();
     } finally {
@@ -235,7 +188,7 @@ function NoticeSetting() {
     }
   }
   async function toggle(n: Notice) {
-    await feedbackApi.saveNotice({ id: n.id, text: n.text, level: n.level, active: !n.active });
+    await feedbackApi.saveNotice({ id: n.id, text: n.text, level: n.level, audience: n.audience, active: !n.active });
     await reload();
   }
   async function remove(n: Notice) {
@@ -245,10 +198,14 @@ function NoticeSetting() {
 
   return (
     <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
-      <div className="card-title" style={{ marginBottom: 6 }}>공지 배너 (강사에게)</div>
-      <div className="page-desc" style={{ marginBottom: 12 }}>올리면 강사·데스크 화면 상단에 한 줄로 떠요. 끄거나 지우면 사라집니다(없으면 아예 안 보임).</div>
+      <div className="card-title" style={{ marginBottom: 6 }}>공지 배너</div>
+      <div className="page-desc" style={{ marginBottom: 12 }}>대상에 따라 강사만 또는 학생 포함 전체 화면 상단에 한 줄로 떠요. 끄거나 지우면 사라집니다.</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <input className="input" style={{ flex: 1, minWidth: 200 }} value={text} onChange={(e) => setText(e.target.value)} placeholder="공지 문구 (예: 오늘 6시 회의 있습니다)" onKeyDown={(e) => e.key === "Enter" && post()} />
+        <select className="input" style={{ width: 116 }} value={audience} onChange={(e) => setAudience(e.target.value as "all" | "staff")}>
+          <option value="staff">강사만</option>
+          <option value="all">학생 포함 전체</option>
+        </select>
         <select className="input" style={{ width: 100 }} value={level} onChange={(e) => setLevel(e.target.value as "info" | "warn")}>
           <option value="info">공지(파랑)</option>
           <option value="warn">중요(주황)</option>
@@ -261,6 +218,7 @@ function NoticeSetting() {
             <div className="rep-itemrow" key={n.id}>
               <span className={"notice-dot " + (n.level === "warn" ? "warn" : "info")} />
               <span style={{ flex: 1, minWidth: 140, opacity: n.active ? 1 : 0.5 }}>{n.text}</span>
+              <span className={"badge " + (n.audience === "all" ? "b-blue" : "b-gray")}>{n.audience === "all" ? "전체" : "강사만"}</span>
               <button className="btn ghost sm" onClick={() => toggle(n)}>{n.active ? "내리기" : "올리기"}</button>
               <button className="rep-x" onClick={() => remove(n)} title="삭제"><Icon name="trash" /></button>
             </div>
@@ -400,7 +358,6 @@ export function Settings({
       <KakaoWebhookSetting />
       <LogoSetting />
       <NotionImport />
-      <RestoreStudents />
       <MathRecordsImport />
     </section>
   );

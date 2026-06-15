@@ -3,9 +3,11 @@ import { useAuth } from "../auth";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { engApi, hwProgress, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, ELEM_LOG_ITEMS, pointsOf, type EngDaily, type EngMakeup, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
-import { DOW, DOW_ORDER, TODAY, fmtMD, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
+import { DOW, DOW_ORDER, TODAY, fmtMD, fmtMDDow, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
-import { Select } from "../components/ui";
+import { Select, Empty } from "../components/ui";
+import { useStore } from "../store";
+import { Icon } from "../icons";
 import { useApprovedChanges, arrivalOf, findSlotConflicts } from "../lib/changeReqLive";
 import { ConflictPopup, ApprovedBanner } from "../components/ChangeReqLive";
 import { DateNav, DateField } from "../components/DateControls";
@@ -1028,8 +1030,9 @@ function EngTimetable({
   );
 }
 
-/* ---------------- 보강 관리 ---------------- */
+/* ---------------- 보강 관리 (수학 보강관리와 동일 레이아웃) ---------------- */
 function EngMakeupPanel({ students }: { students: RosterStudent[] }) {
+  const { openModal } = useStore();
   const ids = useMemo(() => new Set(students.map((s) => s.id)), [students]);
   const nameOf = useMemo(() => {
     const m: Record<string, string> = {};
@@ -1037,19 +1040,10 @@ function EngMakeupPanel({ students }: { students: RosterStudent[] }) {
     return m;
   }, [students]);
   const [list, setList] = useState<EngMakeup[]>([]);
-  const [adding, setAdding] = useState(false);
-  const [f, setF] = useState({ studentId: "", absentDate: todayStr(), makeupDate: todayStr(), makeupTime: "16:00", memo: "" });
 
   const reload = () => engApi.makeups().then((all) => setList(all.filter((mk) => ids.has(mk.studentId)))).catch(() => {});
   useEffect(() => { void reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [students]);
 
-  async function add() {
-    if (!f.studentId) return;
-    await engApi.saveMakeup(f);
-    setAdding(false);
-    setF({ studentId: "", absentDate: todayStr(), makeupDate: todayStr(), makeupTime: "16:00", memo: "" });
-    void reload();
-  }
   async function setStatus(mk: EngMakeup, status: string) {
     await engApi.saveMakeup({ ...mk, status });
     void reload();
@@ -1059,86 +1053,160 @@ function EngMakeupPanel({ students }: { students: RosterStudent[] }) {
     await engApi.removeMakeup(mk.id);
     void reload();
   }
+  function openForm(initial: EngMakeup | null) {
+    openModal(<EngMakeupModal students={students} initial={initial} onSaved={reload} />);
+  }
 
-  const pending = list.filter((m) => m.status === "예정");
-  const others = list.filter((m) => m.status !== "예정");
+  const rowProps = (mk: EngMakeup) => ({ mk, name: nameOf[mk.studentId] || "(삭제된 학생)", onEdit: () => openForm(mk), onStatus: setStatus, onRemove: remove });
+  // 보강일을 아직 안 정한 건 '대기'(상태 "대기" 또는 보강일 없음).
+  const waiting = list.filter((m) => m.status === "대기" || !m.makeupDate);
+  const active = list.filter((m) => (m.status === "예정" || m.status === "완료") && m.makeupDate);
+  const cancelled = list.filter((m) => m.status === "취소" && m.makeupDate);
 
   return (
     <div className="eng-makeup">
-      <div className="eng-add-row" style={{ marginBottom: 12 }}>
-        {adding ? (
-          <>
-            <select className="sm-input" value={f.studentId} onChange={(e) => setF({ ...f, studentId: e.target.value })}>
-              <option value="">학생 선택</option>
-              {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            <DateField value={f.absentDate} onChange={(v) => setF({ ...f, absentDate: v })} placeholder="결석일" />
-            <span className="eng-slash">→</span>
-            <DateField value={f.makeupDate} onChange={(v) => setF({ ...f, makeupDate: v })} placeholder="보강일" />
-            <input className="sm-input" type="time" value={f.makeupTime} onChange={(e) => setF({ ...f, makeupTime: e.target.value })} title="보강시간" />
-            <input className="input" value={f.memo} onChange={(e) => setF({ ...f, memo: e.target.value })} placeholder="메모(선택)" />
-            <button className="btn primary" onClick={add} disabled={!f.studentId}>등록</button>
-            <button className="btn ghost" onClick={() => setAdding(false)}>취소</button>
-          </>
-        ) : (
-          <button className="btn primary" onClick={() => setAdding(true)}>+ 보강 등록</button>
-        )}
+      <div className="mk-addbar">
+        <button className="btn primary" onClick={() => openForm(null)}><Icon name="plus" />보강 등록</button>
       </div>
 
       <div className="mk-group">
-        <div className="mk-grouphead">예정 <span className="gcnt">{pending.length}건</span></div>
+        <div className="mk-grouphead">보강 대기 <span className="gcnt">{waiting.length}건</span></div>
         <div className="card">
-          {pending.length === 0 ? (
-            <div className="hub-muted" style={{ padding: "var(--s4) var(--s6)" }}>예정된 보강이 없어요.</div>
+          {waiting.length === 0 ? (
+            <Empty>보강 일정을 잡을 항목이 없어요.</Empty>
           ) : (
-            <div className="mk-list">
-              {pending.map((mk) => (
-                <MakeupRow key={mk.id} mk={mk} name={nameOf[mk.studentId] || "?"} onStatus={setStatus} onRemove={remove} />
-              ))}
-            </div>
+            <div className="mk-list">{waiting.map((mk) => <EngMakeupRow key={mk.id} {...rowProps(mk)} />)}</div>
           )}
         </div>
       </div>
-      {others.length > 0 && (
+
+      <div className="mk-group">
+        <div className="mk-grouphead">보강 예정 · 완료 <span className="gcnt">{active.length}건</span></div>
+        <div className="card">
+          {active.length === 0 ? (
+            <Empty>예정·완료된 보강이 없어요.</Empty>
+          ) : (
+            <div className="mk-list">{active.map((mk) => <EngMakeupRow key={mk.id} {...rowProps(mk)} />)}</div>
+          )}
+        </div>
+      </div>
+
+      {cancelled.length > 0 && (
         <div className="mk-group">
-          <div className="mk-grouphead">완료·취소 <span className="gcnt">{others.length}건</span></div>
+          <div className="mk-grouphead">보강 미진행 <span className="gcnt">{cancelled.length}건</span></div>
           <div className="card">
-            <div className="mk-list">
-              {others.map((mk) => (
-                <MakeupRow key={mk.id} mk={mk} name={nameOf[mk.studentId] || "?"} onStatus={setStatus} onRemove={remove} />
-              ))}
-            </div>
+            <div className="mk-list">{cancelled.map((mk) => <EngMakeupRow key={mk.id} {...rowProps(mk)} />)}</div>
           </div>
         </div>
       )}
     </div>
   );
 }
-function MakeupRow({ mk, name, onStatus, onRemove }: { mk: EngMakeup; name: string; onStatus: (m: EngMakeup, s: string) => void; onRemove: (m: EngMakeup) => void }) {
-  const tone = mk.status === "완료" ? "b-green" : mk.status === "취소" ? "b-gray" : "b-blue";
+
+function EngMakeupRow({ mk, name, onEdit, onStatus, onRemove }: { mk: EngMakeup; name: string; onEdit: () => void; onStatus: (m: EngMakeup, s: string) => void; onRemove: (m: EngMakeup) => void }) {
+  const waiting = mk.status === "대기" || !mk.makeupDate;
+  const st = waiting ? "대기" : mk.status;
+  const badge = st === "완료" ? "b-green" : st === "취소" ? "b-gray" : st === "대기" ? "b-orange" : "b-blue";
+  const label = st === "완료" ? "보강 완료" : st === "취소" ? "보강 미진행" : st === "대기" ? "보강 대기" : "보강 예정";
+
+  let meta: string;
+  if (waiting) {
+    meta = "결석 " + (mk.absentDate ? fmtMDDow(mk.absentDate) : "미정") + " · 보강일 미정";
+  } else {
+    meta = "보강 " + fmtMDDow(mk.makeupDate) + (mk.makeupTime ? " " + mk.makeupTime : "");
+    if (mk.absentDate) meta += " · 결석 " + fmtMDDow(mk.absentDate);
+  }
+
   return (
-    <div className={"mk-item" + (mk.status === "예정" ? " pending" : "")}>
+    <div className={"mk-item" + (waiting ? " pending" : "")}>
       <div className="mk-main">
-        <div className="mk-name">{name} <span className={"badge " + tone}>{mk.status}</span></div>
+        <div className="mk-name">{name} <span className={"badge " + badge}>{label}</span></div>
         <div className="mk-meta">
-          <span>결석 {mk.absentDate} → 보강 {mk.makeupDate}{mk.makeupTime ? " " + mk.makeupTime : ""}</span>
+          <span>{meta}</span>
           {mk.memo && (<><span className="sep">·</span><span className="mk-memo">{mk.memo}</span></>)}
         </div>
       </div>
       <div className="mk-actions">
-        <select className="sm-input" value={mk.status} onChange={(e) => onStatus(mk, e.target.value)}>
-          <option value="예정">예정</option>
-          <option value="완료">완료</option>
-          <option value="취소">취소</option>
-        </select>
-        <button className="btn danger sm" onClick={() => onRemove(mk)}>삭제</button>
+        {waiting ? (
+          <button className="btn primary sm" onClick={onEdit}><Icon name="calplus" />보강 일정</button>
+        ) : st === "예정" ? (
+          <button className="btn primary sm" onClick={() => onStatus(mk, "완료")}><Icon name="check" />보강 완료</button>
+        ) : (
+          <button className="btn ghost sm" onClick={() => onStatus(mk, "예정")}><Icon name="undo" />{st === "완료" ? "완료 취소" : "예정으로"}</button>
+        )}
+        {!waiting && <button className="btn ghost sm" onClick={onEdit}><Icon name="edit" />수정</button>}
+        {(waiting || st === "예정") && (
+          <button className="btn ghost sm" onClick={() => onStatus(mk, "취소")}><Icon name="ban" />미진행</button>
+        )}
+        <button className="btn danger sm" onClick={() => onRemove(mk)}><Icon name="trash" /></button>
       </div>
     </div>
   );
 }
 
+function EngMakeupModal({ students, initial, onSaved }: { students: RosterStudent[]; initial: EngMakeup | null; onSaved: () => void }) {
+  const { closeModal } = useStore();
+  const [f, setF] = useState({
+    studentId: initial?.studentId || "",
+    absentDate: initial?.absentDate || todayStr(),
+    makeupDate: initial?.makeupDate || "",
+    makeupTime: initial?.makeupTime || "16:00",
+    memo: initial?.memo || "",
+  });
+  const [saving, setSaving] = useState(false);
+  async function save() {
+    if (!f.studentId || saving) return;
+    // 보강일이 없으면 '대기', 정하면 '예정'. 이미 완료/취소면 그대로 둠.
+    const status = !f.makeupDate ? "대기"
+      : (!initial?.status || initial.status === "대기") ? "예정"
+      : initial.status;
+    setSaving(true);
+    try {
+      await engApi.saveMakeup({ ...(initial || {}), ...f, status });
+      closeModal();
+      onSaved();
+    } catch { setSaving(false); }
+  }
+  return (
+    <>
+      <div className="modal-head">
+        <div className="modal-title">{initial ? "보강 수정" : "보강 등록"}</div>
+        <button className="modal-x" onClick={closeModal} aria-label="닫기"><Icon name="x" /></button>
+      </div>
+      <div className="modal-body">
+        <label className="mk-flabel">학생</label>
+        <select className="input" value={f.studentId} onChange={(e) => setF({ ...f, studentId: e.target.value })}>
+          <option value="">학생 선택</option>
+          {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <div className="mk-form-grid">
+          <div>
+            <label className="mk-flabel">결석일</label>
+            <DateField value={f.absentDate} onChange={(v) => setF({ ...f, absentDate: v })} placeholder="결석일" />
+          </div>
+          <div>
+            <label className="mk-flabel">보강일 <span className="mk-flabel-opt">미정이면 대기</span></label>
+            <DateField value={f.makeupDate} onChange={(v) => setF({ ...f, makeupDate: v })} placeholder="보강일" />
+          </div>
+          <div>
+            <label className="mk-flabel">보강 시간</label>
+            <input className="input" type="time" value={f.makeupTime} onChange={(e) => setF({ ...f, makeupTime: e.target.value })} />
+          </div>
+        </div>
+        <label className="mk-flabel">메모 <span className="mk-flabel-opt">선택</span></label>
+        <input className="input" value={f.memo} onChange={(e) => setF({ ...f, memo: e.target.value })} placeholder="메모" />
+      </div>
+      <div className="modal-foot">
+        <button className="btn ghost" onClick={closeModal}>취소</button>
+        <button className="btn primary" onClick={save} disabled={!f.studentId || saving}>{saving ? "저장 중…" : "저장"}</button>
+      </div>
+    </>
+  );
+}
+
 /* ---------------- 현황 대시보드 ---------------- */
 function EngDashboard({ students, daily, band }: { students: RosterStudent[]; daily: Record<string, EngDaily>; band: Band }) {
+  const { openModal } = useStore();
   const attended = students.filter((s) => daily[s.id]?.attended);
   const hwDone = attended.filter((s) => { const d = daily[s.id]; return d && (d.hwChecked || hwProgress(d) === 100); });
   const notYet = students.filter((s) => !daily[s.id]?.attended);
@@ -1169,7 +1237,7 @@ function EngDashboard({ students, daily, band }: { students: RosterStudent[]; da
       {/* 초등영어 학생별 오늘 현황 — 진도·단어시험·활동 한눈에(실시간) */}
       {!showHw && (
         <div className="eng-dash-sec">
-          <h3>학생별 오늘 현황</h3>
+          <h3>학생별 오늘 현황 <span className="eng-dash-hint">학생을 누르면 오늘 한 것을 자세히 볼 수 있어요</span></h3>
           <div className="tbl-wrap">
             <table className="tbl">
               <thead><tr><th>학생</th><th>출석</th><th>원서 진도</th><th>단어시험</th><th>오늘 한 것</th></tr></thead>
@@ -1178,12 +1246,12 @@ function EngDashboard({ students, daily, band }: { students: RosterStudent[]; da
                   const d = daily[s.id];
                   const att = d?.attStatus || (d?.attended ? "출석" : "");
                   return (
-                    <tr key={s.id}>
+                    <tr key={s.id} className="tbl-click" onClick={() => openModal(<ElemDailyModal name={s.name} d={d} />)}>
                       <td className="t-name">{s.name}</td>
                       <td>{att ? <span className={"badge " + (att === "출석" ? "b-green" : att === "지각" ? "b-orange" : att === "결석" ? "b-gray" : "b-blue")}>{att}</span> : <span className="hub-muted">—</span>}</td>
                       <td>{d?.bookNo || <span className="hub-muted">—</span>}</td>
                       <td>{d?.wordTest || <span className="hub-muted">—</span>}</td>
-                      <td>{d?.doneItems?.length ? <span className="hub-muted">{d.doneItems.length}개</span> : <span className="hub-muted">—</span>}</td>
+                      <td>{d?.doneItems?.length ? <span className="badge b-blue">{d.doneItems.length}개</span> : <span className="hub-muted">—</span>}</td>
                     </tr>
                   );
                 })}
@@ -1193,6 +1261,44 @@ function EngDashboard({ students, daily, band }: { students: RosterStudent[]; da
         </div>
       )}
     </div>
+  );
+}
+
+/* 초등영어 학생 오늘 상세 — '오늘 한 것' 항목까지 펼쳐 보기. */
+function ElemDailyModal({ name, d }: { name: string; d?: EngDaily }) {
+  const { closeModal } = useStore();
+  const att = d?.attStatus || (d?.attended ? "출석" : "");
+  return (
+    <>
+      <div className="modal-head">
+        <div className="modal-title">{name} · 오늘 현황</div>
+        <button className="modal-x" onClick={closeModal} aria-label="닫기"><Icon name="x" /></button>
+      </div>
+      <div className="modal-body">
+        {!d ? (
+          <div className="hub-muted">아직 오늘 기록이 없어요.</div>
+        ) : (
+          <div className="elem-detail">
+            <div className="elem-detail-grid">
+              <div className="elem-detail-cell"><span className="elem-detail-l">출석</span><span className="elem-detail-v">{att || "—"}</span></div>
+              <div className="elem-detail-cell"><span className="elem-detail-l">원서 진도</span><span className="elem-detail-v">{d.bookNo || "—"}</span></div>
+              <div className="elem-detail-cell"><span className="elem-detail-l">단어시험</span><span className="elem-detail-v">{d.wordTest || "—"}</span></div>
+            </div>
+            <div className="elem-detail-block">
+              <span className="elem-detail-l">오늘 한 것</span>
+              {d.doneItems?.length ? (
+                <div className="elem-detail-chips">{d.doneItems.map((it, i) => <span className="badge b-blue" key={i}>{it}</span>)}</div>
+              ) : <span className="hub-muted">기록 없음</span>}
+            </div>
+            {d.comment && (<div className="elem-detail-block"><span className="elem-detail-l">코멘트</span><p className="elem-detail-p">{d.comment}</p></div>)}
+            {d.materials && (<div className="elem-detail-block"><span className="elem-detail-l">교재·자료</span><p className="elem-detail-p">{d.materials}</p></div>)}
+          </div>
+        )}
+      </div>
+      <div className="modal-foot">
+        <button className="btn primary" onClick={closeModal}>닫기</button>
+      </div>
+    </>
   );
 }
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "warn" }) {
