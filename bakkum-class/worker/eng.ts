@@ -16,6 +16,24 @@ function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}${(seq++).toString(36)}`;
 }
 
+// '오늘 한 것' 기본 항목(초등 수업일지). 전체공통은 class_config, 학생별은 class_eng_done_items.
+const DEFAULT_DONE_ITEMS = ["준비", "Practice Book", "영문법", "자판연습", "core phonics", "아카데미 주니어 프린트", "판다라이팅"];
+function parseStrArr(s: unknown): string[] {
+  try { const v = JSON.parse(String(s ?? "[]")); return Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : []; }
+  catch { return []; }
+}
+async function cfgGet(env: Env, k: string): Promise<string> {
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_config (k TEXT PRIMARY KEY, v TEXT NOT NULL DEFAULT '')").run();
+  return (await env.DB.prepare("SELECT v FROM class_config WHERE k=?").bind(k).first<{ v: string }>())?.v || "";
+}
+/** 한 학생의 '오늘 한 것' 선택지 = 기본 + 전체공통 + 학생별 (중복 제거). */
+async function doneItemsFor(env: Env, sid: string): Promise<string[]> {
+  const global = parseStrArr(await cfgGet(env, "eng_extra_done_items"));
+  let student: string[] = [];
+  try { student = parseStrArr((await env.DB.prepare("SELECT items FROM class_eng_done_items WHERE student_id=?").bind(sid).first<{ items: string }>())?.items); } catch { /* ignore */ }
+  return [...new Set([...DEFAULT_DONE_ITEMS, ...global, ...student])];
+}
+
 export async function ensureEngTables(env: Env): Promise<void> {
   const stmts = [
     // 일일 학습일지(= 등원 + 기록). 학생-날짜 1건.
@@ -110,6 +128,35 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     try { doneItems = JSON.parse((await getK("eng_extra_done_items")) || "[]"); } catch { /* ignore */ }
     try { pointReasons = JSON.parse((await getK("eng_extra_point_reasons")) || "[]"); } catch { /* ignore */ }
     return json({ doneItems, pointReasons });
+  }
+
+  /* ---------------- '오늘 한 것' 항목(기본 + 전체공통 + 학생별) ---------------- */
+  if (p === "/api/eng/done-items" && m === "GET") {
+    const sid = url.searchParams.get("student_id") || "";
+    const global = parseStrArr(await cfgGet(env, "eng_extra_done_items"));
+    let student: string[] = [];
+    if (sid) { try { student = parseStrArr((await env.DB.prepare("SELECT items FROM class_eng_done_items WHERE student_id=?").bind(sid).first<{ items: string }>())?.items); } catch { /* ignore */ } }
+    return json({ defaults: DEFAULT_DONE_ITEMS, global, student, merged: [...new Set([...DEFAULT_DONE_ITEMS, ...global, ...student])] });
+  }
+  if (p === "/api/eng/done-items" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { scope?: string; studentId?: string; add?: string; remove?: string };
+    const add = String(b.add || "").trim();
+    const remove = String(b.remove || "").trim();
+    if (b.scope === "student") {
+      const sid = String(b.studentId || "");
+      if (!sid) return json({ error: "studentId_required" }, 400);
+      let s: string[] = [];
+      try { s = parseStrArr((await env.DB.prepare("SELECT items FROM class_eng_done_items WHERE student_id=?").bind(sid).first<{ items: string }>())?.items); } catch { /* ignore */ }
+      if (add && !s.includes(add)) s.push(add);
+      if (remove) s = s.filter((x) => x !== remove);
+      await env.DB.prepare("INSERT INTO class_eng_done_items(student_id,items) VALUES(?,?) ON CONFLICT(student_id) DO UPDATE SET items=excluded.items").bind(sid, JSON.stringify(s.slice(0, 100))).run();
+    } else {
+      let g = parseStrArr(await cfgGet(env, "eng_extra_done_items"));
+      if (add && !DEFAULT_DONE_ITEMS.includes(add) && !g.includes(add)) g.push(add);
+      if (remove) g = g.filter((x) => x !== remove);
+      await env.DB.prepare("INSERT INTO class_config(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind("eng_extra_done_items", JSON.stringify(g.slice(0, 100))).run();
+    }
+    return json({ ok: true });
   }
 
   /* ---------------- 일일 학습일지 ---------------- */
@@ -432,6 +479,7 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
       engSlots,
       curriculum,
       daily,
+      doneItemOptions: await doneItemsFor(env, sid),
     });
   }
 

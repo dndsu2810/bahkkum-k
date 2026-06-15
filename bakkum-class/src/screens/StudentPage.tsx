@@ -81,7 +81,7 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
       {/* 일지 입력 */}
       <section className="sp-card">
         <h3 className="sp-card-h">{canEditCur ? "수업 일지 입력" : "오늘 수업 일지"}</h3>
-        <LogEditor studentId={canEditCur ? s.id : undefined} existing={data.daily} slots={data.engSlots} onSaved={reloadSilent} />
+        <LogEditor studentId={canEditCur ? s.id : undefined} existing={data.daily} slots={data.engSlots} options={data.doneItemOptions} onSaved={reloadSilent} />
       </section>
 
       {/* 일지 이력 */}
@@ -222,7 +222,8 @@ function addMin(hm: string, min: number): string {
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
 
-function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; onSaved: () => void }) {
+function LogEditor({ studentId, existing, slots, options, onSaved }: { studentId?: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; options?: string[]; onSaved: () => void }) {
+  const items = options && options.length ? options : STUDENT_LOG_ITEMS;
   const [date, setDate] = useState(todayStr());
   const [bookNo, setBookNo] = useState("");
   const [wordTest, setWordTest] = useState("");
@@ -326,7 +327,7 @@ function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string
       <div className="sp-f">
         <span>오늘 한 것 (한 것에 체크!)</span>
         <div className="sp-checks">
-          {STUDENT_LOG_ITEMS.map((it) => {
+          {items.map((it) => {
             const on = doneItems.includes(it);
             return (
               <label key={it} className={"sp-check" + (on ? " on" : "")}>

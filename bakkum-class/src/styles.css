@@ -1704,6 +1704,12 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .plan-val{display:block;padding:6px 5px;font-size:11px;color:var(--ink);text-align:center;min-height:18px}
 .eng-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .eng-pt-add{border-style:dashed!important;color:var(--ink3);font-weight:600}
+/* '오늘 한 것' 항목 관리 */
+.di-chips{display:flex;flex-wrap:wrap;gap:8px}
+.di-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 12px;border:1px solid var(--line);border-radius:var(--r-full);background:var(--card);font-size:var(--t-sm);font-weight:600;color:var(--ink)}
+.di-chip.fixed{padding:5px 12px;background:var(--bg);color:var(--ink2)}
+.di-x{border:none;background:var(--line);color:var(--ink2);width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:13px;line-height:1;display:grid;place-items:center}
+.di-x:hover{background:var(--bad);color:#fff}
 @media(max-width:560px){.eng-grid2{grid-template-columns:1fr}}
 .eng-label{font-size:var(--t-sm);font-weight:700;color:var(--ink2)}
 .eng-goal{display:flex;align-items:center;gap:8px}

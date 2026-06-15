@@ -54,6 +54,7 @@ export interface StudentPageData {
   engSlots: StudentSlot[];
   curriculum: Curriculum;
   daily: StudentLogRow[];
+  doneItemOptions?: string[]; // 그 학생의 '오늘 한 것' 선택지(기본+전체공통+학생별)
 }
 
 /** 학생 개별 페이지 활동 체크리스트(초등 수업일지 활동과 동일). */

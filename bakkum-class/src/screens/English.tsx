@@ -13,7 +13,7 @@ import { CurriculumEditor } from "./StudentPage";
 import { studentApi, type Curriculum } from "../lib/studentApi";
 
 type Band = "elem" | "mid";
-type Tab = "today" | "tt" | "att" | "hw" | "progress" | "test" | "makeup" | "board" | "cur";
+type Tab = "today" | "tt" | "att" | "hw" | "progress" | "test" | "makeup" | "board" | "cur" | "items";
 
 const WEEK_OPTS = [
   { v: "-1", l: "지난주" },
@@ -75,25 +75,26 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   const [sel, setSel] = useState("");
   const [err, setErr] = useState("");
 
-  // 강사가 추가한 '오늘 한 것'·포인트 사유(기본 목록에 더해 사용).
-  const [extraDone, setExtraDone] = useState<string[]>([]);
+  // 포인트 사유(전체 공통, 기본 목록에 더해 사용).
   const [extraReasons, setExtraReasons] = useState<{ name: string; value: number }[]>([]);
-  useEffect(() => { engApi.getCatalog().then((c) => { setExtraDone(c.doneItems || []); setExtraReasons(c.pointReasons || []); }).catch(() => {}); }, []);
-  const doneItemsAll = useMemo(() => [...ELEM_LOG_ITEMS, ...extraDone], [extraDone]);
+  useEffect(() => { engApi.getCatalog().then((c) => setExtraReasons(c.pointReasons || [])).catch(() => {}); }, []);
   const reasonsAll = useMemo(() => [...POINT_REASONS, ...extraReasons], [extraReasons]);
-  async function addDoneItem(label: string) {
-    const v = label.trim();
-    if (!v || doneItemsAll.includes(v)) return;
-    const next = [...extraDone, v];
-    setExtraDone(next);
-    await engApi.saveCatalog({ doneItems: next }).catch(() => {});
-  }
   async function addReason(name: string, value: number) {
     const label = `${name.trim()} ${value}`.trim();
     if (!name.trim() || reasonsAll.some((r) => r.name === label)) return;
     const next = [...extraReasons, { name: label, value }];
     setExtraReasons(next);
     await engApi.saveCatalog({ pointReasons: next }).catch(() => {});
+  }
+
+  // '오늘 한 것' 항목 — 선택한 학생 기준(기본+전체공통+학생별). 학생 바꾸면 다시 로드.
+  const [doneOptions, setDoneOptions] = useState<string[]>(ELEM_LOG_ITEMS);
+  const loadDoneOptions = (sid: string) => { if (sid) engApi.doneItems(sid).then((c) => setDoneOptions(c.merged)).catch(() => {}); };
+  useEffect(() => { if (band === "elem" && sel) loadDoneOptions(sel); else setDoneOptions(ELEM_LOG_ITEMS); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [sel, band]);
+  async function addDoneItemForStudent(label: string) {
+    if (!sel || !label.trim()) return;
+    await engApi.saveDoneItem({ scope: "student", studentId: sel, add: label.trim() }).catch(() => {});
+    loadDoneOptions(sel);
   }
 
   const students = useMemo(
@@ -205,6 +206,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     makeup: "보강 관리",
     board: "현황",
     cur: "커리큘럼",
+    items: "오늘 한 것 수정",
   };
   // 부제는 '이 화면에서 무엇을 하는지'만 사람 말로. (내부 동작 설명 X)
   const DESC: Record<Tab, string> = {
@@ -217,6 +219,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     makeup: "결석으로 생긴 보강 일정을 잡고 관리하세요.",
     board: "이 반 학생들의 출결·진도·테스트 현황을 한눈에 봅니다.",
     cur: "학생 화면에 보이는 커리큘럼(수업 내용)을 학생별로 수정하세요.",
+    items: "'오늘 한 것' 체크 항목을 추가·삭제하세요. 모두에게 또는 특정 학생에게.",
   };
 
   // 시간표는 수학 주간 시간표와 동일 레이아웃(자체 page-head·주차 선택).
@@ -263,6 +266,8 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
         <EngAttendance list={todayList} addable={addable} date={date} daily={daily} scheduledIds={scheduledIds} slotTimeOf={slotTimeOf} onStatus={setStatus} />
       ) : tab === "hw" ? (
         <EngHomework students={students} />
+      ) : tab === "items" ? (
+        <DoneItemsManager students={students} />
       ) : (
         <div className="eng-split">
           <div className="eng-side">
@@ -317,7 +322,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                       : "왼쪽에서 학생을 선택하면 테스트 점수를 기록할 수 있어요."}
               </div>
             ) : tab === "today" ? (
-              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneItemsAll} reasonsAll={reasonsAll} onAddDoneItem={addDoneItem} onAddReason={addReason} />
+              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={addDoneItemForStudent} onAddReason={addReason} />
             ) : tab === "progress" ? (
               <ProgressPanel studentId={sel} name={nameOf[sel] || ""} />
             ) : tab === "cur" ? (
@@ -328,6 +333,72 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------------- '오늘 한 것' 항목 관리 — 모두에게 / 특정 학생에게 추가·삭제 ---------------- */
+function DoneItemsManager({ students }: { students: RosterStudent[] }) {
+  const [defaults, setDefaults] = useState<string[]>([]);
+  const [global, setGlobal] = useState<string[]>([]);
+  const [sid, setSid] = useState("");
+  const [studentItems, setStudentItems] = useState<string[]>([]);
+  const [addAll, setAddAll] = useState("");
+  const [addStu, setAddStu] = useState("");
+
+  const loadGlobal = () => engApi.doneItems().then((c) => { setDefaults(c.defaults); setGlobal(c.global); }).catch(() => {});
+  const loadStudent = (id: string) => { if (id) engApi.doneItems(id).then((c) => setStudentItems(c.student)).catch(() => {}); else setStudentItems([]); };
+  useEffect(() => { void loadGlobal(); }, []);
+  useEffect(() => { loadStudent(sid); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [sid]);
+
+  async function addToAll() { const v = addAll.trim(); if (!v) return; setAddAll(""); await engApi.saveDoneItem({ scope: "all", add: v }).catch(() => {}); void loadGlobal(); }
+  async function removeFromAll(it: string) { await engApi.saveDoneItem({ scope: "all", remove: it }).catch(() => {}); void loadGlobal(); }
+  async function addToStudent() { const v = addStu.trim(); if (!v || !sid) return; setAddStu(""); await engApi.saveDoneItem({ scope: "student", studentId: sid, add: v }).catch(() => {}); loadStudent(sid); }
+  async function removeFromStudent(it: string) { if (!sid) return; await engApi.saveDoneItem({ scope: "student", studentId: sid, remove: it }).catch(() => {}); loadStudent(sid); }
+
+  return (
+    <div className="di-wrap">
+      <div className="mk-group">
+        <div className="mk-grouphead">기본 항목 <span className="gcnt">{defaults.length}개</span></div>
+        <div className="card" style={{ padding: 14 }}>
+          <div className="di-chips">{defaults.map((it) => <span key={it} className="di-chip fixed">{it}</span>)}</div>
+          <div className="page-desc" style={{ marginTop: 8 }}>기본 항목은 모든 학생에게 늘 보입니다.</div>
+        </div>
+      </div>
+
+      <div className="mk-group">
+        <div className="mk-grouphead">모두에게 추가 <span className="gcnt">{global.length}개</span></div>
+        <div className="card" style={{ padding: 14 }}>
+          <div className="eng-add-row" style={{ marginBottom: 10 }}>
+            <input className="input" value={addAll} onChange={(e) => setAddAll(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addToAll()} placeholder="모든 학생에게 추가할 항목 (예: 받아쓰기)" />
+            <button className="btn primary" onClick={addToAll} disabled={!addAll.trim()}>추가</button>
+          </div>
+          {global.length === 0 ? <div className="hub-muted">추가한 공통 항목이 없어요.</div> : (
+            <div className="di-chips">{global.map((it) => <span key={it} className="di-chip">{it}<button className="di-x" onClick={() => removeFromAll(it)} title="삭제">×</button></span>)}</div>
+          )}
+        </div>
+      </div>
+
+      <div className="mk-group">
+        <div className="mk-grouphead">특정 학생에게만</div>
+        <div className="card" style={{ padding: 14 }}>
+          <select className="sm-input" style={{ marginBottom: 10, minWidth: 160 }} value={sid} onChange={(e) => setSid(e.target.value)}>
+            <option value="">학생 선택</option>
+            {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          {sid ? (
+            <>
+              <div className="eng-add-row" style={{ marginBottom: 10 }}>
+                <input className="input" value={addStu} onChange={(e) => setAddStu(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addToStudent()} placeholder="이 학생에게만 추가할 항목" />
+                <button className="btn primary" onClick={addToStudent} disabled={!addStu.trim()}>추가</button>
+              </div>
+              {studentItems.length === 0 ? <div className="hub-muted">이 학생에게만 추가한 항목이 없어요.</div> : (
+                <div className="di-chips">{studentItems.map((it) => <span key={it} className="di-chip">{it}<button className="di-x" onClick={() => removeFromStudent(it)} title="삭제">×</button></span>)}</div>
+              )}
+            </>
+          ) : <div className="hub-muted">학생을 선택하면 그 학생에게만 보이는 항목을 추가할 수 있어요.</div>}
+        </div>
+      </div>
     </div>
   );
 }
