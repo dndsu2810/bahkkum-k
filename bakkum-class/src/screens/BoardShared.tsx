@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "../auth";
 import { tasksApi, type BoardTask, type TaskStatus } from "../lib/hubApi";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { listUsers, type UserRow } from "../lib/authApi";
@@ -27,6 +28,8 @@ function sortTasks(arr: BoardTask[]): BoardTask[] {
 
 /** 공유 업무 보드 — 모든 강사가 함께 보는 칸반. 카드 클릭 시 상세/수정. 10초 폴링으로 '실시간' 근사. */
 export function BoardShared() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [tasks, setTasks] = useState<BoardTask[]>([]);
   const [roster, setRoster] = useState<RosterStudent[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -67,8 +70,12 @@ export function BoardShared() {
 
   const visible = useMemo(() => {
     const now = Date.now();
-    return tasks.filter((t) => !(t.archived || (t.status === "done" && t.doneAt && now - t.doneAt > WEEK)));
-  }, [tasks]);
+    return tasks.filter((t) => {
+      if (t.archived || (t.status === "done" && t.doneAt && now - t.doneAt > WEEK)) return false;
+      if (t.adminOnly && !isAdmin) return false; // 원장 전용(미나 단계)은 강사에게 숨김
+      return true;
+    });
+  }, [tasks, isAdmin]);
 
   async function add() {
     const tt = title.trim();
@@ -146,8 +153,9 @@ export function BoardShared() {
               </div>
               <div className="board2-list">
                 {items.map((t) => (
-                  <div className={"board2-card" + (t.priority === "urgent" ? " urgent" : "")} key={t.id} onClick={() => setEdit(t)} tabIndex={0}>
+                  <div className={"board2-card" + (t.priority === "urgent" ? " urgent" : "") + (t.adminOnly ? " admin-only" : "")} key={t.id} onClick={() => setEdit(t)} tabIndex={0}>
                     {t.priority === "urgent" && <span className="board2-urgent">급함</span>}
+                    {t.adminOnly && <span className="board2-adminonly">원장 전용</span>}
                     <div className="board2-card-title">{t.title}</div>
                     {t.memo && <div className="board2-card-memo">{t.memo}</div>}
                     <div className="board2-card-meta">
@@ -171,7 +179,7 @@ export function BoardShared() {
       </div>
 
       {edit && (
-        <TaskModal task={edit} users={users} onClose={() => setEdit(null)} onSave={saveEdit} onDelete={remove} />
+        <TaskModal task={edit} users={users} isAdmin={isAdmin} onClose={() => setEdit(null)} onSave={saveEdit} onDelete={remove} />
       )}
     </div>
   );
@@ -181,12 +189,14 @@ export function BoardShared() {
 function TaskModal({
   task,
   users,
+  isAdmin,
   onClose,
   onSave,
   onDelete,
 }: {
   task: BoardTask;
   users: UserRow[];
+  isAdmin: boolean;
   onClose: () => void;
   onSave: (t: BoardTask) => void;
   onDelete: (t: BoardTask) => void;
@@ -244,6 +254,15 @@ function TaskModal({
               <button className={"sm-subj-chip" + (f.priority === "normal" ? " on" : "")} onClick={() => set("priority", "normal")}>일반</button>
             </div>
           </label>
+          {isAdmin && (
+            <label className="prof-field">
+              <span className="prof-field-l">공개 범위</span>
+              <div className="sm-subj">
+                <button className={"sm-subj-chip" + (f.adminOnly ? " on" : "")} onClick={() => set("adminOnly", true)}>원장 전용</button>
+                <button className={"sm-subj-chip" + (!f.adminOnly ? " on" : "")} onClick={() => set("adminOnly", false)}>강사에게 공개</button>
+              </div>
+            </label>
+          )}
         </div>
         <div className="prof-foot">
           <button className="btn ghost" style={{ marginRight: "auto", color: "var(--bad)" }} onClick={() => onDelete(f)}>삭제</button>

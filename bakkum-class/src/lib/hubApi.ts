@@ -99,12 +99,13 @@ export interface BoardTask {
   due: string;
   studentId: string;
   memo: string;
-  assignee: string; // 담당자(강사 이름)
+  assignee: string; // 담당자(강사 이름, 여러 명은 쉼표 구분)
   priority: TaskPriority; // 급한 일 / 일반
   source: string;
   createdAt: number;
   doneAt: number | null;
   archived: boolean;
+  adminOnly: boolean; // 원장 전용(강사 비공개) — 노션 '미나' 단계
 }
 export const tasksApi = {
   list: () => jget<{ tasks: BoardTask[] }>("/api/tasks").then((j) => j.tasks),

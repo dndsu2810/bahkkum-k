@@ -691,7 +691,7 @@ export interface NotionTask {
   tag: string; // 업무 구분(강사/학원 시스템/홍보/원장님/내신)
   due: string; // 마감일 YYYY-MM-DD
   assignDate: string; // 업무 배정일
-  assignees: string[]; // 담당자 이름들
+  assignees: { name: string; email: string }[]; // 담당자(이름+이메일) — 이름 매칭용
   priority: "urgent" | "normal"; // NOW=급함
   archived: boolean; // 완료 파일 이동 == '보관'
 }
@@ -716,7 +716,9 @@ export async function fetchTaskAssignments(env: NotionEnv): Promise<NotionTask[]
       const st = propText(props["상태"]);
       const status = DONE.has(st) ? "done" : DOING.has(st) ? "doing" : "todo";
       const people = ((props["담당자"] as any)?.people || []) as any[];
-      const assignees = people.map((u) => String(u?.name || "").trim()).filter(Boolean);
+      const assignees = people
+        .map((u) => ({ name: String(u?.name || "").trim(), email: String(u?.person?.email || "").trim().toLowerCase() }))
+        .filter((a) => a.name || a.email);
       out.push({
         srcId: String(pg.id).replace(/-/g, ""),
         title,

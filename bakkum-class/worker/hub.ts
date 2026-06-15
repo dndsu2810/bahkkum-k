@@ -48,6 +48,8 @@ export async function ensureHubTables(env: Env): Promise<void> {
     "ALTER TABLE class_events ADD COLUMN src TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_tasks ADD COLUMN assignee TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'",
+    // 원장 전용(강사 비공개) — 노션 '미나' 상태처럼 배정 전 단계. 원장만 보임.
+    "ALTER TABLE class_tasks ADD COLUMN admin_only INTEGER NOT NULL DEFAULT 0",
     // 시간표 변경요청 — 1회성 수업 이동(원래 날짜 → 변경 날짜). 기존 change_date=변경 날짜.
     "ALTER TABLE class_change_reqs ADD COLUMN from_date TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_change_reqs ADD COLUMN to_date TEXT NOT NULL DEFAULT ''",
@@ -287,9 +289,10 @@ export async function handleHub(
     const doneAt = status === "done" ? (b.doneAt ? Number(b.doneAt) : Date.now()) : null;
     const priority = String(b.priority) === "urgent" ? "urgent" : "normal";
     const assignee = String(b.assignee || "");
+    const adminOnly = b.adminOnly ? 1 : 0;
     if (exists) {
       await env.DB
-        .prepare("UPDATE class_tasks SET title=?,status=?,tag=?,due=?,student_id=?,memo=?,assignee=?,priority=?,done_at=?,archived=? WHERE id=?")
+        .prepare("UPDATE class_tasks SET title=?,status=?,tag=?,due=?,student_id=?,memo=?,assignee=?,priority=?,admin_only=?,done_at=?,archived=? WHERE id=?")
         .bind(
           String(b.title || ""),
           status,
@@ -299,6 +302,7 @@ export async function handleHub(
           String(b.memo || ""),
           assignee,
           priority,
+          adminOnly,
           doneAt,
           b.archived ? 1 : 0,
           id
@@ -307,7 +311,7 @@ export async function handleHub(
     } else {
       await env.DB
         .prepare(
-          "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
+          "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,admin_only,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         )
         .bind(
           id,
@@ -319,6 +323,7 @@ export async function handleHub(
           String(b.memo || ""),
           assignee,
           priority,
+          adminOnly,
           String(b.source || ""),
           Date.now(),
           doneAt,
@@ -433,5 +438,6 @@ function taskRow(r: Record<string, unknown>) {
     createdAt: Number(r.created_at ?? 0),
     doneAt: r.done_at == null ? null : Number(r.done_at),
     archived: Number(r.archived ?? 0) === 1,
+    adminOnly: Number(r.admin_only ?? 0) === 1,
   };
 }

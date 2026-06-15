@@ -1436,7 +1436,38 @@ async function importElemLog(env: Env): Promise<Response> {
   return json({ ok: true, total: rows.length, imported, unmatched: [...unmatched] });
 }
 
+// 노션 담당자 이메일 → 앱 강사 이름 보정(노션 이름이 영문/다른 표기일 때).
+const ASSIGNEE_EMAIL_MAP: Record<string, string> = {
+  "jiyeontree05@gmail.com": "목지연",
+};
+
+/** 노션 담당자(이름/이메일)를 앱 강사 이름으로 매칭. 공백 무시 + 글자 재배열('성이름'↔'이름성') 허용. */
+function makeAssigneeMatcher(appNames: string[]) {
+  const norm = (s: string) => s.replace(/\s+/g, "");
+  const sortKey = (s: string) => norm(s).split("").sort().join("");
+  const byNorm = new Map<string, string>();
+  const bySorted = new Map<string, string>();
+  for (const a of appNames) {
+    const n = norm(a);
+    if (!n) continue;
+    if (!byNorm.has(n)) byNorm.set(n, a);
+    if (!bySorted.has(sortKey(a))) bySorted.set(sortKey(a), a);
+  }
+  return (person: { name: string; email: string }): string => {
+    if (person.email && ASSIGNEE_EMAIL_MAP[person.email]) return ASSIGNEE_EMAIL_MAP[person.email];
+    const n = norm(person.name);
+    if (!n) return "";
+    if (byNorm.has(n)) return byNorm.get(n)!; // 공백만 다른 경우
+    const sk = sortKey(person.name);
+    if (bySorted.has(sk)) return bySorted.get(sk)!; // '목지연'↔'지연목' 등 순서만 다른 경우
+    return person.name; // 매칭 실패 → 노션 이름 그대로
+  };
+}
+
 // 노션 '바꿈 할 일 배정 사항' → class_tasks(강사 업무보드) upsert. source=노션 페이지로 중복 방지.
+//  - '미나'(원장 개인 단계) → admin_only=1(강사 비공개). '업무 배정'부터 강사에게 공개.
+//  - 완료/최종 완료(과거 완료분) → archived=1 로 보드에서 내려 '완료' 칸이 길어지지 않게.
+//  - 담당자는 앱 강사 이름으로 매칭(공백·순서 차이, 이메일 보정).
 async function importTasks(env: Env): Promise<Response> {
   await ensureHubTables(env);
   let rows;
@@ -1445,27 +1476,31 @@ async function importTasks(env: Env): Promise<Response> {
   } catch (e) {
     return json({ error: String(e) }, 500);
   }
+  const userRows = await env.DB.prepare("SELECT name FROM class_users").all<{ name: string }>();
+  const matchName = makeAssigneeMatcher((userRows.results || []).map((r) => String(r.name).trim()).filter(Boolean));
   let imported = 0;
   const now = Date.now();
   for (const t of rows) {
     try {
       const src = "ntask_" + t.srcId;
-      const assignee = t.assignees.join(", ");
+      const assignee = [...new Set(t.assignees.map(matchName).filter(Boolean))].join(", ");
       const memo = [t.notionStatus ? `노션 상태: ${t.notionStatus}` : "", t.assignDate ? `배정일 ${t.assignDate}` : ""].filter(Boolean).join(" · ");
-      const archived = t.archived ? 1 : 0;
-      const doneAt = t.status === "done" ? now : null;
+      const adminOnly = t.notionStatus === "미나" || t.notionStatus === "마나" ? 1 : 0;
+      const isDone = t.status === "done";
+      const archived = t.archived || isDone ? 1 : 0; // 과거 완료분은 보관 처리(보드 정리)
+      const doneAt = isDone ? now : null;
       const ex = await env.DB.prepare("SELECT id FROM class_tasks WHERE source=?").bind(src).first<{ id: string }>();
       if (ex) {
         await env.DB
-          .prepare("UPDATE class_tasks SET title=?,status=?,tag=?,due=?,memo=?,assignee=?,priority=?,archived=? WHERE id=?")
-          .bind(t.title, t.status, t.tag, t.due, memo, assignee, t.priority, archived, ex.id)
+          .prepare("UPDATE class_tasks SET title=?,status=?,tag=?,due=?,memo=?,assignee=?,priority=?,admin_only=?,archived=? WHERE id=?")
+          .bind(t.title, t.status, t.tag, t.due, memo, assignee, t.priority, adminOnly, archived, ex.id)
           .run();
       } else {
         await env.DB
           .prepare(
-            "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
+            "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,admin_only,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
           )
-          .bind(`nt_${t.srcId}`, t.title, t.status, t.tag, t.due, "", memo, assignee, t.priority, src, now, doneAt, archived)
+          .bind(`nt_${t.srcId}`, t.title, t.status, t.tag, t.due, "", memo, assignee, t.priority, adminOnly, src, now, doneAt, archived)
           .run();
       }
       imported++;
@@ -1821,6 +1856,15 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
 async function putData(env: Env, request: Request): Promise<Response> {
   const snap = (await request.json()) as DataSnapshot;
   await ensureSchedulesTable(env); // 테이블 없어도 저장이 통째로 실패하지 않게
+  // 업무보드 hub 전용 컬럼(담당자·우선순위·원장전용)은 수학 스냅샷에 없다.
+  // 스냅샷 저장 때 통째로 덮어쓰면 사라지므로, 기존 값을 미리 읽어 보존한다.
+  const prevTaskHub = new Map<string, { assignee: string; priority: string; adminOnly: number }>();
+  try {
+    const cur = await env.DB.prepare("SELECT id, assignee, priority, admin_only FROM class_tasks").all<{ id: string; assignee: string; priority: string; admin_only: number }>();
+    for (const r of cur.results || []) prevTaskHub.set(String(r.id), { assignee: String(r.assignee || ""), priority: String(r.priority || "normal"), adminOnly: Number(r.admin_only || 0) });
+  } catch {
+    /* 컬럼/테이블 없으면 보존할 것도 없음 */
+  }
   const stmts: D1PreparedStatement[] = [
     env.DB.prepare("DELETE FROM class_attendance"),
     env.DB.prepare("DELETE FROM class_makeups"),
@@ -1835,12 +1879,13 @@ async function putData(env: Env, request: Request): Promise<Response> {
     env.DB.prepare("DELETE FROM class_tasks"),
   ];
 
-  // 강사 업무 보드 카드
+  // 강사 업무 보드 카드 — hub 전용 컬럼은 기존 값 보존(수학 스냅샷엔 없음).
   for (const k of snap.tasks || []) {
+    const hub = prevTaskHub.get(k.id);
     stmts.push(
       env.DB
         .prepare(
-          "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
+          "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,admin_only,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         )
         .bind(
           k.id,
@@ -1850,6 +1895,9 @@ async function putData(env: Env, request: Request): Promise<Response> {
           k.due || "",
           k.studentId || "",
           k.memo || "",
+          hub?.assignee || "",
+          hub?.priority || "normal",
+          hub?.adminOnly || 0,
           k.source || "",
           k.createdAt || Date.now(),
           k.doneAt == null ? null : k.doneAt,
