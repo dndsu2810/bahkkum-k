@@ -40,6 +40,7 @@ import {
   fetchEngHomework,
   fetchEngAttendance,
   fetchElemLog,
+  fetchTaskAssignments,
 } from "./notion";
 import { NOTION_CFG } from "./notion";
 import { isHoliday, holidayName } from "../src/lib/holidays";
@@ -286,6 +287,12 @@ export default {
           const me = await readSession(env, request);
           if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
           return await importElemLog(env);
+        }
+        // 노션 '바꿈 할 일 배정 사항' → class_tasks(강사 업무보드) 가져오기.
+        if (p === "/api/sync/tasks" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await importTasks(env);
         }
 
         // ---- 허브 공유 영역(특이사항·위키·SNS·업무보드) ----
@@ -1427,6 +1434,46 @@ async function importElemLog(env: Env): Promise<Response> {
   }
   for (let i = 0; i < stmts.length; i += 50) { try { await env.DB.batch(stmts.slice(i, i + 50)); } catch { /* skip */ } }
   return json({ ok: true, total: rows.length, imported, unmatched: [...unmatched] });
+}
+
+// 노션 '바꿈 할 일 배정 사항' → class_tasks(강사 업무보드) upsert. source=노션 페이지로 중복 방지.
+async function importTasks(env: Env): Promise<Response> {
+  await ensureHubTables(env);
+  let rows;
+  try {
+    rows = await fetchTaskAssignments(env);
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+  let imported = 0;
+  const now = Date.now();
+  for (const t of rows) {
+    try {
+      const src = "ntask_" + t.srcId;
+      const assignee = t.assignees.join(", ");
+      const memo = [t.notionStatus ? `노션 상태: ${t.notionStatus}` : "", t.assignDate ? `배정일 ${t.assignDate}` : ""].filter(Boolean).join(" · ");
+      const archived = t.archived ? 1 : 0;
+      const doneAt = t.status === "done" ? now : null;
+      const ex = await env.DB.prepare("SELECT id FROM class_tasks WHERE source=?").bind(src).first<{ id: string }>();
+      if (ex) {
+        await env.DB
+          .prepare("UPDATE class_tasks SET title=?,status=?,tag=?,due=?,memo=?,assignee=?,priority=?,archived=? WHERE id=?")
+          .bind(t.title, t.status, t.tag, t.due, memo, assignee, t.priority, archived, ex.id)
+          .run();
+      } else {
+        await env.DB
+          .prepare(
+            "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
+          )
+          .bind(`nt_${t.srcId}`, t.title, t.status, t.tag, t.due, "", memo, assignee, t.priority, src, now, doneAt, archived)
+          .run();
+      }
+      imported++;
+    } catch {
+      /* 개별 실패는 건너뜀 */
+    }
+  }
+  return json({ ok: true, total: rows.length, imported });
 }
 
 async function importSns(env: Env): Promise<Response> {

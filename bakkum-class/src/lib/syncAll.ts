@@ -40,6 +40,7 @@ const STEPS: { key: string; label: string; run: () => Promise<number> }[] = [
   { key: "engDaily", label: "영어(중고등) 숙제", run: async () => (await jpost("/api/sync/eng-daily")).imported ?? 0 },
   { key: "engAtt", label: "영어 출결·포인트", run: async () => (await jpost("/api/sync/eng-attendance")).imported ?? 0 },
   { key: "elemLog", label: "영어(초등) 수업일지", run: async () => (await jpost("/api/sync/eng-elem-log")).imported ?? 0 },
+  { key: "tasks", label: "강사 업무(할 일 배정)", run: async () => (await jpost("/api/sync/tasks")).imported ?? 0 },
   { key: "wiki", label: "매뉴얼 위키", run: async () => (await jpost("/api/sync/wiki")).imported ?? 0 },
   { key: "sns", label: "SNS 기록", run: async () => (await jpost("/api/sync/sns")).imported ?? 0 },
 ];

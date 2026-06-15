@@ -681,6 +681,60 @@ export async function fetchEngAttendance(env: NotionEnv): Promise<NotionEngAtt[]
   return out;
 }
 
+// 강사 할 일 배정 데이터소스(바꿈 할 일 배정 사항). 작업이름·상태·담당자·마감일·업무구분·완료파일이동.
+const TASK_ASSIGN_DS = "2e766817-e061-8149-b2b1-000b27f1fcb9";
+export interface NotionTask {
+  srcId: string;
+  title: string;
+  status: "todo" | "doing" | "done"; // 우리 칸반 3칸으로 매핑
+  notionStatus: string; // 원본 상태(보류/미나/업무 배정/진행 중/NOW/완료/최종 완료)
+  tag: string; // 업무 구분(강사/학원 시스템/홍보/원장님/내신)
+  due: string; // 마감일 YYYY-MM-DD
+  assignDate: string; // 업무 배정일
+  assignees: string[]; // 담당자 이름들
+  priority: "urgent" | "normal"; // NOW=급함
+  archived: boolean; // 완료 파일 이동 == '보관'
+}
+/** 할 일 배정 DB 전체 행. 노션 상태 7종 → 칸반 3칸. 담당자(person)는 이름으로. */
+export async function fetchTaskAssignments(env: NotionEnv): Promise<NotionTask[]> {
+  if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
+  const DOING = new Set(["진행 중", "NOW"]);
+  const DONE = new Set(["완료", "최종 완료"]);
+  const out: NotionTask[] = [];
+  let cursor: string | undefined;
+  do {
+    const res = await queryDataSource(env, TASK_ASSIGN_DS, { page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error("notion " + res.status + ": " + t.slice(0, 300));
+    }
+    const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+    for (const pg of j.results) {
+      const props = (pg.properties || {}) as Record<string, Prop>;
+      const title = findTitle(props).trim();
+      if (!title) continue;
+      const st = propText(props["상태"]);
+      const status = DONE.has(st) ? "done" : DOING.has(st) ? "doing" : "todo";
+      const people = ((props["담당자"] as any)?.people || []) as any[];
+      const assignees = people.map((u) => String(u?.name || "").trim()).filter(Boolean);
+      out.push({
+        srcId: String(pg.id).replace(/-/g, ""),
+        title,
+        status,
+        notionStatus: st,
+        tag: propText(props["업무 구분"]),
+        due: propText(props["마감일"]).slice(0, 10),
+        assignDate: propText(props["업무 배정일"]).slice(0, 10),
+        assignees,
+        priority: st === "NOW" ? "urgent" : "normal",
+        archived: propText(props["완료 파일 이동"]).includes("보관"),
+      });
+    }
+    cursor = j.has_more ? j.next_cursor : undefined;
+  } while (cursor);
+  return out;
+}
+
 // 초등 수업일지 데이터소스. 제목 "이름 M/D" + 수업날짜 + 진도/단어시험/체크박스/특이사항.
 const ELEM_LOG_DS = "32c66817-e061-8010-b620-000bfb07dd86";
 const ELEM_CHECK_ITEMS = ["준비", "Practice Book", "영문법", "자판연습", "core phonics", "아카데미 주니어 프린트", "판다라이팅"];
