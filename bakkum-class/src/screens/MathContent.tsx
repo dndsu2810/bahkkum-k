@@ -10,6 +10,7 @@ import { Homework } from "../pages/Homework";
 import { Progress } from "../pages/Progress";
 import { Tests } from "../pages/Tests";
 import { Report } from "../pages/Report";
+import { LessonPlan } from "../pages/LessonPlan";
 
 /** 수학 수업관리 콘텐츠 — store.page에 따라 수학 페이지를 렌더(설정·보드는 허브 쪽). */
 export function MathContent() {
@@ -51,6 +52,7 @@ export function MathContent() {
       {page === "progress" && <Progress />}
       {page === "tests" && <Tests />}
       {page === "report" && <Report />}
+      {page === "plan" && <LessonPlan />}
     </>
   );
 }

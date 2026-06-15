@@ -13,6 +13,7 @@ export type PageId =
   | "progress"
   | "tests"
   | "report"
+  | "plan"
   | "settings";
 
 export interface NavItem {
@@ -56,6 +57,7 @@ export const GROUP_OF: Record<PageId, NavGroup> = {
   timetable: "메인",
   makeup: "관리",
   report: "관리",
+  plan: "관리",
   settings: "관리",
 };
 

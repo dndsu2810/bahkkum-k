@@ -1685,6 +1685,7 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .eng-daily-h h2,.eng-panel h2{font-size:var(--t-lg);color:var(--ink);font-weight:700}
 .eng-attend-line{display:flex;align-items:center;gap:6px;font-size:var(--t-sm);font-weight:600;color:var(--ink2)}
 .eng-field{display:flex;flex-direction:column;gap:8px}
+.plan-frame{width:100%;height:calc(100vh - 220px);min-height:480px;border:0;display:block}
 .eng-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 @media(max-width:560px){.eng-grid2{grid-template-columns:1fr}}
 .eng-label{font-size:var(--t-sm);font-weight:700;color:var(--ink2)}

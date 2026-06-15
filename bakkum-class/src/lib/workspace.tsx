@@ -34,6 +34,7 @@ const MATH: WsEntry[] = [
   { key: "students", label: "학생 관리", icon: "students", kind: "math", page: "students" },
   { key: "makeup", label: "보강 관리", icon: "refresh", kind: "math", page: "makeup" },
   { key: "report", label: "수학 월말리포트", icon: "fileText", kind: "math", page: "report" },
+  { key: "plan", label: "연간 수업 계획표", icon: "cal", kind: "math", page: "plan" },
 ];
 
 /* ---- 영어 수업관리 (핵심부터) ---- */
