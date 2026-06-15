@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { HwLog } from "../types";
 import { useStore } from "../store";
 import { curMonthStr, inMonth, monthOptions, studentById } from "../lib/logic";
-import { fmtDayBand } from "../lib/dates";
+import { fmtDayBand, ymd } from "../lib/dates";
 import { Select, TodayLink } from "../components/ui";
 import { InlineTable, type InlineCol } from "../components/InlineTable";
 import { HomeworkModal } from "../components/modals";
@@ -17,6 +17,14 @@ export function Homework() {
 
   const rows = data.homeworkLog.filter((h) => inMonth(h.date, ym)).sort((a, b) => (a.date < b.date ? 1 : -1));
   const nameOf = (h: HwLog) => studentById(data.students, h.studentId)?.name ?? "(삭제된 학생)";
+
+  // 날짜 그룹: 오늘·어제만 펼치고 과거는 접기. 접힌 헤더엔 검사 현황 요약.
+  const yest = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return ymd(d); })();
+  function hwSummary(list: HwLog[]): string {
+    let done = 0, pending = 0, late = 0;
+    for (const h of list) h.status === "done" ? done++ : h.status === "late" ? late++ : pending++;
+    return [done && `검사완료 ${done}`, pending && `검사 전 ${pending}`, late && `지연 ${late}`].filter(Boolean).join(" · ");
+  }
 
   function apply(d: { homeworkLog: HwLog[] }, id: string, key: string, v: string) {
     const h = d.homeworkLog.find((x) => x.id === id);
@@ -77,6 +85,10 @@ export function Homework() {
             onPatch={onPatch}
             onDelete={onDelete}
             groupBy={(h) => ({ key: h.date, label: fmtDayBand(h.date) })}
+            collapsible
+            groupSummary={hwSummary}
+            openInitially={(key) => key >= yest}
+            pageSize={14}
             empty={<div className="empty">아직 숙제 기록이 없어요. <TodayLink /> 화면에서 입력하면 여기에 쌓여요.</div>}
           />
         </div>

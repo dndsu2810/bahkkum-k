@@ -254,6 +254,16 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 .tbl-band{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;background:#f4f6f9;border-top:1px solid var(--line2)}
 .tbl-band-date{font-size:var(--t-base);font-weight:700;color:var(--ink);letter-spacing:-.01em}
 .tbl-band-cnt{font-size:var(--t-cap);font-weight:700;color:var(--ink3);background:var(--card);border:1px solid var(--line);border-radius:var(--r-full);padding:2px 10px;white-space:nowrap}
+/* 접고 펴는 날짜 그룹 헤더 */
+.tbl-band-btn{width:100%;justify-content:flex-start;border:none;border-top:1px solid var(--line2);cursor:pointer;text-align:left;font:inherit;transition:background .12s}
+.tbl-band-btn:hover{background:#eef1f6}
+[data-theme="dark"] .tbl-band-btn:hover{background:var(--card)}
+.tbl-band-arrow{display:inline-flex;color:var(--ink3);transition:transform .15s;flex:none}
+.tbl-band-arrow.open{transform:rotate(90deg)}
+.tbl-band-sum{font-size:var(--t-cap);color:var(--ink3);font-weight:500;margin-left:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbl-morerow td{padding:0!important;border:none!important;background:transparent!important}
+.tbl-more{width:100%;padding:10px;background:var(--bg);border:none;border-top:1px solid var(--line);color:var(--brand-d);font-weight:600;font-size:var(--t-sm);cursor:pointer;transition:background .12s}
+.tbl-more:hover{background:var(--brand-soft)}
 .t-actions{text-align:right}
 .muted{color:var(--ink3)}
 

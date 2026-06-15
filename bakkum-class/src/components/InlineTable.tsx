@@ -30,9 +30,21 @@ export interface InlineTableProps<T> {
   empty?: ReactNode;
   /** 날짜 등으로 행을 묶는다 — 그룹마다 '띠 헤더'를 넣고 컬럼 헤더는 맨 위 한 번만. */
   groupBy?: (row: T) => { key: string; label: ReactNode };
+  /** 그룹 헤더를 클릭해 접고 펼친다. 기록이 쌓여도 화면이 길어지지 않게. */
+  collapsible?: boolean;
+  /** 접힌 그룹 헤더에 보여줄 요약(예: '출석 15 · 지각 1 · 결석 1'). */
+  groupSummary?: (rows: T[]) => string;
+  /** 처음에 펼쳐둘 그룹(예: 오늘·어제). 없으면 첫 그룹만 펼침. (key, index) → 펼침 여부. */
+  openInitially?: (key: string, index: number) => boolean;
+  /** 처음에 보여줄 그룹 수. 나머지는 '+ 이전 기록 더 보기'로. */
+  pageSize?: number;
 }
 
-export function InlineTable<T>({ rows, cols, rowId, onPatch, onDelete, empty, groupBy }: InlineTableProps<T>) {
+export function InlineTable<T>({ rows, cols, rowId, onPatch, onDelete, empty, groupBy, collapsible, groupSummary, openInitially, pageSize }: InlineTableProps<T>) {
+  // 그룹 접힘/펼침 사용자 토글(없으면 openInitially 기본값). 데이터 새로고침에도 유지.
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
+  const [shown, setShown] = useState(pageSize ?? Infinity);
+  const toggleGroup = (key: string, def: boolean) => setOpenMap((m) => ({ ...m, [key]: !(key in m ? m[key] : def) }));
   const [edit, setEdit] = useState<{ id: string; key: string } | null>(null);
   const [draft, setDraft] = useState("");
   const [flash, setFlash] = useState<{ id: string; key: string; ok: boolean } | null>(null);
@@ -209,20 +221,42 @@ export function InlineTable<T>({ rows, cols, rowId, onPatch, onDelete, empty, gr
       </thead>
       <tbody>
         {groupBy
-          ? groups.map((g) => (
-              <Fragment key={"g_" + g.key}>
-                <tr className="tbl-grouprow">
-                  <td colSpan={totalCols}>
-                    <div className="tbl-band">
-                      <span className="tbl-band-date">{g.label}</span>
-                      <span className="tbl-band-cnt">{g.rows.length}건</span>
-                    </div>
-                  </td>
-                </tr>
-                {g.rows.map(renderRow)}
-              </Fragment>
-            ))
+          ? groups.slice(0, shown).map((g, gi) => {
+              const def = collapsible ? (openInitially ? openInitially(g.key, gi) : gi === 0) : true;
+              const open = collapsible ? (g.key in openMap ? openMap[g.key] : def) : true;
+              return (
+                <Fragment key={"g_" + g.key}>
+                  <tr className={"tbl-grouprow" + (collapsible ? " is-toggle" : "")}>
+                    <td colSpan={totalCols}>
+                      {collapsible ? (
+                        <button type="button" className="tbl-band tbl-band-btn" onClick={() => toggleGroup(g.key, def)} aria-expanded={open}>
+                          <span className={"tbl-band-arrow" + (open ? " open" : "")}><Icon name="chev" /></span>
+                          <span className="tbl-band-date">{g.label}</span>
+                          <span className="tbl-band-cnt">{g.rows.length}건</span>
+                          {!open && groupSummary && <span className="tbl-band-sum">{groupSummary(g.rows)}</span>}
+                        </button>
+                      ) : (
+                        <div className="tbl-band">
+                          <span className="tbl-band-date">{g.label}</span>
+                          <span className="tbl-band-cnt">{g.rows.length}건</span>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                  {open && g.rows.map(renderRow)}
+                </Fragment>
+              );
+            })
           : rows.map(renderRow)}
+        {groupBy && groups.length > shown && (
+          <tr className="tbl-morerow">
+            <td colSpan={totalCols}>
+              <button type="button" className="tbl-more" onClick={() => setShown((n) => n + (pageSize ?? 14))}>
+                + 이전 기록 더 보기 ({groups.length - shown}일 더)
+              </button>
+            </td>
+          </tr>
+        )}
       </tbody>
     </table>
   );
