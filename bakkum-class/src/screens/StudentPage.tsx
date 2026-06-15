@@ -71,7 +71,7 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
         <section className="sp-card">
           <h3 className="sp-card-h">커리큘럼</h3>
           {canEditCur ? (
-            <CurriculumEditor studentId={s.id} cur={data.curriculum} onSaved={load} />
+            <CurriculumEditor studentId={s.id} cur={data.curriculum} onSaved={reloadSilent} />
           ) : (
             <CurriculumView cur={data.curriculum} />
           )}
@@ -81,7 +81,7 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
       {/* 일지 입력 */}
       <section className="sp-card">
         <h3 className="sp-card-h">{canEditCur ? "수업 일지 입력" : "오늘 수업 일지"}</h3>
-        <LogEditor studentId={canEditCur ? s.id : undefined} existing={data.daily} slots={data.engSlots} onSaved={load} />
+        <LogEditor studentId={canEditCur ? s.id : undefined} existing={data.daily} slots={data.engSlots} onSaved={reloadSilent} />
       </section>
 
       {/* 일지 이력 */}
