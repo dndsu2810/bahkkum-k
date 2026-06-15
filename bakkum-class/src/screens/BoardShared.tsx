@@ -72,10 +72,10 @@ export function BoardShared() {
     const now = Date.now();
     return tasks.filter((t) => {
       if (t.archived || (t.status === "done" && t.doneAt && now - t.doneAt > WEEK)) return false;
-      if (t.adminOnly && !isAdmin) return false; // 원장 전용(미나 단계)은 강사에게 숨김
+      if (t.adminOnly) return false; // 원장 전용 할일은 보드에 안 뜸(원장 대시보드에서 관리·배정)
       return true;
     });
-  }, [tasks, isAdmin]);
+  }, [tasks]);
 
   async function add() {
     const tt = title.trim();

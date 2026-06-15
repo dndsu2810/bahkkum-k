@@ -1506,6 +1506,13 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .board2-urgent{display:inline-block;font-size:10px;font-weight:800;color:#fff;background:var(--bad);border-radius:var(--r-full);padding:1px 8px;margin-bottom:5px}
 .board2-adminonly{display:inline-block;font-size:10px;font-weight:800;color:var(--ink2);background:var(--line);border-radius:var(--r-full);padding:1px 8px;margin-bottom:5px;margin-left:4px}
 .board2-card.admin-only{border-style:dashed}
+/* 원장 전용 할일 목록 */
+.admt-list{display:flex;flex-direction:column;gap:2px}
+.admt-row{display:flex;align-items:center;gap:10px;padding:10px 4px}
+.admt-row+.admt-row{border-top:1px solid var(--line)}
+.admt-main{flex:1;min-width:0}
+.admt-title{font-size:var(--t-sm);font-weight:600;color:var(--ink)}
+.admt-memo{font-size:var(--t-cap);color:var(--ink3);margin-top:2px}
 .board2-card-title{font-size:var(--t-sm);color:var(--ink);font-weight:600;line-height:1.4}
 .board2-card-memo{font-size:var(--t-cap);color:var(--ink3);line-height:1.4;margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .board2-card-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}

@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { adminApi, type AdminOverview, type StudentReport } from "../lib/adminApi";
+import { tasksApi, type BoardTask } from "../lib/hubApi";
+import { listUsers, type UserRow } from "../lib/authApi";
 import { todayStr, pad, fmtWhen } from "../lib/dates";
+import { DateField } from "../components/DateControls";
 import { SkeletonCards } from "../components/Skeleton";
+import { Icon } from "../icons";
 
 type AttFilter = "all" | "math" | "elem" | "mid";
 
@@ -85,6 +89,8 @@ export function AdminDashboard() {
             </div>
           </div>
 
+          <AdminTasks />
+
           <div className="dash-grid">
             <section className="card dash-card">
               <h3 className="dash-h">지각·결석 현황</h3>
@@ -156,6 +162,134 @@ export function AdminDashboard() {
       )}
 
       {openId && <StudentReportModal id={openId} month={ym} onClose={() => setOpenId(null)} />}
+    </div>
+  );
+}
+
+/* ---------------- 원장 전용 할일 — 여기서 만들고, 배정하면 강사 보드로 ---------------- */
+function AdminTasks() {
+  const [tasks, setTasks] = useState<BoardTask[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [title, setTitle] = useState("");
+  const [assignTask, setAssignTask] = useState<BoardTask | null>(null);
+
+  async function load() {
+    try { setTasks(await tasksApi.list()); } catch { /* ignore */ }
+  }
+  useEffect(() => {
+    void load();
+    listUsers().then(setUsers).catch(() => {});
+  }, []);
+
+  // 아직 배정 안 한(원장 전용) 카드만, 보관 제외.
+  const mine = useMemo(() => tasks.filter((t) => t.adminOnly && !t.archived), [tasks]);
+
+  async function add() {
+    const tt = title.trim();
+    if (!tt) return;
+    setTitle("");
+    try {
+      await tasksApi.save({ title: tt, status: "todo", priority: "normal", adminOnly: true });
+      await load();
+    } catch { /* ignore */ }
+  }
+  async function remove(t: BoardTask) {
+    if (!window.confirm("이 할일을 삭제할까요?")) return;
+    try { await tasksApi.remove(t.id); await load(); } catch { /* ignore */ }
+  }
+  async function doAssign(t: BoardTask, assignee: string, assignDate: string, due: string) {
+    const memo = [t.memo?.replace(/(^|·\s*)배정일 \S+/g, "").trim(), assignDate ? `배정일 ${assignDate}` : ""].filter(Boolean).join(" · ");
+    try {
+      await tasksApi.save({ ...t, adminOnly: false, status: "todo", assignee, due, memo });
+      setAssignTask(null);
+      await load();
+    } catch { /* ignore */ }
+  }
+
+  return (
+    <section className="card dash-card" style={{ marginBottom: 16 }}>
+      <h3 className="dash-h">원장 전용 할일</h3>
+      <p className="hub-muted" style={{ marginBottom: 10 }}>나만 보는 할일이에요. <b>업무 배정하기</b>를 누르면 담당·마감을 정해 강사 업무 보드로 보냅니다.</p>
+      <div className="board2-add" style={{ marginBottom: 10 }}>
+        <input
+          className="input"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") void add(); }}
+          placeholder="원장 전용 할일을 입력하고 Enter"
+        />
+        <button className="btn primary" onClick={add} disabled={!title.trim()}>추가</button>
+      </div>
+      {mine.length === 0 ? (
+        <div className="hub-muted">원장 전용 할일이 없어요.</div>
+      ) : (
+        <div className="admt-list">
+          {mine.map((t) => (
+            <div className="admt-row" key={t.id}>
+              <div className="admt-main">
+                <div className="admt-title">{t.title}</div>
+                {t.memo && <div className="admt-memo">{t.memo}</div>}
+              </div>
+              <button className="btn primary sm" onClick={() => setAssignTask(t)}>업무 배정하기</button>
+              <button className="rep-x" onClick={() => remove(t)} title="삭제"><Icon name="trash" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      {assignTask && <AssignModal task={assignTask} users={users} onClose={() => setAssignTask(null)} onAssign={doAssign} />}
+    </section>
+  );
+}
+
+function AssignModal({
+  task,
+  users,
+  onClose,
+  onAssign,
+}: {
+  task: BoardTask;
+  users: UserRow[];
+  onClose: () => void;
+  onAssign: (t: BoardTask, assignee: string, assignDate: string, due: string) => void;
+}) {
+  const [names, setNames] = useState<string[]>(task.assignee ? task.assignee.split(",").map((s) => s.trim()).filter(Boolean) : []);
+  const [assignDate, setAssignDate] = useState(todayStr());
+  const [due, setDue] = useState(task.due || "");
+  const toggle = (n: string) => setNames((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n]));
+
+  return (
+    <div className="prof-overlay" onClick={onClose}>
+      <div className="prof" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+        <div className="prof-top">
+          <div className="prof-top-main"><div className="prof-name">업무 배정</div><div className="hub-muted">{task.title}</div></div>
+          <button className="modal-x" onClick={onClose} aria-label="닫기">✕</button>
+        </div>
+        <div className="prof-body">
+          <label className="prof-field">
+            <span className="prof-field-l">담당자 (여러 명 선택 가능)</span>
+            <div className="sm-subj">
+              {users.map((u) => (
+                <button type="button" key={u.id} className={"sm-subj-chip" + (names.includes(u.name) ? " on" : "")} onClick={() => toggle(u.name)}>{u.name}</button>
+              ))}
+              {users.length === 0 && <span className="hub-muted">등록된 강사가 없어요.</span>}
+            </div>
+          </label>
+          <div className="prof-grid">
+            <label className="prof-field">
+              <span className="prof-field-l">배정일</span>
+              <DateField value={assignDate} onChange={setAssignDate} />
+            </label>
+            <label className="prof-field">
+              <span className="prof-field-l">마감일</span>
+              <DateField value={due} onChange={setDue} placeholder="마감일 없음" />
+            </label>
+          </div>
+        </div>
+        <div className="prof-foot">
+          <button className="btn ghost" onClick={onClose}>취소</button>
+          <button className="btn primary" onClick={() => onAssign(task, names.join(", "), assignDate, due)} disabled={names.length === 0}>배정</button>
+        </div>
+      </div>
     </div>
   );
 }
