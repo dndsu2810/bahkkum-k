@@ -17,6 +17,7 @@ import {
 import { GRADE_DIVS, DIV_MAX, makeGrade, parseGrade } from "../lib/grade";
 import { uploadImage } from "../lib/configApi";
 import { StudentPage } from "./StudentPage";
+import { SkeletonList } from "../components/Skeleton";
 import { Icon } from "../icons";
 
 type FilterKey = "all" | "math" | "english" | "elem" | "mid";
@@ -206,7 +207,7 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
       {err && <div className="auth-err" style={{ marginBottom: 12 }}>{err}</div>}
 
       {loading ? (
-        <div className="hub-muted">불러오는 중…</div>
+        <SkeletonList rows={8} />
       ) : list.length === 0 ? (
         <div className="hub-muted">조건에 맞는 학생이 없어요.</div>
       ) : (

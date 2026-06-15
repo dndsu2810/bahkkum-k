@@ -2003,6 +2003,17 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .acct-duty{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
 .acct-duty-label{font-size:var(--t-cap);font-weight:700;color:var(--ink3);margin-right:2px}
 
+/* 로딩 스켈레톤 */
+.skel{display:block;background:linear-gradient(90deg,var(--line) 25%,var(--line2,#e3e9f1) 37%,var(--line) 63%);
+  background-size:400% 100%;animation:skel-shimmer 1.3s ease-in-out infinite}
+@keyframes skel-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+.skel-list{display:flex;flex-direction:column;gap:2px}
+.skel-row{display:flex;align-items:center;gap:12px;padding:12px 4px}
+.skel-row+.skel-row{border-top:1px solid var(--line)}
+.skel-row-t{flex:1;display:flex;flex-direction:column;gap:7px}
+.skel-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.skel-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:16px}
+
 /* 노션 가져오기 진행 단계 목록 */
 .sync-steps{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
 .sync-step{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);font-size:var(--t-sm)}

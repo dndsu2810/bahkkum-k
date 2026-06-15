@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { adminApi, type AdminOverview, type StudentReport } from "../lib/adminApi";
 import { todayStr, pad, fmtWhen } from "../lib/dates";
+import { SkeletonCards } from "../components/Skeleton";
 
 type AttFilter = "all" | "math" | "elem" | "mid";
 
@@ -60,7 +61,7 @@ export function AdminDashboard() {
 
       {err && <div className="auth-err" style={{ marginBottom: 12 }}>{err}</div>}
       {loading || !ov ? (
-        <div className="hub-muted">불러오는 중…</div>
+        <SkeletonCards n={4} />
       ) : (
         <>
           <div className="dash-kpis">

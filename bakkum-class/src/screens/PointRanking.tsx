@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { engApi, type EngRanking } from "../lib/engApi";
+import { SkeletonList } from "../components/Skeleton";
 
 /** 학생 포인트 랭킹 — 영어 수업기록 포인트(적립−차감) 누적 합 순위. 공통. */
 export function PointRanking() {
@@ -29,7 +30,7 @@ export function PointRanking() {
 
       {err && <div className="auth-err" style={{ marginBottom: 10 }}>{err}</div>}
       {loading ? (
-        <div className="hub-muted" style={{ padding: 20 }}>불러오는 중…</div>
+        <SkeletonList rows={6} />
       ) : ranked.length === 0 ? (
         <div className="hub-muted" style={{ padding: 20 }}>아직 포인트 기록이 없어요. 영어 출결·포인트를 입력하거나 노션에서 가져오면 집계됩니다.</div>
       ) : (
