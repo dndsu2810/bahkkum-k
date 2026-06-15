@@ -1496,7 +1496,7 @@ async function importTasks(env: Env): Promise<Response> {
       } else {
         await env.DB
           .prepare(
-            "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,admin_only,assign_date,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,'',?,?,?,?,?,?,?,0)"
+            "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,admin_only,assign_date,source,created_at,done_at,archived) VALUES(?,?,?,?,?,'','',?,?,?,?,?,?,?,0)"
           )
           .bind(`nt_${t.srcId}`, t.title, t.status, t.tag, t.due, assignee, t.priority, adminOnly, t.assignDate, src, now, isDone ? now : null)
           .run();
