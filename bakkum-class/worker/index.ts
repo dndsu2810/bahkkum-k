@@ -1487,7 +1487,7 @@ async function importTasks(env: Env): Promise<Response> {
       const memo = [t.notionStatus ? `노션 상태: ${t.notionStatus}` : "", t.assignDate ? `배정일 ${t.assignDate}` : ""].filter(Boolean).join(" · ");
       const adminOnly = t.notionStatus === "미나" || t.notionStatus === "마나" ? 1 : 0;
       const isDone = t.status === "done";
-      const archived = t.archived || isDone ? 1 : 0; // 과거 완료분은 보관 처리(보드 정리)
+      const archived = t.archived ? 1 : 0; // '보관'만 보관 처리. 완료는 보드 '완료'에 월별로 보임.
       const doneAt = isDone ? now : null;
       const ex = await env.DB.prepare("SELECT id FROM class_tasks WHERE source=?").bind(src).first<{ id: string }>();
       if (ex) {

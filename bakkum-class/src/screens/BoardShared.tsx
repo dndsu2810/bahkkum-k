@@ -4,15 +4,15 @@ import { tasksApi, type BoardTask, type TaskStatus } from "../lib/hubApi";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { listUsers, type UserRow } from "../lib/authApi";
 import { DateField } from "../components/DateControls";
+import { pad, todayStr } from "../lib/dates";
 
-const COLS: { key: TaskStatus; label: string }[] = [
+const ACTIVE_COLS: { key: TaskStatus; label: string }[] = [
   { key: "todo", label: "할 일" },
   { key: "doing", label: "진행 중" },
-  { key: "done", label: "완료" },
 ];
 const NEXT: Record<TaskStatus, TaskStatus | null> = { todo: "doing", doing: "done", done: null };
 const PREV: Record<TaskStatus, TaskStatus | null> = { todo: null, doing: "todo", done: "doing" };
-const WEEK = 7 * 86400000;
+const monthOf = (t: BoardTask) => { const d = new Date(t.doneAt || t.createdAt); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
 
 // 우선순위(급함 먼저) → 마감 빠른 순 → 최신 순
 function sortTasks(arr: BoardTask[]): BoardTask[] {
@@ -36,6 +36,7 @@ export function BoardShared() {
   const [title, setTitle] = useState("");
   const [err, setErr] = useState("");
   const [edit, setEdit] = useState<BoardTask | null>(null);
+  const [doneMonth, setDoneMonth] = useState(() => todayStr().slice(0, 7)); // 완료 칸 월별 보기
   const editing = useRef(false);
 
   const load = useCallback(async () => {
@@ -68,14 +69,26 @@ export function BoardShared() {
     return m;
   }, [roster]);
 
-  const visible = useMemo(() => {
-    const now = Date.now();
-    return tasks.filter((t) => {
-      if (t.archived || (t.status === "done" && t.doneAt && now - t.doneAt > WEEK)) return false;
-      if (t.adminOnly) return false; // 원장 전용 할일은 보드에 안 뜸(원장 대시보드에서 관리·배정)
-      return true;
-    });
-  }, [tasks]);
+  // 보관(archived)·원장 전용은 제외. 완료는 칸에서 월별로 따로 거른다(아래).
+  const visible = useMemo(() => tasks.filter((t) => !t.archived && !t.adminOnly), [tasks]);
+  // 완료가 있는 달 목록(최신순) — 월 이동 버튼 활성화 판단용.
+  const doneMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of visible) if (t.status === "done") set.add(monthOf(t));
+    return [...set].sort().reverse();
+  }, [visible]);
+  const shiftDoneMonth = (delta: number) => {
+    const [y, m] = doneMonth.split("-").map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    setDoneMonth(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`);
+  };
+  // 첫 로드 때, 이번 달에 완료가 없고 지난 달들에 있으면 가장 최근 완료 달로 맞춰준다.
+  const monthInit = useRef(false);
+  useEffect(() => {
+    if (monthInit.current || doneMonths.length === 0) return;
+    monthInit.current = true;
+    if (!doneMonths.includes(doneMonth)) setDoneMonth(doneMonths[0]);
+  }, [doneMonths, doneMonth]);
 
   async function add() {
     const tt = title.trim();
@@ -120,6 +133,25 @@ export function BoardShared() {
     }
   }
 
+  const card = (t: BoardTask) => (
+    <div className={"board2-card" + (t.priority === "urgent" ? " urgent" : "")} key={t.id} onClick={() => setEdit(t)} tabIndex={0}>
+      {t.priority === "urgent" && <span className="board2-urgent">급함</span>}
+      <div className="board2-card-title">{t.title}</div>
+      {t.memo && <div className="board2-card-memo">{t.memo}</div>}
+      <div className="board2-card-meta">
+        {t.assignee && <span className="board2-asg">{t.assignee}</span>}
+        {t.due && <span className="board2-due">~{t.due}</span>}
+        {t.studentId && nameOf[t.studentId] && <span className="board2-stu">{nameOf[t.studentId]}</span>}
+        {t.source && <span className="board2-auto">자동</span>}
+      </div>
+      <div className="board2-card-act" onClick={(e) => e.stopPropagation()}>
+        {PREV[t.status] && <button className="board2-mv" onClick={() => move(t, "prev")} title="왼쪽으로">‹</button>}
+        {NEXT[t.status] && <button className="board2-mv" onClick={() => move(t, "next")} title="오른쪽으로">›</button>}
+        <button className="board2-del" onClick={() => remove(t)} title="삭제">×</button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="board2">
       <div className="sm-head">
@@ -144,7 +176,7 @@ export function BoardShared() {
       {err && <div className="auth-err" style={{ margin: "8px 0" }}>{err}</div>}
 
       <div className="board2-cols">
-        {COLS.map((c) => {
+        {ACTIVE_COLS.map((c) => {
           const items = sortTasks(visible.filter((t) => t.status === c.key));
           return (
             <div className="board2-col" key={c.key}>
@@ -152,30 +184,32 @@ export function BoardShared() {
                 {c.label} <span className="board2-cnt">{items.length}</span>
               </div>
               <div className="board2-list">
-                {items.map((t) => (
-                  <div className={"board2-card" + (t.priority === "urgent" ? " urgent" : "") + (t.adminOnly ? " admin-only" : "")} key={t.id} onClick={() => setEdit(t)} tabIndex={0}>
-                    {t.priority === "urgent" && <span className="board2-urgent">급함</span>}
-                    {t.adminOnly && <span className="board2-adminonly">원장 전용</span>}
-                    <div className="board2-card-title">{t.title}</div>
-                    {t.memo && <div className="board2-card-memo">{t.memo}</div>}
-                    <div className="board2-card-meta">
-                      {t.assignee && <span className="board2-asg">{t.assignee}</span>}
-                      {t.due && <span className="board2-due">~{t.due}</span>}
-                      {t.studentId && nameOf[t.studentId] && <span className="board2-stu">{nameOf[t.studentId]}</span>}
-                      {t.source && <span className="board2-auto">자동</span>}
-                    </div>
-                    <div className="board2-card-act" onClick={(e) => e.stopPropagation()}>
-                      {PREV[t.status] && <button className="board2-mv" onClick={() => move(t, "prev")} title="왼쪽으로">‹</button>}
-                      {NEXT[t.status] && <button className="board2-mv" onClick={() => move(t, "next")} title="오른쪽으로">›</button>}
-                      <button className="board2-del" onClick={() => remove(t)} title="삭제">×</button>
-                    </div>
-                  </div>
-                ))}
+                {items.map(card)}
                 {items.length === 0 && <div className="board2-empty">아직 없어요</div>}
               </div>
             </div>
           );
         })}
+        {/* 완료 — 월별로 정리해서 봄(쌓이지 않게). 월 이동으로 지난 완료도 확인. */}
+        {(() => {
+          const items = sortTasks(visible.filter((t) => t.status === "done" && monthOf(t) === doneMonth));
+          return (
+            <div className="board2-col" key="done">
+              <div className="board2-col-h">
+                완료 <span className="board2-cnt">{items.length}</span>
+                <div className="board2-month">
+                  <button className="board2-mv" onClick={() => shiftDoneMonth(-1)} title="이전 달">‹</button>
+                  <span className="board2-month-l">{doneMonth.replace("-", ". ")}</span>
+                  <button className="board2-mv" onClick={() => shiftDoneMonth(1)} disabled={doneMonth >= todayStr().slice(0, 7)} title="다음 달">›</button>
+                </div>
+              </div>
+              <div className="board2-list">
+                {items.map(card)}
+                {items.length === 0 && <div className="board2-empty">이 달 완료한 일이 없어요</div>}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {edit && (

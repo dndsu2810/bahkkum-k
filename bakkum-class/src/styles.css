@@ -1291,7 +1291,7 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3);margin-top:16px}
 .dash-card{padding:var(--s5)}
 .dash-h{font-size:var(--t-base);font-weight:700;color:var(--ink);margin-bottom:var(--s3)}
-.dash-rows{display:flex;flex-direction:column;gap:6px}
+.dash-rows{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto}
 .dash-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;border:1px solid var(--line);
   background:var(--card);border-radius:var(--r-md);padding:9px 12px;cursor:pointer;transition:background .12s,border-color .12s}
 .dash-row:hover{border-color:var(--brand-line);background:var(--brand-soft)}
@@ -1499,7 +1499,11 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .board2-col{background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3);min-height:200px}
 .board2-col-h{font-weight:700;color:var(--ink);font-size:var(--t-sm);margin-bottom:var(--s3);display:flex;gap:6px;align-items:center}
 .board2-cnt{font-size:11px;font-weight:700;background:#eef1f6;color:var(--ink2);border-radius:var(--r-full);padding:0 7px}
-.board2-list{display:flex;flex-direction:column;gap:var(--s2)}
+.board2-list{display:flex;flex-direction:column;gap:var(--s2);max-height:62vh;overflow-y:auto}
+.board2-month{margin-left:auto;display:flex;align-items:center;gap:4px}
+.board2-month-l{font-size:var(--t-cap);font-weight:600;color:var(--ink2);min-width:54px;text-align:center}
+.board2-month .board2-mv{width:24px;height:24px}
+.board2-month .board2-mv:disabled{opacity:.35;cursor:default}
 .board2-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--s3);box-shadow:var(--sh-sm);cursor:pointer;transition:border-color .12s,box-shadow .12s}
 .board2-card:hover{border-color:var(--brand-line);box-shadow:var(--sh-md,0 2px 8px rgba(15,23,42,.08))}
 .board2-card.urgent{border-color:#f6b9b9;background:linear-gradient(0deg,var(--card),var(--card))}
