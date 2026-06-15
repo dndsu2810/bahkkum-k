@@ -117,9 +117,9 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
     try {
       const webhook = (await cfg(env, "secret_kakao_webhook")) || env.KAKAO_WEBHOOK_URL || "";
       if (webhook) {
-        const when = new Date(now).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
-        const text = `🐞 오류·개선 요청\n작성자: ${me.name} (${roleLabel(me.role)})\n화면: ${page || "미지정"}\n내용: ${body}\n시간: ${when}`;
-        await sendKakao({ KAKAO_WEBHOOK_URL: webhook }, text);
+        const when = new Date(now).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "full", timeStyle: "short" });
+        const text = `작성자: ${me.name} (${roleLabel(me.role)})\n화면: ${page || "미지정"}\n내용: ${body}\n시간: ${when}`;
+        await sendKakao({ KAKAO_WEBHOOK_URL: webhook }, text, undefined, "오류·개선 요청");
       }
     } catch {
       /* 알림 실패는 무시 */
