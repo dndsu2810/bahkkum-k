@@ -4,6 +4,7 @@ import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type Curriculum, t
 import { DOW, DOW_ORDER, fmtFull, fmtMDDow, parseD, timeToMin, todayStr } from "../lib/dates";
 import { NoticeBanner } from "../components/NoticeBanner";
 import { DateField } from "../components/DateControls";
+import { getCachedLogo } from "../lib/configApi";
 import { IssueBoard } from "./IssueBoard";
 import { Icon } from "../icons";
 
@@ -391,11 +392,12 @@ function LogHistory({ rows }: { rows: StudentLogRow[] }) {
 export function StudentHome() {
   const { user, logout } = useAuth();
   const [showIssue, setShowIssue] = useState(false);
+  const logo = getCachedLogo();
   return (
     <div className="sp-shell">
       <header className="sp-shell-top">
         <div className="sp-shell-brand">
-          <div className="hub-logo">바</div>
+          {logo.url ? <img className="hub-logo logo-img" src={logo.url} alt="바꿈영수학원" /> : <div className="hub-logo">바</div>}
           <div>
             <b>바꿈 영어</b>
             <span>{fmtFull(parseD(todayStr()))}</span>

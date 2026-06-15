@@ -956,6 +956,7 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .hub-top-brand{display:flex;align-items:center;gap:var(--s3)}
 .hub-logo{width:38px;height:38px;border-radius:var(--r-md);background:linear-gradient(135deg,#3b82f6,#2563eb);
   color:#fff;display:grid;place-items:center;font-weight:700;font-size:var(--t-md);flex-shrink:0}
+.hub-logo.logo-img{background:none;object-fit:cover;box-shadow:0 4px 10px rgba(0,0,0,.12)}
 .hub-top-brand b{display:block;font-size:var(--t-base);font-weight:700;color:var(--ink);line-height:1.2}
 .hub-top-brand span{font-size:var(--t-cap);color:var(--ink3)}
 .hub-body{flex:1;display:grid;place-items:center;padding:var(--s8) var(--s5)}
