@@ -234,6 +234,7 @@ function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string
   const [savedMsg, setSavedMsg] = useState("");
   const dirtyRef = useRef(false); // 학생이 입력 중인지 — 폴링이 입력을 덮어쓰지 않게
   const dateRef = useRef(date);
+  const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 선택한 날짜에 이미 기록이 있으면 불러와 이어 적기. 날짜가 바뀌면 항상 갱신,
   // 같은 날짜 폴링 갱신은 학생이 입력 중이 아닐 때만(선생님 입력 반영).
@@ -251,6 +252,15 @@ function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string
     dirtyRef.current = false;
   }, [date, existing]);
 
+  // 자동 저장 — 아이들이 '저장'을 안 눌러도 입력하면 잠시 뒤 저절로 저장(잃어버리지 않게).
+  useEffect(() => {
+    if (!dirtyRef.current) return; // 로드·폴링 갱신은 저장하지 않음(사용자 입력만)
+    if (autoTimer.current) clearTimeout(autoTimer.current);
+    autoTimer.current = setTimeout(() => { void save(); }, 1200);
+    return () => { if (autoTimer.current) clearTimeout(autoTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookNo, wordTest, doneItems, startTime, endTime, comment]);
+
   // 선택한 날짜의 요일에 잡힌 수업시간(자동입력용).
   const dow = DOW[parseD(date).getDay()];
   const scheduled = slots.find((s) => s.day === dow);
@@ -263,11 +273,11 @@ function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string
   }
 
   async function save() {
+    dirtyRef.current = false; // 저장 시작 시점 — 저장 도중 새로 입력하면 다시 dirty가 되어 보존됨
     setSaving(true);
     setSavedMsg("");
     try {
       await studentApi.saveLog({ studentId, date, bookNo, wordTest, doneItems, startTime, endTime, comment });
-      dirtyRef.current = false; // 저장 완료 → 이후 폴링 갱신 허용
       setSavedMsg("저장됐어요 ✓");
       onSaved();
     } catch (e) {
@@ -344,8 +354,8 @@ function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string
       </div>
 
       <div className="sp-log-save">
-        <button className="btn primary" onClick={save} disabled={saving}>{saving ? "저장 중…" : "일지 저장"}</button>
-        {savedMsg && <span className="sp-saved">{savedMsg}</span>}
+        <button className="btn primary" onClick={save} disabled={saving}>{saving ? "저장 중…" : "지금 저장"}</button>
+        <span className="sp-saved">{saving ? "저장 중…" : savedMsg || "입력하면 자동으로 저장돼요"}</span>
       </div>
     </div>
   );
