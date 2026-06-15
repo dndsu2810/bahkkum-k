@@ -84,15 +84,24 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
 
   // 날짜별 일일기록 로드
   useEffect(() => {
-    engApi
-      .dailyByDate(date)
-      .then((list) => {
-        const m: Record<string, EngDaily> = {};
-        for (const d of list) m[d.studentId] = d;
-        setDaily(m);
-      })
-      .catch(() => {});
-  }, [date]);
+    const loadDaily = () =>
+      engApi
+        .dailyByDate(date)
+        .then((list) => {
+          const m: Record<string, EngDaily> = {};
+          for (const d of list) m[d.studentId] = d;
+          setDaily(m);
+        })
+        .catch(() => {});
+    void loadDaily();
+    // 현황 화면은 다른 강사 입력이 바로 반영되게 20초마다 새로고침(실시간 근사).
+    if (initialTab === "board") {
+      const iv = setInterval(loadDaily, 20000);
+      const onFocus = () => void loadDaily();
+      window.addEventListener("focus", onFocus);
+      return () => { clearInterval(iv); window.removeEventListener("focus", onFocus); };
+    }
+  }, [date, initialTab]);
 
   const nameOf = useMemo(() => {
     const m: Record<string, string> = {};
@@ -383,6 +392,17 @@ function DailyEditor({ student, band, value, onSave }: { student: string; band: 
             <HwRow label="문법숙제" value={d.hwGrammar} onChange={(v) => setD({ ...d, hwGrammar: v })} />
           </div>
           <label className="eng-check"><input type="checkbox" checked={d.wrongCheck} onChange={(e) => setD({ ...d, wrongCheck: e.target.checked })} /> 틀단확인 (틀린 단어 확인)</label>
+        </div>
+      )}
+
+      {/* 중고등영어도 초등처럼 진도 체크 — 진도(교재·범위) + 단어시험 */}
+      {showHw && (
+        <div className="eng-field">
+          <div className="eng-label">진도 체크</div>
+          <div className="eng-grid2">
+            <input className="input" value={d.bookNo} onChange={(e) => setD({ ...d, bookNo: e.target.value })} placeholder="진도 (교재·범위, 예: Insight 3과)" />
+            <input className="input" value={d.wordTest} onChange={(e) => setD({ ...d, wordTest: e.target.value })} placeholder="단어시험 (예: 18/20)" />
+          </div>
         </div>
       )}
 
@@ -980,6 +1000,33 @@ function EngDashboard({ students, daily, band }: { students: RosterStudent[]; da
           ))}
         </div>
       </div>
+
+      {/* 초등영어 학생별 오늘 현황 — 진도·단어시험·활동 한눈에(실시간) */}
+      {!showHw && (
+        <div className="eng-dash-sec">
+          <h3>학생별 오늘 현황</h3>
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead><tr><th>학생</th><th>출석</th><th>원서 진도</th><th>단어시험</th><th>오늘 한 것</th></tr></thead>
+              <tbody>
+                {students.map((s) => {
+                  const d = daily[s.id];
+                  const att = d?.attStatus || (d?.attended ? "출석" : "");
+                  return (
+                    <tr key={s.id}>
+                      <td className="t-name">{s.name}</td>
+                      <td>{att ? <span className={"badge " + (att === "출석" ? "b-green" : att === "지각" ? "b-orange" : att === "결석" ? "b-gray" : "b-blue")}>{att}</span> : <span className="hub-muted">—</span>}</td>
+                      <td>{d?.bookNo || <span className="hub-muted">—</span>}</td>
+                      <td>{d?.wordTest || <span className="hub-muted">—</span>}</td>
+                      <td>{d?.doneItems?.length ? <span className="hub-muted">{d.doneItems.length}개</span> : <span className="hub-muted">—</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

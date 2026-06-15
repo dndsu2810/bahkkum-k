@@ -326,8 +326,9 @@ const CURRICULUM_DEFAULT: Curriculum = {
 function canEditCurriculum(me: SessionUser): boolean {
   if (me.role === "admin") return true;
   const scope = me.scope || [];
-  if (scope.length) return scope.includes("eng_elem"); // 원장이 지정한 화면 권한
-  return me.role === "english_elem"; // 별도 지정 없으면 역할 기본값
+  // 영어 강사(초등·중고등)면 커리큘럼/진도 편집 가능. 원장이 화면 권한을 지정했으면 그걸 따른다.
+  if (scope.length) return scope.includes("eng_elem") || scope.includes("eng_mid");
+  return me.role === "english_elem" || me.role === "english_mid";
 }
 
 function cleanRows(v: unknown): CurriculumRow[] {
