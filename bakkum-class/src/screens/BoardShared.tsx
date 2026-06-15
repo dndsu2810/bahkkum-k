@@ -194,6 +194,13 @@ function TaskModal({
   const [f, setF] = useState<BoardTask>(task);
   const set = <K extends keyof BoardTask>(k: K, v: BoardTask[K]) => setF((c) => ({ ...c, [k]: v }));
 
+  // 담당자는 쉼표로 구분된 여러 명. 칩 토글로 추가/제거.
+  const assigned = f.assignee.split(",").map((s) => s.trim()).filter(Boolean);
+  const toggleAssignee = (name: string) => {
+    const next = assigned.includes(name) ? assigned.filter((n) => n !== name) : [...assigned, name];
+    set("assignee", next.join(", "));
+  };
+
   return (
     <div className="prof-overlay" onClick={onClose}>
       <div className="prof" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
@@ -210,19 +217,26 @@ function TaskModal({
             <span className="prof-field-l">세부 지시 내용</span>
             <textarea className="input prof-memo" rows={4} value={f.memo} onChange={(e) => set("memo", e.target.value)} placeholder="자세한 지시·메모(여러 줄)" />
           </label>
-          <div className="prof-grid">
-            <label className="prof-field">
-              <span className="prof-field-l">담당자</span>
-              <select className="inline-select" value={f.assignee} onChange={(e) => set("assignee", e.target.value)}>
-                <option value="">미지정</option>
-                {users.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
-              </select>
-            </label>
-            <label className="prof-field">
-              <span className="prof-field-l">마감일</span>
-              <DateField value={f.due} onChange={(v) => set("due", v)} placeholder="마감일 없음" />
-            </label>
-          </div>
+          <label className="prof-field">
+            <span className="prof-field-l">담당자 (여러 명 선택 가능)</span>
+            <div className="sm-subj">
+              {users.map((u) => (
+                <button
+                  type="button"
+                  key={u.id}
+                  className={"sm-subj-chip" + (assigned.includes(u.name) ? " on" : "")}
+                  onClick={() => toggleAssignee(u.name)}
+                >
+                  {u.name}
+                </button>
+              ))}
+              {users.length === 0 && <span className="hub-muted">등록된 강사가 없어요.</span>}
+            </div>
+          </label>
+          <label className="prof-field">
+            <span className="prof-field-l">마감일</span>
+            <DateField value={f.due} onChange={(v) => set("due", v)} placeholder="마감일 없음" />
+          </label>
           <label className="prof-field">
             <span className="prof-field-l">우선순위</span>
             <div className="sm-subj">
