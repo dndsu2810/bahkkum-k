@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { engApi, hwProgress, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, ELEM_LOG_ITEMS, pointsOf, type EngDaily, type EngMakeup, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
@@ -94,9 +94,9 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
         })
         .catch(() => {});
     void loadDaily();
-    // 현황 화면은 다른 강사 입력이 바로 반영되게 20초마다 새로고침(실시간 근사).
-    if (initialTab === "board") {
-      const iv = setInterval(loadDaily, 20000);
+    // 오늘·출결·현황 화면은 학생/다른 강사 입력이 바로 반영되게 15초마다 새로고침(실시간 근사).
+    if (initialTab === "today" || initialTab === "att" || initialTab === "board") {
+      const iv = setInterval(loadDaily, 15000);
       const onFocus = () => void loadDaily();
       window.addEventListener("focus", onFocus);
       return () => { clearInterval(iv); window.removeEventListener("focus", onFocus); };
@@ -308,6 +308,14 @@ function DailyEditor({ student, band, value, onSave }: { student: string; band: 
   const showHw = band !== "elem"; // 초등영어는 숙제 없음
   const [d, setD] = useState<EngDaily>(value);
   const dirty = JSON.stringify(d) !== JSON.stringify(value);
+
+  // 학생/다른 강사가 입력해 value(서버값)가 바뀌면, 교사가 편집 중이 아닐 때만 반영(편집분 보존).
+  const prevValue = useRef(value);
+  useEffect(() => {
+    if (JSON.stringify(d) === JSON.stringify(prevValue.current)) setD(value);
+    prevValue.current = value;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
 
   function setGoals(goals: Goal[]) {
     setD({ ...d, goals });

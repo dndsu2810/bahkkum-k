@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth";
 import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type Curriculum, type CurriculumSection, type CurriculumRow, type StudentLogRow } from "../lib/studentApi";
 import { DOW, DOW_ORDER, fmtFull, fmtMDDow, parseD, timeToMin, todayStr } from "../lib/dates";
@@ -28,8 +28,16 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
       setLoading(false);
     }
   }
+  // 조용히 새로고침(로딩표시 없이) — 선생님이 체크한 게 학생 화면에 바로 반영되게.
+  async function reloadSilent() {
+    try { setData(await studentApi.page(studentId)); } catch { /* 폴링 실패는 무시 */ }
+  }
   useEffect(() => {
     load();
+    const iv = setInterval(reloadSilent, 15000);
+    const onFocus = () => void reloadSilent();
+    window.addEventListener("focus", onFocus);
+    return () => { clearInterval(iv); window.removeEventListener("focus", onFocus); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId]);
 
@@ -224,9 +232,15 @@ function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string
   const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
+  const dirtyRef = useRef(false); // 학생이 입력 중인지 — 폴링이 입력을 덮어쓰지 않게
+  const dateRef = useRef(date);
 
-  // 선택한 날짜에 이미 기록이 있으면 불러와 이어 적기.
+  // 선택한 날짜에 이미 기록이 있으면 불러와 이어 적기. 날짜가 바뀌면 항상 갱신,
+  // 같은 날짜 폴링 갱신은 학생이 입력 중이 아닐 때만(선생님 입력 반영).
   useEffect(() => {
+    const dateChanged = dateRef.current !== date;
+    dateRef.current = date;
+    if (!dateChanged && dirtyRef.current) return;
     const row = existing.find((r) => r.date === date);
     setBookNo(row?.bookNo || "");
     setWordTest(row?.wordTest || "");
@@ -234,6 +248,7 @@ function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string
     setStartTime(row?.startTime || "");
     setEndTime(row?.endTime || "");
     setComment(row?.comment || "");
+    dirtyRef.current = false;
   }, [date, existing]);
 
   // 선택한 날짜의 요일에 잡힌 수업시간(자동입력용).
@@ -242,6 +257,7 @@ function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string
 
   function fillScheduled() {
     if (!scheduled) return;
+    dirtyRef.current = true;
     setStartTime(scheduled.time);
     if (scheduled.duration) setEndTime(addMin(scheduled.time, scheduled.duration));
   }
@@ -251,6 +267,7 @@ function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string
     setSavedMsg("");
     try {
       await studentApi.saveLog({ studentId, date, bookNo, wordTest, doneItems, startTime, endTime, comment });
+      dirtyRef.current = false; // 저장 완료 → 이후 폴링 갱신 허용
       setSavedMsg("저장됐어요 ✓");
       onSaved();
     } catch (e) {
@@ -261,7 +278,7 @@ function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string
   }
 
   return (
-    <div className="sp-log-edit">
+    <div className="sp-log-edit" onChangeCapture={() => { dirtyRef.current = true; }}>
       <div className="sp-f">
         <span>날짜</span>
         <DateField value={date} onChange={setDate} />
@@ -274,13 +291,13 @@ function LogEditor({ studentId, existing, slots, onSaved }: { studentId?: string
           <div className="sp-time-one">
             <label>시작</label>
             <input className="input" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-            <button type="button" className="sp-now" onClick={() => setStartTime(nowHM())}>지금</button>
+            <button type="button" className="sp-now" onClick={() => { dirtyRef.current = true; setStartTime(nowHM()); }}>지금</button>
           </div>
           <span className="sp-time-tilde">~</span>
           <div className="sp-time-one">
             <label>끝</label>
             <input className="input" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-            <button type="button" className="sp-now" onClick={() => setEndTime(nowHM())}>지금</button>
+            <button type="button" className="sp-now" onClick={() => { dirtyRef.current = true; setEndTime(nowHM()); }}>지금</button>
           </div>
         </div>
         {scheduled && (
