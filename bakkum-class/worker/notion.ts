@@ -892,6 +892,125 @@ export function classPageIdForGrade(map: Record<string, string>, grade: string):
   return map[wanted] || CLASS_PAGE_ID[wanted];
 }
 
+/* ---------- 복구: 앱 학생 → 노션 학생 DB 되살리기 ---------- */
+export interface RestoreStudent {
+  appId: string;
+  name: string;
+  status: string;
+  school: string;
+  birth: string;
+  parentPhone: string;
+  studentPhone: string;
+  start: string;
+  onlineId: string;
+  grade: string;
+  subjects: string[];
+  band: string;
+  notionPageId: string;
+}
+export interface RestoreResult {
+  total: number;
+  existing: number;
+  created: { appId: string; name: string; pageId: string }[];
+  skipped: string[];
+  wouldCreate?: string[];
+}
+/** 앱에 남아있는 학생을 노션 학생 DB로 되살린다. 이미 있는(페이지 id/이름) 학생은 건너뛰어 중복 방지.
+ *  dry=true면 만들 목록만 미리 보여주고 쓰지 않는다. 스키마 타입을 읽어 각 속성을 맞게 채운다. */
+export async function pushStudentsToNotion(env: NotionEnv, students: RestoreStudent[], dry: boolean): Promise<RestoreResult> {
+  if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
+  // 1) 학생 DB 스키마(속성 타입) 읽기
+  const metaRes = await notionReq(env, "GET", `/v1/databases/${NOTION_CFG.studentDb}`);
+  if (!metaRes.ok) throw new Error(`schema ${metaRes.status}: ${(await metaRes.text()).slice(0, 200)}`);
+  const meta = (await metaRes.json()) as { properties?: Record<string, { type?: string }> };
+  const schema = meta.properties || {};
+  const typeOf: Record<string, string> = {};
+  let titleName = "이름";
+  for (const [k, v] of Object.entries(schema)) {
+    typeOf[k] = v.type || "";
+    if (v.type === "title") titleName = k;
+  }
+
+  // 2) 기존 노션 학생(중복 방지) — 페이지 id·이름 수집
+  const existingIds = new Set<string>();
+  const existingNames = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const res = await notionReq(env, "POST", `/v1/databases/${NOTION_CFG.studentDb}/query`, { page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) });
+    if (!res.ok) break;
+    const j = (await res.json()) as { results: any[]; has_more: boolean; next_cursor: string };
+    for (const pg of j.results) {
+      existingIds.add(pg.id);
+      const nm = findTitle((pg.properties || {}) as Record<string, Prop>).trim();
+      if (nm) existingNames.add(nm.replace(/\s+/g, ""));
+    }
+    cursor = j.has_more ? j.next_cursor : undefined;
+  } while (cursor);
+
+  const classMap = await fetchClassPageMap(env);
+  const norm = (s: string) => s.replace(/\s+/g, "");
+  const isISO = (s: string) => /^\d{4}-\d{2}-\d{2}/.test(s);
+  const setProp = (props: Record<string, unknown>, name: string, value: string) => {
+    const t = typeOf[name];
+    if (!t) return;
+    if (t === "title") props[name] = { title: value ? [{ text: { content: value } }] : [] };
+    else if (t === "rich_text") props[name] = { rich_text: value ? [{ text: { content: value } }] : [] };
+    else if (t === "select") props[name] = value ? { select: { name: value } } : { select: null };
+    else if (t === "status") { if (value) props[name] = { status: { name: value } }; }
+    else if (t === "phone_number") props[name] = { phone_number: value || null };
+    else if (t === "email") props[name] = { email: value || null };
+    else if (t === "number") { const n = Number(value); if (value !== "" && !isNaN(n)) props[name] = { number: n }; }
+    else if (t === "date") { if (isISO(value)) props[name] = { date: { start: value.slice(0, 10) } }; }
+    else if (t === "multi_select") props[name] = { multi_select: value ? [{ name: value }] : [] };
+  };
+
+  const S = NOTION_CFG.student;
+  const created: { appId: string; name: string; pageId: string }[] = [];
+  const skipped: string[] = [];
+  const wouldCreate: string[] = [];
+
+  for (const st of students) {
+    const already = (st.notionPageId && existingIds.has(st.notionPageId)) || existingNames.has(norm(st.name));
+    if (already) { skipped.push(st.name); continue; }
+    if (dry) { wouldCreate.push(st.name); continue; }
+
+    const props: Record<string, unknown> = {};
+    setProp(props, titleName, st.name);
+    setProp(props, S.status, st.status || "재원");
+    setProp(props, S.school, st.school);
+    setProp(props, S.birth, st.birth);
+    setProp(props, S.parentPhone, st.parentPhone);
+    setProp(props, S.studentPhone, st.studentPhone);
+    setProp(props, S.start, st.start);
+    setProp(props, "ID", st.onlineId);
+    // 수업 선택(relation) — 수학은 확실한 페이지, 영어는 제목 매칭(가능할 때만).
+    if (typeOf[S.classSelect] === "relation") {
+      const rel: { id: string }[] = [];
+      if (st.subjects.includes("math")) {
+        const id = classPageIdForGrade(classMap, st.grade);
+        if (id) rel.push({ id });
+      }
+      if (st.subjects.includes("english")) {
+        const ek =
+          Object.keys(classMap).find((t) => t.includes("영어") && (st.band === "elem" ? /초/.test(t) : /중|고/.test(t))) ||
+          Object.keys(classMap).find((t) => t.includes("영어"));
+        if (ek) rel.push({ id: classMap[ek] });
+      }
+      if (rel.length) props[S.classSelect] = { relation: rel };
+    }
+
+    const r = await notionReq(env, "POST", "/v1/pages", { parent: { database_id: NOTION_CFG.studentDb }, properties: props });
+    if (r.ok) {
+      const pj = (await r.json()) as { id: string };
+      created.push({ appId: st.appId, name: st.name, pageId: pj.id });
+      existingNames.add(norm(st.name)); // 같은 실행 내 중복 방지
+    } else {
+      skipped.push(`${st.name}(실패 ${r.status})`);
+    }
+  }
+  return { total: students.length, existing: existingIds.size, created, skipped, ...(dry ? { wouldCreate } : {}) };
+}
+
 // 숙제 기록 → 노션 숙제 DB. 같은 학생·같은 마감일 행이 있으면 갱신(중복 행 방지).
 //  - 숙제 내용(text) = 교재/내용 텍스트   - 영역(multi_select) = 태그
 //  - 완성도(number) · 확인완료(checkbox) · 특이사항(text) = 메모(분리)

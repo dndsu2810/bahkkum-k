@@ -159,6 +159,54 @@ function MathRecordsImport() {
   );
 }
 
+/** 복구: 앱에 남아있는 학생 명단을 노션 학생 DB로 되살림. 이미 있는 학생은 건너뜀(중복 방지). */
+function RestoreStudents() {
+  const { toast } = useStore();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function run() {
+    if (busy) return;
+    setBusy(true);
+    setMsg("");
+    try {
+      // 1) 미리보기(dry) — 몇 명이 새로 만들어질지 확인.
+      const pre = await fetch("/api/restore/students-to-notion?dry=1", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      const pj = (await pre.json().catch(() => ({}))) as { total?: number; existing?: number; wouldCreate?: string[]; error?: string };
+      if (!pre.ok || pj.error) { setMsg("미리보기 실패: " + (pj.error || pre.status)); return; }
+      const willCreate = pj.wouldCreate?.length || 0;
+      if (willCreate === 0) { setMsg(`새로 만들 학생이 없어요. (앱 재원 ${pj.total}명 · 노션에 이미 ${pj.existing}명 있음)`); return; }
+      if (!window.confirm(`앱 재원 학생 ${pj.total}명 중,\n노션에 없는 ${willCreate}명을 노션 학생 DB에 새로 만듭니다.\n(이미 있는 ${pj.existing}명은 건너뜀 · 중복 안 생김)\n\n진행할까요?`)) return;
+      // 2) 실제 복구.
+      const r = await fetch("/api/restore/students-to-notion", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      const j = (await r.json().catch(() => ({}))) as { created?: unknown[]; skipped?: string[]; error?: string };
+      if (!r.ok || j.error) { setMsg("복구 실패: " + (j.error || r.status)); return; }
+      const n = j.created?.length || 0;
+      setMsg(`완료 · ${n}명을 노션에 되살렸어요.` + (j.skipped?.length ? ` (건너뜀 ${j.skipped.length})` : ""));
+      toast(`노션 학생 명단 복구 완료 · ${n}명`);
+    } catch (e) {
+      setMsg("실패: " + String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
+      <div className="card-title" style={{ marginBottom: 6 }}>노션 학생 명단 복구 (앱 → 노션)</div>
+      <div className="page-desc" style={{ marginBottom: 12 }}>
+        노션 학생 DB가 비었을 때, <b>앱에 남아있는 재원 학생</b>을 노션으로 다시 만들어 줍니다.
+        이미 노션에 있는 학생은 건너뛰어 <b>중복이 생기지 않아요</b>. 이름·학교·생년월일·연락처·첫수업일·ID·수업(가능한 경우)을 채웁니다.
+      </div>
+      <button className="btn" onClick={run} disabled={busy}>
+        <span className={busy ? "spin" : undefined}><Icon name="undo" /></span>
+        {busy ? "복구 중…" : "노션으로 학생 명단 되살리기"}
+      </button>
+      {msg && <div className="page-desc" style={{ marginTop: 10 }}>{msg}</div>}
+    </div>
+  );
+}
+
 /** 공지 배너 — 원장이 강사에게 띄우는 상단 띠. 있을 때만 노출. */
 function NoticeSetting() {
   const [list, setList] = useState<Notice[]>([]);
@@ -352,6 +400,7 @@ export function Settings({
       <KakaoWebhookSetting />
       <LogoSetting />
       <NotionImport />
+      <RestoreStudents />
       <MathRecordsImport />
     </section>
   );

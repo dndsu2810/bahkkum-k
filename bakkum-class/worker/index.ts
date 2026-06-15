@@ -41,6 +41,8 @@ import {
   fetchEngAttendance,
   fetchElemLog,
   fetchTaskAssignments,
+  pushStudentsToNotion,
+  type RestoreStudent,
 } from "./notion";
 import { NOTION_CFG } from "./notion";
 import { isHoliday, holidayName } from "../src/lib/holidays";
@@ -293,6 +295,12 @@ export default {
           const me = await readSession(env, request);
           if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
           return await importTasks(env);
+        }
+        // 복구: 앱 학생 명단 → 노션 학생 DB 되살리기(원장, ?dry=1 미리보기).
+        if (p === "/api/restore/students-to-notion" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          return await restoreStudentsToNotion(env, url);
         }
 
         // ---- 허브 공유 영역(특이사항·위키·SNS·업무보드) ----
@@ -1507,6 +1515,51 @@ async function importTasks(env: Env): Promise<Response> {
     }
   }
   return json({ ok: true, total: rows.length, imported });
+}
+
+// 복구: 앱 D1의 재원 학생을 노션 학생 DB로 되살린다(이미 있는 건 건너뜀). ?dry=1 미리보기.
+async function restoreStudentsToNotion(env: Env, url: URL): Promise<Response> {
+  const dry = url.searchParams.get("dry") === "1";
+  await ensureStudentMeta(env);
+  const rows = await env.DB
+    .prepare("SELECT id,name,grade,status,school,birth_date,parent_phone,student_phone,start_date,notion_page_id FROM students WHERE (hidden IS NULL OR hidden=0) AND status='재원' ORDER BY id")
+    .all<{ id: number; name: string; grade: string; status: string; school: string; birth_date: string; parent_phone: string; student_phone: string; start_date: string; notion_page_id: string | null }>();
+  const metaRows = await env.DB.prepare("SELECT student_id, subjects, english_band, online_id FROM class_student_meta").all<{ student_id: string; subjects: string; english_band: string; online_id: string }>();
+  const metaBy = new Map<string, { subjects: string; english_band: string; online_id: string }>();
+  for (const m of metaRows.results || []) metaBy.set(String(m.student_id), { subjects: String(m.subjects || "[]"), english_band: String(m.english_band || ""), online_id: String(m.online_id || "") });
+  const students: RestoreStudent[] = (rows.results || []).map((r) => {
+    const m = metaBy.get(String(r.id));
+    let subjects: string[] = [];
+    try { subjects = JSON.parse(m?.subjects || "[]"); } catch { /* ignore */ }
+    return {
+      appId: String(r.id),
+      name: String(r.name || ""),
+      status: String(r.status || "재원"),
+      school: String(r.school || ""),
+      birth: String(r.birth_date || ""),
+      parentPhone: String(r.parent_phone || ""),
+      studentPhone: String(r.student_phone || ""),
+      start: String(r.start_date || ""),
+      onlineId: String(m?.online_id || ""),
+      grade: String(r.grade || ""),
+      subjects,
+      band: String(m?.english_band || ""),
+      notionPageId: String(r.notion_page_id || ""),
+    };
+  });
+  let result;
+  try {
+    result = await pushStudentsToNotion(env, students, dry);
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+  // 새로 만든 페이지 id를 앱에 반영(다음 동기화 때 매칭되게).
+  if (!dry) {
+    for (const c of result.created) {
+      try { await env.DB.prepare("UPDATE students SET notion_page_id=? WHERE id=?").bind(c.pageId, Number(c.appId)).run(); } catch { /* ignore */ }
+    }
+  }
+  return json(result);
 }
 
 async function importSns(env: Env): Promise<Response> {
