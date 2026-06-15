@@ -47,6 +47,8 @@ function engEntries(band: "mid" | "elem"): WsEntry[] {
   ];
   // 초등영어는 숙제를 다루지 않는다 — 숙제 기록 메뉴는 중고등만.
   if (band === "mid") list.push({ key: "eng_hw" + sfx, label: "숙제 기록", icon: "book", kind: "hub" });
+  // 초등영어는 학생 화면에 커리큘럼이 보이므로, 그걸 수정하는 메뉴를 둔다.
+  if (band === "elem") list.push({ key: "eng_cur" + sfx, label: "커리큘럼", icon: "clipboard", kind: "hub" });
   list.push(
     { key: "eng_progress" + sfx, label: "진도 기록", icon: "chart", kind: "hub" },
     { key: "eng_test" + sfx, label: "테스트 기록", icon: "cap", kind: "hub" },

@@ -9,9 +9,11 @@ import { Select } from "../components/ui";
 import { useApprovedChanges, arrivalOf, findSlotConflicts } from "../lib/changeReqLive";
 import { ConflictPopup, ApprovedBanner } from "../components/ChangeReqLive";
 import { DateNav, DateField } from "../components/DateControls";
+import { CurriculumEditor } from "./StudentPage";
+import { studentApi, type Curriculum } from "../lib/studentApi";
 
 type Band = "elem" | "mid";
-type Tab = "today" | "tt" | "att" | "hw" | "progress" | "test" | "makeup" | "board";
+type Tab = "today" | "tt" | "att" | "hw" | "progress" | "test" | "makeup" | "board" | "cur";
 
 const WEEK_OPTS = [
   { v: "-1", l: "지난주" },
@@ -72,6 +74,27 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   const [daily, setDaily] = useState<Record<string, EngDaily>>({});
   const [sel, setSel] = useState("");
   const [err, setErr] = useState("");
+
+  // 강사가 추가한 '오늘 한 것'·포인트 사유(기본 목록에 더해 사용).
+  const [extraDone, setExtraDone] = useState<string[]>([]);
+  const [extraReasons, setExtraReasons] = useState<{ name: string; value: number }[]>([]);
+  useEffect(() => { engApi.getCatalog().then((c) => { setExtraDone(c.doneItems || []); setExtraReasons(c.pointReasons || []); }).catch(() => {}); }, []);
+  const doneItemsAll = useMemo(() => [...ELEM_LOG_ITEMS, ...extraDone], [extraDone]);
+  const reasonsAll = useMemo(() => [...POINT_REASONS, ...extraReasons], [extraReasons]);
+  async function addDoneItem(label: string) {
+    const v = label.trim();
+    if (!v || doneItemsAll.includes(v)) return;
+    const next = [...extraDone, v];
+    setExtraDone(next);
+    await engApi.saveCatalog({ doneItems: next }).catch(() => {});
+  }
+  async function addReason(name: string, value: number) {
+    const label = `${name.trim()} ${value}`.trim();
+    if (!name.trim() || reasonsAll.some((r) => r.name === label)) return;
+    const next = [...extraReasons, { name: label, value }];
+    setExtraReasons(next);
+    await engApi.saveCatalog({ pointReasons: next }).catch(() => {});
+  }
 
   const students = useMemo(
     () => roster.filter((s) => s.subjects.includes("english") && s.englishBand === band),
@@ -181,6 +204,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     test: "테스트 기록",
     makeup: "보강 관리",
     board: "현황",
+    cur: "커리큘럼",
   };
   // 부제는 '이 화면에서 무엇을 하는지'만 사람 말로. (내부 동작 설명 X)
   const DESC: Record<Tab, string> = {
@@ -192,6 +216,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     test: "단어시험·테스트 점수를 기록하세요.",
     makeup: "결석으로 생긴 보강 일정을 잡고 관리하세요.",
     board: "이 반 학생들의 출결·진도·테스트 현황을 한눈에 봅니다.",
+    cur: "학생 화면에 보이는 커리큘럼(수업 내용)을 학생별로 수정하세요.",
   };
 
   // 시간표는 수학 주간 시간표와 동일 레이아웃(자체 page-head·주차 선택).
@@ -287,12 +312,16 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                   ? "왼쪽에서 학생을 선택하면 오늘 학습일지(목표·숙제·코멘트)를 기록할 수 있어요."
                   : tab === "progress"
                     ? "왼쪽에서 학생을 선택하면 교재·진도를 기록할 수 있어요."
-                    : "왼쪽에서 학생을 선택하면 테스트 점수를 기록할 수 있어요."}
+                    : tab === "cur"
+                      ? "왼쪽에서 학생을 선택하면 그 학생의 커리큘럼을 수정할 수 있어요."
+                      : "왼쪽에서 학생을 선택하면 테스트 점수를 기록할 수 있어요."}
               </div>
             ) : tab === "today" ? (
-              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} />
+              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneItemsAll} reasonsAll={reasonsAll} onAddDoneItem={addDoneItem} onAddReason={addReason} />
             ) : tab === "progress" ? (
               <ProgressPanel studentId={sel} name={nameOf[sel] || ""} />
+            ) : tab === "cur" ? (
+              <CurriculumPanel key={sel} studentId={sel} name={nameOf[sel] || ""} />
             ) : (
               <TestPanel studentId={sel} name={nameOf[sel] || ""} />
             )}
@@ -303,8 +332,21 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   );
 }
 
+/* ---------------- 커리큘럼 편집(메뉴에서) — 학생 화면에 보이는 커리큘럼 수정 ---------------- */
+function CurriculumPanel({ studentId, name }: { studentId: string; name: string }) {
+  const [cur, setCur] = useState<Curriculum | null>(null);
+  const load = () => studentApi.page(studentId).then((d) => setCur(d.curriculum)).catch(() => {});
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [studentId]);
+  return (
+    <div className="eng-daily">
+      <div className="eng-daily-h"><h2>{name} · 커리큘럼</h2></div>
+      {!cur ? <div className="hub-muted" style={{ padding: 20 }}>불러오는 중…</div> : <CurriculumEditor studentId={studentId} cur={cur} onSaved={load} />}
+    </div>
+  );
+}
+
 /* ---------------- 일일 학습일지 편집 ---------------- */
-function DailyEditor({ student, band, value, onSave }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void }) {
+function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, onAddDoneItem, onAddReason }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void; doneItemsAll: string[]; reasonsAll: { name: string; value: number }[]; onAddDoneItem: (s: string) => void; onAddReason: (name: string, value: number) => void }) {
   const showHw = band !== "elem"; // 초등영어는 숙제 없음
   const [d, setD] = useState<EngDaily>(value);
   const dirty = JSON.stringify(d) !== JSON.stringify(value);
@@ -354,7 +396,7 @@ function DailyEditor({ student, band, value, onSave }: { student: string; band: 
       <div className="eng-field">
         <div className="eng-label">포인트 (적립·차감 사유) · 합계 {pointsOf(d.pointReasons)}점</div>
         <div className="eng-pts">
-          {POINT_REASONS.map((r) => {
+          {reasonsAll.map((r) => {
             const on = d.pointReasons.includes(r.name);
             return (
               <button
@@ -366,6 +408,19 @@ function DailyEditor({ student, band, value, onSave }: { student: string; band: 
               </button>
             );
           })}
+          <button
+            type="button"
+            className="eng-pt eng-pt-add"
+            onClick={() => {
+              const name = window.prompt("추가할 포인트 사유 이름 (예: 도서반납)");
+              if (!name || !name.trim()) return;
+              const v = window.prompt("점수 (적립은 +, 차감은 -, 예: 30 또는 -50)", "10");
+              if (v === null) return;
+              onAddReason(name, Math.round(Number(v)) || 0);
+            }}
+          >
+            + 사유 추가
+          </button>
         </div>
       </div>
 
@@ -424,12 +479,19 @@ function DailyEditor({ student, band, value, onSave }: { student: string; band: 
           <div className="eng-field">
             <div className="eng-label">오늘 한 것</div>
             <div className="eng-pts">
-              {ELEM_LOG_ITEMS.map((it) => {
+              {doneItemsAll.map((it) => {
                 const on = d.doneItems.includes(it);
                 return (
                   <button key={it} className={"eng-pt" + (on ? " on" : "")} onClick={() => setD({ ...d, doneItems: on ? d.doneItems.filter((x) => x !== it) : [...d.doneItems, it] })}>{it}</button>
                 );
               })}
+              <button
+                type="button"
+                className="eng-pt eng-pt-add"
+                onClick={() => { const v = window.prompt("추가할 '오늘 한 것' 항목 이름"); if (v && v.trim()) onAddDoneItem(v); }}
+              >
+                + 항목 추가
+              </button>
             </div>
           </div>
           <div className="eng-field">

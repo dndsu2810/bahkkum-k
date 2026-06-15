@@ -144,7 +144,7 @@ function CurriculumView({ cur }: { cur: Curriculum }) {
 }
 
 /* ---------------- 커리큘럼(편집, 초등영어 권한자) ---------------- */
-function CurriculumEditor({ studentId, cur, onSaved }: { studentId: string; cur: Curriculum; onSaved: () => void }) {
+export function CurriculumEditor({ studentId, cur, onSaved }: { studentId: string; cur: Curriculum; onSaved: () => void }) {
   const [draft, setDraft] = useState<Curriculum>(cur);
   const [saving, setSaving] = useState(false);
   useEffect(() => setDraft(cur), [cur]);

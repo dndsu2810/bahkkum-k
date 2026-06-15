@@ -92,6 +92,24 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     });
   }
 
+  /* ---------------- 강사 추가 목록(오늘 한 것·포인트 사유) ---------------- */
+  if (p === "/api/eng/catalog" && (m === "GET" || m === "POST")) {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_config (k TEXT PRIMARY KEY, v TEXT NOT NULL DEFAULT '')").run();
+    const getK = async (k: string) => (await env.DB.prepare("SELECT v FROM class_config WHERE k=?").bind(k).first<{ v: string }>())?.v || "";
+    if (m === "POST") {
+      const b = (await request.json().catch(() => ({}))) as { doneItems?: unknown; pointReasons?: unknown };
+      const setK = (k: string, v: string) => env.DB.prepare("INSERT INTO class_config(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, v).run();
+      if (Array.isArray(b.doneItems)) await setK("eng_extra_done_items", JSON.stringify(b.doneItems.map((x) => String(x).trim()).filter(Boolean).slice(0, 50)));
+      if (Array.isArray(b.pointReasons)) await setK("eng_extra_point_reasons", JSON.stringify((b.pointReasons as { name?: unknown; value?: unknown }[]).filter((r) => r && r.name).map((r) => ({ name: String(r.name).trim(), value: Math.round(Number(r.value)) || 0 })).slice(0, 50)));
+      return json({ ok: true });
+    }
+    let doneItems: string[] = [];
+    let pointReasons: { name: string; value: number }[] = [];
+    try { doneItems = JSON.parse((await getK("eng_extra_done_items")) || "[]"); } catch { /* ignore */ }
+    try { pointReasons = JSON.parse((await getK("eng_extra_point_reasons")) || "[]"); } catch { /* ignore */ }
+    return json({ doneItems, pointReasons });
+  }
+
   /* ---------------- 일일 학습일지 ---------------- */
   if (p === "/api/eng/daily" && m === "GET") {
     const date = url.searchParams.get("date") || "";

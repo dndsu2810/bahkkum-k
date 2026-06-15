@@ -1703,6 +1703,7 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .plan-input:focus{outline:2px solid var(--brand);outline-offset:-2px;background:var(--card)}
 .plan-val{display:block;padding:6px 5px;font-size:11px;color:var(--ink);text-align:center;min-height:18px}
 .eng-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.eng-pt-add{border-style:dashed!important;color:var(--ink3);font-weight:600}
 @media(max-width:560px){.eng-grid2{grid-template-columns:1fr}}
 .eng-label{font-size:var(--t-sm);font-weight:700;color:var(--ink2)}
 .eng-goal{display:flex;align-items:center;gap:8px}

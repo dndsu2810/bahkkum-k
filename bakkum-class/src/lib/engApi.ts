@@ -167,6 +167,9 @@ export const engApi = {
   syncElemLog: () => jpost<{ ok: boolean; total: number; imported: number; unmatched: string[] }>("/api/sync/eng-elem-log", {}),
   /** 학생 포인트 랭킹(누적 합). */
   ranking: () => jget<{ ranking: EngRanking[] }>("/api/eng/ranking").then((j) => j.ranking),
+  /** 강사가 추가한 '오늘 한 것'·포인트 사유 목록(기본 목록에 더해 쓰임). */
+  getCatalog: () => jget<{ doneItems: string[]; pointReasons: { name: string; value: number }[] }>("/api/eng/catalog"),
+  saveCatalog: (patch: { doneItems?: string[]; pointReasons?: { name: string; value: number }[] }) => jpost("/api/eng/catalog", patch),
 
   progress: (studentId: string) =>
     jget<{ progress: EngProgress[] }>("/api/eng/progress?student_id=" + encodeURIComponent(studentId)).then((j) => j.progress),
