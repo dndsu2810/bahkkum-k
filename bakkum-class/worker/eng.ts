@@ -30,6 +30,8 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "CREATE TABLE IF NOT EXISTS class_eng_makeup (id TEXT PRIMARY KEY, student_id TEXT NOT NULL, absent_date TEXT NOT NULL DEFAULT '', makeup_date TEXT NOT NULL DEFAULT '', makeup_time TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '예정', memo TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)",
     // 학생 개별 페이지 커리큘럼 — 학생-1건. 항목 배열 [{label,value}](단어시험·class5·Link교재·원서·기초영문법·필기체 등). 강사 편집.
     "CREATE TABLE IF NOT EXISTS class_eng_curriculum (student_id TEXT PRIMARY KEY, items TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL DEFAULT 0)",
+    // '오늘 한 것' 학생별 추가 항목(전체공통은 class_config). 학생-1건, items JSON 배열.
+    "CREATE TABLE IF NOT EXISTS class_eng_done_items (student_id TEXT PRIMARY KEY, items TEXT NOT NULL DEFAULT '[]')",
   ];
   for (const s of stmts) {
     try {

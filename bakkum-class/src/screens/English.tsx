@@ -1004,40 +1004,54 @@ function EngMakeupPanel({ students }: { students: RosterStudent[] }) {
         )}
       </div>
 
-      <h3 className="eng-mk-h">예정 {pending.length}건</h3>
-      <div className="eng-rows">
-        {pending.map((mk) => (
-          <MakeupRow key={mk.id} mk={mk} name={nameOf[mk.studentId] || "?"} onStatus={setStatus} onRemove={remove} />
-        ))}
-        {pending.length === 0 && <div className="hub-muted">예정된 보강이 없어요.</div>}
+      <div className="mk-group">
+        <div className="mk-grouphead">예정 <span className="gcnt">{pending.length}건</span></div>
+        <div className="card">
+          {pending.length === 0 ? (
+            <div className="hub-muted" style={{ padding: "var(--s4) var(--s6)" }}>예정된 보강이 없어요.</div>
+          ) : (
+            <div className="mk-list">
+              {pending.map((mk) => (
+                <MakeupRow key={mk.id} mk={mk} name={nameOf[mk.studentId] || "?"} onStatus={setStatus} onRemove={remove} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       {others.length > 0 && (
-        <>
-          <h3 className="eng-mk-h" style={{ marginTop: 16 }}>완료·취소</h3>
-          <div className="eng-rows">
-            {others.map((mk) => (
-              <MakeupRow key={mk.id} mk={mk} name={nameOf[mk.studentId] || "?"} onStatus={setStatus} onRemove={remove} />
-            ))}
+        <div className="mk-group">
+          <div className="mk-grouphead">완료·취소 <span className="gcnt">{others.length}건</span></div>
+          <div className="card">
+            <div className="mk-list">
+              {others.map((mk) => (
+                <MakeupRow key={mk.id} mk={mk} name={nameOf[mk.studentId] || "?"} onStatus={setStatus} onRemove={remove} />
+              ))}
+            </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
 }
 function MakeupRow({ mk, name, onStatus, onRemove }: { mk: EngMakeup; name: string; onStatus: (m: EngMakeup, s: string) => void; onRemove: (m: EngMakeup) => void }) {
+  const tone = mk.status === "완료" ? "b-green" : mk.status === "취소" ? "b-gray" : "b-blue";
   return (
-    <div className="eng-row">
-      <div className="eng-row-main">
-        <b>{name}</b>
-        <span className="eng-lv">{mk.absentDate} 결석 → {mk.makeupDate} {mk.makeupTime}</span>
-        {mk.memo && <span className="eng-mk-memo">{mk.memo}</span>}
+    <div className={"mk-item" + (mk.status === "예정" ? " pending" : "")}>
+      <div className="mk-main">
+        <div className="mk-name">{name} <span className={"badge " + tone}>{mk.status}</span></div>
+        <div className="mk-meta">
+          <span>결석 {mk.absentDate} → 보강 {mk.makeupDate}{mk.makeupTime ? " " + mk.makeupTime : ""}</span>
+          {mk.memo && (<><span className="sep">·</span><span className="mk-memo">{mk.memo}</span></>)}
+        </div>
       </div>
-      <select className="sm-input" value={mk.status} onChange={(e) => onStatus(mk, e.target.value)}>
-        <option value="예정">예정</option>
-        <option value="완료">완료</option>
-        <option value="취소">취소</option>
-      </select>
-      <button className="btn ghost sm" onClick={() => onRemove(mk)}>삭제</button>
+      <div className="mk-actions">
+        <select className="sm-input" value={mk.status} onChange={(e) => onStatus(mk, e.target.value)}>
+          <option value="예정">예정</option>
+          <option value="완료">완료</option>
+          <option value="취소">취소</option>
+        </select>
+        <button className="btn danger sm" onClick={() => onRemove(mk)}>삭제</button>
+      </div>
     </div>
   );
 }
