@@ -172,7 +172,7 @@ export const engApi = {
   saveCatalog: (patch: { doneItems?: string[]; pointReasons?: { name: string; value: number }[] }) => jpost("/api/eng/catalog", patch),
   /** '오늘 한 것' 항목 — 기본 + 전체공통 + 학생별. student_id 주면 그 학생 것 포함. */
   doneItems: (studentId?: string) =>
-    jget<{ defaults: string[]; global: string[]; student: string[]; merged: string[] }>("/api/eng/done-items" + (studentId ? "?student_id=" + encodeURIComponent(studentId) : "")),
+    jget<{ defaults: string[]; hidden: string[]; global: string[]; student: string[]; merged: string[] }>("/api/eng/done-items" + (studentId ? "?student_id=" + encodeURIComponent(studentId) : "")),
   /** 항목 추가/삭제. scope 'all'(모두) | 'student'(해당 학생만). add 또는 remove 중 하나. */
   saveDoneItem: (b: { scope: "all" | "student"; studentId?: string; add?: string; remove?: string }) => jpost("/api/eng/done-items", b),
 

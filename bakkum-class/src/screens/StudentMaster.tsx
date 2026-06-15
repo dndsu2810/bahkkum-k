@@ -33,6 +33,13 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 const BAND_LABEL: Record<Exclude<EnglishBand, "">, string> = { elem: "초등", mid: "중고등" };
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
 const STATUSES = ["재원", "휴원", "퇴원", "상담"];
+type StatusKey = "all" | "재원" | "휴원" | "퇴원";
+const STATUS_FILTERS: { key: StatusKey; label: string }[] = [
+  { key: "all", label: "전체 상태" },
+  { key: "재원", label: "재원" },
+  { key: "휴원", label: "휴원" },
+  { key: "퇴원", label: "퇴원" },
+];
 
 const initials = (name: string) => (name || "?").trim().slice(0, 2);
 // 등원요일: 지정값이 있으면 그것, 없으면 수업시간(요일)에서 자동 반영.
@@ -52,6 +59,7 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [statusF, setStatusF] = useState<StatusKey>("all");
   const [openId, setOpenId] = useState<string | null>(null);
   const [schoolF, setSchoolF] = useState("");
   const [gradeF, setGradeF] = useState("");
@@ -127,7 +135,8 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
       }
       if (kw && !r.name.includes(kw) && !(r.school || "").includes(kw) && !(r.onlineId || "").includes(kw)) return false;
       if (bandLock) return true;
-      // 겹쳐 보기 — 과목/구분 + 학교 + 학년 동시 적용.
+      // 겹쳐 보기 — 상태 + 과목/구분 + 학교 + 학년 동시 적용.
+      if (statusF !== "all" && (r.status || "") !== statusF) return false;
       if (schoolF && (r.school || "") !== schoolF) return false;
       if (gradeF && (r.grade || "") !== gradeF) return false;
       if (filter === "math" && !r.subjects.includes("math")) return false;
@@ -136,7 +145,7 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
       if (filter === "mid" && !(r.subjects.includes("english") && r.englishBand === "mid")) return false;
       return true;
     });
-  }, [rows, q, filter, bandLock, schoolF, gradeF]);
+  }, [rows, q, filter, statusF, bandLock, schoolF, gradeF]);
 
   // 필터 옵션 — 실제 데이터에서 학교 목록, 학년은 초1~고3.
   const schools = useMemo(() => [...new Set(rows.map((r) => r.school).filter(Boolean))].sort(), [rows]);
@@ -181,6 +190,12 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
         />
         {!bandLock && (
           <div className="sm-filters">
+            {STATUS_FILTERS.map((f) => (
+              <button key={f.key} className={"sm-fchip" + (statusF === f.key ? " on" : "")} onClick={() => setStatusF(f.key)}>
+                {f.label}
+              </button>
+            ))}
+            <span className="sm-fdiv" />
             {FILTERS.map((f) => (
               <button key={f.key} className={"sm-fchip" + (filter === f.key ? " on" : "")} onClick={() => setFilter(f.key)}>
                 {f.label}
@@ -198,9 +213,9 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
           </div>
         )}
       </div>
-      {!bandLock && (schoolF || gradeF || filter !== "all") && (
+      {!bandLock && (schoolF || gradeF || filter !== "all" || statusF !== "all") && (
         <div className="hub-muted" style={{ marginBottom: 8 }}>
-          {[schoolF, gradeF, filter !== "all" ? FILTERS.find((f) => f.key === filter)?.label : ""].filter(Boolean).join(" · ")} · <b>{list.length}명</b>
+          {[statusF !== "all" ? statusF : "", schoolF, gradeF, filter !== "all" ? FILTERS.find((f) => f.key === filter)?.label : ""].filter(Boolean).join(" · ")} · <b>{list.length}명</b>
         </div>
       )}
 

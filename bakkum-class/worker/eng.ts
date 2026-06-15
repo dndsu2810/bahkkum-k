@@ -26,12 +26,13 @@ async function cfgGet(env: Env, k: string): Promise<string> {
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_config (k TEXT PRIMARY KEY, v TEXT NOT NULL DEFAULT '')").run();
   return (await env.DB.prepare("SELECT v FROM class_config WHERE k=?").bind(k).first<{ v: string }>())?.v || "";
 }
-/** 한 학생의 '오늘 한 것' 선택지 = 기본 + 전체공통 + 학생별 (중복 제거). */
+/** 한 학생의 '오늘 한 것' 선택지 = (기본−숨김) + 전체공통 + 학생별 (중복 제거). */
 async function doneItemsFor(env: Env, sid: string): Promise<string[]> {
   const global = parseStrArr(await cfgGet(env, "eng_extra_done_items"));
+  const hidden = parseStrArr(await cfgGet(env, "eng_hidden_done_items"));
   let student: string[] = [];
   try { student = parseStrArr((await env.DB.prepare("SELECT items FROM class_eng_done_items WHERE student_id=?").bind(sid).first<{ items: string }>())?.items); } catch { /* ignore */ }
-  return [...new Set([...DEFAULT_DONE_ITEMS, ...global, ...student])];
+  return [...new Set([...DEFAULT_DONE_ITEMS.filter((d) => !hidden.includes(d)), ...global, ...student])];
 }
 
 export async function ensureEngTables(env: Env): Promise<void> {
@@ -134,11 +135,13 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
   if (p === "/api/eng/done-items" && m === "GET") {
     const sid = url.searchParams.get("student_id") || "";
     const global = parseStrArr(await cfgGet(env, "eng_extra_done_items"));
+    const hidden = parseStrArr(await cfgGet(env, "eng_hidden_done_items"));
     let student: string[] = [];
     if (sid) { try { student = parseStrArr((await env.DB.prepare("SELECT items FROM class_eng_done_items WHERE student_id=?").bind(sid).first<{ items: string }>())?.items); } catch { /* ignore */ } }
-    return json({ defaults: DEFAULT_DONE_ITEMS, global, student, merged: [...new Set([...DEFAULT_DONE_ITEMS, ...global, ...student])] });
+    return json({ defaults: DEFAULT_DONE_ITEMS, hidden, global, student, merged: [...new Set([...DEFAULT_DONE_ITEMS.filter((d) => !hidden.includes(d)), ...global, ...student])] });
   }
   if (p === "/api/eng/done-items" && m === "POST") {
+    const setCfg = (k: string, v: string) => env.DB.prepare("INSERT INTO class_config(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, v).run();
     const b = (await request.json().catch(() => ({}))) as { scope?: string; studentId?: string; add?: string; remove?: string };
     const add = String(b.add || "").trim();
     const remove = String(b.remove || "").trim();
@@ -152,9 +155,18 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
       await env.DB.prepare("INSERT INTO class_eng_done_items(student_id,items) VALUES(?,?) ON CONFLICT(student_id) DO UPDATE SET items=excluded.items").bind(sid, JSON.stringify(s.slice(0, 100))).run();
     } else {
       let g = parseStrArr(await cfgGet(env, "eng_extra_done_items"));
-      if (add && !DEFAULT_DONE_ITEMS.includes(add) && !g.includes(add)) g.push(add);
-      if (remove) g = g.filter((x) => x !== remove);
-      await env.DB.prepare("INSERT INTO class_config(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind("eng_extra_done_items", JSON.stringify(g.slice(0, 100))).run();
+      let hidden = parseStrArr(await cfgGet(env, "eng_hidden_done_items"));
+      // 기본 항목은 삭제 대신 '숨김' 목록으로, 추가 시 숨김 해제(복원). 커스텀은 전체공통 목록에서 추가/삭제.
+      if (add) {
+        if (DEFAULT_DONE_ITEMS.includes(add)) hidden = hidden.filter((x) => x !== add);
+        else if (!g.includes(add)) g.push(add);
+      }
+      if (remove) {
+        if (DEFAULT_DONE_ITEMS.includes(remove)) { if (!hidden.includes(remove)) hidden.push(remove); }
+        else g = g.filter((x) => x !== remove);
+      }
+      await setCfg("eng_extra_done_items", JSON.stringify(g.slice(0, 100)));
+      await setCfg("eng_hidden_done_items", JSON.stringify(hidden.slice(0, 50)));
     }
     return json({ ok: true });
   }

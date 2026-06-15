@@ -340,29 +340,39 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
 /* ---------------- '오늘 한 것' 항목 관리 — 모두에게 / 특정 학생에게 추가·삭제 ---------------- */
 function DoneItemsManager({ students }: { students: RosterStudent[] }) {
   const [defaults, setDefaults] = useState<string[]>([]);
+  const [hidden, setHidden] = useState<string[]>([]);
   const [global, setGlobal] = useState<string[]>([]);
   const [sid, setSid] = useState("");
   const [studentItems, setStudentItems] = useState<string[]>([]);
   const [addAll, setAddAll] = useState("");
   const [addStu, setAddStu] = useState("");
 
-  const loadGlobal = () => engApi.doneItems().then((c) => { setDefaults(c.defaults); setGlobal(c.global); }).catch(() => {});
+  const loadGlobal = () => engApi.doneItems().then((c) => { setDefaults(c.defaults); setHidden(c.hidden || []); setGlobal(c.global); }).catch(() => {});
   const loadStudent = (id: string) => { if (id) engApi.doneItems(id).then((c) => setStudentItems(c.student)).catch(() => {}); else setStudentItems([]); };
   useEffect(() => { void loadGlobal(); }, []);
   useEffect(() => { loadStudent(sid); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [sid]);
 
   async function addToAll() { const v = addAll.trim(); if (!v) return; setAddAll(""); await engApi.saveDoneItem({ scope: "all", add: v }).catch(() => {}); void loadGlobal(); }
   async function removeFromAll(it: string) { await engApi.saveDoneItem({ scope: "all", remove: it }).catch(() => {}); void loadGlobal(); }
+  async function restoreDefault(it: string) { await engApi.saveDoneItem({ scope: "all", add: it }).catch(() => {}); void loadGlobal(); }
+  const activeDefaults = defaults.filter((d) => !hidden.includes(d));
   async function addToStudent() { const v = addStu.trim(); if (!v || !sid) return; setAddStu(""); await engApi.saveDoneItem({ scope: "student", studentId: sid, add: v }).catch(() => {}); loadStudent(sid); }
   async function removeFromStudent(it: string) { if (!sid) return; await engApi.saveDoneItem({ scope: "student", studentId: sid, remove: it }).catch(() => {}); loadStudent(sid); }
 
   return (
     <div className="di-wrap">
       <div className="mk-group">
-        <div className="mk-grouphead">기본 항목 <span className="gcnt">{defaults.length}개</span></div>
+        <div className="mk-grouphead">기본 항목 <span className="gcnt">{activeDefaults.length}개</span></div>
         <div className="card" style={{ padding: 14 }}>
-          <div className="di-chips">{defaults.map((it) => <span key={it} className="di-chip fixed">{it}</span>)}</div>
-          <div className="page-desc" style={{ marginTop: 8 }}>기본 항목은 모든 학생에게 늘 보입니다.</div>
+          {activeDefaults.length === 0 ? <div className="hub-muted">모든 기본 항목을 숨겼어요.</div> : (
+            <div className="di-chips">{activeDefaults.map((it) => <span key={it} className="di-chip">{it}<button className="di-x" onClick={() => removeFromAll(it)} title="숨기기">×</button></span>)}</div>
+          )}
+          {hidden.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div className="page-desc" style={{ marginBottom: 6 }}>숨긴 기본 항목</div>
+              <div className="di-chips">{hidden.map((it) => <span key={it} className="di-chip fixed">{it}<button className="di-x restore" onClick={() => restoreDefault(it)} title="복원">↩</button></span>)}</div>
+            </div>
+          )}
         </div>
       </div>
 
