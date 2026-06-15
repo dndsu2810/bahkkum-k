@@ -1517,11 +1517,13 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .admt-main{flex:1;min-width:0}
 .admt-title{font-size:var(--t-sm);font-weight:600;color:var(--ink)}
 .admt-memo{font-size:var(--t-cap);color:var(--ink3);margin-top:2px}
+.admt-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
 .board2-card-title{font-size:var(--t-sm);color:var(--ink);font-weight:600;line-height:1.4}
 .board2-card-memo{font-size:var(--t-cap);color:var(--ink3);line-height:1.4;margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .board2-card-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
-.board2-tag,.board2-due,.board2-stu,.board2-auto,.board2-asg{font-size:11px;font-weight:600;border-radius:var(--r-full);padding:1px 8px}
+.board2-tag,.board2-due,.board2-stu,.board2-auto,.board2-asg,.board2-assigned{font-size:11px;font-weight:600;border-radius:var(--r-full);padding:1px 8px}
 .board2-asg{background:var(--brand-soft);color:var(--brand-d)}
+.board2-assigned{background:var(--line);color:var(--ink3)}
 .sm-subj-chip.urgent.on{background:var(--bad-soft,#fdeaea);color:var(--bad);border-color:#f6cccc}
 .board2-tag{background:var(--brand-soft);color:var(--brand-d)}
 .board2-due{background:var(--warn-soft);color:var(--warn)}

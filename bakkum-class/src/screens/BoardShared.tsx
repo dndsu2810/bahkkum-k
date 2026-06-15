@@ -12,7 +12,12 @@ const ACTIVE_COLS: { key: TaskStatus; label: string }[] = [
 ];
 const NEXT: Record<TaskStatus, TaskStatus | null> = { todo: "doing", doing: "done", done: null };
 const PREV: Record<TaskStatus, TaskStatus | null> = { todo: null, doing: "todo", done: "doing" };
-const monthOf = (t: BoardTask) => { const d = new Date(t.doneAt || t.createdAt); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
+// 완료 월 분류 키 — 배정일 우선(노션 가져온 건), 없으면 완료시각, 그것도 없으면 생성일.
+const monthOf = (t: BoardTask) => {
+  if (t.assignDate) return t.assignDate.slice(0, 7);
+  const d = new Date(t.doneAt || t.createdAt);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+};
 
 // 우선순위(급함 먼저) → 마감 빠른 순 → 최신 순
 function sortTasks(arr: BoardTask[]): BoardTask[] {
@@ -140,6 +145,7 @@ export function BoardShared() {
       {t.memo && <div className="board2-card-memo">{t.memo}</div>}
       <div className="board2-card-meta">
         {t.assignee && <span className="board2-asg">{t.assignee}</span>}
+        {t.assignDate && <span className="board2-assigned">배정 {t.assignDate.slice(5)}</span>}
         {t.due && <span className="board2-due">~{t.due}</span>}
         {t.studentId && nameOf[t.studentId] && <span className="board2-stu">{nameOf[t.studentId]}</span>}
         {t.source && <span className="board2-auto">자동</span>}

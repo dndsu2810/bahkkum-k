@@ -166,11 +166,19 @@ export function AdminDashboard() {
   );
 }
 
-/* ---------------- 원장 전용 할일 — 여기서 만들고, 배정하면 강사 보드로 ---------------- */
+/* ---------------- 원장 전용 할일 — 할 일/진행 중/완료 탭. 배정하면 강사 보드로 ---------------- */
+type AdmTab = "todo" | "doing" | "done";
+const admMonthOf = (t: BoardTask) => {
+  if (t.assignDate) return t.assignDate.slice(0, 7);
+  const d = new Date(t.doneAt || t.createdAt);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+};
 function AdminTasks() {
   const [tasks, setTasks] = useState<BoardTask[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [title, setTitle] = useState("");
+  const [tab, setTab] = useState<AdmTab>("todo");
+  const [doneMonth, setDoneMonth] = useState(() => todayStr().slice(0, 7));
   const [assignTask, setAssignTask] = useState<BoardTask | null>(null);
 
   async function load() {
@@ -181,8 +189,22 @@ function AdminTasks() {
     listUsers().then(setUsers).catch(() => {});
   }, []);
 
-  // 아직 배정 안 한(원장 전용) 카드만, 보관 제외.
+  // 원장 전용(배정 안 한) 카드만, 보관 제외.
   const mine = useMemo(() => tasks.filter((t) => t.adminOnly && !t.archived), [tasks]);
+  const counts = useMemo(() => ({
+    todo: mine.filter((t) => t.status === "todo").length,
+    doing: mine.filter((t) => t.status === "doing").length,
+    done: mine.filter((t) => t.status === "done").length,
+  }), [mine]);
+  const shown = useMemo(() => {
+    if (tab === "done") return mine.filter((t) => t.status === "done" && admMonthOf(t) === doneMonth);
+    return mine.filter((t) => t.status === tab);
+  }, [mine, tab, doneMonth]);
+  const shiftMonth = (delta: number) => {
+    const [y, m] = doneMonth.split("-").map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    setDoneMonth(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`);
+  };
 
   async function add() {
     const tt = title.trim();
@@ -193,23 +215,31 @@ function AdminTasks() {
       await load();
     } catch { /* ignore */ }
   }
+  async function setStatus(t: BoardTask, status: AdmTab) {
+    try { await tasksApi.save({ ...t, status }); await load(); } catch { /* ignore */ }
+  }
   async function remove(t: BoardTask) {
     if (!window.confirm("이 할일을 삭제할까요?")) return;
     try { await tasksApi.remove(t.id); await load(); } catch { /* ignore */ }
   }
   async function doAssign(t: BoardTask, assignee: string, assignDate: string, due: string) {
-    const memo = [t.memo?.replace(/(^|·\s*)배정일 \S+/g, "").trim(), assignDate ? `배정일 ${assignDate}` : ""].filter(Boolean).join(" · ");
     try {
-      await tasksApi.save({ ...t, adminOnly: false, status: "todo", assignee, due, memo });
+      await tasksApi.save({ ...t, adminOnly: false, status: "todo", assignee, assignDate, due });
       setAssignTask(null);
       await load();
     } catch { /* ignore */ }
   }
 
+  const TABS: { key: AdmTab; label: string }[] = [
+    { key: "todo", label: "할 일" },
+    { key: "doing", label: "진행 중" },
+    { key: "done", label: "완료" },
+  ];
+
   return (
     <section className="card dash-card" style={{ marginBottom: 16 }}>
       <h3 className="dash-h">원장 전용 할일</h3>
-      <p className="hub-muted" style={{ marginBottom: 10 }}>나만 보는 할일이에요. <b>업무 배정하기</b>를 누르면 담당·마감을 정해 강사 업무 보드로 보냅니다.</p>
+      <p className="hub-muted" style={{ marginBottom: 10 }}>나만 보는 할일이에요. 진행 중·완료로 옮기거나, <b>업무 배정하기</b>로 담당·마감을 정해 강사 보드로 보냅니다.</p>
       <div className="board2-add" style={{ marginBottom: 10 }}>
         <input
           className="input"
@@ -220,17 +250,45 @@ function AdminTasks() {
         />
         <button className="btn primary" onClick={add} disabled={!title.trim()}>추가</button>
       </div>
-      {mine.length === 0 ? (
-        <div className="hub-muted">원장 전용 할일이 없어요.</div>
+
+      <div className="sm-filters" style={{ marginBottom: 10, alignItems: "center" }}>
+        {TABS.map((t) => (
+          <button key={t.key} className={"sm-fchip" + (tab === t.key ? " on" : "")} onClick={() => setTab(t.key)}>
+            {t.label} <span className="board2-cnt">{counts[t.key]}</span>
+          </button>
+        ))}
+        {tab === "done" && (
+          <div className="board2-month" style={{ marginLeft: "auto" }}>
+            <button className="board2-mv" onClick={() => shiftMonth(-1)} title="이전 달">‹</button>
+            <span className="board2-month-l">{doneMonth.replace("-", ". ")}</span>
+            <button className="board2-mv" onClick={() => shiftMonth(1)} disabled={doneMonth >= todayStr().slice(0, 7)} title="다음 달">›</button>
+          </div>
+        )}
+      </div>
+
+      {shown.length === 0 ? (
+        <div className="hub-muted">{tab === "done" ? "이 달 완료한 일이 없어요." : tab === "doing" ? "진행 중인 일이 없어요." : "할 일이 없어요."}</div>
       ) : (
         <div className="admt-list">
-          {mine.map((t) => (
+          {shown.map((t) => (
             <div className="admt-row" key={t.id}>
               <div className="admt-main">
                 <div className="admt-title">{t.title}</div>
-                {t.memo && <div className="admt-memo">{t.memo}</div>}
+                <div className="admt-meta">
+                  {t.assignDate && <span className="board2-assigned">배정 {t.assignDate.slice(5)}</span>}
+                  {t.due && <span className="board2-due">~{t.due}</span>}
+                </div>
               </div>
-              <button className="btn primary sm" onClick={() => setAssignTask(t)}>업무 배정하기</button>
+              {t.status !== "done" ? (
+                <>
+                  {t.status === "todo" && <button className="btn ghost sm" onClick={() => setStatus(t, "doing")}>진행</button>}
+                  {t.status === "doing" && <button className="btn ghost sm" onClick={() => setStatus(t, "todo")}>← 할일</button>}
+                  <button className="btn ghost sm" onClick={() => setStatus(t, "done")}>완료</button>
+                  <button className="btn primary sm" onClick={() => setAssignTask(t)}>업무 배정하기</button>
+                </>
+              ) : (
+                <button className="btn ghost sm" onClick={() => setStatus(t, "doing")}>되돌리기</button>
+              )}
               <button className="rep-x" onClick={() => remove(t)} title="삭제"><Icon name="trash" /></button>
             </div>
           ))}
@@ -253,7 +311,7 @@ function AssignModal({
   onAssign: (t: BoardTask, assignee: string, assignDate: string, due: string) => void;
 }) {
   const [names, setNames] = useState<string[]>(task.assignee ? task.assignee.split(",").map((s) => s.trim()).filter(Boolean) : []);
-  const [assignDate, setAssignDate] = useState(todayStr());
+  const [assignDate, setAssignDate] = useState(task.assignDate || todayStr());
   const [due, setDue] = useState(task.due || "");
   const toggle = (n: string) => setNames((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n]));
 

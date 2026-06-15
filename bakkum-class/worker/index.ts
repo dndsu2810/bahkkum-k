@@ -1484,23 +1484,21 @@ async function importTasks(env: Env): Promise<Response> {
     try {
       const src = "ntask_" + t.srcId;
       const assignee = [...new Set(t.assignees.map(matchName).filter(Boolean))].join(", ");
-      const memo = [t.notionStatus ? `노션 상태: ${t.notionStatus}` : "", t.assignDate ? `배정일 ${t.assignDate}` : ""].filter(Boolean).join(" · ");
       const adminOnly = t.notionStatus === "미나" || t.notionStatus === "마나" ? 1 : 0;
       const isDone = t.status === "done";
-      const archived = t.archived ? 1 : 0; // '보관'만 보관 처리. 완료는 보드 '완료'에 월별로 보임.
-      const doneAt = isDone ? now : null;
-      const ex = await env.DB.prepare("SELECT id FROM class_tasks WHERE source=?").bind(src).first<{ id: string }>();
+      // 완료·최종완료는 모두 '완료'로 통일해 보드에 보이게(보관 안 함). 메모는 사용자 편집 보존 위해 갱신 안 함.
+      const ex = await env.DB.prepare("SELECT id, done_at FROM class_tasks WHERE source=?").bind(src).first<{ id: string; done_at: number | null }>();
       if (ex) {
         await env.DB
-          .prepare("UPDATE class_tasks SET title=?,status=?,tag=?,due=?,memo=?,assignee=?,priority=?,admin_only=?,archived=? WHERE id=?")
-          .bind(t.title, t.status, t.tag, t.due, memo, assignee, t.priority, adminOnly, archived, ex.id)
+          .prepare("UPDATE class_tasks SET title=?,status=?,tag=?,due=?,assignee=?,priority=?,admin_only=?,assign_date=?,archived=0,done_at=? WHERE id=?")
+          .bind(t.title, t.status, t.tag, t.due, assignee, t.priority, adminOnly, t.assignDate, isDone ? ex.done_at ?? now : null, ex.id)
           .run();
       } else {
         await env.DB
           .prepare(
-            "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,admin_only,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+            "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,admin_only,assign_date,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,'',?,?,?,?,?,?,?,0)"
           )
-          .bind(`nt_${t.srcId}`, t.title, t.status, t.tag, t.due, "", memo, assignee, t.priority, adminOnly, src, now, doneAt, archived)
+          .bind(`nt_${t.srcId}`, t.title, t.status, t.tag, t.due, assignee, t.priority, adminOnly, t.assignDate, src, now, isDone ? now : null)
           .run();
       }
       imported++;
@@ -1858,10 +1856,10 @@ async function putData(env: Env, request: Request): Promise<Response> {
   await ensureSchedulesTable(env); // 테이블 없어도 저장이 통째로 실패하지 않게
   // 업무보드 hub 전용 컬럼(담당자·우선순위·원장전용)은 수학 스냅샷에 없다.
   // 스냅샷 저장 때 통째로 덮어쓰면 사라지므로, 기존 값을 미리 읽어 보존한다.
-  const prevTaskHub = new Map<string, { assignee: string; priority: string; adminOnly: number }>();
+  const prevTaskHub = new Map<string, { assignee: string; priority: string; adminOnly: number; assignDate: string }>();
   try {
-    const cur = await env.DB.prepare("SELECT id, assignee, priority, admin_only FROM class_tasks").all<{ id: string; assignee: string; priority: string; admin_only: number }>();
-    for (const r of cur.results || []) prevTaskHub.set(String(r.id), { assignee: String(r.assignee || ""), priority: String(r.priority || "normal"), adminOnly: Number(r.admin_only || 0) });
+    const cur = await env.DB.prepare("SELECT id, assignee, priority, admin_only, assign_date FROM class_tasks").all<{ id: string; assignee: string; priority: string; admin_only: number; assign_date: string }>();
+    for (const r of cur.results || []) prevTaskHub.set(String(r.id), { assignee: String(r.assignee || ""), priority: String(r.priority || "normal"), adminOnly: Number(r.admin_only || 0), assignDate: String(r.assign_date || "") });
   } catch {
     /* 컬럼/테이블 없으면 보존할 것도 없음 */
   }
@@ -1885,7 +1883,7 @@ async function putData(env: Env, request: Request): Promise<Response> {
     stmts.push(
       env.DB
         .prepare(
-          "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,admin_only,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+          "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,admin_only,assign_date,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         )
         .bind(
           k.id,
@@ -1898,6 +1896,7 @@ async function putData(env: Env, request: Request): Promise<Response> {
           hub?.assignee || "",
           hub?.priority || "normal",
           hub?.adminOnly || 0,
+          hub?.assignDate || "",
           k.source || "",
           k.createdAt || Date.now(),
           k.doneAt == null ? null : k.doneAt,

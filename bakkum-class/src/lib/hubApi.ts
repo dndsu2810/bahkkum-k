@@ -106,6 +106,7 @@ export interface BoardTask {
   doneAt: number | null;
   archived: boolean;
   adminOnly: boolean; // 원장 전용(강사 비공개) — 노션 '미나' 단계
+  assignDate: string; // 업무 배정일(YYYY-MM-DD)
 }
 export const tasksApi = {
   list: () => jget<{ tasks: BoardTask[] }>("/api/tasks").then((j) => j.tasks),
