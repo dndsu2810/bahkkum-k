@@ -1,0 +1,74 @@
+/* ============================================================
+   와이어프레임 브라우저 크롬 — 컨트롤 레일 + 디바이스 프레임
+   (제품 화면이 아닌 "도구" 영역. 어두운 슬레이트로 구분)
+   ============================================================ */
+
+.app-root {
+  position: fixed; inset: 0; display: flex; overflow: hidden;
+  background: #0b0d10; font-family: var(--font); word-break: keep-all;
+}
+
+/* ---------- 좌측 컨트롤 레일 ---------- */
+.rail {
+  width: 268px; flex: none; background: #14171c; color: #cfd4dc;
+  border-right: 1px solid #23272e; display: flex; flex-direction: column;
+}
+.rail-head { padding: 18px 18px 14px; border-bottom: 1px solid #23272e; }
+.rail-title { display: flex; align-items: center; gap: 10px; }
+.rail-title .mk { width: 32px; height: 32px; border-radius: 9px; background: #2563eb; color: #fff;
+  display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; }
+.rail-title b { font-size: 14px; color: #fff; line-height: 1.3; }
+.rail-title span { font-size: 11px; color: #79818e; font-weight: 600; line-height: 1.3; }
+
+.rail-controls { padding: 14px 14px 6px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid #23272e; }
+.seg { display: flex; background: #1c2027; border: 1px solid #2a2f37; border-radius: 9px; padding: 3px; gap: 3px; }
+.seg button { flex: 1; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #aab2bf;
+  font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: var(--font); transition: background .12s, color .12s; }
+.seg button.on { background: #2563eb; color: #fff; }
+.seg button:not(.on):hover { background: #232831; color: #fff; }
+.ctl-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: #aab2bf; font-weight: 600; }
+
+.rail-nav { flex: 1; overflow-y: auto; padding: 10px 10px 20px; }
+.rail-group { font-size: 10px; font-weight: 700; letter-spacing: .08em; color: #6a727d;
+  text-transform: uppercase; padding: 14px 10px 6px; }
+.rail-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px;
+  color: #b7bdc7; font-size: 12.5px; font-weight: 600; cursor: pointer; line-height: 1.3; }
+.rail-item:hover { background: #1d2128; color: #fff; }
+.rail-item.on { background: #22304a; color: #cfe0ff; }
+.rail-item .ic { flex: none; opacity: .85; }
+.rail-foot { padding: 12px 16px; border-top: 1px solid #23272e; font-size: 11px; color: #6a727d; line-height: 1.5; }
+
+/* ---------- 스테이지 ---------- */
+.stage { flex: 1; min-width: 0; overflow: auto; display: flex; align-items: flex-start; justify-content: center;
+  padding: 36px; background:
+    radial-gradient(circle at 1px 1px, #1b1f26 1px, transparent 0) 0 0 / 22px 22px, #0e1115; }
+.stage.mob { align-items: flex-start; }
+
+/* ---------- 데스크탑 프레임 (scale-to-fit) ---------- */
+.dev-scaler { position: relative; flex: none; }
+.dev-desktop { width: 1240px; position: absolute; left: 50%; top: 0;
+  transform: translateX(-50%); transform-origin: top center;
+  border-radius: 14px; overflow: hidden;
+  border: 1px solid #2a2f37; background: var(--surface); box-shadow: 0 24px 60px rgba(0,0,0,.5); }
+.dev-bar { height: 40px; background: var(--surface-2); border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 14px; padding: 0 14px; }
+.dev-dot { width: 11px; height: 11px; border-radius: 999px; background: var(--line-strong); }
+.dev-url { flex: 1; max-width: 340px; height: 24px; border-radius: 7px; background: var(--surface-3);
+  display: flex; align-items: center; padding: 0 12px; font-size: 11px; color: var(--ink-3); font-weight: 600; }
+.dev-desktop-screen { height: 760px; overflow: hidden; }
+
+/* ---------- 모바일 프레임 ---------- */
+.dev-phone { width: 392px; height: 812px; border-radius: 44px; background: #06070a; padding: 12px;
+  border: 1px solid #2a2f37; box-shadow: 0 24px 60px rgba(0,0,0,.5); position: relative; }
+.dev-notch { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 150px; height: 26px;
+  background: #06070a; border-radius: 0 0 16px 16px; z-index: 5; }
+.dev-phone-screen { width: 100%; height: 100%; border-radius: 33px; overflow: hidden; background: var(--surface); }
+.dev-phone-screen .scr { height: 100%; }
+
+/* 화면 래퍼: 주석 핀 위치 기준 */
+.screen-wrap { position: relative; height: 100%; }
+
+@media (max-width: 1100px) {
+  .rail { width: 232px; }
+}
