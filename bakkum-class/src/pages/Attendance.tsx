@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import type { AttStatus, Attitude, Student } from "../types";
 import { DOW, fmtDayBand, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
@@ -13,7 +13,7 @@ import {
 } from "../lib/logic";
 import { NEEDS_MAKEUP, applyMakeup } from "../lib/attendanceLogic";
 import { holidayName } from "../lib/holidays";
-import { awardPoints, pushAttendanceNotion } from "../api";
+import { awardPoints, pushAttendanceNotion, attendancePoints, loadPointCatalog } from "../api";
 import { GradeBadge, Empty, Select, TodayLink } from "../components/ui";
 import { RecordFilters, EMPTY_FILTER, filterActive } from "../components/RecordFilters";
 import { Icon } from "../icons";
@@ -79,6 +79,8 @@ export function Attendance() {
   const [recShown, setRecShown] = useState(14);
   const [flt, setFlt] = useState(EMPTY_FILTER);
   const recYest = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return ymd(d); })();
+  // 출석 적립 점수(카탈로그) 로드 — 수학도 '포인트 항목' 점수로 적립(키오스크 반영).
+  useEffect(() => { void loadPointCatalog(); }, []);
   const attSummary = (rows: { rec: { status: string } }[]) => {
     let o = 0, l = 0, a = 0;
     for (const r of rows) r.rec.status === "출석" ? o++ : r.rec.status === "지각" ? l++ : a++;
@@ -170,14 +172,14 @@ export function Attendance() {
 
     // point side-effect (remote only; awarded by roster id)
     if (!prevAwarded && willAward) {
-      const res = await awardPoints(it.student.id, 20, "출석");
+      const res = await awardPoints(it.student.id, attendancePoints(), "출석");
       mutate((draft) => {
         const r = draft.attendance[key];
         if (r) r.pointsAwarded = res.matched;
       });
       toast(res.matched ? "출석 처리 · 포인트 적립" : "출석 처리 (포인트 미적립 학생)");
     } else if (prevAwarded && !willAward) {
-      await awardPoints(it.student.id, -20, "출석 취소");
+      await awardPoints(it.student.id, -attendancePoints(), "출석 취소");
       mutate((draft) => {
         const r = draft.attendance[key];
         if (r) r.pointsAwarded = false;

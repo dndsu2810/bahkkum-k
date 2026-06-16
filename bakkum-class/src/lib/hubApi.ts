@@ -136,6 +136,42 @@ export const eventsApi = {
   sync: () => jpost("/api/sync/events", {}),
 };
 
+/* ---------------- 자료/프린트 배부 (공용: 수학·영어) ---------------- */
+export interface MaterialStat { lesson: number; hw: number; done: number; total: number }
+export interface Material {
+  id: string;
+  name: string;
+  subject: string; // '' | math | english
+  memo: string;
+  printed: boolean; // 인쇄 완료 여부
+  authorName: string;
+  createdAt: number;
+  stat: MaterialStat; // 배부 요약(수업/숙제/완료/전체)
+}
+export interface MaterialAssign {
+  id: string;
+  materialId: string;
+  studentId: string;
+  kind: string; // lesson(수업) | hw(숙제)
+  date: string;
+  done: boolean;
+  createdAt: number;
+}
+export const materialsApi = {
+  list: (subject?: string) =>
+    jget<{ materials: Material[] }>("/api/materials" + (subject ? "?subject=" + subject : "")).then((j) => j.materials),
+  save: (mt: { id?: string; name: string; subject?: string; memo?: string }) => jpost("/api/materials", mt),
+  setPrinted: (id: string, printed: boolean) => jpost("/api/materials/print", { id, printed }),
+  remove: (id: string) => jpost("/api/materials/delete", { id }),
+  assigns: (q: { materialId?: string; studentId?: string }) =>
+    jget<{ assigns: MaterialAssign[] }>(
+      "/api/materials/assign" + (q.materialId ? "?material_id=" + q.materialId : q.studentId ? "?student_id=" + q.studentId : "")
+    ).then((j) => j.assigns),
+  assign: (b: { materialId: string; studentIds: string[]; kind: "lesson" | "hw"; date?: string }) => jpost("/api/materials/assign", b),
+  setDone: (id: string, done: boolean) => jpost("/api/materials/assign/done", { id, done }),
+  unassign: (id: string) => jpost("/api/materials/assign/delete", { id }),
+};
+
 /* ---------------- 시간표 변경 요청 ---------------- */
 export interface ChangeReq {
   id: string;

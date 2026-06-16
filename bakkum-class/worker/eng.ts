@@ -22,6 +22,33 @@ function parseStrArr(s: unknown): string[] {
   try { const v = JSON.parse(String(s ?? "[]")); return Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : []; }
   catch { return []; }
 }
+// 포인트 사유 기본 목록(저장된 카탈로그가 없을 때 출발점). 라벨 끝 숫자가 점수.
+const DEFAULT_POINT_REASONS: { name: string; value: number }[] = [
+  { name: "출석 100", value: 100 },
+  { name: "지각 -100", value: -100 },
+  { name: "칭찬 200", value: 200 },
+  { name: "단어숙제 50", value: 50 },
+  { name: "독해숙제 50", value: 50 },
+  { name: "문법숙제 50", value: 50 },
+  { name: "숙제 50", value: 50 },
+  { name: "숙제 -100", value: -100 },
+  { name: "협동 300", value: 300 },
+];
+function parseReasonList(s: unknown): { name: string; value: number }[] {
+  try { const a = JSON.parse(String(s ?? "[]")); return Array.isArray(a) ? a.map((r) => ({ name: String(r?.name ?? "").trim(), value: Math.round(Number(r?.value)) || 0 })).filter((r) => r.name) : []; }
+  catch { return []; }
+}
+/** 포인트 항목 카탈로그 → {기본이름: 점수} 맵(라벨 끝 숫자 제거). 자동 적립 계산용. */
+async function pointCatMap(env: Env): Promise<Record<string, number>> {
+  let list = parseReasonList(await cfgGet(env, "point_reasons"));
+  if (!list.length) list = DEFAULT_POINT_REASONS;
+  const m: Record<string, number> = {};
+  for (const r of list) {
+    const key = String(r.name).replace(/\s*-?\d+\s*$/, "").trim();
+    if (key && !(key in m)) m[key] = Math.round(Number(r.value)) || 0;
+  }
+  return m;
+}
 async function cfgGet(env: Env, k: string): Promise<string> {
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_config (k TEXT PRIMARY KEY, v TEXT NOT NULL DEFAULT '')").run();
   return (await env.DB.prepare("SELECT v FROM class_config WHERE k=?").bind(k).first<{ v: string }>())?.v || "";
@@ -81,6 +108,10 @@ export async function ensureEngTables(env: Env): Promise<void> {
     // 학생이 직접 적는 수업 시작/끝 시간(초등 개별 페이지 일지).
     "ALTER TABLE class_eng_daily ADD COLUMN start_time TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_eng_daily ADD COLUMN end_time TEXT NOT NULL DEFAULT ''",
+    // 보강 플래그 — 이 수업이 보강이면 1. 출결은 그대로 남기되 포인트 적립에서 제외(수학과 통일).
+    "ALTER TABLE class_eng_daily ADD COLUMN makeup INTEGER NOT NULL DEFAULT 0",
+    // 테스트 결과 — 통과/재시(NP). 단어·문장 시험 미통과 표시.
+    "ALTER TABLE class_eng_test ADD COLUMN result TEXT NOT NULL DEFAULT ''",
   ]) {
     try {
       await env.DB.prepare(a).run();
@@ -131,7 +162,23 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     return json({ doneItems, pointReasons });
   }
 
-  /* ---------------- '오늘 한 것' 항목(기본 + 전체공통 + 학생별) ---------------- */
+  /* ---------------- 포인트 항목(적립·차감 사유) 카탈로그 — 공통 단일 목록(원장·강사가 직접 작성) ---------------- */
+  if (p === "/api/eng/point-reasons" && m === "GET") {
+    let saved: { name: string; value: number }[] = [];
+    try { const a = JSON.parse((await cfgGet(env, "point_reasons")) || "[]"); if (Array.isArray(a)) saved = a.map((r) => ({ name: String(r.name ?? "").trim(), value: Math.round(Number(r.value)) || 0 })).filter((r) => r.name); } catch { /* ignore */ }
+    if (saved.length) return json({ reasons: saved });
+    // 저장된 목록이 없으면 기본값 + 기존에 추가했던 사유를 합쳐 보여준다(최초 1회 작성 출발점).
+    const extra = parseReasonList(await cfgGet(env, "eng_extra_point_reasons"));
+    return json({ reasons: [...DEFAULT_POINT_REASONS, ...extra] });
+  }
+  if (p === "/api/eng/point-reasons" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { reasons?: unknown };
+    const reasons = Array.isArray(b.reasons)
+      ? (b.reasons as { name?: unknown; value?: unknown }[]).map((r) => ({ name: String(r?.name ?? "").trim(), value: Math.round(Number(r?.value)) || 0 })).filter((r) => r.name).slice(0, 100)
+      : [];
+    await env.DB.prepare("INSERT INTO class_config(k,v) VALUES('point_reasons',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(JSON.stringify(reasons)).run();
+    return json({ ok: true, count: reasons.length });
+  }
   if (p === "/api/eng/done-items" && m === "GET") {
     const sid = url.searchParams.get("student_id") || "";
     const global = parseStrArr(await cfgGet(env, "eng_extra_done_items"));
@@ -188,23 +235,40 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     const date = String(b.date || "");
     if (!sid || !date) return json({ error: "bad_input" }, 400);
     const goals = JSON.stringify(Array.isArray(b.goals) ? b.goals : []);
-    // 출결 상태 — '출석/지각/결석'. 구버전 '등원'은 '출석'으로 정규화.
-    let status = ["출석", "등원", "지각", "결석"].includes(String(b.attStatus)) ? String(b.attStatus) : "";
+    // 출결 상태 — 수학과 통일: 출석/지각/결석 + 조퇴/무단결석. 구버전 '등원'은 '출석'으로 정규화.
+    let status = ["출석", "등원", "지각", "결석", "조퇴", "무단결석"].includes(String(b.attStatus)) ? String(b.attStatus) : "";
     if (status === "등원") status = "출석";
     const lateMin = Number(b.lateMin) || 0;
     const reason = String(b.absentReason || "");
-    // 상태가 있으면 그걸로 출석여부 판단(출석·지각=출석). 없으면 기존 attended 불린.
-    const attended = status ? (status === "출석" || status === "지각" ? 1 : 0) : b.attended ? 1 : 0;
+    // 출석여부 — 출석·지각·조퇴는 등원(1), 결석·무단결석은 0. 상태 없으면 기존 attended 불린.
+    const attended = status ? (status === "출석" || status === "지각" || status === "조퇴" ? 1 : 0) : b.attended ? 1 : 0;
+    // 보강 플래그 — 켜면 이 수업은 보강(포인트 미적립).
+    const makeup = b.makeup ? 1 : 0;
     const hwSt = (v: unknown) => (["완료", "미흡", "안함", "없음"].includes(String(v)) ? String(v) : "");
-    // 포인트: 사유 라벨들의 끝 숫자(±) 합으로 계산(노션 포인트 공식과 동일).
-    const reasons = Array.isArray(b.pointReasons) ? (b.pointReasons as unknown[]).map((x) => String(x)) : [];
-    const points = reasons.reduce((n, r) => { const m = /(-?\d+)\s*$/.exec(r); return n + (m ? parseInt(m[1], 10) : 0); }, 0);
+    const hwW = hwSt(b.hwWord), hwR = hwSt(b.hwReading), hwG = hwSt(b.hwGrammar);
+    // 포인트 자동 적립 — 출결·숙제 상태로 '포인트 항목' 카탈로그 점수를 자동 계산(수동 선택 폐지).
+    //   출석/조퇴 +출석점수, 지각 +지각점수(보통 −), 숙제 완료 +·미흡 절반·안함 −. 보강이면 전부 0.
+    const catMap = await pointCatMap(env);
+    const cs = (k: string, fb = 0) => (k in catMap ? catMap[k] : fb);
+    const autoReasons: string[] = [];
+    let points = 0;
+    if (!makeup) {
+      if (status === "출석" || status === "조퇴") { const v = cs("출석"); if (v) { points += v; autoReasons.push(`출석 ${v}`); } }
+      else if (status === "지각") { const v = cs("지각"); if (v) { points += v; autoReasons.push(`지각 ${v}`); } }
+      const hwPt = (val: string, key: string) => {
+        if (!val || val === "없음") return;
+        const base = cs(key, cs("숙제", 50));
+        const v = val === "완료" ? base : val === "미흡" ? Math.round(base / 2) : val === "안함" ? -base : 0;
+        if (v) { points += v; autoReasons.push(`${key} ${v}`); }
+      };
+      hwPt(hwW, "단어숙제"); hwPt(hwR, "독해숙제"); hwPt(hwG, "문법숙제");
+    }
     const doneItems = Array.isArray(b.doneItems) ? (b.doneItems as unknown[]).map((x) => String(x)) : [];
     await env.DB
       .prepare(
-        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,book_no,word_test,done_items,comment,materials,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, book_no=excluded.book_no, word_test=excluded.word_test, done_items=excluded.done_items, comment=excluded.comment, materials=excluded.materials, updated_at=excluded.updated_at"
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,makeup,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,book_no,word_test,done_items,comment,materials,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, makeup=excluded.makeup, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, book_no=excluded.book_no, word_test=excluded.word_test, done_items=excluded.done_items, comment=excluded.comment, materials=excluded.materials, updated_at=excluded.updated_at"
       )
-      .bind(sid, date, attended, status, lateMin, reason, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwSt(b.hwWord), hwSt(b.hwReading), hwSt(b.hwGrammar), b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(reasons), points, String(b.note || ""), String(b.bookNo || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.comment || ""), String(b.materials || ""), Date.now())
+      .bind(sid, date, attended, status, lateMin, reason, makeup, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwW, hwR, hwG, b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(autoReasons), points, String(b.note || ""), String(b.bookNo || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.comment || ""), String(b.materials || ""), Date.now())
       .run();
     // 결석 → 보강 관리로 연결: 같은 학생·결석일의 보강이 없으면 '예정'으로 자동 생성.
     if (status === "결석") {
@@ -262,9 +326,12 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
   /* ---------------- 테스트 ---------------- */
   if (p === "/api/eng/test" && m === "GET") {
     const sid = url.searchParams.get("student_id") || "";
-    const q = sid
-      ? env.DB.prepare("SELECT * FROM class_eng_test WHERE student_id=? ORDER BY date DESC").bind(sid)
-      : env.DB.prepare("SELECT * FROM class_eng_test ORDER BY date DESC LIMIT 1000");
+    const date = url.searchParams.get("date") || "";
+    let q;
+    if (sid && date) q = env.DB.prepare("SELECT * FROM class_eng_test WHERE student_id=? AND date=? ORDER BY created_at DESC").bind(sid, date);
+    else if (sid) q = env.DB.prepare("SELECT * FROM class_eng_test WHERE student_id=? ORDER BY date DESC").bind(sid);
+    else if (date) q = env.DB.prepare("SELECT * FROM class_eng_test WHERE date=? ORDER BY created_at DESC").bind(date);
+    else q = env.DB.prepare("SELECT * FROM class_eng_test ORDER BY date DESC LIMIT 1000");
     const r = await q.all<Record<string, unknown>>();
     return json({ tests: (r.results || []).map(testRow) });
   }
@@ -273,16 +340,17 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     const sid = String(b.studentId || "");
     if (!sid) return json({ error: "studentId_required" }, 400);
     const id = String(b.id || "") || newId("et");
+    const result = ["통과", "재시"].includes(String(b.result)) ? String(b.result) : "";
     const exists = await env.DB.prepare("SELECT id FROM class_eng_test WHERE id=?").bind(id).first();
     if (exists) {
       await env.DB
-        .prepare("UPDATE class_eng_test SET date=?,name=?,score=?,total=?,memo=? WHERE id=?")
-        .bind(String(b.date || ""), String(b.name || ""), Number(b.score) || 0, Number(b.total) || 100, String(b.memo || ""), id)
+        .prepare("UPDATE class_eng_test SET date=?,name=?,score=?,total=?,memo=?,result=? WHERE id=?")
+        .bind(String(b.date || ""), String(b.name || ""), Number(b.score) || 0, Number(b.total) || 100, String(b.memo || ""), result, id)
         .run();
     } else {
       await env.DB
-        .prepare("INSERT INTO class_eng_test(id,student_id,date,name,score,total,memo,created_at) VALUES(?,?,?,?,?,?,?,?)")
-        .bind(id, sid, String(b.date || ""), String(b.name || ""), Number(b.score) || 0, Number(b.total) || 100, String(b.memo || ""), Date.now())
+        .prepare("INSERT INTO class_eng_test(id,student_id,date,name,score,total,memo,result,created_at) VALUES(?,?,?,?,?,?,?,?,?)")
+        .bind(id, sid, String(b.date || ""), String(b.name || ""), Number(b.score) || 0, Number(b.total) || 100, String(b.memo || ""), result, Date.now())
         .run();
     }
     return json({ ok: true, id });
@@ -589,6 +657,7 @@ function dailyRow(r: Record<string, unknown>) {
     attStatus: String(r.att_status ?? ""),
     lateMin: Number(r.late_min ?? 0),
     absentReason: String(r.absent_reason ?? ""),
+    makeup: Number(r.makeup ?? 0) === 1,
     goals,
     homework: String(r.homework ?? ""),
     hwChecked: Number(r.hw_checked) === 1,
@@ -631,5 +700,6 @@ function testRow(r: Record<string, unknown>) {
     score: Number(r.score ?? 0),
     total: Number(r.total ?? 100),
     memo: String(r.memo ?? ""),
+    result: String(r.result ?? ""),
   };
 }

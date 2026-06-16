@@ -73,6 +73,8 @@ const WIKI: WsEntry = { key: "wiki", label: "바꿈 매뉴얼", icon: "book", ki
 const SNS: WsEntry = { key: "sns", label: "SNS 관리", icon: "copy", kind: "hub" };
 const MASTER: WsEntry = { key: "master", label: "학생 명단", icon: "students", kind: "hub" };
 const RANKING: WsEntry = { key: "ranking", label: "포인트 랭킹", icon: "chart", kind: "hub" };
+const MATERIALS: WsEntry = { key: "materials", label: "자료 배부", icon: "copy", kind: "hub" };
+const POINT_CATALOG: WsEntry = { key: "point_catalog", label: "포인트 항목", icon: "chart", kind: "hub" };
 const ENGREPORT: WsEntry = { key: "engreport", label: "영어 월말리포트", icon: "fileText", kind: "hub" };
 const ISSUES: WsEntry = { key: "issues", label: "오류·개선 요청", icon: "clipboard", kind: "hub" };
 const GUIDE: WsEntry = { key: "guide", label: "사용 가이드", icon: "book", kind: "hub" };
@@ -112,6 +114,10 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   const common: WsEntry[] = [];
   if (areas.has("students")) common.push(MASTER);
   common.push(RANKING);
+  // 포인트 항목·자료 배부 — 강사·원장 공용(수학·영어 모두 같은 화면).
+  const isTeacher = role === "admin" || areas.has("math") || role === "english_mid" || role === "english_elem";
+  if (isTeacher) common.push(POINT_CATALOG);
+  if (isTeacher) common.push(MATERIALS);
   common.push(REQS);
   if (areas.has("wiki")) common.push(WIKI);
   if (areas.has("sns")) common.push(SNS);

@@ -5,7 +5,7 @@ import { DOW, fmtFull, fmtMDDow, parseD, timeToMin, todayStr, uid, ymd } from ".
 import { activeStudents, attendsOn, effectiveLessons, nextLessonDate, studentById } from "../lib/logic";
 import { applyMakeup, findBoKey } from "../lib/attendanceLogic";
 import { holidayName } from "../lib/holidays";
-import { awardPoints, pushAttendanceNotion, pushHomeworkNotion } from "../api";
+import { awardPoints, pushAttendanceNotion, pushHomeworkNotion, attendancePoints, loadPointCatalog } from "../api";
 import { GradeBadge, Empty } from "../components/ui";
 import { TestModal, StudentModal } from "../components/modals";
 import { Icon } from "../icons";
@@ -65,6 +65,8 @@ export function Today() {
   // 시간표 변경요청 — 그 날짜 승인된 변경(수학) 표시 + 수학↔영어 겹침 자동 감지.
   const [hubRoster, setHubRoster] = useState<RosterStudent[]>([]);
   useEffect(() => { getRoster().then(setHubRoster).catch(() => {}); }, []);
+  // 출석 적립 점수(카탈로그) 로드 — 수학도 '포인트 항목' 점수로 적립(키오스크 반영).
+  useEffect(() => { void loadPointCatalog(); }, []);
   const approvedChanges = useApprovedChanges(day);
   const conflicts = useMemo(() => findSlotConflicts(hubRoster, day), [hubRoster, day]);
 
@@ -116,16 +118,40 @@ export function Today() {
     const prevAwarded = prev?.pointsAwarded === true;
     const clearing = prev?.status === status;
     const willAward = !clearing && status === "출석";
+    // 결석 시 검사할 숙제를 다음 등원일로 이월 / 출석 등으로 바꾸면 복원.
+    const sid = it.student.id;
+    const isAbsence = !clearing && (status === "결석" || status === "무단결석");
+    const wasAbsence = !!prevRec && (prevRec.status === "결석" || prevRec.status === "무단결석");
+    const nextDay = isAbsence ? nextLessonDate(it.student, day) : "";
+    const doCarry = isAbsence && !!nextDay;
+    const doRevert = wasAbsence && !isAbsence; // 결석을 풀거나 다른 출석류로 바꿈
+    // 영향받는 숙제 백업(되돌리기용)
+    const carryBak: { id: string; recheck?: string; carried?: string }[] = [];
+    for (const h of data.homeworkLog) {
+      if (h.studentId !== sid) continue;
+      const isDueToday = h.status !== "done" && (h.recheckDate || h.date) === day;
+      if ((doCarry && isDueToday) || (doRevert && h.carriedFrom === day)) carryBak.push({ id: h.id, recheck: h.recheckDate, carried: h.carriedFrom });
+    }
+    const carryCount = doCarry ? carryBak.length : 0;
+    const revertCarry = (d: { homeworkLog: HwLog[] }) => {
+      for (const h of d.homeworkLog) if (h.studentId === sid && h.carriedFrom === day) { h.recheckDate = day; h.carriedFrom = undefined; }
+    };
     mutate((d) => {
       if (clearing) {
         delete d.attendance[key];
         d.makeups = d.makeups.filter((m) => !(m.attKey === key && m.status === "pending"));
         if (d.dismissedMakeups?.length) d.dismissedMakeups = d.dismissedMakeups.filter((k) => k !== key);
+        if (doRevert) revertCarry(d);
         return;
       }
       const cur = d.attendance[key];
       d.attendance[key] = { ...(cur || {}), status, pointsAwarded: prevAwarded };
       applyMakeup(d, key, it.student.id, it.duration, status);
+      if (doCarry) {
+        for (const h of d.homeworkLog) {
+          if (h.studentId === sid && h.status !== "done" && (h.recheckDate || h.date) === day) { h.recheckDate = nextDay; h.carriedFrom = day; }
+        }
+      } else if (doRevert) revertCarry(d);
     });
     if (!clearing) {
       const cur = data.attendance[key];
@@ -138,16 +164,17 @@ export function Today() {
       });
     }
     let awardedNet = 0; // 이 마킹이 실제로 바꾼 포인트(되돌릴 양)
+    const pt = attendancePoints(); // 출석 적립 점수(카탈로그)
     if (!prevAwarded && willAward) {
-      const r = await awardPoints(it.student.id, 20, "출석");
-      awardedNet = r.matched ? 20 : 0;
+      const r = await awardPoints(it.student.id, pt, "출석");
+      awardedNet = r.matched ? pt : 0;
       mutate((d) => {
         const rec = d.attendance[key];
         if (rec) rec.pointsAwarded = r.matched;
       });
     } else if (prevAwarded && !willAward) {
-      await awardPoints(it.student.id, -20, "출석 취소");
-      awardedNet = -20;
+      await awardPoints(it.student.id, -pt, "출석 취소");
+      awardedNet = -pt;
       mutate((d) => {
         const rec = d.attendance[key];
         if (rec) rec.pointsAwarded = false;
@@ -160,12 +187,15 @@ export function Today() {
         else delete d.attendance[key];
         d.makeups = d.makeups.filter((m) => m.attKey !== key);
         if (prevMakeupCopy) d.makeups.push({ ...prevMakeupCopy });
+        // 이월/복원했던 숙제 원상복구
+        for (const bak of carryBak) { const h = d.homeworkLog.find((x) => x.id === bak.id); if (h) { h.recheckDate = bak.recheck; h.carriedFrom = bak.carried; } }
       });
       if (awardedNet) void awardPoints(it.student.id, -awardedNet, "되돌리기");
       if (prevRec) pushAttendanceNotion(it.student.id, { date: day, status: prevRec.status, attitude: prevRec.attitude || "", lateMinutes: prevRec.lateMinutes || 0, note: prevRec.note || "" });
       toast(it.student.name + " · 되돌렸어요");
     };
-    toast(clearing ? it.student.name + " · 출결 취소" : it.student.name + " · " + status, doUndo);
+    const carryMsg = carryCount > 0 && nextDay ? ` · 검사할 숙제 ${carryCount}건 ${fmtMDDow(nextDay)}로 이월` : "";
+    toast(clearing ? it.student.name + " · 출결 취소" : it.student.name + " · " + status + carryMsg, doUndo);
   }
 
   // 미체크 학생 전원 출석 처리 (예외는 이후 개별 수정)
@@ -185,9 +215,10 @@ export function Today() {
     });
     for (const it of targets) pushAttendanceNotion(it.student.id, { date: day, status: "출석", attitude: "", lateMinutes: 0, note: "" });
     const awarded: string[] = []; // 실제 포인트 적립된 학생(되돌릴 대상)
+    const ptAll = attendancePoints();
     for (const it of targets) {
       const key = keyOf(it);
-      const r = await awardPoints(it.student.id, 20, "출석");
+      const r = await awardPoints(it.student.id, ptAll, "출석");
       if (r.matched) awarded.push(it.student.id);
       mutate((d) => {
         const rec = d.attendance[key];
@@ -203,7 +234,7 @@ export function Today() {
           d.makeups = d.makeups.filter((m) => !(m.attKey === key && m.status === "pending"));
         }
       });
-      for (const sid of awarded) void awardPoints(sid, -20, "되돌리기");
+      for (const sid of awarded) void awardPoints(sid, -ptAll, "되돌리기");
       toast("전체 출석을 되돌렸어요");
     };
     toast(`${targets.length}명 전체 출석 처리`, doUndo);
@@ -629,6 +660,7 @@ export function Today() {
                           <div className="today-hwitem" key={hw.id}>
                             <span className="today-hwitem-name" title={hw.book}>
                               {hw.book || "숙제"}{hw.tags.length ? <span className="muted"> · {hw.tags.join(", ")}</span> : null}
+                              {hw.carriedFrom ? <span className="badge b-blue" style={{ marginLeft: 6 }} title={fmtMDDow(hw.carriedFrom) + " 결석으로 이월"}>결석 이월</span> : null}
                               {hw.delayCount ? <span className="badge b-orange" style={{ marginLeft: 6 }}>{hw.delayCount}차 밀림</span> : null}
                             </span>
                             <span className="today-pct-quick">

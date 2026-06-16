@@ -149,6 +149,29 @@ export async function hideStudent(studentId: string): Promise<void> {
   }
 }
 
+// 출석 적립 점수 — '포인트 항목' 카탈로그의 '출석' 점수(수학·영어 통일). 로드 전 기본 100.
+let attPoint = 100;
+/** 현재 출석 적립 점수(카탈로그 반영). 키오스크가 읽는 students.points에 이 값으로 적립. */
+export function attendancePoints(): number {
+  return attPoint;
+}
+/** 포인트 항목 카탈로그에서 '출석' 점수를 읽어온다(없으면 기본 100 유지). */
+export async function loadPointCatalog(): Promise<void> {
+  if (mode !== "remote") return;
+  try {
+    const r = await fetch("/api/points/catalog", { cache: "no-store" });
+    if (!r.ok) return;
+    const j = (await r.json()) as { reasons?: { name: string; value: number }[] };
+    const found = (j.reasons || []).find((x) => /^출석\b/.test(String(x.name)) && !/취소/.test(String(x.name)));
+    if (found) {
+      const m = /(-?\d+)\s*$/.exec(String(found.name));
+      attPoint = m ? parseInt(m[1], 10) : Number(found.value) || attPoint;
+    }
+  } catch {
+    /* 실패 시 기본값 유지 */
+  }
+}
+
 /**
  * Award/revoke points for a roster student (by id) and keep students.points
  * in sync. Remote only — a no-op in dev/local mode. Returns { matched:false }
@@ -217,11 +240,12 @@ export async function syncStudents(): Promise<SyncStudentsResult> {
 }
 
 /** Fire-and-forget push of an app record to Notion (best-effort; never throws). */
-function notionPush(path: string, body: unknown): void {
-  if (mode !== "remote") return;
-  fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(
-    () => {}
-  );
+// 수학 기록(출결·숙제·진도·테스트)을 노션에 더 이상 푸시하지 않음 — 앱 D1이 단일 출처.
+// (학생명단 노션→앱 읽기 동기화는 그대로.) 다시 켜려면 아래 주석의 fetch 복원.
+function notionPush(_path: string, _body: unknown): void {
+  return;
+  // if (mode !== "remote") return;
+  // fetch(_path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(_body) }).catch(() => {});
 }
 /** 출결 → 노션(앱→노션 단방향). 같은 학생·같은 날짜의 연속 변경은 모아 마지막 상태만
  *  보낸다(중복 행/과다 호출 방지). 서버는 (학생,날짜) 기준 upsert. */

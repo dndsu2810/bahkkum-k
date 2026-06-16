@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
-import { engApi, hwProgress, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, ELEM_LOG_ITEMS, pointsOf, type EngDaily, type EngMakeup, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
+import { engApi, hwProgress, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, ELEM_LOG_ITEMS, type AttStatus, type EngDaily, type EngMakeup, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtMD, fmtMDDow, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
@@ -47,6 +47,7 @@ const blankDaily = (studentId: string, date: string): EngDaily => ({
   attStatus: "",
   lateMin: 0,
   absentReason: "",
+  makeup: false,
   goals: [],
   homework: "",
   hwChecked: false,
@@ -77,17 +78,15 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   const [sel, setSel] = useState("");
   const [err, setErr] = useState("");
 
-  // 포인트 사유(전체 공통, 기본 목록에 더해 사용).
-  const [extraReasons, setExtraReasons] = useState<{ name: string; value: number }[]>([]);
-  useEffect(() => { engApi.getCatalog().then((c) => setExtraReasons(c.pointReasons || [])).catch(() => {}); }, []);
-  const reasonsAll = useMemo(() => [...POINT_REASONS, ...extraReasons], [extraReasons]);
-  async function addReason(name: string, value: number) {
-    const label = `${name.trim()} ${value}`.trim();
-    if (!name.trim() || reasonsAll.some((r) => r.name === label)) return;
-    const next = [...extraReasons, { name: label, value }];
-    setExtraReasons(next);
-    await engApi.saveCatalog({ pointReasons: next }).catch(() => {});
-  }
+  // 포인트 항목 카탈로그(점수표) — '포인트 항목' 화면에서 관리. 여기선 읽어서 자동 적립 계산에만 사용.
+  const [reasonsAll, setReasonsAll] = useState<{ name: string; value: number }[]>(POINT_REASONS);
+  const loadReasons = () => engApi.pointReasons().then((rs) => { if (rs.length) setReasonsAll(rs); }).catch(() => {});
+  useEffect(() => {
+    void loadReasons();
+    const onFocus = () => void loadReasons();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
 
   // '오늘 한 것' 항목 — 선택한 학생 기준(기본+전체공통+학생별). 학생 바꾸면 다시 로드.
   const [doneOptions, setDoneOptions] = useState<string[]>(ELEM_LOG_ITEMS);
@@ -148,18 +147,26 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
       setErr("저장에 실패했어요.");
     }
   }
-  // 출결 상태 지정 — 지각은 분, 결석은 사유를 받는다. 결석은 백엔드에서 보강 자동연결.
-  function setStatus(sid: string, status: "출석" | "지각" | "결석" | "") {
+  // 출결 상태 지정 — 수학과 통일. 출석·지각·조퇴는 등원, 결석·무단결석은 미등원.
+  // 지각 분·결석 사유는 인라인 입력(아래 patchDaily)으로 받는다. 결석은 백엔드에서 보강 자동연결.
+  function setStatus(sid: string, status: AttStatus) {
     const d = getDaily(sid);
-    if (status === "지각") {
-      const m = Number(window.prompt("지각 몇 분?", String(d.lateMin || 10)) || 0);
-      void saveDaily({ ...d, attStatus: "지각", lateMin: m, attended: true });
-    } else if (status === "결석") {
-      const r = window.prompt("결석 사유", d.absentReason || "") ?? "";
-      void saveDaily({ ...d, attStatus: "결석", absentReason: r, attended: false });
-    } else {
-      void saveDaily({ ...d, attStatus: status, attended: status === "출석" });
-    }
+    const attended = status === "출석" || status === "지각" || status === "조퇴";
+    void saveDaily({
+      ...d,
+      attStatus: status,
+      attended,
+      lateMin: status === "지각" ? d.lateMin || 0 : 0,
+      absentReason: status === "결석" || status === "무단결석" ? d.absentReason : "",
+    });
+  }
+  // 일일기록 부분 수정(지각 분·결석 사유·수업태도·특이사항 등 인라인 입력).
+  function patchDaily(sid: string, patch: Partial<EngDaily>) {
+    void saveDaily({ ...getDaily(sid), ...patch });
+  }
+  // 보강 플래그 토글 — 출결은 그대로 두고 보강 여부만 켜고/끈다(켜면 포인트 미적립).
+  function setMakeup(sid: string, on: boolean) {
+    void saveDaily({ ...getDaily(sid), makeup: on });
   }
 
   // 시간표 변경요청 — 그 날짜 승인된 1회성 변경(영어) 반영 + 수학↔영어 겹침 감지.
@@ -193,6 +200,11 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [students, scheduledIds, daily, approvedChanges]);
   const addable = students.filter((s) => !scheduledIds.has(s.id) && !(daily[s.id]?.attStatus || daily[s.id]?.attended));
+  // A-4 초등 출결 활성화 — 초등은 시간표(engSlots)가 없을 때가 많아 예정 목록이 비기 쉽다.
+  // 출결 탭에서 예정 학생이 없으면 그 반 전체 학생을 보여줘 출결을 무조건 할 수 있게(대시보드 집계 필수).
+  const attEmpty = todayList.length === 0;
+  const attList = attEmpty && band === "elem" ? students : todayList;
+  const attAddable = attEmpty && band === "elem" ? [] : addable;
 
   const conflicts = useMemo(() => findSlotConflicts(students, date), [students, date]);
   const showLive = tab === "today" || tab === "att";
@@ -265,7 +277,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
       ) : tab === "makeup" ? (
         <EngMakeupPanel students={students} />
       ) : tab === "att" ? (
-        <EngAttendance list={todayList} addable={addable} date={date} daily={daily} scheduledIds={scheduledIds} slotTimeOf={slotTimeOf} onStatus={setStatus} />
+        <EngAttendance list={attList} addable={attAddable} date={date} daily={daily} scheduledIds={scheduledIds} slotTimeOf={slotTimeOf} getDaily={getDaily} onStatus={setStatus} onMakeup={setMakeup} onPatch={patchDaily} />
       ) : tab === "hw" ? (
         <EngHomework students={students} />
       ) : tab === "items" ? (
@@ -284,19 +296,13 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
               const d = daily[s.id];
               const st = d?.attStatus || "";
               return (
-                <div key={s.id} className={"eng-stu" + (sel === s.id ? " on" : "")}>
-                  {tab === "today" && (
-                    <div className="eng-att-seg">
-                      <button className={"eas" + (st === "출석" ? " on g" : "")} onClick={() => setStatus(s.id, st === "출석" ? "" : "출석")} title={st === "출석" ? "출석 취소" : "출석"}>출</button>
-                      <button className={"eas" + (st === "지각" ? " on w" : "")} onClick={() => setStatus(s.id, st === "지각" ? "" : "지각")} title={st === "지각" ? "지각 취소" : "지각"}>지</button>
-                      <button className={"eas" + (st === "결석" ? " on b" : "")} onClick={() => setStatus(s.id, st === "결석" ? "" : "결석")} title={st === "결석" ? "결석 취소" : "결석"}>결</button>
-                    </div>
-                  )}
+                <div key={s.id} className={"eng-stu" + (tab === "today" ? " today-side-row" : "") + (sel === s.id ? " on" : "")}>
                   <button className="eng-stu-name" onClick={() => setSel(s.id)}>
-                    {s.name}
+                    <span className="today-side-nm">{s.name}</span>
                     {tab === "today" && scheduledIds.has(s.id) && slotTimeOf(s) && <span className="eng-stu-time">{slotTimeOf(s)}</span>}
                     {tab === "today" && (() => { const ch = arrivalOf(approvedChanges, s.id, "english", date); return ch ? <span className="eng-stu-chg" title="승인된 시간 변경">{arrivedIds.has(s.id) ? "이동 " : ""}{ch.toTime}</span> : null; })()}
-                    {tab === "today" && st === "지각" && d?.lateMin ? <span className="eng-stu-late">{d.lateMin}분</span> : null}
+                    {tab === "today" && st && <span className={"today-side-st " + (st === "출석" ? "g" : st === "지각" || st === "조퇴" ? "w" : "b")}>{st}{st === "지각" && d?.lateMin ? ` ${d.lateMin}분` : ""}</span>}
+                    {tab === "today" && d?.makeup && <span className="eng-stu-mk" title="보강 수업 (포인트 미적립)">보강</span>}
                     {tab === "today" && d && (d.hwChecked || hwProgress(d) !== null) && <span className="eng-dot ok" title="숙제 기록됨" />}
                   </button>
                 </div>
@@ -324,7 +330,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                       : "왼쪽에서 학생을 선택하면 테스트 점수를 기록할 수 있어요."}
               </div>
             ) : tab === "today" ? (
-              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={addDoneItemForStudent} onAddReason={addReason} />
+              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={addDoneItemForStudent} />
             ) : tab === "progress" ? (
               <ProgressPanel studentId={sel} name={nameOf[sel] || ""} />
             ) : tab === "cur" ? (
@@ -428,11 +434,45 @@ function CurriculumPanel({ studentId, name }: { studentId: string; name: string 
   );
 }
 
+/* 포인트 항목 카탈로그 → {기본이름: 점수} 맵(라벨 끝 숫자 제거). 자동 적립 계산용. */
+function catMapOf(reasons: { name: string; value: number }[]): Record<string, number> {
+  const m: Record<string, number> = {};
+  for (const r of reasons) { const k = String(r.name).replace(/\s*-?\d+\s*$/, "").trim(); if (k && !(k in m)) m[k] = r.value; }
+  return m;
+}
+/** 출결·숙제 상태로 자동 적립 포인트 계산(서버와 동일 규칙). 미리보기용. */
+function autoPointsOf(d: EngDaily, cm: Record<string, number>): { total: number; items: { l: string; v: number }[] } {
+  if (d.makeup) return { total: 0, items: [] };
+  const cs = (k: string, fb = 0) => (k in cm ? cm[k] : fb);
+  const items: { l: string; v: number }[] = [];
+  if (d.attStatus === "출석" || d.attStatus === "조퇴") { const v = cs("출석"); if (v) items.push({ l: "출석", v }); }
+  else if (d.attStatus === "지각") { const v = cs("지각"); if (v) items.push({ l: "지각", v }); }
+  const hw = (val: string, key: string) => {
+    if (!val || val === "없음") return;
+    const base = cs(key, cs("숙제", 50));
+    const v = val === "완료" ? base : val === "미흡" ? Math.round(base / 2) : val === "안함" ? -base : 0;
+    if (v) items.push({ l: key, v });
+  };
+  hw(d.hwWord, "단어숙제"); hw(d.hwReading, "독해숙제"); hw(d.hwGrammar, "문법숙제");
+  return { total: items.reduce((n, x) => n + x.v, 0), items };
+}
+
+/* 출결 6종 → 수학 today-seg 트랙 색상(on-present/late/absent). 보강은 별도 플래그. */
+const ENG_STATUS6: { v: AttStatus; on: string; att: boolean }[] = [
+  { v: "출석", on: "on-present", att: true },
+  { v: "지각", on: "on-late", att: true },
+  { v: "결석", on: "on-absent", att: false },
+  { v: "조퇴", on: "on-late", att: true },
+  { v: "무단결석", on: "on-absent", att: false },
+];
+
 /* ---------------- 일일 학습일지 편집 ---------------- */
-function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, onAddDoneItem, onAddReason }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void; doneItemsAll: string[]; reasonsAll: { name: string; value: number }[]; onAddDoneItem: (s: string) => void; onAddReason: (name: string, value: number) => void }) {
+function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, onAddDoneItem }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void; doneItemsAll: string[]; reasonsAll: { name: string; value: number }[]; onAddDoneItem: (s: string) => void }) {
   const showHw = band !== "elem"; // 초등영어는 숙제 없음
   const [d, setD] = useState<EngDaily>(value);
   const dirty = JSON.stringify(d) !== JSON.stringify(value);
+  // 포인트 자동 적립 미리보기(출결·숙제 + 카탈로그 점수). 저장 시 서버가 동일 규칙으로 확정.
+  const autoPts = useMemo(() => autoPointsOf(d, catMapOf(reasonsAll)), [d, reasonsAll]);
 
   // 학생/다른 강사가 입력해 value(서버값)가 바뀌면, 교사가 편집 중이 아닐 때만 반영(편집분 보존).
   const prevValue = useRef(value);
@@ -453,58 +493,45 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
       </div>
 
       <div className="eng-field">
-        <div className="eng-label">출결</div>
-        <div className="sm-subj">
-          <button className={"sm-subj-chip" + (d.attStatus === "출석" ? " on" : "")} onClick={() => setD({ ...d, attStatus: d.attStatus === "출석" ? "" : "출석", attended: d.attStatus !== "출석" })}>출석</button>
-          <button className={"sm-subj-chip" + (d.attStatus === "지각" ? " on" : "")} onClick={() => setD({ ...d, attStatus: d.attStatus === "지각" ? "" : "지각", attended: d.attStatus !== "지각" })}>지각</button>
-          <button className={"sm-subj-chip" + (d.attStatus === "결석" ? " on" : "")} onClick={() => setD({ ...d, attStatus: d.attStatus === "결석" ? "" : "결석", attended: false })}>결석</button>
+        <div className="eng-label">출결 {d.makeup && <span className="eng-mk-tag">보강 · 포인트 미적립</span>}</div>
+        <div className="today-detail-row">
+          <div className="today-seg">
+            {ENG_STATUS6.map((o) => (
+              <button key={o.v} className={d.attStatus === o.v ? o.on : ""} onClick={() => setD({ ...d, attStatus: d.attStatus === o.v ? "" : o.v, attended: d.attStatus === o.v ? false : o.att })}>{o.v}</button>
+            ))}
+          </div>
+          <button className={"att-mk" + (d.makeup ? " on" : "")} onClick={() => setD({ ...d, makeup: !d.makeup })} title="보강 수업 (출결은 남기되 포인트 미적립)">보강</button>
         </div>
         {d.attStatus === "지각" && (
           <label className="eng-late-row">지각 <input className="sm-input" style={{ maxWidth: 90 }} type="number" min={0} step={5} value={d.lateMin || 0} onChange={(e) => setD({ ...d, lateMin: Number(e.target.value) || 0 })} /> 분</label>
         )}
-        {d.attStatus === "결석" && (
+        {(d.attStatus === "결석" || d.attStatus === "무단결석") && (
           <input className="input" style={{ marginTop: 6 }} value={d.absentReason} onChange={(e) => setD({ ...d, absentReason: e.target.value })} placeholder="결석 사유 (보강 관리에 자동 연결됩니다)" />
         )}
       </div>
 
       <div className="eng-field">
         <div className="eng-label">수업 태도</div>
-        <div className="sm-subj">
+        <div className="today-mood-seg">
           {ENG_ATTITUDES.map((a) => (
-            <button key={a} className={"sm-subj-chip" + (d.attitude === a ? " on" : "")} onClick={() => setD({ ...d, attitude: d.attitude === a ? "" : a })}>{a}</button>
+            <button key={a} className={d.attitude === a ? "on" : ""} onClick={() => setD({ ...d, attitude: d.attitude === a ? "" : a })}>{a}</button>
           ))}
         </div>
       </div>
 
       <div className="eng-field">
-        <div className="eng-label">포인트 (적립·차감 사유) · 합계 {pointsOf(d.pointReasons)}점</div>
-        <div className="eng-pts">
-          {reasonsAll.map((r) => {
-            const on = d.pointReasons.includes(r.name);
-            return (
-              <button
-                key={r.name}
-                className={"eng-pt" + (r.value < 0 ? " minus" : "") + (on ? " on" : "")}
-                onClick={() => setD({ ...d, pointReasons: on ? d.pointReasons.filter((x) => x !== r.name) : [...d.pointReasons, r.name] })}
-              >
-                {r.name}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            className="eng-pt eng-pt-add"
-            onClick={() => {
-              const name = window.prompt("추가할 포인트 사유 이름 (예: 도서반납)");
-              if (!name || !name.trim()) return;
-              const v = window.prompt("점수 (적립은 +, 차감은 -, 예: 30 또는 -50)", "10");
-              if (v === null) return;
-              onAddReason(name, Math.round(Number(v)) || 0);
-            }}
-          >
-            + 사유 추가
-          </button>
-        </div>
+        <div className="eng-label">포인트 {d.makeup ? <span className="eng-mk-tag">보강 미적립</span> : <>· 오늘 <b className={autoPts.total < 0 ? "pc-minus" : "pc-plus"}>{autoPts.total > 0 ? "+" : ""}{autoPts.total}</b>점</>}</div>
+        {d.makeup ? (
+          <div className="eng-auto-hint">보강 수업은 포인트가 적립되지 않아요.</div>
+        ) : autoPts.items.length === 0 ? (
+          <div className="eng-auto-hint">출결·숙제를 입력하면 포인트가 <b>자동</b>으로 들어가요. (점수는 ‘포인트 항목’ 화면에서)</div>
+        ) : (
+          <div className="eng-auto-pts">
+            {autoPts.items.map((x, i) => (
+              <span key={i} className={"eng-auto-pt" + (x.v < 0 ? " minus" : "")}>{x.l} {x.v > 0 ? "+" : ""}{x.v}</span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="eng-field">
@@ -584,6 +611,9 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
         </>
       )}
 
+      {/* 오늘 시험 기록 — 여러 개 입력 + 미통과 재시(NP) 표시 (class_eng_test에 저장, 테스트 기록 탭과 공유) */}
+      <DailyTests studentId={d.studentId} date={d.date} />
+
       <div className="eng-field">
         <div className="eng-label">코멘트</div>
         <textarea className="input" rows={2} value={d.comment} onChange={(e) => setD({ ...d, comment: e.target.value })} placeholder="수업 코멘트" />
@@ -610,6 +640,57 @@ function HwRow({ label, value, onChange }: { label: string; value: HwStatus; onC
           <button key={s} className={"eas hw " + cls(s) + (value === s ? " on " + cls(s) : "")} onClick={() => onChange(value === s ? "" : s)}>{s}</button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* 오늘 시험 기록(여러 개) — 단어/문장 시험 등을 그 날짜로 여러 개 입력. 미통과는 재시(NP)로 표시.
+   class_eng_test에 저장 → '테스트 기록' 탭과 같은 데이터. */
+function DailyTests({ studentId, date }: { studentId: string; date: string }) {
+  const [list, setList] = useState<EngTest[]>([]);
+  const [name, setName] = useState("단어시험");
+  const [score, setScore] = useState("");
+  const [total, setTotal] = useState("");
+  const reload = () => engApi.testsByDate(studentId, date).then(setList).catch(() => {});
+  useEffect(() => { void reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [studentId, date]);
+
+  // 시험을 먼저 추가하고, 각 줄에서 통과/재시를 누르는 흐름(직관적).
+  async function add() {
+    if (!name.trim()) return;
+    await engApi.saveTest({ studentId, date, name: name.trim(), score: Number(score) || 0, total: Number(total) || 100, result: "" });
+    setScore(""); setTotal("");
+    void reload();
+  }
+  async function setResult(t: EngTest, result: string) { await engApi.saveTest({ ...t, result: t.result === result ? "" : result }); void reload(); }
+  async function remove(t: EngTest) { await engApi.removeTest(t.id); void reload(); }
+
+  return (
+    <div className="eng-field">
+      <div className="eng-label">오늘 본 시험</div>
+      <div className="test-add">
+        <input className="input test-add-nm" value={name} onChange={(e) => setName(e.target.value)} placeholder="시험명 (예: 단어시험)" onKeyDown={(e) => e.key === "Enter" && add()} />
+        <input className="input test-add-sc" inputMode="numeric" value={score} onChange={(e) => setScore(e.target.value.replace(/[^0-9]/g, ""))} placeholder="점수" />
+        <span className="test-add-slash">/</span>
+        <input className="input test-add-sc" inputMode="numeric" value={total} onChange={(e) => setTotal(e.target.value.replace(/[^0-9]/g, ""))} placeholder="만점" />
+        <button className="btn primary sm" onClick={add} disabled={!name.trim()}>추가</button>
+      </div>
+      {list.length === 0 ? (
+        <div className="eng-auto-hint">시험명을 적고 <b>추가</b>를 누른 뒤, 통과/재시를 표시하세요.</div>
+      ) : (
+        <div className="test-rows">
+          {list.map((t) => (
+            <div className="test-row" key={t.id}>
+              <span className="test-row-nm">{t.name}</span>
+              {(t.score || t.total) ? <span className="test-row-sc">{t.score}/{t.total}</span> : <span className="test-row-sc muted">—</span>}
+              <div className="att-seg test-pf">
+                <button className={t.result === "통과" ? "on t-green" : ""} onClick={() => setResult(t, "통과")}>통과</button>
+                <button className={t.result === "재시" ? "on t-red" : ""} onClick={() => setResult(t, "재시")}>재시(NP)</button>
+              </div>
+              <button className="test-row-x" onClick={() => remove(t)} aria-label="삭제">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -684,6 +765,7 @@ function TestPanel({ studentId, name }: { studentId: string; name: string }) {
     await engApi.removeTest(t.id);
     void reload();
   }
+  async function setResult(t: EngTest, result: string) { await engApi.saveTest({ ...t, result: t.result === result ? "" : result }); void reload(); }
 
   return (
     <div className="eng-panel">
@@ -700,6 +782,10 @@ function TestPanel({ studentId, name }: { studentId: string; name: string }) {
           <div className="eng-row" key={t.id}>
             <div className="eng-row-main"><b>{t.name}</b><span className="eng-lv">{t.date}</span></div>
             <span className="eng-score">{t.score}<span className="eng-total"> / {t.total}</span></span>
+            <div className="sm-subj">
+              <button className={"sm-subj-chip" + (t.result === "통과" ? " on" : "")} onClick={() => setResult(t, "통과")}>통과</button>
+              <button className={"sm-subj-chip np" + (t.result === "재시" ? " on" : "")} onClick={() => setResult(t, "재시")}>재시(NP)</button>
+            </div>
             <button className="btn ghost sm" onClick={() => remove(t)}>삭제</button>
           </div>
         ))}
@@ -709,9 +795,13 @@ function TestPanel({ studentId, name }: { studentId: string; name: string }) {
   );
 }
 
-/* ---------------- 출결 기록 (출석/지각/결석, 예정 우선) ---------------- */
+/* ---------------- 출결 기록 (수학과 동일 카드형 · 출석/지각/결석 + 더보기 조퇴/무단결석 + 보강 플래그) ---------------- */
+const ENG_ATT_MAIN: AttStatus[] = ["출석", "지각", "결석"];
+const ENG_ATT_MORE: AttStatus[] = ["조퇴", "무단결석"];
+const ENG_ATT_TONE: Record<string, string> = { 출석: "green", 지각: "orange", 결석: "red", 조퇴: "orange", 무단결석: "red" };
+
 function EngAttendance({
-  list, addable, date, daily, scheduledIds, slotTimeOf, onStatus,
+  list, addable, daily, scheduledIds, slotTimeOf, onStatus, onMakeup, onPatch,
 }: {
   list: RosterStudent[];
   addable: RosterStudent[];
@@ -719,11 +809,16 @@ function EngAttendance({
   daily: Record<string, EngDaily>;
   scheduledIds: Set<string>;
   slotTimeOf: (s: RosterStudent) => string;
-  onStatus: (sid: string, status: "출석" | "지각" | "결석" | "") => void;
+  getDaily: (sid: string) => EngDaily;
+  onStatus: (sid: string, status: AttStatus) => void;
+  onMakeup: (sid: string, on: boolean) => void;
+  onPatch: (sid: string, patch: Partial<EngDaily>) => void;
 }) {
   const cnt = (st: string) => list.filter((s) => daily[s.id]?.attStatus === st).length;
-  // 키보드 단축키 — 현재 행에 1 출석·2 지각·3 결석, Enter/↓ 다음·↑ 이전.
+  const mkCnt = list.filter((s) => daily[s.id]?.makeup).length;
+  // 키보드 단축키 — 현재 행에 1 출석·2 지각·3 결석, Enter/↓ 다음·↑ 이전. 줄별 '더보기'(조퇴/무단결석).
   const [cur, setCur] = useState(0);
+  const [moreId, setMoreId] = useState<string | null>(null);
   useEffect(() => { if (cur > list.length - 1) setCur(Math.max(0, list.length - 1)); }, [list.length, cur]);
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -743,30 +838,55 @@ function EngAttendance({
   }, [list, cur, onStatus, daily]);
   return (
     <div className="eng-attp">
-      <p className="hub-muted" style={{ marginBottom: 10 }}>{date} · 등원 예정 학생이 위에 옵니다. 출석/지각/결석을 표시하세요. 결석은 보강 관리로 연결됩니다.</p>
-      <p className="eng-att-hint">키보드: <b>1</b> 출석 · <b>2</b> 지각 · <b>3</b> 결석 · <b>Enter/↓</b> 다음 · <b>↑</b> 이전</p>
-      <div className="dash-kpis" style={{ gridTemplateColumns: "repeat(3,1fr)", maxWidth: 480, marginBottom: 14 }}>
-        <div className="kpi"><div className="kpi-v">{cnt("출석") + cnt("지각")}<span className="kpi-u">명</span></div><div className="kpi-l">출석</div></div>
+      <p className="eng-att-hint">키보드: <b>1</b> 출석 · <b>2</b> 지각 · <b>3</b> 결석 · <b>Enter/↓</b> 다음 · <b>↑</b> 이전 · 결석은 보강 관리로 연결돼요.</p>
+      <div className="dash-kpis" style={{ gridTemplateColumns: "repeat(4,1fr)", maxWidth: 620, marginBottom: 14 }}>
+        <div className="kpi"><div className="kpi-v">{cnt("출석") + cnt("지각") + cnt("조퇴")}<span className="kpi-u">명</span></div><div className="kpi-l">출석</div></div>
         <div className="kpi"><div className="kpi-v" style={{ color: "var(--warn)" }}>{cnt("지각")}<span className="kpi-u">명</span></div><div className="kpi-l">지각</div></div>
-        <div className="kpi"><div className="kpi-v" style={{ color: "var(--bad)" }}>{cnt("결석")}<span className="kpi-u">명</span></div><div className="kpi-l">결석</div></div>
+        <div className="kpi"><div className="kpi-v" style={{ color: "var(--bad)" }}>{cnt("결석") + cnt("무단결석")}<span className="kpi-u">명</span></div><div className="kpi-l">결석</div></div>
+        <div className="kpi"><div className="kpi-v" style={{ color: "#8b5cf6" }}>{mkCnt}<span className="kpi-u">명</span></div><div className="kpi-l">보강</div></div>
       </div>
-      <div className="eng-att-rows">
+      <div>
         {list.map((s, i) => {
           const d = daily[s.id];
-          const st = d?.attStatus || "";
+          const st = (d?.attStatus || "") as AttStatus;
+          const mk = !!d?.makeup;
+          const forced = !!st && ENG_ATT_MORE.includes(st);
+          const open = forced || moreId === s.id;
+          const missing = st === "결석" || st === "무단결석";
           return (
-            <div className={"eng-att-row" + (scheduledIds.has(s.id) ? "" : " extra") + (i === cur ? " cur" : "")} key={s.id} onClick={() => setCur(i)}>
-              <div className="eng-att-info">
-                <b>{s.name}</b>
-                {scheduledIds.has(s.id) && slotTimeOf(s) && <span className="eng-att-time">{slotTimeOf(s)}</span>}
-                {st === "지각" && d?.lateMin ? <span className="eng-att-detail warn">{d.lateMin}분 지각</span> : null}
-                {st === "결석" && <span className="eng-att-detail bad">결석{d?.absentReason ? ` · ${d.absentReason}` : ""}</span>}
+            <div key={s.id}>
+              <div className={"att-row" + (missing ? " is-absent" : "") + (i === cur ? " cur" : "")} onClick={() => setCur(i)}>
+                <div className="att-time">{scheduledIds.has(s.id) ? slotTimeOf(s) || "—" : "추가"}</div>
+                <div className="att-stu">
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{s.name}{mk && <span className="att-mk-badge">보강</span>}</div>
+                  </div>
+                </div>
+                <div className="att-segwrap">
+                  <div className="att-seg">
+                    {ENG_ATT_MAIN.map((opt) => (
+                      <button key={opt} className={st === opt ? "on t-" + ENG_ATT_TONE[opt] : ""} onClick={() => onStatus(s.id, st === opt ? "" : opt)}>{opt}</button>
+                    ))}
+                    {open && ENG_ATT_MORE.map((opt) => (
+                      <button key={opt} className={st === opt ? "on t-" + ENG_ATT_TONE[opt] : ""} onClick={() => onStatus(s.id, st === opt ? "" : opt)}>{opt}</button>
+                    ))}
+                  </div>
+                  {!forced && (
+                    <button className="att-more" onClick={() => setMoreId(moreId === s.id ? null : s.id)}>{open ? "접기" : "⋯ 더보기"}</button>
+                  )}
+                  <button className={"att-mk" + (mk ? " on" : "")} onClick={() => onMakeup(s.id, !mk)} title="보강 수업 (출결은 남기되 포인트 미적립)">보강</button>
+                </div>
               </div>
-              <div className="eng-att-seg">
-                <button className={"eas" + (st === "출석" ? " on g" : "")} onClick={() => onStatus(s.id, st === "출석" ? "" : "출석")}>출</button>
-                <button className={"eas" + (st === "지각" ? " on w" : "")} onClick={() => onStatus(s.id, st === "지각" ? "" : "지각")}>지</button>
-                <button className={"eas" + (st === "결석" ? " on b" : "")} onClick={() => onStatus(s.id, st === "결석" ? "" : "결석")}>결</button>
-              </div>
+              {(st || mk) && (
+                <EngAttExtra
+                  status={st}
+                  lateMin={d?.lateMin || 0}
+                  attitude={d?.attitude || ""}
+                  note={d?.note || ""}
+                  absentReason={d?.absentReason || ""}
+                  onPatch={(patch) => onPatch(s.id, patch)}
+                />
+              )}
             </div>
           );
         })}
@@ -780,6 +900,37 @@ function EngAttendance({
           </select>
         </div>
       )}
+    </div>
+  );
+}
+
+/* 출결 한 줄 아래 인라인 입력 — 지각 분·수업태도·특이사항(·결석 사유). 텍스트는 blur 시 저장. */
+function EngAttExtra({ status, lateMin, attitude, note, absentReason, onPatch }: { status: AttStatus; lateMin: number; attitude: string; note: string; absentReason: string; onPatch: (patch: Partial<EngDaily>) => void }) {
+  const [noteV, setNoteV] = useState(note);
+  const [reasonV, setReasonV] = useState(absentReason);
+  useEffect(() => setNoteV(note), [note]);
+  useEffect(() => setReasonV(absentReason), [absentReason]);
+  return (
+    <div className="att-extra">
+      {status === "지각" && (
+        <span className="att-extra-item">
+          <span className="mini-label">지각</span>
+          <input className="mini-num" type="number" min={0} step={5} placeholder="분" value={lateMin || ""} onChange={(e) => onPatch({ lateMin: +e.target.value || 0 })} />
+          <span className="mini-label">분</span>
+        </span>
+      )}
+      {(status === "결석" || status === "무단결석") && (
+        <input className="mini-note" placeholder="결석 사유 (보강 관리에 연결)" value={reasonV} onChange={(e) => setReasonV(e.target.value)} onBlur={() => { if (reasonV !== absentReason) onPatch({ absentReason: reasonV }); }} />
+      )}
+      <span className="att-extra-item">
+        <span className="mini-label">수업태도</span>
+        <span className="mini-seg">
+          {ENG_ATTITUDES.map((a) => (
+            <button key={a} className={attitude === a ? "on" : ""} onClick={() => onPatch({ attitude: attitude === a ? "" : a })}>{a}</button>
+          ))}
+        </span>
+      </span>
+      <input className="mini-note" placeholder="특이사항 (선택)" value={noteV} onChange={(e) => setNoteV(e.target.value)} onBlur={() => { if (noteV !== note) onPatch({ note: noteV }); }} />
     </div>
   );
 }

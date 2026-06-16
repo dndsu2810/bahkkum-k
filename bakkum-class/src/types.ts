@@ -85,6 +85,8 @@ export interface HwLog {
   delayCount?: number;
   /** 다시 검사할 날짜(YYYY-MM-DD). 지연 시 지정 → 오늘 페이지에서 이 날짜에 다시 뜸. */
   recheckDate?: string;
+  /** 결석 자동 이월 출처 날짜(YYYY-MM-DD). 그 날 결석으로 다음 등원일로 넘겨짐 → 출석으로 바꾸면 복원. */
+  carriedFrom?: string;
 }
 
 /** A progress record (진도 관리). 날짜가 아니라 진행중/완료(완성도 100)가 기준. */

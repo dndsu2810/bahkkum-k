@@ -305,7 +305,7 @@ export default {
         }
 
         // ---- 허브 공유 영역(특이사항·위키·SNS·업무보드) ----
-        if (p.startsWith("/api/notes") || p.startsWith("/api/wiki") || p.startsWith("/api/sns") || p.startsWith("/api/tasks") || p.startsWith("/api/events") || p.startsWith("/api/reqs")) {
+        if (p.startsWith("/api/notes") || p.startsWith("/api/wiki") || p.startsWith("/api/sns") || p.startsWith("/api/tasks") || p.startsWith("/api/events") || p.startsWith("/api/reqs") || p.startsWith("/api/materials")) {
           const me = await readSession(env, request);
           if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
           const res = await handleHub(env, request, p, me);
@@ -354,6 +354,14 @@ export default {
           return json({ ok: true });
         }
         if (p === "/api/points" && request.method === "POST") return await postPoints(env, request);
+        // 포인트 항목 카탈로그(읽기) — 수학·영어 공통 적립 점수. 저장된 게 없으면 빈 목록(클라가 기본값 사용).
+        if (p === "/api/points/catalog" && request.method === "GET") {
+          await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_config (k TEXT PRIMARY KEY, v TEXT NOT NULL DEFAULT '')").run();
+          const v = (await env.DB.prepare("SELECT v FROM class_config WHERE k='point_reasons'").first<{ v: string }>())?.v || "[]";
+          let reasons: { name: string; value: number }[] = [];
+          try { const a = JSON.parse(v); if (Array.isArray(a)) reasons = a; } catch { /* ignore */ }
+          return json({ reasons });
+        }
         if (p === "/api/report" && request.method === "GET") return await getReport(env, url);
         if (p === "/api/sync/students" && request.method === "GET") return await syncStudents(env);
         if (p === "/api/schedule" && request.method === "GET") return await getSchedule(env, url);
@@ -1271,11 +1279,12 @@ function mapEventCat(c: string): string {
 let evSeq = 0;
 async function importEvents(env: Env, request: Request): Promise<Response> {
   await ensureHubTables(env);
-  // 기본: 지난 90일부터 이후 일정 모두. ?since=YYYY-MM-DD 로 조정 가능.
+  // 기본: 지난 180일부터 이후 일정 모두. ?since=YYYY-MM-DD 로 조정 가능.
+  // (노션에서 날짜를 옮긴 과거 일정도 빠짐없이 재동기화되도록 넉넉히.)
   const url = new URL(request.url);
   let since = url.searchParams.get("since") || "";
   if (!since) {
-    const d = new Date(Date.now() - 90 * 86400000);
+    const d = new Date(Date.now() - 180 * 86400000);
     since = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
   }
   let items;
@@ -1645,6 +1654,14 @@ async function ensureSchedulesTable(env: Env): Promise<void> {
   } catch {
     /* ignore */
   }
+  // 숙제 검사 일정 영속화 — 다시검사일·밀림횟수·결석이월출처(있으면 무시).
+  for (const a of [
+    "ALTER TABLE class_homework ADD COLUMN recheck_date TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_homework ADD COLUMN delay_count INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE class_homework ADD COLUMN carried_from TEXT NOT NULL DEFAULT ''",
+  ]) {
+    try { await env.DB.prepare(a).run(); } catch { /* 이미 있으면 무시 */ }
+  }
   // 강사 업무 보드(칸반) 카드.
   try {
     await env.DB
@@ -1850,6 +1867,9 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
       completion: Number(r.completion),
       status: r.status === "late" ? ("late" as const) : r.status === "pending" ? ("pending" as const) : ("done" as const),
       memo: String(r.memo ?? ""),
+      recheckDate: String(r.recheck_date ?? "") || undefined,
+      delayCount: Number(r.delay_count ?? 0) || undefined,
+      carriedFrom: String(r.carried_from ?? "") || undefined,
     }));
 
   const progressLog = (pRes.results as Record<string, unknown>[])
@@ -2003,9 +2023,9 @@ async function putData(env: Env, request: Request): Promise<Response> {
     stmts.push(
       env.DB
         .prepare(
-          "INSERT INTO class_homework(id,student_id,date,book,tags,completion,status,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?)"
+          "INSERT INTO class_homework(id,student_id,date,book,tags,completion,status,memo,recheck_date,delay_count,carried_from,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
         )
-        .bind(h.id, h.studentId, h.date, h.book || "", (h.tags || []).join(","), h.completion || 0, h.status || "done", h.memo || "", Date.now())
+        .bind(h.id, h.studentId, h.date, h.book || "", (h.tags || []).join(","), h.completion || 0, h.status || "done", h.memo || "", h.recheckDate || "", h.delayCount || 0, h.carriedFrom || "", Date.now())
     );
   }
   for (const pr of snap.progressLog || []) {

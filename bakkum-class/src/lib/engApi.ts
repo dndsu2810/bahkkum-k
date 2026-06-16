@@ -20,7 +20,8 @@ export interface Goal {
   text: string;
   done: boolean;
 }
-export type AttStatus = "" | "출석" | "지각" | "결석";
+// 출결 상태 — 수학과 통일(출석/지각/결석 + 조퇴/무단결석). '보강'은 상태가 아니라 별도 플래그(makeup).
+export type AttStatus = "" | "출석" | "지각" | "결석" | "조퇴" | "무단결석";
 // 중고등영어 숙제 분류 상태(노션 과제기록과 동일): 완료/미흡/안함/없음.
 export type HwStatus = "" | "완료" | "미흡" | "안함" | "없음";
 export const HW_STATUSES: HwStatus[] = ["완료", "미흡", "안함", "없음"];
@@ -38,6 +39,8 @@ export interface EngDaily {
   attStatus: AttStatus;
   lateMin: number; // 지각 분
   absentReason: string; // 결석 사유
+  // 보강 플래그 — 켜면 이 수업은 보강. 출결(출석/지각/조퇴/무단결석)은 그대로 남기되 포인트는 적립하지 않음.
+  makeup: boolean;
   goals: Goal[];
   homework: string;
   hwChecked: boolean;
@@ -100,6 +103,7 @@ export interface EngTest {
   score: number;
   total: number;
   memo: string;
+  result: string; // '' | 통과 | 재시(NP)
 }
 
 /* 월말리포트 — 8개 항목 등급(기존 영어 성적표 사양 그대로). */
@@ -170,6 +174,9 @@ export const engApi = {
   /** 강사가 추가한 '오늘 한 것'·포인트 사유 목록(기본 목록에 더해 쓰임). */
   getCatalog: () => jget<{ doneItems: string[]; pointReasons: { name: string; value: number }[] }>("/api/eng/catalog"),
   saveCatalog: (patch: { doneItems?: string[]; pointReasons?: { name: string; value: number }[] }) => jpost("/api/eng/catalog", patch),
+  /** 포인트 항목(적립·차감 사유) 공통 카탈로그 — 저장된 게 없으면 기본+기존추가 합본 반환. */
+  pointReasons: () => jget<{ reasons: { name: string; value: number }[] }>("/api/eng/point-reasons").then((j) => j.reasons),
+  savePointReasons: (reasons: { name: string; value: number }[]) => jpost("/api/eng/point-reasons", { reasons }),
   /** '오늘 한 것' 항목 — 기본 + 전체공통 + 학생별. student_id 주면 그 학생 것 포함. */
   doneItems: (studentId?: string) =>
     jget<{ defaults: string[]; hidden: string[]; global: string[]; student: string[]; merged: string[] }>("/api/eng/done-items" + (studentId ? "?student_id=" + encodeURIComponent(studentId) : "")),
@@ -183,6 +190,9 @@ export const engApi = {
 
   tests: (studentId: string) =>
     jget<{ tests: EngTest[] }>("/api/eng/test?student_id=" + encodeURIComponent(studentId)).then((j) => j.tests),
+  /** 특정 학생·날짜의 테스트(오늘 화면에서 여러 개 입력용). */
+  testsByDate: (studentId: string, date: string) =>
+    jget<{ tests: EngTest[] }>("/api/eng/test?student_id=" + encodeURIComponent(studentId) + "&date=" + encodeURIComponent(date)).then((j) => j.tests),
   saveTest: (t: Partial<EngTest> & { studentId: string }) => jpost("/api/eng/test", t),
   removeTest: (id: string) => jpost("/api/eng/test/delete", { id }),
 

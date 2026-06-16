@@ -31,6 +31,10 @@ export async function ensureHubTables(env: Env): Promise<void> {
     "CREATE TABLE IF NOT EXISTS class_events (id TEXT PRIMARY KEY, date TEXT NOT NULL DEFAULT '', end_date TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT '학원', memo TEXT NOT NULL DEFAULT '', author_id TEXT NOT NULL DEFAULT '', author_name TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)",
     // 시간표 변경 요청 — 한 학생의 수업시간 임시 변경을 담당/지정 강사에게 요청 → 승인.
     "CREATE TABLE IF NOT EXISTS class_change_reqs (id TEXT PRIMARY KEY, student_id TEXT NOT NULL DEFAULT '', student_name TEXT NOT NULL DEFAULT '', subject TEXT NOT NULL DEFAULT '', change_date TEXT NOT NULL DEFAULT '', from_time TEXT NOT NULL DEFAULT '', to_time TEXT NOT NULL DEFAULT '', reason TEXT NOT NULL DEFAULT '', requester_id TEXT NOT NULL DEFAULT '', requester_name TEXT NOT NULL DEFAULT '', target_id TEXT NOT NULL DEFAULT '', target_name TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', response TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)",
+    // 자료/프린트 배부(공용: 수학·영어) — 인쇄할 프린트 목록. printed: 0 인쇄대기·1 인쇄완료.
+    "CREATE TABLE IF NOT EXISTS class_materials (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', subject TEXT NOT NULL DEFAULT '', memo TEXT NOT NULL DEFAULT '', printed INTEGER NOT NULL DEFAULT 0, author_id TEXT NOT NULL DEFAULT '', author_name TEXT NOT NULL DEFAULT '', archived INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL DEFAULT 0)",
+    // 자료 배부 내역 — 학생에게 수업(lesson)/숙제(hw)로 배부. done: 완료 여부.
+    "CREATE TABLE IF NOT EXISTS class_material_assign (id TEXT PRIMARY KEY, material_id TEXT NOT NULL DEFAULT '', student_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT 'lesson', date TEXT NOT NULL DEFAULT '', done INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)",
   ];
   for (const s of stmts) {
     try {
@@ -143,6 +147,101 @@ export async function handleHub(
     const b = (await request.json().catch(() => ({}))) as { id?: string };
     if (!b.id) return json({ error: "id_required" }, 400);
     await env.DB.prepare("DELETE FROM class_events WHERE id=?").bind(b.id).run();
+    return json({ ok: true });
+  }
+
+  /* ---------------- 자료/프린트 배부 (공용: 수학·영어) ---------------- */
+  // 자료 목록 + 자료별 배부 건수(수업/숙제/완료) 요약.
+  if (p === "/api/materials" && m === "GET") {
+    const url = new URL(request.url);
+    const subject = url.searchParams.get("subject") || "";
+    const q = subject
+      ? env.DB.prepare("SELECT * FROM class_materials WHERE archived=0 AND (subject=? OR subject='') ORDER BY printed, created_at DESC").bind(subject)
+      : env.DB.prepare("SELECT * FROM class_materials WHERE archived=0 ORDER BY printed, created_at DESC");
+    const r = await q.all<Record<string, unknown>>();
+    const aRes = await env.DB.prepare("SELECT material_id, kind, done FROM class_material_assign").all<Record<string, unknown>>();
+    const stat: Record<string, { lesson: number; hw: number; done: number; total: number }> = {};
+    for (const a of aRes.results || []) {
+      const mid = String(a.material_id);
+      const s = (stat[mid] ||= { lesson: 0, hw: 0, done: 0, total: 0 });
+      s.total++;
+      if (String(a.kind) === "hw") s.hw++; else s.lesson++;
+      if (Number(a.done) === 1) s.done++;
+    }
+    return json({ materials: (r.results || []).map((x) => ({ ...materialRow(x), stat: stat[String(x.id)] || { lesson: 0, hw: 0, done: 0, total: 0 } })) });
+  }
+  // 자료 등록/수정.
+  if (p === "/api/materials" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string; name?: string; subject?: string; memo?: string };
+    const name = (b.name || "").trim();
+    if (!name) return json({ error: "name_required" }, 400);
+    const subject = b.subject === "math" || b.subject === "english" ? b.subject : "";
+    const memo = (b.memo || "").slice(0, 1000);
+    if (b.id) {
+      await env.DB.prepare("UPDATE class_materials SET name=?,subject=?,memo=? WHERE id=?").bind(name.slice(0, 200), subject, memo, b.id).run();
+      return json({ ok: true, id: b.id });
+    }
+    const id = newId("mat");
+    await env.DB.prepare("INSERT INTO class_materials(id,name,subject,memo,printed,author_id,author_name,created_at) VALUES(?,?,?,?,0,?,?,?)").bind(id, name.slice(0, 200), subject, memo, me.sub, me.name, Date.now()).run();
+    return json({ ok: true, id });
+  }
+  // 인쇄 완료/대기 토글.
+  if (p === "/api/materials/print" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string; printed?: boolean };
+    if (!b.id) return json({ error: "id_required" }, 400);
+    await env.DB.prepare("UPDATE class_materials SET printed=? WHERE id=?").bind(b.printed ? 1 : 0, b.id).run();
+    return json({ ok: true });
+  }
+  // 자료 삭제(배부 내역도 함께).
+  if (p === "/api/materials/delete" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string };
+    if (!b.id) return json({ error: "id_required" }, 400);
+    await env.DB.prepare("DELETE FROM class_material_assign WHERE material_id=?").bind(b.id).run();
+    await env.DB.prepare("DELETE FROM class_materials WHERE id=?").bind(b.id).run();
+    return json({ ok: true });
+  }
+  // 배부 내역 조회 — 자료별(material_id) 또는 학생별(student_id).
+  if (p === "/api/materials/assign" && m === "GET") {
+    const url = new URL(request.url);
+    const mid = url.searchParams.get("material_id") || "";
+    const sid = url.searchParams.get("student_id") || "";
+    let q;
+    if (mid) q = env.DB.prepare("SELECT * FROM class_material_assign WHERE material_id=? ORDER BY created_at DESC").bind(mid);
+    else if (sid) q = env.DB.prepare("SELECT * FROM class_material_assign WHERE student_id=? ORDER BY created_at DESC").bind(sid);
+    else q = env.DB.prepare("SELECT * FROM class_material_assign ORDER BY created_at DESC LIMIT 1000");
+    const r = await q.all<Record<string, unknown>>();
+    return json({ assigns: (r.results || []).map(assignRow) });
+  }
+  // 자료 배부 — 학생들에게 수업(lesson)/숙제(hw)로. 같은 자료·학생·종류 중복 방지.
+  if (p === "/api/materials/assign" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { materialId?: string; studentIds?: unknown; kind?: string; date?: string };
+    const mid = String(b.materialId || "");
+    const ids = Array.isArray(b.studentIds) ? b.studentIds.map((x) => String(x)).filter(Boolean) : [];
+    if (!mid || !ids.length) return json({ error: "bad_input" }, 400);
+    const kind = b.kind === "hw" ? "hw" : "lesson";
+    const date = String(b.date || "");
+    const now = Date.now();
+    let added = 0;
+    for (const sid of ids) {
+      const ex = await env.DB.prepare("SELECT id FROM class_material_assign WHERE material_id=? AND student_id=? AND kind=?").bind(mid, sid, kind).first();
+      if (ex) continue;
+      await env.DB.prepare("INSERT INTO class_material_assign(id,material_id,student_id,kind,date,done,created_by,created_at) VALUES(?,?,?,?,?,0,?,?)").bind(newId("ma"), mid, sid, kind, date, me.sub, now).run();
+      added++;
+    }
+    return json({ ok: true, added });
+  }
+  // 배부 완료/미완료 토글.
+  if (p === "/api/materials/assign/done" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string; done?: boolean };
+    if (!b.id) return json({ error: "id_required" }, 400);
+    await env.DB.prepare("UPDATE class_material_assign SET done=? WHERE id=?").bind(b.done ? 1 : 0, b.id).run();
+    return json({ ok: true });
+  }
+  // 배부 취소(개별).
+  if (p === "/api/materials/assign/delete" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string };
+    if (!b.id) return json({ error: "id_required" }, 400);
+    await env.DB.prepare("DELETE FROM class_material_assign WHERE id=?").bind(b.id).run();
     return json({ ok: true });
   }
 
@@ -391,6 +490,28 @@ function eventRow(r: Record<string, unknown>) {
     authorId: String(r.author_id ?? ""),
     authorName: String(r.author_name ?? ""),
     updatedAt: Number(r.updated_at ?? 0),
+  };
+}
+function materialRow(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    name: String(r.name ?? ""),
+    subject: String(r.subject ?? ""),
+    memo: String(r.memo ?? ""),
+    printed: Number(r.printed ?? 0) === 1,
+    authorName: String(r.author_name ?? ""),
+    createdAt: Number(r.created_at ?? 0),
+  };
+}
+function assignRow(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    materialId: String(r.material_id ?? ""),
+    studentId: String(r.student_id ?? ""),
+    kind: String(r.kind ?? "lesson"),
+    date: String(r.date ?? ""),
+    done: Number(r.done ?? 0) === 1,
+    createdAt: Number(r.created_at ?? 0),
   };
 }
 function parseImgs(v: unknown): string[] {

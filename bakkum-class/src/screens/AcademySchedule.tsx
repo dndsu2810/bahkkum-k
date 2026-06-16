@@ -36,16 +36,38 @@ export function AcademySchedule() {
     void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ym]);
+  // 창에 다시 포커스가 오면(설정에서 노션 동기화 후 돌아오는 등) 최신 일정으로 새로고침 — 반영 지연 완화.
+  useEffect(() => {
+    const onFocus = () => void reload();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ym]);
 
   const monthEvents = useMemo(
     () => events.filter((e) => e.date.slice(0, 7) === ym).sort((a, b) => a.date.localeCompare(b.date)),
     [events, ym]
   );
+  // 목록용 — 시작일 1회(기간은 '~종료' 라벨로 표시).
   const byDate = useMemo(() => {
     const m: Record<string, EventItem[]> = {};
     for (const e of monthEvents) (m[e.date] ||= []).push(e);
     return m;
   }, [monthEvents]);
+  // 달력용 — 기간 일정은 시작~종료 모든 날짜 칸에 표시(이번 달 칸만).
+  const byDateSpan = useMemo(() => {
+    const m: Record<string, EventItem[]> = {};
+    for (const e of events) {
+      const end = e.endDate && e.endDate >= e.date ? e.endDate : e.date;
+      let cur = e.date;
+      for (let guard = 0; cur <= end && guard < 400; guard++) {
+        if (cur.slice(0, 7) === ym) (m[cur] ||= []).push(e);
+        cur = addDay(cur);
+      }
+    }
+    for (const k of Object.keys(m)) m[k].sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title));
+    return m;
+  }, [events, ym]);
 
   function shiftMonth(delta: number) {
     const [y, mo] = ym.split("-").map(Number);
@@ -61,6 +83,37 @@ export function AcademySchedule() {
       await reload();
     } catch {
       setErr("삭제에 실패했어요.");
+    }
+  }
+  // 수정 모달(달력·목록 공용)에서 바로 삭제 — 달력에서도 삭제 가능하게.
+  async function removeEditing() {
+    if (!edit?.id) return;
+    if (!window.confirm(`"${edit.title}" 일정을 삭제할까요?`)) return;
+    try {
+      await eventsApi.remove(edit.id);
+      setEdit(null);
+      await reload();
+    } catch {
+      setErr("삭제에 실패했어요.");
+    }
+  }
+  // 드래그앤드롭 — 잡은 날(srcDay)에서 놓은 날(dstDay)만큼 일정 전체를 이동(기간이면 종료일도 같이).
+  async function moveEvent(id: string, srcDay: string, dstDay: string) {
+    if (!canEdit || srcDay === dstDay) return;
+    const ev = events.find((e) => e.id === id);
+    if (!ev) return;
+    const delta = Math.round((parseD(dstDay).getTime() - parseD(srcDay).getTime()) / 86400000);
+    if (!delta) return;
+    const newDate = shiftDate(ev.date, delta);
+    const newEnd = ev.endDate ? shiftDate(ev.endDate, delta) : "";
+    // 낙관적 반영 후 저장.
+    setEvents((list) => list.map((e) => (e.id === id ? { ...e, date: newDate, endDate: newEnd } : e)));
+    try {
+      await eventsApi.save({ id: ev.id, date: newDate, endDate: newEnd || undefined, title: ev.title, category: ev.category, memo: ev.memo });
+      await reload();
+    } catch {
+      setErr("일정 이동에 실패했어요.");
+      await reload();
     }
   }
   async function save() {
@@ -116,10 +169,12 @@ export function AcademySchedule() {
       ) : view === "cal" ? (
         <CalendarGrid
           ym={ym}
-          byDate={byDate}
+          byDate={byDateSpan}
           today={today}
+          canEdit={canEdit}
           onPickDate={(d) => canEdit && setEdit({ date: d, endDate: "", title: "", category: "학원", memo: "" })}
           onPickEvent={(e) => canEdit && setEdit({ id: e.id, date: e.date, endDate: e.endDate, title: e.title, category: e.category, memo: e.memo })}
+          onMove={moveEvent}
         />
       ) : monthEvents.length === 0 ? (
         <div className="hub-muted" style={{ padding: 20 }}>
@@ -195,6 +250,7 @@ export function AcademySchedule() {
               </label>
             </div>
             <div className="prof-foot">
+              {edit.id && <button className="btn ghost" style={{ color: "var(--bad)", marginRight: "auto" }} onClick={removeEditing}>삭제</button>}
               <button className="btn ghost" onClick={() => setEdit(null)}>취소</button>
               <button className="btn primary" onClick={save} disabled={!edit.date || !edit.title.trim()}>저장</button>
             </div>
@@ -209,22 +265,36 @@ function fmtShort(s: string): string {
   const d = parseD(s);
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
+/** YYYY-MM-DD 다음 날 문자열. */
+function addDay(s: string): string {
+  return shiftDate(s, 1);
+}
+/** YYYY-MM-DD 에서 n일 이동한 날짜 문자열. */
+function shiftDate(s: string, n: number): string {
+  const d = parseD(s);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 const catCls = (c: string) => "cg-ev cg-ev-" + (CATS.includes(c) ? c : "학원");
 
-/** 월 달력(그리드) — 일~토 7열. 칸 클릭=그날 추가, 일정 클릭=수정. */
+/** 월 달력(그리드) — 일~토 7열. 칸 클릭=그날 추가, 일정 클릭=수정, 일정 드래그=날짜 이동. */
 function CalendarGrid({
   ym,
   byDate,
   today,
+  canEdit,
   onPickDate,
   onPickEvent,
+  onMove,
 }: {
   ym: string;
   byDate: Record<string, EventItem[]>;
   today: string;
+  canEdit: boolean;
   onPickDate: (d: string) => void;
   onPickEvent: (e: EventItem) => void;
+  onMove: (id: string, srcDay: string, dstDay: string) => void;
 }) {
   const [y, mo] = ym.split("-").map(Number);
   const first = new Date(Date.UTC(y, mo - 1, 1));
@@ -235,8 +305,13 @@ function CalendarGrid({
   for (let d = 1; d <= daysIn; d++) cells.push(`${ym}-${pad(d)}`);
   while (cells.length % 7 !== 0) cells.push(null);
 
+  // 드래그 중인 일정(id|잡은날) · 드롭 대상 칸 하이라이트.
+  const [drag, setDrag] = useState<{ id: string; src: string } | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+
   return (
     <div className="cg">
+      {canEdit && <div className="cg-hint">일정을 끌어다 다른 날짜로 옮길 수 있어요. 클릭하면 수정·삭제.</div>}
       <div className="cg-head">
         {DOW.map((w, i) => (
           <div key={w} className={"cg-hd" + (i === 0 ? " sun" : i === 6 ? " sat" : "")}>{w}</div>
@@ -248,15 +323,30 @@ function CalendarGrid({
           const evs = byDate[d] || [];
           const dom = i % 7;
           return (
-            <div className={"cg-cell" + (d === today ? " today" : "")} key={i} onClick={() => onPickDate(d)}>
+            <div
+              className={"cg-cell" + (d === today ? " today" : "") + (over === d && drag && drag.src !== d ? " drop-over" : "")}
+              key={i}
+              onClick={() => onPickDate(d)}
+              onDragOver={(ev) => { if (drag) { ev.preventDefault(); if (over !== d) setOver(d); } }}
+              onDragLeave={() => setOver((o) => (o === d ? null : o))}
+              onDrop={(ev) => {
+                ev.preventDefault();
+                if (drag) onMove(drag.id, drag.src, d);
+                setDrag(null);
+                setOver(null);
+              }}
+            >
               <div className={"cg-dnum" + (dom === 0 ? " sun" : dom === 6 ? " sat" : "")}>{Number(d.slice(8, 10))}</div>
               <div className="cg-evs">
                 {evs.slice(0, 4).map((e) => (
                   <button
                     key={e.id}
-                    className={catCls(e.category)}
+                    className={catCls(e.category) + (drag?.id === e.id ? " dragging" : "")}
                     title={`${e.title}${e.memo ? " · " + e.memo : ""}`}
+                    draggable={canEdit}
                     onClick={(ev) => { ev.stopPropagation(); onPickEvent(e); }}
+                    onDragStart={(ev) => { setDrag({ id: e.id, src: d }); ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", e.id); }}
+                    onDragEnd={() => { setDrag(null); setOver(null); }}
                   >
                     {e.title}
                   </button>
