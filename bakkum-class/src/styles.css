@@ -1296,6 +1296,7 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .prof-slot-tag{font-size:10px;font-weight:700;border-radius:var(--r-full);padding:1px 7px;margin-left:4px;vertical-align:middle}
 .prof-slot-tag.math{color:var(--brand-d);background:var(--brand-soft)}
 .prof-slot-tag.eng{color:#0891b2;background:#e6f7fb}
+[data-theme="dark"] .prof-slot-tag.eng{color:#86d6e7;background:rgba(8,145,178,.2)}
 .prof-slot-ro{display:flex;flex-wrap:wrap;gap:6px}
 .prof-slot-chip{font-size:var(--t-sm);font-weight:600;color:var(--ink2);background:var(--bg);
   border:1px solid var(--line);border-radius:var(--r-full);padding:3px 10px}
@@ -1326,6 +1327,10 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .ev-cat-강사{color:#0891b2;background:#e6f7fb;border-color:#c7eef5}
 .ev-cat-휴원{color:var(--bad);background:var(--bad-soft,#fdeaea);border-color:#f6cccc}
 .ev-cat-할일{color:#ca8a04;background:#fdf6e3;border-color:#f3e6bf}
+/* 다크 — 학교/강사/할일 칩만 밝은 색이 하드코딩돼 다크에서 흰 박스로 튐(학원/휴원은 토큰이라 OK). 라이트는 그대로, 다크만 보정. */
+[data-theme="dark"] .ev-cat-학교{color:#c9aef7;background:rgba(147,51,234,.18);border-color:rgba(147,51,234,.38)}
+[data-theme="dark"] .ev-cat-강사{color:#86d6e7;background:rgba(8,145,178,.18);border-color:rgba(8,145,178,.38)}
+[data-theme="dark"] .ev-cat-할일{color:#e6c266;background:rgba(202,138,4,.18);border-color:rgba(202,138,4,.38)}
 .ev-main{flex:1;min-width:0}
 .ev-title{font-size:var(--t-base);font-weight:600;color:var(--ink)}
 .ev-range{font-weight:500;color:var(--ink3)}
