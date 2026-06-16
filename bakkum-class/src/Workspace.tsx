@@ -552,7 +552,9 @@ function Body({ view, cats, jumpStudent, reqPrefill, homeTiles, homeSummary, cta
                     ? "cur"
                     : view.startsWith("eng_items")
                       ? "items"
-                      : "today";
+                      : view.startsWith("eng_naesin")
+                        ? "naesin"
+                        : "today";
     return <English key={view} band={band} tab={tab} />;
   }
   if (view.startsWith("desk_")) {

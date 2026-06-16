@@ -514,6 +514,7 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .att-row.cur{box-shadow:inset 3px 0 0 var(--brand);background:var(--brand-soft)}
 .att-mk{min-height:44px;padding:0 12px;border-radius:var(--r-md);border:1px solid var(--line2);background:var(--card);color:var(--ink3);font-size:var(--t-sm);font-weight:700;white-space:nowrap;cursor:pointer;transition:.15s}
 .att-mk:hover{background:#f4f6fa;color:var(--ink2)}
+[data-theme="dark"] .att-mk:hover{background:var(--hover);color:var(--ink2)}
 .att-mk.on{background:var(--purple);border-color:var(--purple);color:#fff;box-shadow:var(--sh-sm)}
 .att-mk-badge{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:var(--r-full);font-size:11px;font-weight:800;background:var(--purple-bg);color:var(--purple)}
 .sm-subj-chip.mk.on{background:var(--purple);color:#fff;border-color:var(--purple)}
@@ -1600,6 +1601,7 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .notes-stu{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border:none;
   background:none;border-radius:var(--r-sm);text-align:left;color:var(--ink2);font-weight:500;font-size:var(--t-sm)}
 .notes-stu:hover{background:#f4f6fa;color:var(--ink)}
+[data-theme="dark"] .notes-stu:hover{background:var(--hover)}
 .notes-stu.on{background:var(--brand-soft);color:var(--brand-d);font-weight:600}
 .notes-cnt{font-size:11px;font-weight:700;background:#eef1f6;color:var(--ink2);border-radius:var(--r-full);padding:0 7px}
 .notes-stu.on .notes-cnt{background:#fff;color:var(--brand-d)}
@@ -1764,6 +1766,8 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .eng-stu-name{flex:1;display:flex;align-items:center;gap:6px;text-align:left;border:none;background:none;
   padding:8px 10px;border-radius:var(--r-sm);color:var(--ink2);font-weight:500;font-size:var(--t-sm);cursor:pointer}
 .eng-stu-name:hover{background:#f4f6fa;color:var(--ink)}
+/* 다크모드에서 hover 배경이 밝은 회색(#f4f6fa) 그대로면 흰 박스로 떠 글씨가 안 보임 → 다크 hover 토큰으로 */
+[data-theme="dark"] .eng-stu-name:hover{background:var(--hover)}
 .eng-stu.on .eng-stu-name{color:var(--brand-d);font-weight:600}
 .eng-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .eng-dot.ok{background:var(--ok)}
@@ -2344,3 +2348,61 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .test-pf button{min-width:54px}
 .test-row-x{width:28px;height:28px;border:none;background:transparent;color:var(--ink4);border-radius:7px;cursor:pointer;font-weight:700}
 .test-row-x:hover{background:var(--bad-soft,#fdeaea);color:var(--bad)}
+
+/* ---------------- 내신모드 자유 숙제 + 배부 자료 연결 ---------------- */
+.eng-stu-naesin{margin-left:6px;padding:1px 6px;border-radius:var(--r-full);font-size:10px;font-weight:800;background:var(--purple-bg);color:var(--purple)}
+.eng-mk-tag.soft{background:var(--card2,#eef2f7);color:var(--ink3);font-weight:700}
+.eng-hwfree{display:flex;flex-direction:column;gap:6px}
+.eng-hwfree-row{display:flex;align-items:center;gap:10px}
+.eng-hwfree-t{flex:1;min-width:0;font-size:var(--t-sm);font-weight:600;color:var(--ink2);display:flex;align-items:center;gap:6px}
+.eng-hwfree-from{font-size:10px;font-weight:800;color:var(--brand-d);background:var(--brand-soft);border-radius:var(--r-full);padding:1px 7px;white-space:nowrap}
+.eng-hwfree-x{width:24px;height:24px;border:none;background:transparent;color:var(--ink4);border-radius:6px;cursor:pointer;font-weight:700;font-size:15px;flex:none}
+.eng-hwfree-x:hover{background:var(--bad-soft,#fdeaea);color:var(--bad)}
+.eng-hwchips{display:flex;flex-wrap:wrap;gap:6px}
+.eng-hwchip{display:inline-flex;align-items:center;gap:4px;background:var(--brand-soft);color:var(--brand-d);border-radius:var(--r-full);padding:3px 4px 3px 11px;font-size:var(--t-sm);font-weight:700}
+.eng-hwchip-x{width:18px;height:18px;border:none;background:transparent;color:var(--brand-d);border-radius:50%;cursor:pointer;font-weight:700;font-size:13px;line-height:1}
+.eng-hwchip-x:hover{background:rgba(0,0,0,.08)}
+.eng-matpull{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.eng-matpull-l{font-size:var(--t-cap);font-weight:700;color:var(--ink3)}
+.eng-matpull-chip{border:1px solid var(--line2);background:var(--card);color:var(--ink2);border-radius:var(--r-full);padding:4px 10px;font-size:var(--t-cap);font-weight:600;cursor:pointer}
+.eng-matpull-chip:hover{border-color:var(--brand-line,var(--brand))}
+.eng-matpull-chip.on{background:var(--brand-soft);color:var(--brand-d);border-color:var(--brand-line,var(--brand));cursor:default}
+.eng-matpull-chip:disabled{cursor:default}
+
+/* ---------------- 내신모드 관리 화면 ---------------- */
+.naesin-wrap{display:flex;flex-direction:column;gap:18px;max-width:760px}
+.naesin-help{font-size:var(--t-sm);color:var(--ink3);line-height:1.55;margin-bottom:10px}
+.naesin-list{display:flex;flex-direction:column;gap:8px}
+.naesin-item{border:1px solid var(--line);border-radius:var(--r-md);padding:12px 14px;background:var(--card)}
+.naesin-item.on{border-color:var(--purple);background:var(--purple-bg)}
+[data-theme="dark"] .naesin-item.on{background:rgba(139,92,246,.12)}
+.naesin-row1{display:flex;align-items:center;gap:10px}
+.naesin-name{font-weight:700;color:var(--ink1)}
+.naesin-dday{margin-left:auto;font-size:var(--t-cap);font-weight:800;color:var(--bad);background:var(--bad-soft,#fdeaea);border-radius:var(--r-full);padding:2px 9px}
+.naesin-toggle{width:40px;height:23px;border-radius:var(--r-full);border:none;background:var(--line2);position:relative;cursor:pointer;flex:none;transition:.15s}
+.naesin-toggle.on{background:var(--purple)}
+.naesin-knob{position:absolute;top:2px;left:2px;width:19px;height:19px;border-radius:50%;background:#fff;box-shadow:var(--sh-sm);transition:.15s}
+.naesin-toggle.on .naesin-knob{left:19px}
+.naesin-fields{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:12px}
+.naesin-f{display:flex;flex-direction:column;gap:3px;font-size:var(--t-cap);font-weight:700;color:var(--ink3)}
+.naesin-f .input{min-width:130px}
+.naesin-save{align-self:flex-end}
+.naesin-soon{border:1px dashed var(--line2);border-radius:var(--r-md);padding:14px 16px;background:var(--card2,#f7f9fc)}
+.naesin-soon-h{font-weight:800;color:var(--ink2);margin-bottom:8px}
+.naesin-soon ul{margin:0;padding-left:18px;color:var(--ink3);font-size:var(--t-sm);line-height:1.7}
+
+/* ---------------- 자료배부 — 경로·부수·담당자·대상학교 ---------------- */
+.mat-add-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.mat-add-f{display:flex;flex-direction:column;gap:3px;font-size:var(--t-cap);font-weight:700;color:var(--ink3)}
+.mat-add-f .sm-input{width:100%}
+.mat-item-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:3px;font-size:var(--t-cap);color:var(--ink3)}
+.mat-item-meta span{white-space:nowrap}
+.mat-detail-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:-4px 0 12px}
+.mat-meta-chip{font-size:var(--t-cap);font-weight:700;color:var(--ink2);background:var(--card2,#eef2f7);border-radius:var(--r-full);padding:3px 10px}
+.mat-meta-link{font-size:var(--t-cap);font-weight:700;color:var(--brand-d);background:var(--brand-soft);border-radius:var(--r-full);padding:3px 10px;text-decoration:none}
+.mat-meta-link:hover{text-decoration:underline}
+
+/* ---------------- 내신모드 — 한 번에 켜기·학년 ---------------- */
+.naesin-grade{margin-left:6px;font-size:var(--t-cap);font-weight:700;color:var(--ink3)}
+.naesin-bulk-ctl{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin-bottom:10px}
+.naesin-pickrow{display:flex;flex-wrap:wrap;gap:6px}

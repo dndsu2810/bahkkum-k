@@ -145,6 +145,11 @@ export interface Material {
   memo: string;
   printed: boolean; // 인쇄 완료 여부
   authorName: string;
+  filePath: string; // 인쇄할 문서 경로/링크
+  copies: number; // 인쇄 부수
+  assignee: string; // 인쇄 담당자
+  school: string; // 대상 학교(선택)
+  grade: string; // 대상 학년(선택)
   createdAt: number;
   stat: MaterialStat; // 배부 요약(수업/숙제/완료/전체)
 }
@@ -160,7 +165,7 @@ export interface MaterialAssign {
 export const materialsApi = {
   list: (subject?: string) =>
     jget<{ materials: Material[] }>("/api/materials" + (subject ? "?subject=" + subject : "")).then((j) => j.materials),
-  save: (mt: { id?: string; name: string; subject?: string; memo?: string }) => jpost("/api/materials", mt),
+  save: (mt: { id?: string; name: string; subject?: string; memo?: string; filePath?: string; copies?: number; assignee?: string; school?: string; grade?: string }) => jpost("/api/materials", mt),
   setPrinted: (id: string, printed: boolean) => jpost("/api/materials/print", { id, printed }),
   remove: (id: string) => jpost("/api/materials/delete", { id }),
   assigns: (q: { materialId?: string; studentId?: string }) =>

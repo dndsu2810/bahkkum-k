@@ -24,7 +24,21 @@ export function Materials() {
   const [filter, setFilter] = useState("");
   const [newName, setNewName] = useState("");
   const [newSubject, setNewSubject] = useState("");
+  const [newFile, setNewFile] = useState("");
+  const [newCopies, setNewCopies] = useState("");
+  const [newAssignee, setNewAssignee] = useState("");
+  const [newSchool, setNewSchool] = useState("");
+  const [newGrade, setNewGrade] = useState("");
+  const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+
+  // 대상 학교·학년 선택 → 그 학생 인원수만큼 인쇄 부수 자동.
+  const activeRoster = useMemo(() => roster.filter((s) => !s.status || s.status === "재원"), [roster]);
+  const schools = useMemo(() => [...new Set(activeRoster.map((s) => s.school).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko")), [activeRoster]);
+  const gradesForSchool = useMemo(() => [...new Set(activeRoster.filter((s) => !newSchool || s.school === newSchool).map((s) => s.grade).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko")), [activeRoster, newSchool]);
+  const matchCount = useMemo(() => activeRoster.filter((s) => (!newSchool || s.school === newSchool) && (!newGrade || s.grade === newGrade)).length, [activeRoster, newSchool, newGrade]);
+  // 학교+학년이 모두 정해지면 부수를 인원수로 자동 채움(이후 수동 수정 가능).
+  useEffect(() => { if (newSchool && newGrade) setNewCopies(String(matchCount)); }, [newSchool, newGrade, matchCount]);
 
   const reloadMaterials = () => materialsApi.list().then(setMaterials).catch(() => setErr("자료를 불러오지 못했어요. 잠시 후 다시 시도해 주세요."));
   useEffect(() => { void reloadMaterials(); getRoster().then(setRoster).catch(() => {}); }, []);
@@ -38,9 +52,15 @@ export function Materials() {
   const selMat = materials.find((mt) => mt.id === sel);
 
   async function addMaterial() {
-    if (!newName.trim()) return;
-    try { await materialsApi.save({ name: newName.trim(), subject: newSubject }); setNewName(""); setErr(""); await reloadMaterials(); }
+    if (!newName.trim() || saving) return; // 중복 제출 방지(느릴 때 여러 번 눌러 여러 개 생기던 문제)
+    setSaving(true);
+    try {
+      await materialsApi.save({ name: newName.trim(), subject: newSubject, filePath: newFile.trim(), copies: Number(newCopies) || 0, assignee: newAssignee.trim(), school: newSchool, grade: newGrade });
+      setNewName(""); setNewFile(""); setNewCopies(""); setNewAssignee(""); setNewSchool(""); setNewGrade(""); setErr("");
+      await reloadMaterials();
+    }
     catch { setErr("저장에 실패했어요."); }
+    finally { setSaving(false); }
   }
   async function togglePrint(mt: Material) { await materialsApi.setPrinted(mt.id, !mt.printed); await reloadMaterials(); }
   async function removeMaterial(mt: Material) {
@@ -72,13 +92,38 @@ export function Materials() {
           {canEdit && (
             <div className="mat-add">
               <input className="sm-input" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="자료 이름 (예: 호평중3 3과 워크북)" onKeyDown={(e) => e.key === "Enter" && addMaterial()} />
-              <div className="mat-add-row">
-                <div className="sm-subj">
-                  {SUBJECTS.map((s) => (
-                    <button key={s.v} className={"sm-subj-chip" + (newSubject === s.v ? " on" : "")} onClick={() => setNewSubject(s.v)}>{s.l}</button>
-                  ))}
-                </div>
-                <button className="btn primary sm" onClick={addMaterial} disabled={!newName.trim()}>등록</button>
+              <div className="sm-subj" style={{ marginTop: 6 }}>
+                {SUBJECTS.map((s) => (
+                  <button key={s.v} className={"sm-subj-chip" + (newSubject === s.v ? " on" : "")} onClick={() => setNewSubject(s.v)}>{s.l}</button>
+                ))}
+              </div>
+              <input className="sm-input" style={{ marginTop: 6 }} value={newFile} onChange={(e) => setNewFile(e.target.value)} placeholder="프린트 문서 경로/링크 (예: 드라이브 링크·G:\\프린트\\3과.pdf)" />
+              <div className="mat-add-grid">
+                <label className="mat-add-f">
+                  <span>학교</span>
+                  <select className="sm-input" value={newSchool} onChange={(e) => { setNewSchool(e.target.value); setNewGrade(""); }}>
+                    <option value="">선택</option>
+                    {schools.map((sc) => <option key={sc} value={sc}>{sc}</option>)}
+                  </select>
+                </label>
+                <label className="mat-add-f">
+                  <span>학년</span>
+                  <select className="sm-input" value={newGrade} onChange={(e) => setNewGrade(e.target.value)} disabled={!newSchool}>
+                    <option value="">{newSchool ? "선택" : "학교 먼저"}</option>
+                    {gradesForSchool.map((g) => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </label>
+                <label className="mat-add-f">
+                  <span>부수{newSchool && newGrade ? ` · ${matchCount}명` : ""}</span>
+                  <input className="sm-input" inputMode="numeric" value={newCopies} onChange={(e) => setNewCopies(e.target.value.replace(/[^0-9]/g, ""))} placeholder="부수" />
+                </label>
+                <label className="mat-add-f">
+                  <span>담당자</span>
+                  <input className="sm-input" value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)} placeholder="인쇄 담당" />
+                </label>
+              </div>
+              <div className="mat-add-row" style={{ marginTop: 6 }}>
+                <button className="btn primary sm" onClick={addMaterial} disabled={!newName.trim() || saving}>{saving ? "등록 중…" : "등록"}</button>
               </div>
             </div>
           )}
@@ -125,6 +170,13 @@ function MatGroup({ title, items, sel, onSel, onPrint, onRemove, canEdit, emptyT
               <span className={"mat-subj mat-subj-" + (mt.subject || "all")}>{subjLabel(mt.subject)}</span>
               {mt.stat.total > 0 && <span className="mat-item-stat">수업 {mt.stat.lesson} · 숙제 {mt.stat.hw} · 완료 {mt.stat.done}/{mt.stat.total}</span>}
             </div>
+            {(mt.copies > 0 || mt.school || mt.assignee) && (
+              <div className="mat-item-meta">
+                {(mt.school || mt.grade) && <span>{mt.school}{mt.grade ? " " + mt.grade : ""}</span>}
+                {mt.copies > 0 && <span>{mt.copies}부</span>}
+                {mt.assignee && <span>담당 {mt.assignee}</span>}
+              </div>
+            )}
           </button>
           {canEdit && (
             <div className="mat-item-act">
@@ -185,6 +237,16 @@ function MaterialDetail({ material, assigns, roster, nameOf, canEdit, onChanged 
         <span className={"mat-subj mat-subj-" + (material.subject || "all")}>{subjLabel(material.subject)}</span>
         {!material.printed && <span className="mat-print-warn">인쇄 대기</span>}
       </div>
+      {(material.copies > 0 || material.school || material.assignee || material.filePath) && (
+        <div className="mat-detail-meta">
+          {(material.school || material.grade) && <span className="mat-meta-chip">{material.school}{material.grade ? " " + material.grade : ""}</span>}
+          {material.copies > 0 && <span className="mat-meta-chip">인쇄 {material.copies}부</span>}
+          {material.assignee && <span className="mat-meta-chip">담당 {material.assignee}</span>}
+          {material.filePath && (/^https?:\/\//.test(material.filePath)
+            ? <a className="mat-meta-link" href={material.filePath} target="_blank" rel="noreferrer">📄 문서 열기</a>
+            : <span className="mat-meta-chip">📄 {material.filePath}</span>)}
+        </div>
+      )}
 
       {canEdit && (
         <div className="card mat-assign-box">

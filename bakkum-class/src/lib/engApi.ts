@@ -60,7 +60,30 @@ export interface EngDaily {
   doneItems: string[];
   comment: string;
   materials: string;
+  // 내신모드 자유 숙제 — 내줄 숙제(다음 시간) + 숙제 검사(지난 것: 항목+상태).
+  hwAssign: string[];
+  hwCheck: { text: string; status: HwStatus }[];
   updatedAt: number;
+}
+
+// 내신기간 모드 — 학생별 ON/OFF + 기간(시작·종료) + 학교·시험일.
+export interface EngNaesin {
+  studentId: string;
+  on: boolean;
+  startDate: string;
+  endDate: string;
+  school: string;
+  grade: string;
+  examDate: string;
+  memo: string;
+  updatedAt?: number;
+}
+/** 그 날짜에 이 학생이 내신모드인가 — ON이고, 기간(시작·종료) 안일 때만. 종료일이 지나면 자동으로 평소 모드. */
+export function naesinActiveOn(rec: EngNaesin | undefined, date: string): boolean {
+  if (!rec || !rec.on) return false;
+  if (rec.startDate && date < rec.startDate) return false;
+  if (rec.endDate && date > rec.endDate) return false;
+  return true;
 }
 
 // 적립/차감 사유 카탈로그(노션 '적립이나 차감사유' 옵션과 동일). 라벨 끝 숫자가 점수.
@@ -200,4 +223,8 @@ export const engApi = {
     jget<{ makeups: EngMakeup[] }>("/api/eng/makeup" + (studentId ? "?student_id=" + encodeURIComponent(studentId) : "")).then((j) => j.makeups),
   saveMakeup: (mk: Partial<EngMakeup> & { studentId: string }) => jpost("/api/eng/makeup", mk),
   removeMakeup: (id: string) => jpost("/api/eng/makeup/delete", { id }),
+
+  /** 내신기간 모드 — 학생별 ON/OFF·기간·학교·시험일. */
+  naesin: () => jget<{ list: EngNaesin[] }>("/api/eng/naesin").then((j) => j.list),
+  saveNaesin: (rec: EngNaesin) => jpost("/api/eng/naesin", rec),
 };

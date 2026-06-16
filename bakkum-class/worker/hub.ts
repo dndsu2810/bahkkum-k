@@ -17,7 +17,11 @@ function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}${(seq++).toString(36)}`;
 }
 
+// 스키마 보장은 워커 isolate당 1회만 — 매 요청마다 수십 개의 CREATE/ALTER 왕복을 돌면 전반적으로 느려진다.
+// 새 배포 시 새 isolate라 다시 1회 실행되므로 컬럼 추가가 반영된다.
+let hubReady = false;
 export async function ensureHubTables(env: Env): Promise<void> {
+  if (hubReady) return;
   const stmts = [
     // 강사 특이사항(학생별 시간순 누적, 공용)
     "CREATE TABLE IF NOT EXISTS class_notes (id TEXT PRIMARY KEY, student_id TEXT NOT NULL DEFAULT '', author_id TEXT NOT NULL DEFAULT '', author_name TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)",
@@ -58,6 +62,12 @@ export async function ensureHubTables(env: Env): Promise<void> {
     // 시간표 변경요청 — 1회성 수업 이동(원래 날짜 → 변경 날짜). 기존 change_date=변경 날짜.
     "ALTER TABLE class_change_reqs ADD COLUMN from_date TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_change_reqs ADD COLUMN to_date TEXT NOT NULL DEFAULT ''",
+    // 자료/프린트 — 인쇄 문서 경로·부수·담당자·대상 학교/학년(학교+학년 선택 시 인원수만큼 자동 부수).
+    "ALTER TABLE class_materials ADD COLUMN file_path TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_materials ADD COLUMN copies INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE class_materials ADD COLUMN assignee TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_materials ADD COLUMN school TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_materials ADD COLUMN grade TEXT NOT NULL DEFAULT ''",
   ]) {
     try {
       await env.DB.prepare(a).run();
@@ -65,6 +75,7 @@ export async function ensureHubTables(env: Env): Promise<void> {
       /* 이미 있으면 무시 */
     }
   }
+  hubReady = true;
 }
 
 /** 허브 공유 영역 라우팅. 처리하면 Response, 아니면 null. */
@@ -172,17 +183,22 @@ export async function handleHub(
   }
   // 자료 등록/수정.
   if (p === "/api/materials" && m === "POST") {
-    const b = (await request.json().catch(() => ({}))) as { id?: string; name?: string; subject?: string; memo?: string };
+    const b = (await request.json().catch(() => ({}))) as { id?: string; name?: string; subject?: string; memo?: string; filePath?: string; copies?: unknown; assignee?: string; school?: string; grade?: string };
     const name = (b.name || "").trim();
     if (!name) return json({ error: "name_required" }, 400);
     const subject = b.subject === "math" || b.subject === "english" ? b.subject : "";
     const memo = (b.memo || "").slice(0, 1000);
+    const filePath = (b.filePath || "").slice(0, 500);
+    const copies = Math.max(0, Math.min(9999, Math.round(Number(b.copies) || 0)));
+    const assignee = (b.assignee || "").slice(0, 100);
+    const school = (b.school || "").slice(0, 100);
+    const grade = (b.grade || "").slice(0, 50);
     if (b.id) {
-      await env.DB.prepare("UPDATE class_materials SET name=?,subject=?,memo=? WHERE id=?").bind(name.slice(0, 200), subject, memo, b.id).run();
+      await env.DB.prepare("UPDATE class_materials SET name=?,subject=?,memo=?,file_path=?,copies=?,assignee=?,school=?,grade=? WHERE id=?").bind(name.slice(0, 200), subject, memo, filePath, copies, assignee, school, grade, b.id).run();
       return json({ ok: true, id: b.id });
     }
     const id = newId("mat");
-    await env.DB.prepare("INSERT INTO class_materials(id,name,subject,memo,printed,author_id,author_name,created_at) VALUES(?,?,?,?,0,?,?,?)").bind(id, name.slice(0, 200), subject, memo, me.sub, me.name, Date.now()).run();
+    await env.DB.prepare("INSERT INTO class_materials(id,name,subject,memo,printed,author_id,author_name,file_path,copies,assignee,school,grade,created_at) VALUES(?,?,?,?,0,?,?,?,?,?,?,?,?)").bind(id, name.slice(0, 200), subject, memo, me.sub, me.name, filePath, copies, assignee, school, grade, Date.now()).run();
     return json({ ok: true, id });
   }
   // 인쇄 완료/대기 토글.
@@ -500,6 +516,11 @@ function materialRow(r: Record<string, unknown>) {
     memo: String(r.memo ?? ""),
     printed: Number(r.printed ?? 0) === 1,
     authorName: String(r.author_name ?? ""),
+    filePath: String(r.file_path ?? ""),
+    copies: Number(r.copies ?? 0),
+    assignee: String(r.assignee ?? ""),
+    school: String(r.school ?? ""),
+    grade: String(r.grade ?? ""),
     createdAt: Number(r.created_at ?? 0),
   };
 }

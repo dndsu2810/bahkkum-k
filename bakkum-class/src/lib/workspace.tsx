@@ -50,6 +50,8 @@ function engEntries(band: "mid" | "elem"): WsEntry[] {
   ];
   // 초등영어는 숙제를 다루지 않는다 — 숙제 기록 메뉴는 중고등만.
   if (band === "mid") list.push({ key: "eng_hw" + sfx, label: "숙제 기록", icon: "book", kind: "hub" });
+  // 내신기간 모드 — 중고등만. 켜진 학생은 '오늘' 숙제가 자유입력+배부자료 기준으로.
+  if (band === "mid") list.push({ key: "eng_naesin" + sfx, label: "내신모드", icon: "cap", kind: "hub" });
   // 초등영어는 학생 화면에 커리큘럼이 보이므로, 그걸 수정하는 메뉴를 둔다.
   if (band === "elem") list.push(
     { key: "eng_cur" + sfx, label: "커리큘럼", icon: "clipboard", kind: "hub" },

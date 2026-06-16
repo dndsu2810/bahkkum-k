@@ -510,7 +510,9 @@ async function usersDelete(env: Env, request: Request): Promise<Response> {
 /* ---------------- 공통 학생 마스터 ----------------
    기존 students 로스터(노션·모각공 공유)는 그대로 두고, 허브 전용 필드
    (온라인ID·수강과목·영어반)는 별도 class_student_meta에 보관(추가전용). */
+let studentMetaReady = false;
 async function ensureStudentMeta(env: Env): Promise<void> {
+  if (studentMetaReady) return; // isolate당 1회 — roster 로드마다 DDL 왕복 방지
   try {
     await env.DB
       .prepare(
@@ -532,6 +534,7 @@ async function ensureStudentMeta(env: Env): Promise<void> {
       /* 이미 있으면 무시 */
     }
   }
+  studentMetaReady = true;
 }
 
 interface RosterStudent {
@@ -1148,7 +1151,9 @@ async function syncRoster(env: Env, url: URL): Promise<Response> {
 }
 
 /* ---------------- 시간표 (수학=class_lessons / 영어=class_eng_lessons) ---------------- */
+let engLessonsReady = false;
 async function ensureEngLessons(env: Env): Promise<void> {
+  if (engLessonsReady) return; // isolate당 1회
   try {
     await env.DB
       .prepare(
@@ -1158,6 +1163,7 @@ async function ensureEngLessons(env: Env): Promise<void> {
   } catch {
     /* ignore */
   }
+  engLessonsReady = true;
 }
 
 interface TtLesson {

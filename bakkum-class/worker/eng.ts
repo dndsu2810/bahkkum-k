@@ -62,7 +62,10 @@ async function doneItemsFor(env: Env, sid: string): Promise<string[]> {
   return [...new Set([...DEFAULT_DONE_ITEMS.filter((d) => !hidden.includes(d)), ...global, ...student])];
 }
 
+// 스키마 보장은 워커 isolate당 1회만(매 요청 수십 개 DDL 왕복 방지). 새 배포 = 새 isolate라 컬럼 추가 반영됨.
+let engReady = false;
 export async function ensureEngTables(env: Env): Promise<void> {
+  if (engReady) return;
   const stmts = [
     // 일일 학습일지(= 등원 + 기록). 학생-날짜 1건.
     "CREATE TABLE IF NOT EXISTS class_eng_daily (student_id TEXT NOT NULL, date TEXT NOT NULL, attended INTEGER NOT NULL DEFAULT 0, goals TEXT NOT NULL DEFAULT '[]', homework TEXT NOT NULL DEFAULT '', hw_checked INTEGER NOT NULL DEFAULT 0, comment TEXT NOT NULL DEFAULT '', materials TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(student_id, date))",
@@ -78,6 +81,8 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "CREATE TABLE IF NOT EXISTS class_eng_curriculum (student_id TEXT PRIMARY KEY, items TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL DEFAULT 0)",
     // '오늘 한 것' 학생별 추가 항목(전체공통은 class_config). 학생-1건, items JSON 배열.
     "CREATE TABLE IF NOT EXISTS class_eng_done_items (student_id TEXT PRIMARY KEY, items TEXT NOT NULL DEFAULT '[]')",
+    // 내신기간 모드 — 학생별 ON/OFF + 기간(시작·종료) + 학교·시험일(D-day). 기간 안에서만 '오늘' 숙제가 자유입력+배부자료 기준으로 바뀐다.
+    "CREATE TABLE IF NOT EXISTS class_eng_naesin (student_id TEXT PRIMARY KEY, on_flag INTEGER NOT NULL DEFAULT 0, start_date TEXT NOT NULL DEFAULT '', end_date TEXT NOT NULL DEFAULT '', school TEXT NOT NULL DEFAULT '', exam_date TEXT NOT NULL DEFAULT '', memo TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL DEFAULT 0)",
   ];
   for (const s of stmts) {
     try {
@@ -112,6 +117,10 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "ALTER TABLE class_eng_daily ADD COLUMN makeup INTEGER NOT NULL DEFAULT 0",
     // 테스트 결과 — 통과/재시(NP). 단어·문장 시험 미통과 표시.
     "ALTER TABLE class_eng_test ADD COLUMN result TEXT NOT NULL DEFAULT ''",
+    // 내신모드용 자유 숙제 — {assign:[내줄숙제], check:[{text,status}]} JSON. 지난 '내줄 숙제'가 이번 '숙제 검사'로 이어진다.
+    "ALTER TABLE class_eng_daily ADD COLUMN hw_items TEXT NOT NULL DEFAULT '{}'",
+    // 내신모드 학년 — 학생 명단에서 자동 매칭(학교와 함께).
+    "ALTER TABLE class_eng_naesin ADD COLUMN grade TEXT NOT NULL DEFAULT ''",
   ]) {
     try {
       await env.DB.prepare(a).run();
@@ -125,6 +134,7 @@ export async function ensureEngTables(env: Env): Promise<void> {
   } catch {
     /* ignore */
   }
+  engReady = true;
 }
 
 export async function handleEng(env: Env, request: Request, p: string, me: SessionUser): Promise<Response | null> {
@@ -264,11 +274,20 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
       hwPt(hwW, "단어숙제"); hwPt(hwR, "독해숙제"); hwPt(hwG, "문법숙제");
     }
     const doneItems = Array.isArray(b.doneItems) ? (b.doneItems as unknown[]).map((x) => String(x)) : [];
+    // 내신모드 자유 숙제 — 내줄 숙제(문자열 목록) + 숙제 검사(항목+상태). 점수에는 영향 없음(출결·3분류만 적립).
+    const hwAssign = Array.isArray(b.hwAssign) ? (b.hwAssign as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 60) : [];
+    const hwCheck = Array.isArray(b.hwCheck)
+      ? (b.hwCheck as { text?: unknown; status?: unknown }[])
+          .map((x) => ({ text: String(x?.text ?? "").trim(), status: hwSt(x?.status) }))
+          .filter((x) => x.text)
+          .slice(0, 60)
+      : [];
+    const hwItems = JSON.stringify({ assign: hwAssign, check: hwCheck });
     await env.DB
       .prepare(
-        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,makeup,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,book_no,word_test,done_items,comment,materials,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, makeup=excluded.makeup, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, book_no=excluded.book_no, word_test=excluded.word_test, done_items=excluded.done_items, comment=excluded.comment, materials=excluded.materials, updated_at=excluded.updated_at"
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,makeup,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,book_no,word_test,done_items,comment,materials,hw_items,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, makeup=excluded.makeup, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, book_no=excluded.book_no, word_test=excluded.word_test, done_items=excluded.done_items, comment=excluded.comment, materials=excluded.materials, hw_items=excluded.hw_items, updated_at=excluded.updated_at"
       )
-      .bind(sid, date, attended, status, lateMin, reason, makeup, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwW, hwR, hwG, b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(autoReasons), points, String(b.note || ""), String(b.bookNo || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.comment || ""), String(b.materials || ""), Date.now())
+      .bind(sid, date, attended, status, lateMin, reason, makeup, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwW, hwR, hwG, b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(autoReasons), points, String(b.note || ""), String(b.bookNo || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.comment || ""), String(b.materials || ""), hwItems, Date.now())
       .run();
     // 결석 → 보강 관리로 연결: 같은 학생·결석일의 보강이 없으면 '예정'으로 자동 생성.
     if (status === "결석") {
@@ -284,6 +303,25 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
         /* 보강 자동생성 실패해도 출결 저장은 유지 */
       }
     }
+    return json({ ok: true });
+  }
+
+  /* ---------------- 내신기간 모드 (학생별 ON/OFF + 기간·학교·시험일) ---------------- */
+  if (p === "/api/eng/naesin" && m === "GET") {
+    const r = await env.DB.prepare("SELECT * FROM class_eng_naesin").all<Record<string, unknown>>();
+    return json({ list: (r.results || []).map(naesinRow) });
+  }
+  if (p === "/api/eng/naesin" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const sid = String(b.studentId || "");
+    if (!sid) return json({ error: "studentId_required" }, 400);
+    const on = b.on ? 1 : 0;
+    await env.DB
+      .prepare(
+        "INSERT INTO class_eng_naesin(student_id,on_flag,start_date,end_date,school,grade,exam_date,memo,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id) DO UPDATE SET on_flag=excluded.on_flag, start_date=excluded.start_date, end_date=excluded.end_date, school=excluded.school, grade=excluded.grade, exam_date=excluded.exam_date, memo=excluded.memo, updated_at=excluded.updated_at"
+      )
+      .bind(sid, on, String(b.startDate || ""), String(b.endDate || ""), String(b.school || ""), String(b.grade || ""), String(b.examDate || ""), String(b.memo || ""), Date.now())
+      .run();
     return json({ ok: true });
   }
 
@@ -650,6 +688,17 @@ function dailyRow(r: Record<string, unknown>) {
   } catch {
     /* ignore */
   }
+  let hwAssign: string[] = [];
+  let hwCheck: { text: string; status: string }[] = [];
+  try {
+    const hi = JSON.parse(String(r.hw_items ?? "{}"));
+    if (hi && typeof hi === "object") {
+      if (Array.isArray(hi.assign)) hwAssign = hi.assign.map((x: unknown) => String(x));
+      if (Array.isArray(hi.check)) hwCheck = hi.check.map((x: Record<string, unknown>) => ({ text: String(x?.text ?? ""), status: String(x?.status ?? "") })).filter((x: { text: string }) => x.text);
+    }
+  } catch {
+    /* ignore */
+  }
   return {
     studentId: String(r.student_id),
     date: String(r.date),
@@ -676,6 +725,21 @@ function dailyRow(r: Record<string, unknown>) {
     endTime: String(r.end_time ?? ""),
     comment: String(r.comment ?? ""),
     materials: String(r.materials ?? ""),
+    hwAssign,
+    hwCheck,
+    updatedAt: Number(r.updated_at ?? 0),
+  };
+}
+function naesinRow(r: Record<string, unknown>) {
+  return {
+    studentId: String(r.student_id),
+    on: Number(r.on_flag ?? 0) === 1,
+    startDate: String(r.start_date ?? ""),
+    endDate: String(r.end_date ?? ""),
+    school: String(r.school ?? ""),
+    grade: String(r.grade ?? ""),
+    examDate: String(r.exam_date ?? ""),
+    memo: String(r.memo ?? ""),
     updatedAt: Number(r.updated_at ?? 0),
   };
 }

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
-import { engApi, hwProgress, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, ELEM_LOG_ITEMS, type AttStatus, type EngDaily, type EngMakeup, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
+import { engApi, hwProgress, naesinActiveOn, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, ELEM_LOG_ITEMS, type AttStatus, type EngDaily, type EngMakeup, type EngNaesin, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
+import { materialsApi, eventsApi, type MaterialAssign, type EventItem } from "../lib/hubApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtMD, fmtMDDow, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
@@ -15,7 +16,7 @@ import { CurriculumEditor } from "./StudentPage";
 import { studentApi, type Curriculum } from "../lib/studentApi";
 
 type Band = "elem" | "mid";
-type Tab = "today" | "tt" | "att" | "hw" | "progress" | "test" | "makeup" | "board" | "cur" | "items";
+type Tab = "today" | "tt" | "att" | "hw" | "progress" | "test" | "makeup" | "board" | "cur" | "items" | "naesin";
 
 const WEEK_OPTS = [
   { v: "-1", l: "지난주" },
@@ -64,6 +65,8 @@ const blankDaily = (studentId: string, date: string): EngDaily => ({
   doneItems: [],
   comment: "",
   materials: "",
+  hwAssign: [],
+  hwCheck: [],
   updatedAt: 0,
 });
 
@@ -97,6 +100,11 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     await engApi.saveDoneItem({ scope: "student", studentId: sel, add: label.trim() }).catch(() => {});
     loadDoneOptions(sel);
   }
+
+  // 내신기간 모드 — 학생별 ON/기간. 중고등만. 켜진 기간엔 '오늘' 숙제가 자유입력+배부자료 기준으로 바뀐다.
+  const [naesinMap, setNaesinMap] = useState<Record<string, EngNaesin>>({});
+  const loadNaesin = () => engApi.naesin().then((list) => { const m: Record<string, EngNaesin> = {}; for (const r of list) m[r.studentId] = r; setNaesinMap(m); }).catch(() => {});
+  useEffect(() => { if (band === "mid") void loadNaesin(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [band]);
 
   const students = useMemo(
     () => roster.filter((s) => s.subjects.includes("english") && s.englishBand === band),
@@ -221,6 +229,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     board: "현황",
     cur: "커리큘럼",
     items: "오늘 한 것 수정",
+    naesin: "내신모드",
   };
   // 부제는 '이 화면에서 무엇을 하는지'만 사람 말로. (내부 동작 설명 X)
   const DESC: Record<Tab, string> = {
@@ -234,6 +243,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     board: "이 반 학생들의 출결·진도·테스트 현황을 한눈에 봅니다.",
     cur: "학생 화면에 보이는 커리큘럼(수업 내용)을 학생별로 수정하세요.",
     items: "'오늘 한 것' 체크 항목을 추가·삭제하세요. 모두에게 또는 특정 학생에게.",
+    naesin: "내신기간 학생을 켜고 기간·학교·시험일을 정하세요. 켜진 기간엔 '오늘' 숙제가 자유입력+배부자료 기준으로 바뀝니다.",
   };
 
   // 시간표는 수학 주간 시간표와 동일 레이아웃(자체 page-head·주차 선택).
@@ -274,6 +284,8 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
 
       {tab === "board" ? (
         <EngDashboard students={students} daily={daily} band={band} />
+      ) : tab === "naesin" ? (
+        <EngNaesinPanel students={students} naesinMap={naesinMap} onChanged={loadNaesin} />
       ) : tab === "makeup" ? (
         <EngMakeupPanel students={students} />
       ) : tab === "att" ? (
@@ -303,6 +315,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                     {tab === "today" && (() => { const ch = arrivalOf(approvedChanges, s.id, "english", date); return ch ? <span className="eng-stu-chg" title="승인된 시간 변경">{arrivedIds.has(s.id) ? "이동 " : ""}{ch.toTime}</span> : null; })()}
                     {tab === "today" && st && <span className={"today-side-st " + (st === "출석" ? "g" : st === "지각" || st === "조퇴" ? "w" : "b")}>{st}{st === "지각" && d?.lateMin ? ` ${d.lateMin}분` : ""}</span>}
                     {tab === "today" && d?.makeup && <span className="eng-stu-mk" title="보강 수업 (포인트 미적립)">보강</span>}
+                    {tab === "today" && band === "mid" && naesinActiveOn(naesinMap[s.id], date) && <span className="eng-stu-naesin" title="내신기간 모드">내신</span>}
                     {tab === "today" && d && (d.hwChecked || hwProgress(d) !== null) && <span className="eng-dot ok" title="숙제 기록됨" />}
                   </button>
                 </div>
@@ -330,7 +343,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                       : "왼쪽에서 학생을 선택하면 테스트 점수를 기록할 수 있어요."}
               </div>
             ) : tab === "today" ? (
-              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={addDoneItemForStudent} />
+              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={addDoneItemForStudent} examMode={band === "mid" && naesinActiveOn(naesinMap[sel], date)} />
             ) : tab === "progress" ? (
               <ProgressPanel studentId={sel} name={nameOf[sel] || ""} />
             ) : tab === "cur" ? (
@@ -421,6 +434,168 @@ function DoneItemsManager({ students }: { students: RosterStudent[] }) {
   );
 }
 
+/* ---------------- 내신기간 모드 관리 — 학생별 ON/기간·학교·시험일 ---------------- */
+function ddayLabel(examDate: string, today: string): string {
+  if (!examDate) return "";
+  const a = parseD(today), b = parseD(examDate);
+  const diff = Math.round((b.getTime() - a.getTime()) / 86400000);
+  if (diff === 0) return "D-DAY";
+  return diff > 0 ? "D-" + diff : "D+" + -diff;
+}
+/** 학원 일정에서 시험일 추정 — 학교명 + '시험/고사' 키워드가 든 다가오는 일정의 시작일. 없으면 빈칸. */
+function guessExamDate(events: EventItem[], school: string, today: string): string {
+  const sc = (school || "").trim().toLowerCase();
+  if (!sc) return "";
+  const cand = events
+    .filter((e) => {
+      const text = (e.title + " " + e.category + " " + e.memo).toLowerCase();
+      const examish = text.includes("시험") || text.includes("고사") || text.includes("내신");
+      return examish && text.includes(sc);
+    })
+    .filter((e) => (e.endDate || e.date) >= today)
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+  return cand[0]?.date || "";
+}
+const NAESIN_BLANK = (sid: string): EngNaesin => ({ studentId: sid, on: false, startDate: "", endDate: "", school: "", grade: "", examDate: "", memo: "" });
+
+function EngNaesinPanel({ students, naesinMap, onChanged }: { students: RosterStudent[]; naesinMap: Record<string, EngNaesin>; onChanged: () => void }) {
+  const today = todayStr();
+  const stuById = useMemo(() => { const m: Record<string, RosterStudent> = {}; for (const s of students) m[s.id] = s; return m; }, [students]);
+  const [events, setEvents] = useState<EventItem[]>([]);
+  useEffect(() => { eventsApi.list().then(setEvents).catch(() => {}); }, []);
+
+  // 로컬이 화면의 진실 — 토글/입력은 즉시 반영(렉 없음), 저장은 백그라운드. 서버 갱신은 미저장분만 보존하며 머지.
+  const [recs, setRecs] = useState<Record<string, EngNaesin>>(naesinMap);
+  const touched = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    setRecs((cur) => {
+      const next: Record<string, EngNaesin> = { ...naesinMap };
+      for (const sid of touched.current) if (cur[sid]) next[sid] = cur[sid];
+      return next;
+    });
+  }, [naesinMap]);
+
+  const recOf = (sid: string): EngNaesin => recs[sid] || naesinMap[sid] || NAESIN_BLANK(sid);
+  const dirty = (sid: string): boolean => JSON.stringify(recOf(sid)) !== JSON.stringify(naesinMap[sid] || NAESIN_BLANK(sid));
+
+  // 학생 매칭 자동 채움 — 학교·학년은 명단에서, 시험일은 학원 일정에서(있으면).
+  function autoFill(sid: string, rec: EngNaesin): EngNaesin {
+    const s = stuById[sid];
+    const school = rec.school || s?.school || "";
+    const grade = rec.grade || s?.grade || "";
+    const examDate = rec.examDate || guessExamDate(events, school, today);
+    return { ...rec, school, grade, examDate };
+  }
+  function persist(rec: EngNaesin) {
+    touched.current.add(rec.studentId);
+    engApi.saveNaesin(rec).then(() => { touched.current.delete(rec.studentId); onChanged(); }).catch(() => {});
+  }
+  function patch(sid: string, p: Partial<EngNaesin>) {
+    touched.current.add(sid);
+    setRecs((cur) => ({ ...cur, [sid]: { ...recOf(sid), ...p } }));
+  }
+  function toggle(sid: string) {
+    const cur = recOf(sid);
+    const next = cur.on ? { ...cur, on: false } : autoFill(sid, { ...cur, on: true });
+    setRecs((r) => ({ ...r, [sid]: next }));
+    persist(next);
+  }
+  function save(sid: string) { persist(recOf(sid)); }
+
+  // 한 번에 켜기 — 선택 학생 + 공통 기간.
+  const [pick, setPick] = useState<Set<string>>(new Set());
+  const [bulkStart, setBulkStart] = useState("");
+  const [bulkEnd, setBulkEnd] = useState("");
+  function togglePick(sid: string) { setPick((p) => { const n = new Set(p); n.has(sid) ? n.delete(sid) : n.add(sid); return n; }); }
+  function bulkOn() {
+    if (!pick.size) return;
+    const updated: Record<string, EngNaesin> = {};
+    for (const sid of pick) {
+      const next = autoFill(sid, { ...recOf(sid), on: true, startDate: bulkStart || recOf(sid).startDate, endDate: bulkEnd || recOf(sid).endDate });
+      updated[sid] = next;
+      persist(next);
+    }
+    setRecs((r) => ({ ...r, ...updated }));
+    setPick(new Set());
+  }
+
+  const activeN = students.filter((s) => naesinActiveOn(recOf(s.id), today)).length;
+
+  return (
+    <div className="naesin-wrap">
+      {/* 한 번에 켜기 */}
+      <div className="mk-group">
+        <div className="mk-grouphead">한 번에 켜기 <span className="gcnt">선택 {pick.size}명</span></div>
+        <div className="card" style={{ padding: 14 }}>
+          <div className="naesin-bulk-ctl">
+            <label className="naesin-f"><span>공통 시작일</span><DateField value={bulkStart} onChange={setBulkStart} placeholder="시작일" /></label>
+            <label className="naesin-f"><span>공통 종료일</span><DateField value={bulkEnd} onChange={setBulkEnd} placeholder="종료일" /></label>
+            <button className="btn primary sm" onClick={bulkOn} disabled={!pick.size}>{pick.size ? `선택 ${pick.size}명 내신 켜기` : "학생 선택"}</button>
+          </div>
+          <div className="naesin-pickrow">
+            {students.map((s) => {
+              const on = naesinActiveOn(recOf(s.id), today);
+              return (
+                <button key={s.id} className={"mat-cand-chip" + (pick.has(s.id) ? " on" : "") + (on ? " already" : "")} onClick={() => togglePick(s.id)} title={on ? "이미 내신중" : ""}>
+                  {s.name}{s.grade ? ` ${s.grade}` : ""}{on && <span className="mat-cand-dot">✓</span>}
+                </button>
+              );
+            })}
+            {students.length === 0 && <div className="hub-muted">중고등 영어 학생이 없어요.</div>}
+          </div>
+          <div className="naesin-help" style={{ marginTop: 8 }}>학교·학년은 학생 명단에서 자동으로 채워지고, 시험일은 학원 일정에 ‘학교명+시험’ 일정이 있으면 끌어옵니다(없으면 빈칸).</div>
+        </div>
+      </div>
+
+      <div className="mk-group">
+        <div className="mk-grouphead">내신기간 학생 <span className="gcnt">현재 {activeN}명</span></div>
+        <div className="naesin-help">켜진 기간(시작~종료) 안에서는 그 학생의 ‘오늘’ 숙제가 <b>자유 입력 + 배부 자료 기준</b>으로 바뀝니다. 종료일이 지나면 자동으로 평소 모드(단어·리딩·문법)로 돌아갑니다.</div>
+        {students.length === 0 ? (
+          <div className="hub-muted">중고등 영어 학생이 없어요.</div>
+        ) : (
+          <div className="naesin-list">
+            {students.map((s) => {
+              const r = recOf(s.id);
+              const active = naesinActiveOn(r, today);
+              return (
+                <div className={"naesin-item" + (r.on ? " on" : "")} key={s.id}>
+                  <div className="naesin-row1">
+                    <button className={"naesin-toggle" + (r.on ? " on" : "")} onClick={() => toggle(s.id)} role="switch" aria-checked={r.on}>
+                      <span className="naesin-knob" />
+                    </button>
+                    <span className="naesin-name">{s.name}{s.grade && <span className="naesin-grade">{s.grade}</span>}</span>
+                    {active && <span className="badge b-purple">내신중</span>}
+                    {r.on && r.examDate && <span className="naesin-dday">{ddayLabel(r.examDate, today)}</span>}
+                  </div>
+                  {r.on && (
+                    <div className="naesin-fields">
+                      <label className="naesin-f"><span>시작일</span><DateField value={r.startDate} onChange={(v) => patch(s.id, { startDate: v })} placeholder="시작일" /></label>
+                      <label className="naesin-f"><span>종료일</span><DateField value={r.endDate} onChange={(v) => patch(s.id, { endDate: v })} placeholder="종료일" /></label>
+                      <label className="naesin-f"><span>학교</span><input className="input" style={{ minWidth: 110 }} value={r.school} onChange={(e) => patch(s.id, { school: e.target.value })} placeholder="예: 호평중" /></label>
+                      <label className="naesin-f"><span>학년</span><input className="input" style={{ minWidth: 70, maxWidth: 90 }} value={r.grade} onChange={(e) => patch(s.id, { grade: e.target.value })} placeholder="예: 중3" /></label>
+                      <label className="naesin-f"><span>시험일</span><DateField value={r.examDate} onChange={(v) => patch(s.id, { examDate: v })} placeholder="시험일" /></label>
+                      <button className="btn primary sm naesin-save" onClick={() => save(s.id)} disabled={!dirty(s.id)}>{dirty(s.id) ? "저장" : "저장됨"}</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div className="naesin-soon">
+        <div className="naesin-soon-h">곧 추가될 내신모드 기능 <span className="eng-mk-tag soft">준비중</span></div>
+        <ul>
+          <li>학교별 시험범위 입력 · 시험범위별 진도 체크</li>
+          <li>오답·재시(NP) 집중 관리</li>
+          <li>시험 후 결과 기록</li>
+        </ul>
+        <div className="hub-muted" style={{ marginTop: 6 }}>원장님과 항목·전환 규칙을 확정한 뒤 추가합니다.</div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- 커리큘럼 편집(메뉴에서) — 학생 화면에 보이는 커리큘럼 수정 ---------------- */
 function CurriculumPanel({ studentId, name }: { studentId: string; name: string }) {
   const [cur, setCur] = useState<Curriculum | null>(null);
@@ -467,12 +642,58 @@ const ENG_STATUS6: { v: AttStatus; on: string; att: boolean }[] = [
 ];
 
 /* ---------------- 일일 학습일지 편집 ---------------- */
-function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, onAddDoneItem }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void; doneItemsAll: string[]; reasonsAll: { name: string; value: number }[]; onAddDoneItem: (s: string) => void }) {
+function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, onAddDoneItem, examMode }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void; doneItemsAll: string[]; reasonsAll: { name: string; value: number }[]; onAddDoneItem: (s: string) => void; examMode?: boolean }) {
   const showHw = band !== "elem"; // 초등영어는 숙제 없음
   const [d, setD] = useState<EngDaily>(value);
   const dirty = JSON.stringify(d) !== JSON.stringify(value);
   // 포인트 자동 적립 미리보기(출결·숙제 + 카탈로그 점수). 저장 시 서버가 동일 규칙으로 확정.
   const autoPts = useMemo(() => autoPointsOf(d, catMapOf(reasonsAll)), [d, reasonsAll]);
+
+  // 내신모드 자유 숙제 — 지난 회차 '내줄 숙제'를 이번 '숙제 검사'로 이어 보여주기 + 배부 자료 기준 숙제.
+  const [hist, setHist] = useState<EngDaily[]>([]);
+  const [matAssigns, setMatAssigns] = useState<MaterialAssign[]>([]);
+  const [matNames, setMatNames] = useState<Record<string, string>>({});
+  const [newAssign, setNewAssign] = useState("");
+  const [newCheck, setNewCheck] = useState("");
+  useEffect(() => {
+    if (!examMode) return;
+    let alive = true;
+    engApi.dailyByStudent(value.studentId).then((l) => { if (alive) setHist(l); }).catch(() => {});
+    Promise.all([materialsApi.assigns({ studentId: value.studentId }), materialsApi.list()])
+      .then(([as, ms]) => { if (!alive) return; setMatAssigns(as); const m: Record<string, string> = {}; for (const x of ms) m[x.id] = x.name; setMatNames(m); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [examMode, value.studentId]);
+  // 지난(가장 가까운 이전 날짜) '내줄 숙제' — 이번 '숙제 검사'로 이어진다.
+  const carried = useMemo(() => {
+    const prior = hist.filter((x) => x.date < d.date && x.hwAssign && x.hwAssign.length).sort((a, b) => (a.date < b.date ? 1 : -1));
+    return prior[0]?.hwAssign || [];
+  }, [hist, d.date]);
+  // 화면에 보일 '숙제 검사' 행 = (지난 내줄숙제 ∪ 이미 기록된 검사). 상태는 d.hwCheck에서.
+  const checkStatusOf = (text: string): HwStatus => (d.hwCheck.find((c) => c.text === text)?.status || "") as HwStatus;
+  const checkRows = useMemo(() => {
+    const seen = new Set<string>();
+    const rows: { text: string; carried: boolean }[] = [];
+    for (const t of carried) { if (!seen.has(t)) { seen.add(t); rows.push({ text: t, carried: true }); } }
+    for (const c of d.hwCheck) { if (!seen.has(c.text)) { seen.add(c.text); rows.push({ text: c.text, carried: false }); } }
+    return rows;
+  }, [carried, d.hwCheck]);
+  function setCheckStatus(text: string, status: HwStatus) {
+    const others = d.hwCheck.filter((c) => c.text !== text);
+    setD({ ...d, hwCheck: status ? [...others, { text, status }] : others });
+  }
+  function removeCheck(text: string) { setD({ ...d, hwCheck: d.hwCheck.filter((c) => c.text !== text) }); }
+  function addAssign(text: string) { const v = text.trim(); if (!v || d.hwAssign.includes(v)) return; setD({ ...d, hwAssign: [...d.hwAssign, v] }); }
+  function removeAssign(text: string) { setD({ ...d, hwAssign: d.hwAssign.filter((x) => x !== text) }); }
+  // 숙제로 배부된 자료(이 학생) — 내줄 숙제로 한 번에 채워 넣을 수 있게.
+  const hwMatNames = useMemo(() => {
+    const names = matAssigns.filter((a) => a.kind === "hw").map((a) => matNames[a.materialId]).filter(Boolean);
+    return [...new Set(names)] as string[];
+  }, [matAssigns, matNames]);
+  const lessonMatNames = useMemo(() => {
+    const names = matAssigns.filter((a) => a.kind === "lesson").map((a) => matNames[a.materialId]).filter(Boolean);
+    return [...new Set(names)] as string[];
+  }, [matAssigns, matNames]);
 
   // 학생/다른 강사가 입력해 value(서버값)가 바뀌면, 교사가 편집 중이 아닐 때만 반영(편집분 보존).
   const prevValue = useRef(value);
@@ -556,7 +777,8 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
         <button className="btn ghost sm" onClick={() => setGoals([...d.goals, { text: "", done: false }])}>+ 목표 추가</button>
       </div>
 
-      {showHw && (
+      {/* 평소 모드 — 기존 단어/리딩/문법 3분류 숙제(포인트 자동적립 기준) */}
+      {showHw && !examMode && (
         <div className="eng-field">
           <div className="eng-label">숙제{(() => { const p = hwProgress(d); return p === null ? "" : ` · 진행률 ${p}%`; })()}</div>
           <div className="eng-hw3">
@@ -568,6 +790,63 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
         </div>
       )}
 
+      {/* 내신모드 — 학생마다 다른 숙제를 자유 입력. 지난 '내줄 숙제'가 이번 '숙제 검사'로 이어짐 + 배부 자료 기준. */}
+      {showHw && examMode && (
+        <>
+          <div className="eng-field">
+            <div className="eng-label">숙제 검사 <span className="eng-mk-tag soft">지난 시간에 내준 것</span></div>
+            {checkRows.length === 0 ? (
+              <div className="eng-auto-hint">지난 회차에 ‘내줄 숙제’를 입력하면 여기로 이어져 보여요. 아래에서 직접 추가할 수도 있어요.</div>
+            ) : (
+              <div className="eng-hwfree">
+                {checkRows.map((r) => {
+                  const st = checkStatusOf(r.text);
+                  return (
+                    <div className="eng-hwfree-row" key={r.text}>
+                      <span className="eng-hwfree-t">{r.text}{r.carried && <span className="eng-hwfree-from" title="지난 시간 내준 숙제">이어받음</span>}</span>
+                      <div className="eng-hw3-seg">
+                        {HW_STATUSES.map((s) => {
+                          const cls = s === "완료" ? "g" : s === "미흡" ? "w" : s === "안함" ? "b" : "";
+                          return <button key={s} className={"eas hw " + cls + (st === s ? " on " + cls : "")} onClick={() => setCheckStatus(r.text, st === s ? "" : (s as HwStatus))}>{s}</button>;
+                        })}
+                      </div>
+                      <button className="eng-hwfree-x" onClick={() => removeCheck(r.text)} aria-label="삭제">×</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="eng-add-row" style={{ marginTop: 8 }}>
+              <input className="sm-input" value={newCheck} onChange={(e) => setNewCheck(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && newCheck.trim()) { setCheckStatus(newCheck.trim(), "완료"); setNewCheck(""); } }} placeholder="검사할 숙제 직접 추가" />
+              <button className="btn ghost sm" onClick={() => { if (newCheck.trim()) { setCheckStatus(newCheck.trim(), "완료"); setNewCheck(""); } }} disabled={!newCheck.trim()}>추가</button>
+            </div>
+          </div>
+
+          <div className="eng-field">
+            <div className="eng-label">내줄 숙제 <span className="eng-mk-tag soft">다음 시간</span></div>
+            {d.hwAssign.length > 0 && (
+              <div className="eng-hwchips">
+                {d.hwAssign.map((t) => <span className="eng-hwchip" key={t}>{t}<button className="eng-hwchip-x" onClick={() => removeAssign(t)} aria-label="삭제">×</button></span>)}
+              </div>
+            )}
+            <div className="eng-add-row" style={{ marginTop: 8 }}>
+              <input className="sm-input" value={newAssign} onChange={(e) => setNewAssign(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { addAssign(newAssign); setNewAssign(""); } }} placeholder="다음 시간 낼 숙제 (예: 4과 그래머빌드업)" />
+              <button className="btn ghost sm" onClick={() => { addAssign(newAssign); setNewAssign(""); }} disabled={!newAssign.trim()}>추가</button>
+            </div>
+            {hwMatNames.length > 0 && (
+              <div className="eng-matpull">
+                <span className="eng-matpull-l">📄 배부된 숙제 자료</span>
+                {hwMatNames.map((nm) => (
+                  <button key={nm} className={"eng-matpull-chip" + (d.hwAssign.includes(nm) ? " on" : "")} onClick={() => addAssign(nm)} title="내줄 숙제로 추가" disabled={d.hwAssign.includes(nm)}>
+                    {nm}{d.hwAssign.includes(nm) ? " ✓" : " +"}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
       {/* 중고등영어도 초등처럼 진도 체크 — 진도(교재·범위) + 단어시험 */}
       {showHw && (
         <div className="eng-field">
@@ -576,6 +855,14 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
             <input className="input" value={d.bookNo} onChange={(e) => setD({ ...d, bookNo: e.target.value })} placeholder="진도 (교재·범위, 예: Insight 3과)" />
             <input className="input" value={d.wordTest} onChange={(e) => setD({ ...d, wordTest: e.target.value })} placeholder="단어시험 (예: 18/20)" />
           </div>
+          {examMode && lessonMatNames.length > 0 && (
+            <div className="eng-matpull">
+              <span className="eng-matpull-l">📄 배부된 수업 자료</span>
+              {lessonMatNames.map((nm) => (
+                <button key={nm} className="eng-matpull-chip" onClick={() => setD({ ...d, bookNo: d.bookNo ? d.bookNo + ", " + nm : nm })} title="진도에 반영">{nm} +</button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
