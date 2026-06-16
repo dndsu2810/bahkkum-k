@@ -2425,3 +2425,17 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .mk-archive-toggle .nav-caret{transition:transform .15s}
 .mk-archive-toggle .nav-caret.closed{transform:rotate(-90deg)}
 .mk-archive-hint{font-weight:500;color:var(--ink4);font-size:11px;margin-left:auto}
+
+/* 학생 프로필 — 누적 강사 특이사항 타임라인 (와이어프레임 학생상세 특이사항 탭) */
+.prof-notes{display:flex;flex-direction:column;gap:10px}
+.prof-notes-add{display:flex;gap:8px;align-items:center}
+.prof-notes-add .inline-input{flex:1}
+.prof-notes-tl{display:flex;flex-direction:column}
+.prof-note{padding:9px 0;border-top:1px solid var(--line)}
+.prof-note:first-child{border-top:none;padding-top:2px}
+.prof-note-h{display:flex;align-items:center;gap:8px}
+.prof-note-h strong{font-size:var(--t-sm);font-weight:700;color:var(--ink)}
+.prof-note-when{font-size:var(--t-cap);color:var(--ink4);font-weight:600}
+.prof-note-x{margin-left:auto;width:24px;height:24px;border:none;background:transparent;color:var(--ink4);border-radius:6px;cursor:pointer;font-weight:700}
+.prof-note-x:hover{background:var(--bad-soft,#fdeaea);color:var(--bad)}
+.prof-note-b{margin:3px 0 0;font-size:var(--t-sm);color:var(--ink2);line-height:1.5;white-space:pre-wrap}

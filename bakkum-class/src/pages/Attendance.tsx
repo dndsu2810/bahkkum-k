@@ -379,7 +379,7 @@ export function Attendance() {
                       </span>
                       <input
                         className="mini-note"
-                        placeholder="특이사항 (선택)"
+                        placeholder={st === "결석" || st === "무단결석" ? "결석 사유 (월말리포트 특이사항에 반영)" : "특이사항 (선택)"}
                         value={rec.note ?? ""}
                         onChange={(e) => patchRecord(key, { note: e.target.value })}
                       />

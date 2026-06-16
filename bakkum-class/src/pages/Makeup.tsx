@@ -90,18 +90,28 @@ export function MakeupPage() {
     onRevert: (id) => {
       mutate((d) => {
         const k = d.makeups.find((m) => m.id === id);
-        if (k) {
-          k.status = "pending";
-          k.makeupDate = "";
-          k.makeupTime = "";
-          k.parentContacted = false;
+        if (!k) return;
+        // 되돌리기 전에, 이 보강으로 만들어진 '보강' 출결 행을 제거한다.
+        // (안 지우면 월말리포트 특이사항/달력에 '보강'으로 그대로 남는 문제)
+        if (k.makeupDate) {
+          const exist = findBoKey(d.attendance, k.makeupDate, k.studentId);
+          if (exist) delete d.attendance[exist];
         }
+        k.status = "pending";
+        k.makeupDate = "";
+        k.makeupTime = "";
+        k.parentContacted = false;
       });
       toast("보강 대기로 되돌렸어요.");
     },
     onDelete: (id) => {
       mutate((d) => {
         const k = d.makeups.find((m) => m.id === id);
+        // 보강으로 만들어진 출결 행도 함께 제거(월말리포트에 '보강'으로 남지 않게).
+        if (k?.makeupDate) {
+          const exist = findBoKey(d.attendance, k.makeupDate, k.studentId);
+          if (exist) delete d.attendance[exist];
+        }
         // 결석에서 자동 등록된 보강이면 att_key를 '삭제 표시'에 남겨
         // 노션 재가져오기/출결 재체크 때 되살아나지 않게 한다.
         if (k?.attKey) {

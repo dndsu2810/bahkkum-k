@@ -16,6 +16,7 @@ import {
 } from "../lib/rosterApi";
 import { GRADE_DIVS, DIV_MAX, makeGrade, parseGrade } from "../lib/grade";
 import { uploadImage } from "../lib/configApi";
+import { notesApi, type NoteItem } from "../lib/hubApi";
 import { StudentPage } from "./StudentPage";
 import { SkeletonList } from "../components/Skeleton";
 import { Icon } from "../icons";
@@ -471,6 +472,12 @@ function ProfileModal({
               <textarea className="input prof-memo" rows={4} value={f.memo} onChange={(e) => set("memo", e.target.value)} placeholder="누적 메모(상담·특이사항 등)" />
             )}
           </Section>
+
+          {/* 강사 특이사항(누적) — 과목 공통, 강사들이 시간순으로 남긴 기록(class_notes). 와이어프레임 학생상세 '특이사항 탭'. */}
+          <section className="prof-sec">
+            <h4 className="prof-sec-t">강사 특이사항 (누적)</h4>
+            <StudentNotes studentId={f.id} canEdit={canEdit} />
+          </section>
         </div>
 
         {err && <div className="auth-err" style={{ margin: "0 var(--s5)" }}>{err}</div>}
@@ -496,6 +503,62 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h4 className="prof-sec-t">{title}</h4>
       <div className="prof-grid">{children}</div>
     </section>
+  );
+}
+
+/** 누적 강사 특이사항 — 그 학생의 class_notes(과목 공통)를 시간순으로. 추가/삭제 가능(권한자). */
+function fmtWhen(ts: number): string {
+  const diff = Date.now() - ts;
+  const h = Math.floor(diff / 3600000);
+  if (diff < 3600000) return "방금";
+  if (h < 24) return h + "시간 전";
+  const d = Math.floor(h / 24);
+  if (d < 7) return d + "일 전";
+  const dt = new Date(ts);
+  return dt.getFullYear() + ". " + (dt.getMonth() + 1) + ". " + dt.getDate() + ".";
+}
+function StudentNotes({ studentId, canEdit }: { studentId: string; canEdit: boolean }) {
+  const [notes, setNotes] = useState<NoteItem[]>([]);
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = () => notesApi.list(studentId).then(setNotes).catch(() => {});
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [studentId]);
+  async function add() {
+    const b = body.trim();
+    if (!b || busy) return;
+    setBusy(true);
+    try { await notesApi.add(studentId, b); setBody(""); await load(); } catch { /* ignore */ } finally { setBusy(false); }
+  }
+  async function remove(id: string) {
+    if (!window.confirm("이 특이사항을 삭제할까요?")) return;
+    await notesApi.remove(id).catch(() => {});
+    void load();
+  }
+  return (
+    <div className="prof-notes">
+      {canEdit && (
+        <div className="prof-notes-add">
+          <input className="inline-input" value={body} onChange={(e) => setBody(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="특이사항 추가 (예: 단어시험 만점, 레벨업 검토)" />
+          <button className="btn primary sm" onClick={add} disabled={!body.trim() || busy}>{busy ? "추가 중…" : "추가"}</button>
+        </div>
+      )}
+      {notes.length === 0 ? (
+        <p className="prof-memo-ro" style={{ marginTop: canEdit ? 4 : 0 }}>아직 누적된 특이사항이 없어요.</p>
+      ) : (
+        <div className="prof-notes-tl">
+          {notes.map((n) => (
+            <div className="prof-note" key={n.id}>
+              <div className="prof-note-h">
+                <strong>{n.authorName || "강사"}</strong>
+                <span className="prof-note-when">{fmtWhen(n.createdAt)}</span>
+                {canEdit && <button className="prof-note-x" onClick={() => remove(n.id)} aria-label="삭제">✕</button>}
+              </div>
+              <p className="prof-note-b">{n.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

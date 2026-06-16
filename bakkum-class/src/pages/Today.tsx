@@ -28,10 +28,13 @@ interface DayEntry {
   makeups: Makeup[];
 }
 
+// 출결 선택지 — 출결 기록 페이지와 동일(출석·지각·결석 + 조퇴·무단결석). 영어 '오늘'과도 통일.
 const QUICK: { s: AttStatus; cls: string }[] = [
   { s: "출석", cls: "on-present" },
   { s: "지각", cls: "on-late" },
   { s: "결석", cls: "on-absent" },
+  { s: "조퇴", cls: "on-late" },
+  { s: "무단결석", cls: "on-absent" },
 ];
 
 // 수업태도 (노션 '수업태도' select 옵션과 동일 라벨)
@@ -59,6 +62,7 @@ export function Today() {
   const [dueDraft, setDueDraft] = useState<Record<string, string>>({});
   const [tagDraft, setTagDraft] = useState<Record<string, string[]>>({});
   const [pctDraft, setPctDraft] = useState<Record<string, string>>({});
+  const [noteDraft, setNoteDraft] = useState<Record<string, string>>({}); // 결석 사유 입력 임시값(blur 시 저장)
   const [gradeTab, setGradeTab] = useState<"all" | "cho" | "jung">("all");
   // 영어식 마스터-디테일: 왼쪽에서 고른 학생을 오른쪽 상세에 표시.
   const [sel, setSel] = useState<string>("");
@@ -265,6 +269,18 @@ export function Today() {
     }
   }
 
+  // 보강 등원 학생의 학습 태도 — 정규 수업이 없는 보강 전용 등원일에도 태도를 기록.
+  // 보강 출결 행(보강 키)에 attitude를 저장. 행이 없으면 status '보강'으로 만들어 둔다(보강 완료 시 이 행을 재사용).
+  const makeupBoKey = (mk: Makeup) => findBoKey(data.attendance, mk.makeupDate, mk.studentId) || mk.makeupDate + "|" + mk.studentId + "|" + (mk.makeupTime || "");
+  const makeupAttitude = (mk: Makeup): string => data.attendance[makeupBoKey(mk)]?.attitude || "";
+  function setMakeupAttitude(mk: Makeup, att: string) {
+    mutate((d) => {
+      const key = findBoKey(d.attendance, mk.makeupDate, mk.studentId) || mk.makeupDate + "|" + mk.studentId + "|" + (mk.makeupTime || "");
+      const cur = d.attendance[key];
+      d.attendance[key] = { ...(cur || {}), status: cur?.status || "보강", attitude: cur?.attitude === att ? "" : (att as Attitude) };
+    });
+  }
+
   // 지각 분 입력 — 지각으로 찍은 학생만. 노션에도 lateMinutes 반영.
   function setLateMin(it: LessonOnDate, min: number) {
     const key = keyOf(it);
@@ -275,6 +291,24 @@ export function Today() {
       if (r) r.lateMinutes = v;
       synced = d.attendance[key] ? { ...d.attendance[key] } : null;
     });
+    if (synced) {
+      const r: AttRecord = synced;
+      pushAttendanceNotion(it.student.id, { date: day, status: r.status, attitude: r.attitude || "", lateMinutes: r.lateMinutes || 0, note: r.note || "" });
+    }
+  }
+
+  // 결석 사유(특이사항) 저장 — 결석/무단결석 학생. blur 시 attendance.note에 저장 → 월말리포트 특이사항에 '결석 — 사유'로 반영.
+  function commitNote(it: LessonOnDate) {
+    const key = keyOf(it);
+    const v = noteDraft[key];
+    if (v === undefined) return;
+    let synced: AttRecord | null = null;
+    mutate((d) => {
+      const r = d.attendance[key];
+      if (r) r.note = v;
+      synced = d.attendance[key] ? { ...d.attendance[key] } : null;
+    });
+    setNoteDraft((m) => { const n = { ...m }; delete n[key]; return n; });
     if (synced) {
       const r: AttRecord = synced;
       pushAttendanceNotion(it.student.id, { date: day, status: r.status, attitude: r.attitude || "", lateMinutes: r.lateMinutes || 0, note: r.note || "" });
@@ -554,7 +588,7 @@ export function Today() {
                 const attOk = lesson ? !!st : mkAllDone;
                 const done = attOk && checkHws.every((h) => h.status === "done") && (assignedHws.length > 0 || none);
                 const lateMin = lesson ? data.attendance[keyOf(lesson)]?.lateMinutes : undefined;
-                const stCls = st === "출석" ? "g" : st === "지각" ? "w" : st === "결석" ? "b" : "";
+                const stCls = st === "출석" ? "g" : st === "지각" || st === "조퇴" ? "w" : st === "결석" || st === "무단결석" ? "b" : "";
                 return (
                   <div key={e.key} className={"eng-stu today-side-row" + (activeEntry?.key === e.key ? " on" : "")}>
                     <button className="eng-stu-name" onClick={() => setSel(e.key)}>
@@ -613,6 +647,21 @@ export function Today() {
                       {st === "지각" && (
                         <label className="eng-late-row">지각 <input className="sm-input" style={{ maxWidth: 90 }} type="number" min={0} step={5} placeholder="분" value={data.attendance[keyOf(lesson)]?.lateMinutes ?? ""} onChange={(ev) => setLateMin(lesson, +ev.target.value || 0)} /> 분</label>
                       )}
+                      {(st === "결석" || st === "무단결석") && (() => {
+                        const k = keyOf(lesson);
+                        const v = noteDraft[k] ?? (data.attendance[k]?.note ?? "");
+                        return (
+                          <input
+                            className="input today-absent-note"
+                            style={{ marginTop: 8 }}
+                            placeholder="결석 사유 (월말리포트 특이사항에 반영)"
+                            value={v}
+                            onChange={(ev) => setNoteDraft((m) => ({ ...m, [k]: ev.target.value }))}
+                            onBlur={() => commitNote(lesson)}
+                            onKeyDown={(ev) => { if (ev.key === "Enter") (ev.target as HTMLInputElement).blur(); }}
+                          />
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -643,6 +692,19 @@ export function Today() {
                         {ATTITUDES.map((a) => {
                           const on = data.attendance[keyOf(lesson)]?.attitude === a;
                           return <button key={a} className={on ? "on" : ""} onClick={() => setAttitude(lesson, a)}>{a}</button>;
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 수업태도 (보강 전용 등원일 — 정규 수업이 없어도 보강으로 왔으면 입력 가능) */}
+                  {!lesson && e.makeups.length > 0 && (
+                    <div className="eng-field">
+                      <div className="eng-label">수업 태도</div>
+                      <div className="today-mood-seg">
+                        {ATTITUDES.map((a) => {
+                          const on = makeupAttitude(e.makeups[0]) === a;
+                          return <button key={a} className={on ? "on" : ""} onClick={() => setMakeupAttitude(e.makeups[0], a)}>{a}</button>;
                         })}
                       </div>
                     </div>
