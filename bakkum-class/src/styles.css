@@ -915,11 +915,11 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
   color-scheme:dark; /* 네이티브 날짜 입력칸·달력 팝업까지 다크 */
   /* 표면을 단계로 쌓아 카드가 떠 보이게 (바탕 < 카드 < 보조표면) */
   --bg:#10151f; --card:#172033; --card2:#1c2536;
-  --line:#26324a; --line2:#33425f;
+  --line:#2c3a52; --line2:#3a4a68;
   /* 호버 — 어떤 표면 위든 동일하게 '살짝만' 밝아지는 반투명 오버레이 (톤 일관) */
   --hover:rgba(255,255,255,.045);
-  /* 글자 — 순백 대신 톤다운, 보조/캡션도 명암비 4.5:1 이상 */
-  --ink:#e8ecf4; --ink2:#a7b0c0; --ink3:#8b97ad; --ink4:#8b97ad;
+  /* 글자 — 순백 대신 톤다운, 본문·보조는 한 단계 밝게(배경에 묻히지 않게) */
+  --ink:#e8ecf4; --ink2:#c7d0dd; --ink3:#9aa6b8; --ink4:#8b97ad;
   /* 포인트(파랑) — 텍스트형은 밝게, 채움형은 blue-500 */
   --brand:#3b82f6; --brand-d:#6aa0ff; --brand-soft:rgba(106,160,255,.14); --brand-line:#2e4368;
   /* 상태색 — 400단계 + 반투명 배경(형광 방지, 어떤 표면에도 자연스럽게) */
@@ -1799,7 +1799,10 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .today-late-input{width:64px;height:30px;border:1px solid var(--line2);border-radius:var(--r-sm);padding:0 8px;font-size:var(--t-sm);background:var(--card);color:var(--ink)}
 .eng-main>.today-stu{margin:0}
 /* 수학 '오늘' 상세 — 영어 일일기록과 같은 라벨+필드 레이아웃(폭은 패널 가득) */
-.today-detail{max-width:none;gap:var(--s5)}
+.today-detail{max-width:640px;gap:20px}
+/* 여백 패치 — '오늘' 입력 패널: 콘텐츠 폭 제한(가로 텅 빔 해결) + 출결 버튼 터치영역 + 빈 상태 점선 박스 */
+.today-detail .today-seg button{min-height:40px;min-width:64px}
+.today-hwrow-empty{border:1px dashed var(--line);border-radius:var(--r-md);padding:11px 14px;color:var(--ink3)}
 .today-detail-h h2{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:var(--t-lg);font-weight:700;color:var(--ink)}
 .today-detail-time{font-size:var(--t-sm);font-weight:600;color:var(--ink3)}
 .today-detail .today-seg{display:inline-flex}
@@ -1821,16 +1824,18 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .plan-cat{display:block;font-size:10px;font-weight:800;color:var(--brand-d);margin-bottom:3px}
 .plan-item{font-weight:600;color:var(--ink)}
 .plan-catstart th,.plan-catstart td{border-top:2px solid var(--line2)}
-.plan-cell{vertical-align:top}
-.plan-cell.filled{background:var(--brand-soft)}
+.plan-cell{vertical-align:middle}
+/* 여백 패치 2-c — 셀 전체 옅은 파랑 채움이 텍스트를 묻어서 제거(일정명만 또렷). 이번 달 컬럼 강조는 .plan-cell.now로 유지. */
+.plan-cell.filled{background:transparent}
 /* 칸 내용 — 잘리지 않고 줄바꿈으로 모두 보이게, 여백 확보 */
 .plan-val{display:block;padding:10px 11px;font-size:var(--t-cap);line-height:1.55;color:var(--ink);text-align:center;min-height:22px;white-space:pre-wrap;word-break:break-word}
 /* 편집자용: 칸 전체가 버튼. 누르면 일정명·상세설명 입력 모달 */
 .plan-cellbtn{width:100%;min-width:64px;min-height:44px;border:0;background:transparent;padding:10px 11px;font-size:var(--t-cap);line-height:1.55;color:var(--ink);text-align:center;white-space:pre-wrap;word-break:break-word;border-radius:var(--r-sm);transition:background .12s}
 .plan-cellbtn:hover{background:var(--brand-line)}
 /* 빈 칸의 + 는 평소엔 거의 안 보이게(과밀 정리), 칸 위에 올리면 또렷 */
-.plan-cellbtn.empty{color:var(--ink4);opacity:.14}
-.plan-cellbtn.empty:hover{opacity:1;color:var(--brand-d)}
+/* 여백 패치 2-a — 빈 칸 '+' 노이즈 제거: 평소엔 안 보이고(opacity 0), hover/focus 시에만 옅게 */
+.plan-cellbtn.empty{color:var(--ink4);opacity:0}
+.plan-cellbtn.empty:hover,.plan-cellbtn.empty:focus-visible{opacity:.5;color:var(--brand-d)}
 .plan-cellbtn.empty svg{width:14px;height:14px;stroke-width:2}
 /* 상세설명 있음 표시 점 */
 .plan-dot{display:inline-block;width:5px;height:5px;border-radius:var(--r-full);background:var(--brand);margin-left:5px;vertical-align:middle}

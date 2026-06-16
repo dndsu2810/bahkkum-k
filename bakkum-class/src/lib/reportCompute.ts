@@ -11,6 +11,18 @@ function bucketOf(status: string): DayBucket | null {
   return null;
 }
 
+/** 그 학생의 '활성 보강 일정'(예정/완료, 보강일 지정됨)이 있는 날짜 집합.
+ *  보강을 '대기'로 되돌리거나 삭제하면 makeupDate가 비워져 여기에 안 들어온다 →
+ *  남아 있는 '보강' 출결 행을 리포트에서 무시하는 기준(고아 보강 표시 방지). */
+function activeMakeupDates(data: DataSnapshot, studentId: string): Set<string> {
+  const s = new Set<string>();
+  for (const m of data.makeups || []) {
+    if (m.studentId !== studentId) continue;
+    if ((m.status === "scheduled" || m.status === "done") && m.makeupDate) s.add(m.makeupDate);
+  }
+  return s;
+}
+
 /** Compute attendance summary for one student in a given year/month from the snapshot. */
 export function computeAtt(data: DataSnapshot, studentId: string, year: number, month: number): AttSummary {
   const prefix = year + "-" + pad(month) + "-";
@@ -26,6 +38,7 @@ export function computeAtt(data: DataSnapshot, studentId: string, year: number, 
 
   // 같은 날짜·같은 상태는 1회만(중복 출결 키로 인한 이중집계 방지).
   const counted = new Set<string>();
+  const activeMk = activeMakeupDates(data, studentId);
   Object.keys(data.attendance).forEach((key) => {
     const parts = key.split("|");
     const date = parts[0];
@@ -34,6 +47,8 @@ export function computeAtt(data: DataSnapshot, studentId: string, year: number, 
     const status = data.attendance[key].status;
     const b = bucketOf(status);
     if (!b) return;
+    // '보강' 출결인데 그 날짜에 활성 보강 일정이 없으면(되돌림/삭제된 고아) 집계·달력에서 제외.
+    if (b === "m" && !activeMk.has(date)) return;
     const dk = date + "|" + status;
     if (counted.has(dk)) return;
     counted.add(dk);
@@ -67,6 +82,7 @@ export function deriveNotes(
   month: number
 ): NoteItem[] {
   const prefix = year + "-" + pad(month) + "-";
+  const activeMk = activeMakeupDates(data, studentId);
   const rows: { date: string; status: string; note: string; time: string; lateMin: number }[] = [];
   Object.keys(data.attendance).forEach((key) => {
     const parts = key.split("|");
@@ -76,6 +92,8 @@ export function deriveNotes(
     if (sid !== studentId || date.indexOf(prefix) !== 0) return;
     const rec = data.attendance[key];
     if (rec.status === "출석" && !rec.note) return; // 평범한 출석은 특이사항 아님
+    // '보강'인데 활성 보강 일정이 없으면(되돌림/삭제된 고아) 특이사항에서 제외.
+    if (rec.status === "보강" && !activeMk.has(date)) return;
     rows.push({ date, status: rec.status, note: rec.note || "", time, lateMin: Number(rec.lateMinutes) || 0 });
   });
   rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.time < b.time ? -1 : 1));
