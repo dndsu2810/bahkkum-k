@@ -5,7 +5,7 @@ import { Icon } from "../icons";
 import { getConfig, setConfig } from "../lib/configApi";
 
 // 연간 수업 계획표 — 원장 시트 구조를 앱 자체 표로. 분기→월 타임라인 × 항목(카테고리·세부).
-// 저장은 class_config의 'math_year_plan' 키(JSON). 원장만 편집, 그 외 읽기.
+// 저장은 class_config의 'math_year_plan' 키(JSON). 수학 강사·원장이 편집, 그 외 읽기.
 
 const MONTHS = ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"];
 const QUARTERS = [
@@ -102,7 +102,8 @@ function PlanCellModal({ item, sub, name, detail, onSave }: { item: string; sub:
 export function LessonPlan() {
   const { user } = useAuth();
   const { openModal } = useStore();
-  const canEdit = user?.role === "admin";
+  // 연간 수업 계획은 수학 강사가 정하므로 수학 강사·원장 모두 편집 가능.
+  const canEdit = user?.role === "admin" || user?.role === "math";
   const now = new Date();
   const nowYear = now.getFullYear();
   const nowMonth = now.getMonth(); // 0~11
@@ -175,7 +176,7 @@ export function LessonPlan() {
       <div className="page-head">
         <div>
           <h1 className="page-title">수학 연간 수업 계획표</h1>
-          <div className="page-desc">분기·월별 수업 계획을 한 곳에서. {canEdit ? "칸을 눌러 바로 입력하면 자동 저장돼요." : "원장이 작성한 연간 계획이에요."}</div>
+          <div className="page-desc">분기·월별 수업 계획을 한 곳에서. {canEdit ? "칸을 눌러 바로 입력하면 자동 저장돼요." : "수학 강사·원장이 작성한 연간 계획이에요."}</div>
         </div>
         <div className="head-actions plan-head-actions">
           {savedAt && <span className="page-desc">{savedAt}</span>}
