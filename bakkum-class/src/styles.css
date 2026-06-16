@@ -588,7 +588,10 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .today-sec-tag.asn{background:rgba(22,163,107,.13);color:#0E7A4C}
 .today-hwitem{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 0}
 .today-hwitem + .today-hwitem{border-top:1px dashed var(--line)}
-.today-hwitem-name{flex:1;min-width:130px;font-size:var(--t-base);font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-flex;align-items:center;gap:4px}
+.today-hwitem-name{flex:1;min-width:130px;font-size:var(--t-base);font-weight:600;color:var(--ink);display:inline-flex;align-items:center;gap:6px;overflow:visible}
+/* 숙제명만 말줄임 — 뒤의 '결석 이월' 등 배지는 잘리지 않게 */
+.today-hwitem-title{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.today-hwitem-name .badge{flex-shrink:0}
 .today-hwitem-name svg{width:15px;height:15px;color:var(--ok);flex-shrink:0}
 .today-hwitem-name b{font-weight:700}
 .today-assignrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:8px;margin-top:4px;border-top:1px dashed var(--line)}

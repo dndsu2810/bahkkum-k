@@ -659,9 +659,9 @@ export function Today() {
                         return (
                           <div className="today-hwitem" key={hw.id}>
                             <span className="today-hwitem-name" title={hw.book}>
-                              {hw.book || "숙제"}{hw.tags.length ? <span className="muted"> · {hw.tags.join(", ")}</span> : null}
-                              {hw.carriedFrom ? <span className="badge b-blue" style={{ marginLeft: 6 }} title={fmtMDDow(hw.carriedFrom) + " 결석으로 이월"}>결석 이월</span> : null}
-                              {hw.delayCount ? <span className="badge b-orange" style={{ marginLeft: 6 }}>{hw.delayCount}차 밀림</span> : null}
+                              <span className="today-hwitem-title">{hw.book || "숙제"}{hw.tags.length ? <span className="muted"> · {hw.tags.join(", ")}</span> : null}</span>
+                              {hw.carriedFrom ? <span className="badge b-blue" title={fmtMDDow(hw.carriedFrom) + " 결석으로 이월"}>결석 이월</span> : null}
+                              {hw.delayCount ? <span className="badge b-orange">{hw.delayCount}차 밀림</span> : null}
                             </span>
                             <span className="today-pct-quick">
                               {PCT_QUICK.map((p) => (
