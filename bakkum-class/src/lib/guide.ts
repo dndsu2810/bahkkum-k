@@ -300,8 +300,8 @@ function topGroup(board: boolean): GuideGroup {
 export const GUIDES: Record<Exclude<Role, "developer">, RoleGuide> = {
   admin: {
     title: "원장 사용 가이드",
-    summary: "원장(개발자 포함)은 모든 화면을 보고, 강사 계정·화면 권한·학원 설정을 관리합니다. 수학·영어 수업관리 전체와 원장 전용 화면을 사용할 수 있어요.",
-    start: "로그인하면 수학 '오늘' 화면으로 바로 들어갑니다. 왼쪽 사이드바에서 모든 메뉴를 카테고리별로 볼 수 있어요.",
+    summary: "원장은 모든 화면을 보고, 강사 계정·화면 권한·학원 설정을 관리합니다. 수학·영어 수업관리 전체와 원장 전용 화면을 사용할 수 있어요.",
+    start: "로그인하면 중고등 영어 '오늘' 화면으로 바로 들어갑니다. 왼쪽 사이드바에서 모든 메뉴를 카테고리별로 볼 수 있어요.",
     groups: [
       topGroup(true),
       MATH_GROUP,

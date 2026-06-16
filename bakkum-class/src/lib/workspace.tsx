@@ -5,7 +5,7 @@
 import type { IconName } from "../icons";
 import type { PageId } from "./nav";
 import type { AuthUser } from "./roles";
-import { areasForUser } from "./roles";
+import { areasForUser, shownRole } from "./roles";
 
 /** 사이드바 항목. math는 기존 수학 페이지(store.page), hub는 허브 화면. */
 export interface WsEntry {
@@ -132,6 +132,9 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
 
 /** 로그인 직후 기본 진입 항목. */
 export function defaultEntry(user: AuthUser): string {
+  // 원장(정민아 · 중고등 영어 담당)은 중고등 영어 '오늘'로 직행.
+  // 개발자(displayRole="developer", 수학 강사 겸임)는 원장이 아니므로 아래 수학 분기로.
+  if (shownRole(user) === "admin") return "eng_today_mid";
   if (areasForUser(user).includes("math")) return "today";
   if (user.role === "english_mid") return "eng_today_mid";
   if (user.role === "english_elem") return "eng_today_elem";
