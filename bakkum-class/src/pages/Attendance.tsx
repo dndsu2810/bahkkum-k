@@ -88,7 +88,21 @@ export function Attendance() {
   };
 
   const holiday = holidayName(attDate);
-  const lessons = lessonsOnDate(data.students, attDate);
+  const scheduled = lessonsOnDate(data.students, attDate);
+  // 영어 출결기록과 동일: 그날 예정 수업 + '예정엔 없지만 그날 출결 기록이 있는' 학생(시간표 변경·보강·이동)도
+  // 편집 목록에 포함해 항상 수정 가능하게. (이전엔 예정 수업 학생만 떠서 그 외 기록을 수정 못 하던 문제)
+  const lessons = (() => {
+    const keys = new Set(scheduled.map((it) => attDate + "|" + it.student.id + "|" + it.time));
+    const extra: LessonOnDate[] = [];
+    for (const k of Object.keys(data.attendance)) {
+      if (!k.startsWith(attDate + "|") || keys.has(k)) continue;
+      const parts = k.split("|");
+      const s = studentById(data.students, parts[1]);
+      if (s) extra.push({ student: s, time: parts[2] || "", duration: 60 });
+    }
+    extra.sort((a, b) => (a.time < b.time ? -1 : 1));
+    return [...scheduled, ...extra];
+  })();
 
   // 출결 기록(월별) — 라이브 체크분 + 노션에서 가져온 기록 모두 포함
   const recFltActive = filterActive(flt);

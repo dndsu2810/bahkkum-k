@@ -32,6 +32,15 @@ export async function ensureFeedbackTables(env: Env): Promise<void> {
       /* ignore */
     }
   }
+  // 링크(어디가 문제인지)·지현T 답변·답변시각·작성자 확인여부(답변/해결 알림용).
+  for (const a of [
+    "ALTER TABLE class_issue ADD COLUMN link TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_issue ADD COLUMN reply TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_issue ADD COLUMN reply_at INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE class_issue ADD COLUMN seen INTEGER NOT NULL DEFAULT 1",
+  ]) {
+    try { await env.DB.prepare(a).run(); } catch { /* 이미 있으면 무시 */ }
+  }
 }
 
 async function cfg(env: Env, k: string): Promise<string> {
@@ -113,16 +122,17 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
     const id = newId("iss");
     const page = String(b.page || "").slice(0, 60);
     const shot = String(b.shot || "");
+    const link = String(b.link || "").slice(0, 500);
     const now = Date.now();
-    await env.DB.prepare("INSERT INTO class_issue(id,page,author_sub,author_name,author_role,body,shot,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)")
-      .bind(id, page, me.sub, me.name, me.role, body.slice(0, 2000), shot, "접수", now, now)
+    await env.DB.prepare("INSERT INTO class_issue(id,page,author_sub,author_name,author_role,body,shot,link,status,seen,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,1,?,?)")
+      .bind(id, page, me.sub, me.name, me.role, body.slice(0, 2000), shot, link, "접수", now, now)
       .run();
     // 원장 카카오워크 알림(웹훅 설정 시). 실패해도 등록은 성공.
     try {
       const webhook = (await cfg(env, "secret_kakao_webhook")) || env.KAKAO_WEBHOOK_URL || "";
       if (webhook) {
         const when = new Date(now).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "full", timeStyle: "short" });
-        const text = `작성자: ${me.name} (${roleLabel(me.role)})\n화면: ${page || "미지정"}\n내용: ${body}\n시간: ${when}`;
+        const text = `작성자: ${me.name} (${roleLabel(me.role)})\n화면: ${page || "미지정"}${link ? `\n링크: ${link}` : ""}\n내용: ${body}\n시간: ${when}`;
         await sendKakao({ KAKAO_WEBHOOK_URL: webhook }, text, undefined, "오류·개선 요청");
       }
     } catch {
@@ -135,7 +145,32 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
     const b = (await request.json().catch(() => ({}))) as { id?: string; status?: string };
     if (!b.id) return json({ error: "id_required" }, 400);
     const status = ISSUE_STATUS.includes(String(b.status)) ? String(b.status) : "접수";
-    await env.DB.prepare("UPDATE class_issue SET status=?, updated_at=? WHERE id=?").bind(status, Date.now(), b.id).run();
+    // 상태 변경(특히 해결완료) → 작성자에게 알림 가도록 seen=0.
+    await env.DB.prepare("UPDATE class_issue SET status=?, seen=0, updated_at=? WHERE id=?").bind(status, Date.now(), b.id).run();
+    return json({ ok: true });
+  }
+  // 지현T(원장) 답변 — 답변 달면 작성자에게 알림(seen=0).
+  if (p === "/api/issue/reply" && m === "POST") {
+    if (!isAdmin) return json({ error: "forbidden" }, 403);
+    const b = (await request.json().catch(() => ({}))) as { id?: string; reply?: string };
+    if (!b.id) return json({ error: "id_required" }, 400);
+    const now = Date.now();
+    await env.DB.prepare("UPDATE class_issue SET reply=?, reply_at=?, seen=0, updated_at=? WHERE id=?")
+      .bind(String(b.reply || "").slice(0, 2000), now, now, b.id).run();
+    return json({ ok: true });
+  }
+  // 알림 개수(종 배지) — 원장: 새 접수 건수 / 그 외: 내 글에 새 답변·해결(seen=0) 건수.
+  if (p === "/api/issue/unseen" && m === "GET") {
+    if (isAdmin) {
+      const r = await env.DB.prepare("SELECT COUNT(*) n FROM class_issue WHERE status='접수'").first<{ n: number }>();
+      return json({ count: Number(r?.n) || 0, kind: "new" });
+    }
+    const r = await env.DB.prepare("SELECT COUNT(*) n FROM class_issue WHERE author_sub=? AND seen=0").bind(me.sub).first<{ n: number }>();
+    return json({ count: Number(r?.n) || 0, kind: "reply" });
+  }
+  // 내 글 답변/해결 확인 처리(작성자가 화면 열 때).
+  if (p === "/api/issue/seen" && m === "POST") {
+    await env.DB.prepare("UPDATE class_issue SET seen=1 WHERE author_sub=? AND seen=0").bind(me.sub).run();
     return json({ ok: true });
   }
   if (p === "/api/issue/delete" && m === "POST") {
@@ -179,6 +214,10 @@ function issueRow(r: Record<string, unknown>) {
     authorRole: String(r.author_role ?? ""),
     body: String(r.body ?? ""),
     shot: String(r.shot ?? ""),
+    link: String(r.link ?? ""),
+    reply: String(r.reply ?? ""),
+    replyAt: Number(r.reply_at ?? 0),
+    seen: Number(r.seen ?? 1) === 1,
     status: String(r.status ?? "접수"),
     createdAt: Number(r.created_at ?? 0),
     updatedAt: Number(r.updated_at ?? 0),

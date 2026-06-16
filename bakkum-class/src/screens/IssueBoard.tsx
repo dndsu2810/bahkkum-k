@@ -19,6 +19,7 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
   const [page, setPage] = useState(defaultPage || "");
   const [body, setBody] = useState("");
   const [shot, setShot] = useState("");
+  const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
 
@@ -37,6 +38,8 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
   }
   useEffect(() => {
     void reload();
+    // 이 화면을 열면 내 글의 새 답변·해결을 '확인함'으로 → 종 배지 정리.
+    feedbackApi.markIssuesSeen().then(() => window.dispatchEvent(new Event("issue-seen"))).catch(() => {});
   }, []);
 
   async function submit() {
@@ -44,9 +47,10 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
     setBusy(true);
     setErr("");
     try {
-      await feedbackApi.createIssue({ page, body: body.trim(), shot });
+      await feedbackApi.createIssue({ page, body: body.trim(), shot, link: link.trim() });
       setBody("");
       setShot("");
+      setLink("");
       setPage(defaultPage || "");
       setSent(true);
       setTimeout(() => setSent(false), 2000);
@@ -73,6 +77,14 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
       setErr("상태 변경에 실패했어요.");
     }
   }
+  async function sendReply(i: Issue, reply: string) {
+    try {
+      await feedbackApi.replyIssue(i.id, reply.trim());
+      await reload();
+    } catch {
+      setErr("답변 저장에 실패했어요.");
+    }
+  }
   async function remove(i: Issue) {
     if (!window.confirm("이 요청을 삭제할까요?")) return;
     try {
@@ -90,8 +102,8 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
     <div className="issue">
       <div className="sm-head">
         <div>
-          <h1 className="sm-title">오류·개선 요청</h1>
-          <p className="sm-desc">불편하거나 고쳤으면 하는 점을 적어 주세요. 지현T에게 바로 전달됩니다.</p>
+          <h1 className="sm-title">오류·개선 요청 <span className="issue-to">To. 지현T</span></h1>
+          <p className="sm-desc">요청사항이나 고쳐야 할 점을 지현T에게 보내세요. 어디가 문제인지 <b>링크</b>를 같이 넣으면 더 빨라요. 답변이 달리면 알림이 갑니다.</p>
         </div>
       </div>
 
@@ -118,6 +130,7 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
             <button className="issue-shot-x" onClick={() => setShot("")}>×</button>
           </div>
         )}
+        <input className="input" style={{ marginBottom: 8 }} value={link} onChange={(e) => setLink(e.target.value)} placeholder="어디가 문제인지 링크 (앱 주소·노션 링크 등 · 선택)" />
         <textarea className="input" rows={3} value={body} onChange={(e) => setBody(e.target.value)} placeholder="무슨 문제인지 / 어떻게 개선하면 좋을지 적어 주세요." />
         <div className="issue-form-foot">
           <button className="btn primary" onClick={submit} disabled={!body.trim() || busy}>{busy ? "보내는 중…" : "보내기"}</button>
@@ -151,22 +164,55 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
                 <button className="issue-del" onClick={() => remove(i)} title="삭제">×</button>
               </div>
               <div className="issue-body">{i.body}</div>
+              {i.link && (
+                <a className="issue-link" href={i.link} target="_blank" rel="noopener noreferrer">
+                  <span className="issue-link-tag">링크</span> {i.link}
+                </a>
+              )}
               {i.shot && (
                 <a className="issue-shot-link" href={i.shot} target="_blank" rel="noopener noreferrer">
                   <img src={i.shot} alt="첨부" />
                 </a>
               )}
+              {i.reply && (
+                <div className="issue-reply">
+                  <div className="issue-reply-h">지현T 답변</div>
+                  <div className="issue-reply-b">{i.reply}</div>
+                </div>
+              )}
               {isAdmin && (
-                <div className="issue-actions">
-                  {ISSUE_STATUSES.map((s) => (
-                    <button key={s} className={"issue-stbtn " + statusCls(s) + (i.status === s ? " on" : "")} onClick={() => setStatus(i, s)}>{s}</button>
-                  ))}
+                <div className="issue-admin">
+                  <div className="issue-actions">
+                    {ISSUE_STATUSES.map((s) => (
+                      <button key={s} className={"issue-stbtn " + statusCls(s) + (i.status === s ? " on" : "")} onClick={() => setStatus(i, s)}>{s}</button>
+                    ))}
+                  </div>
+                  <AdminReply issue={i} onReply={sendReply} />
                 </div>
               )}
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** 원장 답변 입력 — 이미 답변이 있으면 수정. 저장하면 작성자에게 알림(seen=0). */
+function AdminReply({ issue, onReply }: { issue: Issue; onReply: (i: Issue, reply: string) => void }) {
+  const [v, setV] = useState(issue.reply || "");
+  const [open, setOpen] = useState(!issue.reply);
+  if (!open) {
+    return (
+      <button className="btn ghost sm issue-reply-edit" onClick={() => setOpen(true)}>
+        <Icon name="edit" /> 답변 수정
+      </button>
+    );
+  }
+  return (
+    <div className="issue-reply-form">
+      <textarea className="input" rows={2} value={v} onChange={(e) => setV(e.target.value)} placeholder="작성자에게 보낼 답변 (저장하면 알림이 갑니다)" />
+      <button className="btn primary sm" onClick={() => onReply(issue, v)} disabled={!v.trim()}>답변 보내기</button>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { ModalHost, ToastHost } from "./components/ModalHost";
 import { type Category, getCategories, setCategories } from "./lib/categories";
 import { ROLE_LABEL, shownRole, dutyText } from "./lib/roles";
 import { sidebarFor, defaultEntry, dutyLabel, type WsEntry } from "./lib/workspace";
+import type { PageId } from "./lib/nav";
 import { MathContent } from "./screens/MathContent";
 import { HubHome, type HomeStat } from "./screens/HubHome";
 import { MessageSend } from "./screens/MessageSend";
@@ -30,6 +31,7 @@ import { Materials } from "./screens/Materials";
 import { Guide } from "./screens/Guide";
 import { NoticeBanner } from "./components/NoticeBanner";
 import { reqsApi } from "./lib/hubApi";
+import { feedbackApi } from "./lib/feedbackApi";
 import { getRoster, type RosterStudent } from "./lib/rosterApi";
 import { engApi } from "./lib/engApi";
 import { messageApi } from "./lib/messageApi";
@@ -44,11 +46,32 @@ export function Workspace() {
   const entries = useMemo(() => groups.flatMap((g) => g.entries), [groups]);
   const byKey = useMemo(() => new Map(entries.map((e) => [e.key, e])), [entries]);
 
+  // 새로고침해도 현재 화면 유지 + 화면별 주소(해시). 예: #eng_today_mid, 수학은 #math:attendance.
   const [view, setView] = useState<string>(() => {
+    const h = location.hash.slice(1);
+    if (h.startsWith("math:")) return "math";
+    if (h && byKey.get(h)) return byKey.get(h)!.kind === "math" ? "math" : h;
     const d = user ? defaultEntry(user) : "home";
     return byKey.get(d)?.kind === "math" ? "math" : d;
   });
+  // 첫 로드 시 해시가 수학 페이지면 그 페이지로 이동.
+  useEffect(() => {
+    const h = location.hash.slice(1);
+    if (h.startsWith("math:")) store.navigate(h.slice(5) as PageId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // 화면(또는 수학 페이지) 바뀔 때 주소 해시 갱신 — 그 주소로 새로고침/공유하면 같은 화면이 열린다.
+  useEffect(() => {
+    const h = view === "math" ? "math:" + store.page : view;
+    if (location.hash.slice(1) !== h) history.replaceState(null, "", "#" + h);
+  }, [view, store.page]);
   const [cats, setCats] = useState<Category[]>(getCategories());
+
+  // 화면(카테고리) 전환 시 스크롤을 맨 위로 — 이전 화면에서 내려둔 스크롤이 남아 다음 화면이 아래에서 시작하던 문제.
+  useEffect(() => {
+    document.querySelector(".content")?.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0 });
+  }, [view, store.page]);
 
   // 계정별 서버 저장 prefs: 즐겨찾기 + 사이드바 순서(카테고리·세부항목 드래그 정렬)
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -177,6 +200,28 @@ export function Workspace() {
     if (noBackend) return;
     getConfig().then((c) => { setLogoUrl(c.logoUrl || ""); setLogoSize(Number(c.logoSize) || 0); }).catch(() => {});
   }, [noBackend]);
+
+  // 오류·개선 요청 알림 — 원장: 새 접수 / 그 외: 내 글 새 답변·해결. 종 배지 + 사이드바 + 팝업.
+  const [issueUnseen, setIssueUnseen] = useState(0);
+  const [issueKind, setIssueKind] = useState("reply");
+  const [issuePopup, setIssuePopup] = useState(false);
+  useEffect(() => {
+    if (noBackend || !user) return;
+    let alive = true;
+    const load = () => feedbackApi.issueUnseen().then((r) => {
+      if (!alive) return;
+      setIssueUnseen(r.count);
+      setIssueKind(r.kind || "reply");
+      if (r.count > 0 && r.kind === "reply") setIssuePopup(true); // 답변 도착 팝업(작성자)
+    }).catch(() => {});
+    void load();
+    const iv = setInterval(load, 30000);
+    const onFocus = () => void load();
+    const onSeen = () => { setIssueUnseen(0); setIssuePopup(false); };
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("issue-seen", onSeen);
+    return () => { alive = false; clearInterval(iv); window.removeEventListener("focus", onFocus); window.removeEventListener("issue-seen", onSeen); };
+  }, [noBackend, user]);
 
   // 시간표 변경 요청 — 나에게 온 대기 건수(사이드바 알림 배지)
   const [reqPending, setReqPending] = useState(0);
@@ -342,6 +387,7 @@ export function Workspace() {
     if (e.key === "eng_makeup_mid") return engWait.mid > 0 ? <span className="nav-badge warn">{engWait.mid}</span> : null;
     if (e.key === "eng_makeup_elem") return engWait.elem > 0 ? <span className="nav-badge warn">{engWait.elem}</span> : null;
     if (e.key === "messages_send") return replyUnseen > 0 ? <span className="nav-badge bad">{replyUnseen}</span> : null;
+    if (e.key === "issues") return issueUnseen > 0 ? <span className="nav-badge bad">{issueUnseen}</span> : null;
     return null;
   }
 
@@ -484,12 +530,12 @@ export function Workspace() {
           <div className="top-actions">
             <button
               className="topbell"
-              onClick={() => setView("reqs")}
-              title={reqPending > 0 ? `받은 시간표 변경 요청 ${reqPending}건` : "시간표 변경 요청"}
-              aria-label="시간표 변경 요청 알림"
+              onClick={() => setView(issueUnseen > 0 ? "issues" : "reqs")}
+              title={issueUnseen > 0 ? (issueKind === "new" ? `새 오류·개선 요청 ${issueUnseen}건` : `요청 답변·해결 ${issueUnseen}건`) : reqPending > 0 ? `받은 시간표 변경 요청 ${reqPending}건` : "알림"}
+              aria-label="알림"
             >
               <Icon name="bell" />
-              {reqPending > 0 && <span className="topbell-badge">{reqPending}</span>}
+              {reqPending + issueUnseen > 0 && <span className="topbell-badge">{reqPending + issueUnseen}</span>}
             </button>
             <ThemeToggle />
             <span className="acct-chip">
@@ -506,6 +552,16 @@ export function Workspace() {
           <footer className="maker-credit">제작자 EZ</footer>
         </main>
       </div>
+      {issuePopup && issueUnseen > 0 && issueKind === "reply" && (
+        <div className="issue-pop" role="status">
+          <div className="issue-pop-b">
+            <b>지현T가 요청에 답했어요</b>
+            <span>오류·개선 요청 {issueUnseen}건에 답변·해결 소식이 있어요.</span>
+          </div>
+          <button className="btn primary sm" onClick={() => { setView("issues"); setIssuePopup(false); }}>보기</button>
+          <button className="issue-pop-x" onClick={() => setIssuePopup(false)} aria-label="닫기">✕</button>
+        </div>
+      )}
       <ModalHost />
       <ToastHost />
     </div>
