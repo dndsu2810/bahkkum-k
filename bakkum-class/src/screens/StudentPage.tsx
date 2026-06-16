@@ -7,6 +7,7 @@ import { NoticeBanner } from "../components/NoticeBanner";
 import { DateField } from "../components/DateControls";
 import { getCachedLogo } from "../lib/configApi";
 import { IssueBoard } from "./IssueBoard";
+import { Guide } from "./Guide";
 import { Icon } from "../icons";
 
 /** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
@@ -421,6 +422,7 @@ function LogHistory({ rows }: { rows: StudentLogRow[] }) {
 export function StudentHome() {
   const { user, logout } = useAuth();
   const [showIssue, setShowIssue] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
   const logo = getCachedLogo();
   return (
     <div className="sp-shell">
@@ -434,6 +436,7 @@ export function StudentHome() {
         </div>
         <div className="sp-shell-actions">
           <StudentMessages />
+          <button className="btn ghost sm" onClick={() => setShowGuide(true)}><Icon name="book" /> 사용 안내</button>
           <button className="btn ghost sm" onClick={() => setShowIssue(true)}><Icon name="alert" /> 오류 신고</button>
           <button className="btn ghost" onClick={() => logout()}>로그아웃</button>
         </div>
@@ -450,6 +453,15 @@ export function StudentHome() {
           <div className="sp-modal" onClick={(e) => e.stopPropagation()}>
             <button className="modal-x sp-modal-x" onClick={() => setShowIssue(false)} aria-label="닫기">✕</button>
             <IssueBoard defaultPage="학생 화면" />
+          </div>
+        </div>
+      )}
+
+      {showGuide && (
+        <div className="prof-overlay sp-overlay" onClick={() => setShowGuide(false)}>
+          <div className="sp-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-x sp-modal-x" onClick={() => setShowGuide(false)} aria-label="닫기">✕</button>
+            <Guide forceRole="student" embedded />
           </div>
         </div>
       )}

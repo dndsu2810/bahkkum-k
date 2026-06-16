@@ -75,6 +75,7 @@ const MASTER: WsEntry = { key: "master", label: "학생 명단", icon: "students
 const RANKING: WsEntry = { key: "ranking", label: "포인트 랭킹", icon: "chart", kind: "hub" };
 const ENGREPORT: WsEntry = { key: "engreport", label: "영어 월말리포트", icon: "fileText", kind: "hub" };
 const ISSUES: WsEntry = { key: "issues", label: "오류·개선 요청", icon: "clipboard", kind: "hub" };
+const GUIDE: WsEntry = { key: "guide", label: "사용 가이드", icon: "book", kind: "hub" };
 const ACCOUNTS: WsEntry = { key: "accounts", label: "강사 관리", icon: "users", kind: "hub" };
 const ADMIN_DASH: WsEntry = { key: "admin_dash", label: "원장 대시보드", icon: "dashboard", kind: "hub" };
 const SETTINGS: WsEntry = { key: "settings", label: "설정", icon: "gear", kind: "hub" };
@@ -115,6 +116,7 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   if (areas.has("wiki")) common.push(WIKI);
   if (areas.has("sns")) common.push(SNS);
   common.push(ISSUES); // 오류·개선 요청 — 모두 접근.
+  common.push(GUIDE); // 사용 가이드 — 역할별 안내(모두 접근).
   if (common.length) groups.push({ label: "공통", entries: common });
 
   // 학생 메시지 — 원장·수학 담당 공통, 별도 카테고리(동일 위치).

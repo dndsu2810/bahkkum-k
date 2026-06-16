@@ -25,6 +25,7 @@ import { AdminDashboard } from "./screens/AdminDashboard";
 import { ChangeRequests } from "./screens/ChangeRequests";
 import { PointRanking } from "./screens/PointRanking";
 import { IssueBoard } from "./screens/IssueBoard";
+import { Guide } from "./screens/Guide";
 import { NoticeBanner } from "./components/NoticeBanner";
 import { reqsApi } from "./lib/hubApi";
 import { getRoster, type RosterStudent } from "./lib/rosterApi";
@@ -517,6 +518,7 @@ function Body({ view, cats, jumpStudent, reqPrefill, homeTiles, homeSummary, cta
   if (view === "reqs") return <ChangeRequests prefill={reqPrefill} />;
   if (view === "ranking") return <PointRanking />;
   if (view === "issues") return <IssueBoard />;
+  if (view === "guide") return <Guide />;
   if (view === "board") return <BoardShared />;
   if (view === "notes") return <Notes />;
   if (view === "wiki") return <Wiki />;
