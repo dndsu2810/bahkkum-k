@@ -1,7 +1,16 @@
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { Makeup } from "../types";
 import { useStore } from "../store";
 import { byAbsentDesc, mkStatus } from "../lib/logic";
+
+/** 오늘에서 n일 전 날짜(YYYY-MM-DD). 보강 완료 자동 보관 기준선. */
+function daysAgoStr(n: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - n);
+  const p = (x: number) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 import { findBoKey } from "../lib/attendanceLogic";
 import { MakeupList, type MakeupActions } from "../components/MakeupList";
 import { ScheduleModal, SkipModal, MakeupModal } from "../components/modals";
@@ -34,6 +43,7 @@ function MkGroup({
 
 export function MakeupPage() {
   const { data, mutate, toast, openModal } = useStore();
+  const [showArchive, setShowArchive] = useState(false);
 
   const pending = data.makeups.filter((k) => mkStatus(k) === "pending").sort(byAbsentDesc);
   const arranged = data.makeups
@@ -42,6 +52,11 @@ export function MakeupPage() {
       return s === "scheduled" || s === "done";
     })
     .sort((a, b) => (a.makeupDate < b.makeupDate ? 1 : -1));
+  // 완료된 보강은 보강일이 7일 지나면 자동 '보관'(목록에서 접어둠). 예정은 항상 표시. 삭제 아님 — 보관함에서 펼쳐 볼 수 있음.
+  const archiveCutoff = daysAgoStr(7);
+  const isArchived = (k: Makeup) => mkStatus(k) === "done" && !!k.makeupDate && k.makeupDate < archiveCutoff;
+  const arrangedActive = arranged.filter((k) => !isArchived(k));
+  const archived = arranged.filter(isArchived);
   const skipped = data.makeups.filter((k) => mkStatus(k) === "skip").sort(byAbsentDesc);
 
   const actions: MakeupActions = {
@@ -128,13 +143,28 @@ export function MakeupPage() {
         />
       </MkGroup>
 
-      <MkGroup title="보강 예정 · 완료" list={arranged}>
-        <MakeupList list={arranged} students={data.students} manage actions={actions} />
+      <MkGroup title="보강 예정 · 완료" list={arrangedActive}>
+        <MakeupList list={arrangedActive} students={data.students} manage actions={actions} />
       </MkGroup>
 
       <MkGroup title="보강 미진행" list={skipped}>
         <MakeupList list={skipped} students={data.students} manage actions={actions} />
       </MkGroup>
+
+      {archived.length > 0 && (
+        <div className="mk-group">
+          <button className="mk-archive-toggle" onClick={() => setShowArchive((v) => !v)} aria-expanded={showArchive}>
+            <span className={"nav-caret" + (showArchive ? "" : " closed")}>▾</span>
+            보관함 <span className="gcnt">{archived.length}건</span>
+            <span className="mk-archive-hint">완료 후 7일 지난 보강 (자동 보관)</span>
+          </button>
+          {showArchive && (
+            <div className="card">
+              <MakeupList list={archived} students={data.students} manage actions={actions} />
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

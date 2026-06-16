@@ -1629,7 +1629,9 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .board2-add{display:flex;gap:8px;margin:var(--s4) 0}
 .board2-add .input{flex:1}
 .board2-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s4)}
-.board2-col{background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3);min-height:200px}
+.board2-col{background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3);min-height:200px;transition:border-color .12s,background .12s}
+/* 드래그로 카드를 끌어올 때 드롭 대상 칸 강조 */
+.board2-col.drop-over{border-color:var(--brand);background:var(--brand-soft);box-shadow:inset 0 0 0 1px var(--brand)}
 .board2-col-h{font-weight:700;color:var(--ink);font-size:var(--t-sm);margin-bottom:var(--s3);display:flex;gap:6px;align-items:center}
 .board2-cnt{font-size:11px;font-weight:700;background:#eef1f6;color:var(--ink2);border-radius:var(--r-full);padding:0 7px}
 .board2-list{display:flex;flex-direction:column;gap:var(--s2);max-height:62vh;overflow-y:auto}
@@ -1637,7 +1639,8 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .board2-month-l{font-size:var(--t-cap);font-weight:600;color:var(--ink2);min-width:54px;text-align:center}
 .board2-month .board2-mv{width:24px;height:24px}
 .board2-month .board2-mv:disabled{opacity:.35;cursor:default}
-.board2-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--s3);box-shadow:var(--sh-sm);cursor:pointer;transition:border-color .12s,box-shadow .12s}
+.board2-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--s3);box-shadow:var(--sh-sm);cursor:grab;transition:border-color .12s,box-shadow .12s}
+.board2-card:active{cursor:grabbing}
 .board2-card:hover{border-color:var(--brand-line);box-shadow:var(--sh-md,0 2px 8px rgba(15,23,42,.08))}
 .board2-card.urgent{border-color:#f6b9b9;background:linear-gradient(0deg,var(--card),var(--card))}
 .board2-urgent{display:inline-block;font-size:10px;font-weight:800;color:#fff;background:var(--bad);border-radius:var(--r-full);padding:1px 8px;margin-bottom:5px}
@@ -2414,3 +2417,11 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .naesin-grade{margin-left:6px;font-size:var(--t-cap);font-weight:700;color:var(--ink3)}
 .naesin-bulk-ctl{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin-bottom:10px}
 .naesin-pickrow{display:flex;flex-wrap:wrap;gap:6px}
+
+/* 보강 보관함 토글 — 완료 7일 지난 보강을 접어두는 섹션 헤더 */
+.mk-archive-toggle{display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;cursor:pointer;font-size:var(--t-cap);font-weight:700;color:var(--ink2);margin:0 0 9px 2px;padding:4px 0;text-align:left}
+.mk-archive-toggle:hover{color:var(--ink)}
+.mk-archive-toggle .gcnt{color:var(--ink3);font-weight:600}
+.mk-archive-toggle .nav-caret{transition:transform .15s}
+.mk-archive-toggle .nav-caret.closed{transform:rotate(-90deg)}
+.mk-archive-hint{font-weight:500;color:var(--ink4);font-size:11px;margin-left:auto}

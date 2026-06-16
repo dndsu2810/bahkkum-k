@@ -1478,6 +1478,7 @@ function EngMakeupPanel({ students }: { students: RosterStudent[] }) {
     return m;
   }, [students]);
   const [list, setList] = useState<EngMakeup[]>([]);
+  const [showArchive, setShowArchive] = useState(false);
 
   const reload = () => engApi.makeups().then((all) => setList(all.filter((mk) => ids.has(mk.studentId)))).catch(() => {});
   useEffect(() => { void reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [students]);
@@ -1498,8 +1499,13 @@ function EngMakeupPanel({ students }: { students: RosterStudent[] }) {
   const rowProps = (mk: EngMakeup) => ({ mk, name: nameOf[mk.studentId] || "(삭제된 학생)", onEdit: () => openForm(mk), onStatus: setStatus, onRemove: remove });
   // 보강일을 아직 안 정한 건 '대기'(상태 "대기" 또는 보강일 없음).
   const waiting = list.filter((m) => m.status === "대기" || !m.makeupDate);
-  const active = list.filter((m) => (m.status === "예정" || m.status === "완료") && m.makeupDate);
+  const activeAll = list.filter((m) => (m.status === "예정" || m.status === "완료") && m.makeupDate);
   const cancelled = list.filter((m) => m.status === "취소" && m.makeupDate);
+  // 완료된 보강은 보강일이 7일 지나면 자동 '보관'(목록에서 접어둠). 예정은 항상 표시. 삭제 아님 — 보관함에서 펼쳐 볼 수 있음.
+  const archiveCutoff = (() => { const d = new Date(TODAY); d.setDate(d.getDate() - 7); return ymd(d); })();
+  const isArchived = (m: EngMakeup) => m.status === "완료" && !!m.makeupDate && m.makeupDate < archiveCutoff;
+  const active = activeAll.filter((m) => !isArchived(m));
+  const archived = activeAll.filter(isArchived);
 
   return (
     <div className="eng-makeup">
@@ -1535,6 +1541,21 @@ function EngMakeupPanel({ students }: { students: RosterStudent[] }) {
           <div className="card">
             <div className="mk-list">{cancelled.map((mk) => <EngMakeupRow key={mk.id} {...rowProps(mk)} />)}</div>
           </div>
+        </div>
+      )}
+
+      {archived.length > 0 && (
+        <div className="mk-group">
+          <button className="mk-archive-toggle" onClick={() => setShowArchive((v) => !v)} aria-expanded={showArchive}>
+            <span className={"nav-caret" + (showArchive ? "" : " closed")}>▾</span>
+            보관함 <span className="gcnt">{archived.length}건</span>
+            <span className="mk-archive-hint">완료 후 7일 지난 보강 (자동 보관)</span>
+          </button>
+          {showArchive && (
+            <div className="card">
+              <div className="mk-list">{archived.map((mk) => <EngMakeupRow key={mk.id} {...rowProps(mk)} />)}</div>
+            </div>
+          )}
         </div>
       )}
     </div>

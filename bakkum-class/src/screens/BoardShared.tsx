@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useAuth } from "../auth";
 import { tasksApi, type BoardTask, type TaskStatus } from "../lib/hubApi";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
@@ -43,6 +43,9 @@ export function BoardShared() {
   const [edit, setEdit] = useState<BoardTask | null>(null);
   const [doneMonth, setDoneMonth] = useState(() => todayStr().slice(0, 7)); // 완료 칸 월별 보기
   const editing = useRef(false);
+  // 드래그로 카드를 칸 사이 이동(데스크톱). 터치/접근성용 ‹› 버튼은 그대로 유지.
+  const dragId = useRef<string | null>(null);
+  const [dropCol, setDropCol] = useState<TaskStatus | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -115,7 +118,13 @@ export function BoardShared() {
   async function move(t: BoardTask, dir: "next" | "prev") {
     const to = dir === "next" ? NEXT[t.status] : PREV[t.status];
     if (!to) return;
-    setTasks((cur) => cur.map((x) => (x.id === t.id ? { ...x, status: to } : x)));
+    await moveTo(t.id, to);
+  }
+  // 카드를 지정한 칸으로 이동(드래그 드롭·버튼 공용). 같은 칸이면 무시.
+  async function moveTo(id: string, to: TaskStatus) {
+    const t = tasks.find((x) => x.id === id);
+    if (!t || t.status === to) return;
+    setTasks((cur) => cur.map((x) => (x.id === id ? { ...x, status: to } : x)));
     try {
       await tasksApi.save({ ...t, status: to });
       await load();
@@ -123,6 +132,11 @@ export function BoardShared() {
       setErr("이동에 실패했어요.");
     }
   }
+  // 칸(드롭 영역) 공통 핸들러 — 드래그 중일 때만 반응.
+  const colDrop = (status: TaskStatus) => ({
+    onDragOver: (e: DragEvent) => { if (dragId.current) { e.preventDefault(); setDropCol(status); } },
+    onDrop: (e: DragEvent) => { e.preventDefault(); const id = dragId.current; dragId.current = null; setDropCol(null); if (id) void moveTo(id, status); },
+  });
   async function saveEdit(next: BoardTask) {
     setTasks((cur) => cur.map((x) => (x.id === next.id ? next : x)));
     setEdit(null);
@@ -145,7 +159,15 @@ export function BoardShared() {
   }
 
   const card = (t: BoardTask) => (
-    <div className={"board2-card" + (t.priority === "urgent" ? " urgent" : "")} key={t.id} onClick={() => setEdit(t)} tabIndex={0}>
+    <div
+      className={"board2-card" + (t.priority === "urgent" ? " urgent" : "")}
+      key={t.id}
+      onClick={() => setEdit(t)}
+      tabIndex={0}
+      draggable
+      onDragStart={(e) => { dragId.current = t.id; e.dataTransfer.effectAllowed = "move"; }}
+      onDragEnd={() => { dragId.current = null; setDropCol(null); }}
+    >
       {t.priority === "urgent" && <span className="board2-urgent">급함</span>}
       <div className="board2-card-title">{t.title}</div>
       {t.memo && <div className="board2-card-memo">{t.memo}</div>}
@@ -195,7 +217,7 @@ export function BoardShared() {
         {ACTIVE_COLS.map((c) => {
           const items = sortTasks(scoped.filter((t) => t.status === c.key));
           return (
-            <div className="board2-col" key={c.key}>
+            <div className={"board2-col" + (dropCol === c.key ? " drop-over" : "")} key={c.key} {...colDrop(c.key)}>
               <div className="board2-col-h">
                 {c.label} <span className="board2-cnt">{items.length}</span>
               </div>
@@ -210,7 +232,7 @@ export function BoardShared() {
         {(() => {
           const items = sortTasks(scoped.filter((t) => t.status === "done" && monthOf(t) === doneMonth));
           return (
-            <div className="board2-col" key="done">
+            <div className={"board2-col" + (dropCol === "done" ? " drop-over" : "")} key="done" {...colDrop("done")}>
               <div className="board2-col-h">
                 완료 <span className="board2-cnt">{items.length}</span>
                 <div className="board2-month">
