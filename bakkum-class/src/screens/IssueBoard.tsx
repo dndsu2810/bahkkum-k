@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { feedbackApi, ISSUE_PAGES, ISSUE_STATUSES, ISSUE_STATUS_ORDER, type Issue } from "../lib/feedbackApi";
 import { uploadImage } from "../lib/configApi";
 import { fmtWhen } from "../lib/dates";
+import { useAuth } from "../auth";
 import { Icon } from "../icons";
 
 const ROLE_LABEL: Record<string, string> = { admin: "원장", developer: "개발자", math: "수학", english_mid: "영어(중고등)", english_elem: "영어(초등)", desk: "데스크", student: "학생" };
@@ -9,6 +10,8 @@ const statusCls = (s: string) => (s === "완료" ? "done" : s === "보류" ? "ho
 
 /** 오류·개선 요청 — 누구나 작성(작성자 자동), 원장이 상태 변경. */
 export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
+  const { user } = useAuth();
+  const mySub = user?.sub || "";
   const [issues, setIssues] = useState<Issue[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [filter, setFilter] = useState<string>("all");
@@ -83,6 +86,15 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
       await reload();
     } catch {
       setErr("답변 저장에 실패했어요.");
+    }
+  }
+  async function deleteReply(replyId: string) {
+    if (!window.confirm("이 답변을 삭제할까요?")) return;
+    try {
+      await feedbackApi.removeReply(replyId);
+      await reload();
+    } catch {
+      setErr("답변 삭제에 실패했어요.");
     }
   }
   async function remove(i: Issue) {
@@ -182,22 +194,21 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
                   <img src={i.shot} alt="첨부" />
                 </a>
               )}
-              {i.reply && (
-                <div className="issue-reply">
-                  <div className="issue-reply-h">지현T 답변</div>
-                  <div className="issue-reply-b">{i.reply}</div>
-                </div>
-              )}
               {isAdmin && (
-                <div className="issue-admin">
-                  <div className="issue-actions">
-                    {ISSUE_STATUSES.map((s) => (
-                      <button key={s} className={"issue-stbtn " + statusCls(s) + (i.status === s ? " on" : "")} onClick={() => setStatus(i, s)}>{s}</button>
-                    ))}
-                  </div>
-                  <AdminReply issue={i} onReply={sendReply} />
+                <div className="issue-actions">
+                  {ISSUE_STATUSES.map((s) => (
+                    <button key={s} className={"issue-stbtn " + statusCls(s) + (i.status === s ? " on" : "")} onClick={() => setStatus(i, s)}>{s}</button>
+                  ))}
                 </div>
               )}
+              <ReplyThread
+                issue={i}
+                mySub={mySub}
+                isAdmin={isAdmin}
+                canReply={isAdmin || i.authorSub === mySub}
+                onSend={sendReply}
+                onDelete={deleteReply}
+              />
             </div>
           ))}
         </div>
@@ -206,21 +217,54 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
   );
 }
 
-/** 원장 답변 입력 — 이미 답변이 있으면 수정. 저장하면 작성자에게 알림(seen=0). */
-function AdminReply({ issue, onReply }: { issue: Issue; onReply: (i: Issue, reply: string) => void }) {
-  const [v, setV] = useState(issue.reply || "");
-  const [open, setOpen] = useState(!issue.reply);
-  if (!open) {
-    return (
-      <button className="btn ghost sm issue-reply-edit" onClick={() => setOpen(true)}>
-        <Icon name="edit" /> 답변 수정
-      </button>
-    );
-  }
+/** 답변 스레드 — 작성자·시간이 남는 댓글. 원장과 글 작성자가 주고받고, 내 답글은 색으로 구분. */
+function ReplyThread({
+  issue,
+  mySub,
+  isAdmin,
+  canReply,
+  onSend,
+  onDelete,
+}: {
+  issue: Issue;
+  mySub: string;
+  isAdmin: boolean;
+  canReply: boolean;
+  onSend: (i: Issue, text: string) => void;
+  onDelete: (replyId: string) => void;
+}) {
+  const [v, setV] = useState("");
+  const [open, setOpen] = useState(false);
+  const replies = issue.replies || [];
   return (
-    <div className="issue-reply-form">
-      <textarea className="input" rows={2} value={v} onChange={(e) => setV(e.target.value)} placeholder="작성자에게 보낼 답변 (저장하면 알림이 갑니다)" />
-      <button className="btn primary sm" onClick={() => onReply(issue, v)} disabled={!v.trim()}>답변 보내기</button>
+    <div className="issue-thread">
+      {replies.map((r) => {
+        const mine = !!r.authorSub && r.authorSub === mySub;
+        return (
+          <div className={"issue-msg" + (mine ? " mine" : "")} key={r.id}>
+            <div className="issue-msg-h">
+              <span className="issue-msg-who">{mine ? "나" : r.authorName || "답변"}{r.authorRole ? ` · ${ROLE_LABEL[r.authorRole] || r.authorRole}` : ""}</span>
+              <span className="issue-msg-t">{fmtWhen(r.createdAt)}</span>
+              {(mine || isAdmin) && <button className="issue-msg-del" title="삭제" onClick={() => onDelete(r.id)}>×</button>}
+            </div>
+            <div className="issue-msg-b">{r.text}</div>
+          </div>
+        );
+      })}
+      {canReply &&
+        (open ? (
+          <div className="issue-reply-form">
+            <textarea className="input" rows={2} value={v} onChange={(e) => setV(e.target.value)} placeholder={replies.length ? "답글 달기… (누가 썼는지 함께 표시돼요)" : "답변 쓰기…"} />
+            <div className="issue-reply-act">
+              <button className="btn primary sm" onClick={() => { onSend(issue, v); setV(""); setOpen(false); }} disabled={!v.trim()}>보내기</button>
+              <button className="btn ghost sm" onClick={() => { setV(""); setOpen(false); }}>취소</button>
+            </div>
+          </div>
+        ) : (
+          <button className="btn ghost sm issue-reply-edit" onClick={() => setOpen(true)}>
+            <Icon name="edit" /> {replies.length ? "답글 달기" : "답변 쓰기"}
+          </button>
+        ))}
     </div>
   );
 }

@@ -43,6 +43,17 @@ export async function ensureFeedbackTables(env: Env): Promise<void> {
   }
   // 상태 명칭 통일: 기존 '해결중' → '진행중'(보류 단계 신설에 맞춰 정리).
   try { await env.DB.prepare("UPDATE class_issue SET status='진행중' WHERE status='해결중'").run(); } catch { /* ignore */ }
+  // 답변을 작성자·시간이 남는 댓글 스레드로 — 누가 무슨 답을 했는지 구분.
+  try {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_issue_reply (id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, author_sub TEXT NOT NULL DEFAULT '', author_name TEXT NOT NULL DEFAULT '', author_role TEXT NOT NULL DEFAULT '', text TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)").run();
+    await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_class_issue_reply ON class_issue_reply(issue_id)").run();
+    // 기존 단일 reply 칸 → 스레드 첫 메시지로 1회 이관(이미 옮겼으면 건너뜀).
+    await env.DB.prepare(
+      "INSERT INTO class_issue_reply(id, issue_id, author_sub, author_name, author_role, text, created_at) " +
+        "SELECT 'irpL_'||id, id, '', '', 'admin', reply, CASE WHEN reply_at>0 THEN reply_at ELSE updated_at END FROM class_issue " +
+        "WHERE reply<>'' AND NOT EXISTS (SELECT 1 FROM class_issue_reply x WHERE x.issue_id = class_issue.id)"
+    ).run();
+  } catch { /* ignore */ }
 }
 
 async function cfg(env: Env, k: string): Promise<string> {
@@ -115,7 +126,19 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
       ? env.DB.prepare("SELECT * FROM class_issue ORDER BY created_at DESC LIMIT 500")
       : env.DB.prepare("SELECT * FROM class_issue WHERE author_sub=? ORDER BY created_at DESC LIMIT 200").bind(me.sub);
     const r = await q.all<Record<string, unknown>>();
-    return json({ issues: (r.results || []).map(issueRow), isAdmin });
+    const issues = (r.results || []).map(issueRow);
+    // 답변 스레드 한 번에 가져와 글별로 묶기.
+    const ids = issues.map((i) => i.id);
+    if (ids.length) {
+      const rr = await env.DB
+        .prepare(`SELECT * FROM class_issue_reply WHERE issue_id IN (${ids.map(() => "?").join(",")}) ORDER BY created_at ASC`)
+        .bind(...ids)
+        .all<Record<string, unknown>>();
+      const byIssue: Record<string, ReturnType<typeof replyRow>[]> = {};
+      for (const row of rr.results || []) (byIssue[String(row.issue_id)] ||= []).push(replyRow(row));
+      for (const i of issues) i.replies = byIssue[i.id] || [];
+    }
+    return json({ issues, isAdmin });
   }
   if (p === "/api/issue" && m === "POST") {
     const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -154,14 +177,34 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
     await env.DB.prepare("UPDATE class_issue SET status=?, seen=0, updated_at=? WHERE id=?").bind(status, Date.now(), b.id).run();
     return json({ ok: true });
   }
-  // 지현T(원장) 답변 — 답변 달면 작성자에게 알림(seen=0).
+  // 답변(댓글 스레드) — 원장 또는 글 작성자가 작성. 누가 썼는지·시간 함께 남김.
   if (p === "/api/issue/reply" && m === "POST") {
-    if (!isAdmin) return json({ error: "forbidden" }, 403);
     const b = (await request.json().catch(() => ({}))) as { id?: string; reply?: string };
     if (!b.id) return json({ error: "id_required" }, 400);
+    const issue = await env.DB.prepare("SELECT author_sub FROM class_issue WHERE id=?").bind(b.id).first<{ author_sub: string }>();
+    if (!issue) return json({ error: "not_found" }, 404);
+    const isAuthor = String(issue.author_sub) === me.sub;
+    if (!isAdmin && !isAuthor) return json({ error: "forbidden" }, 403); // 원장·작성자만 답글
+    const text = String(b.reply || "").trim().slice(0, 2000);
+    if (!text) return json({ error: "text_required" }, 400);
     const now = Date.now();
-    await env.DB.prepare("UPDATE class_issue SET reply=?, reply_at=?, seen=0, updated_at=? WHERE id=?")
-      .bind(String(b.reply || "").slice(0, 2000), now, now, b.id).run();
+    const authorRole = me.displayRole || me.role;
+    await env.DB
+      .prepare("INSERT INTO class_issue_reply(id, issue_id, author_sub, author_name, author_role, text, created_at) VALUES(?,?,?,?,?,?,?)")
+      .bind(newId("irp"), b.id, me.sub, me.name, authorRole, text, now)
+      .run();
+    // 작성자 본인 답글이면 자기 알림은 끄고(seen=1), 남(원장 등)이 달면 작성자에게 알림(seen=0).
+    await env.DB.prepare("UPDATE class_issue SET seen=?, updated_at=? WHERE id=?").bind(isAuthor ? 1 : 0, now, b.id).run();
+    return json({ ok: true });
+  }
+  // 답변 삭제 — 본인 답글 또는 원장.
+  if (p === "/api/issue/reply/delete" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string };
+    if (!b.id) return json({ error: "id_required" }, 400);
+    const row = await env.DB.prepare("SELECT author_sub FROM class_issue_reply WHERE id=?").bind(b.id).first<{ author_sub: string }>();
+    if (!row) return json({ ok: true });
+    if (!isAdmin && String(row.author_sub) !== me.sub) return json({ error: "forbidden" }, 403);
+    await env.DB.prepare("DELETE FROM class_issue_reply WHERE id=?").bind(b.id).run();
     return json({ ok: true });
   }
   // 알림 개수(종 배지) — 원장: 새 접수 건수 / 그 외: 내 글에 새 답변·해결(seen=0) 건수.
@@ -226,5 +269,17 @@ function issueRow(r: Record<string, unknown>) {
     status: String(r.status ?? "접수"),
     createdAt: Number(r.created_at ?? 0),
     updatedAt: Number(r.updated_at ?? 0),
+    replies: [] as ReturnType<typeof replyRow>[],
+  };
+}
+function replyRow(r: Record<string, unknown>) {
+  return {
+    id: String(r.id),
+    issueId: String(r.issue_id ?? ""),
+    authorSub: String(r.author_sub ?? ""),
+    authorName: String(r.author_name ?? ""),
+    authorRole: String(r.author_role ?? ""),
+    text: String(r.text ?? ""),
+    createdAt: Number(r.created_at ?? 0),
   };
 }

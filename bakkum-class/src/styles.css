@@ -2564,9 +2564,21 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .issue-reply-h{font-size:var(--t-cap);font-weight:800;color:var(--ok);margin-bottom:3px}
 .issue-reply-b{font-size:var(--t-sm);color:var(--ink2);line-height:1.55;white-space:pre-wrap}
 .issue-admin{margin-top:10px;display:flex;flex-direction:column;gap:8px}
-.issue-reply-form{display:flex;gap:8px;align-items:flex-end}
+.issue-reply-form{display:flex;gap:8px;align-items:flex-end;margin-top:8px}
 .issue-reply-form .input{flex:1}
-.issue-reply-edit{align-self:flex-start}
+.issue-reply-act{display:flex;gap:6px;flex:none}
+.issue-reply-edit{align-self:flex-start;margin-top:8px}
+/* 답변 스레드 — 작성자·시간 표시, 내 답글은 색으로 구분 */
+.issue-thread{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.issue-msg{border-left:3px solid var(--line2);background:var(--card2,#f6f8fb);border-radius:0 var(--r-md) var(--r-md) 0;padding:8px 11px}
+.issue-msg.mine{border-left-color:var(--brand);background:var(--brand-soft)}
+.issue-msg-h{display:flex;align-items:center;gap:8px;margin-bottom:3px}
+.issue-msg-who{font-size:var(--t-cap);font-weight:800;color:var(--ink2)}
+.issue-msg.mine .issue-msg-who{color:var(--brand-d)}
+.issue-msg-t{font-size:var(--t-cap);color:var(--ink3)}
+.issue-msg-del{margin-left:auto;border:none;background:none;color:var(--ink3);font-size:15px;line-height:1;cursor:pointer;padding:0 2px}
+.issue-msg-del:hover{color:var(--bad)}
+.issue-msg-b{font-size:var(--t-sm);color:var(--ink2);line-height:1.55;white-space:pre-wrap}
 /* 답변 도착 팝업 */
 .issue-pop{position:fixed;right:18px;bottom:18px;z-index:60;display:flex;align-items:center;gap:12px;max-width:380px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-lg);padding:12px 14px}
 .issue-pop-b{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}

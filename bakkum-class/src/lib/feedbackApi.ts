@@ -23,6 +23,15 @@ export interface Notice {
   createdBy: string;
   audience: "all" | "staff"; // all=학생 포함 전체, staff=강사만
 }
+export interface IssueReply {
+  id: string;
+  issueId: string;
+  authorSub: string;
+  authorName: string;
+  authorRole: string;
+  text: string;
+  createdAt: number;
+}
 export interface Issue {
   id: string;
   page: string;
@@ -32,12 +41,13 @@ export interface Issue {
   body: string;
   shot: string;
   link: string; // 어디가 문제인지 링크
-  reply: string; // 지현T 답변
+  reply: string; // (구) 단일 답변 — 스레드로 이관됨
   replyAt: number;
   seen: boolean; // 작성자가 답변·해결을 확인했는지
   status: string; // 접수 | 진행중 | 보류 | 완료
   createdAt: number;
   updatedAt: number;
+  replies: IssueReply[]; // 작성자·시간이 남는 답변 스레드
 }
 
 export const ISSUE_STATUSES = ["접수", "진행중", "보류", "완료"];
@@ -65,6 +75,7 @@ export const feedbackApi = {
   createIssue: (i: { page: string; body: string; shot?: string; link?: string }) => jpost("/api/issue", i),
   setIssueStatus: (id: string, status: string) => jpost("/api/issue/status", { id, status }),
   replyIssue: (id: string, reply: string) => jpost("/api/issue/reply", { id, reply }),
+  removeReply: (id: string) => jpost("/api/issue/reply/delete", { id }),
   removeIssue: (id: string) => jpost("/api/issue/delete", { id }),
   /** 알림 개수(종) — 원장: 새 접수 / 그 외: 내 글 새 답변·해결. */
   issueUnseen: () => jget<{ count: number; kind: string }>("/api/issue/unseen"),
