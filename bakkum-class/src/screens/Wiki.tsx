@@ -4,6 +4,7 @@ import { wikiApi, type WikiPage, type WikiStatus } from "../lib/hubApi";
 import { fmtWhen } from "../lib/dates";
 import { ImageGrid } from "../components/ImageGrid";
 import { copyText } from "../lib/report";
+import { Icon } from "../icons";
 
 /** 표 셀 — 누르면 그 값이 복사된다(아이디·비번 복붙용). 빈 칸은 '—'. */
 function CopyCell({ text }: { text: string }) {
@@ -128,6 +129,136 @@ function WikiBody({ text }: { text: string }) {
     }
   }
   return <div className="wiki-body">{blocks}</div>;
+}
+
+/* ===== 본문 블록 편집기 — 글/표 블록으로 입력·수정(저장은 파이프 표 텍스트로 동일) ===== */
+type Block = { type: "text"; text: string } | { type: "table"; rows: string[][] };
+
+/** 본문 텍스트 → 블록 배열. 연속된 `a | b` 줄은 표, 나머지는 글. */
+function parseBlocks(body: string): Block[] {
+  const blocks: Block[] = [];
+  let textBuf: string[] = [];
+  let tblBuf: string[] = [];
+  const flushText = () => { const t = textBuf.join("\n").trim(); if (t) blocks.push({ type: "text", text: t }); textBuf = []; };
+  const flushTbl = () => {
+    if (!tblBuf.length) return;
+    const rows = tblBuf.map((l) => l.split("|").map((c) => c.trim()));
+    const cols = Math.max(...rows.map((r) => r.length), 1);
+    blocks.push({ type: "table", rows: rows.map((r) => { const rr = r.slice(); while (rr.length < cols) rr.push(""); return rr; }) });
+    tblBuf = [];
+  };
+  for (const ln of body.replace(/\r/g, "").split("\n")) {
+    if (ln.includes("|")) { flushText(); tblBuf.push(ln); }
+    else { flushTbl(); textBuf.push(ln); }
+  }
+  flushTbl();
+  flushText();
+  return blocks;
+}
+
+/** 블록 배열 → 본문 텍스트(WikiBody가 그대로 표/글로 렌더). */
+function serializeBlocks(blocks: Block[]): string {
+  return blocks
+    .map((b) => (b.type === "text" ? b.text.trim() : b.rows.map((r) => r.map((c) => c.trim()).join(" | ")).join("\n")))
+    .filter((s) => s.trim())
+    .join("\n\n");
+}
+
+/** 위키 본문 편집기 — '쉬운 편집'(블록·표 셀) ↔ '직접 입력'(텍스트) 전환. */
+function BodyEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [mode, setMode] = useState<"block" | "text">("block");
+  const [blocks, setBlocks] = useState<Block[]>(() => parseBlocks(value));
+
+  const update = (bs: Block[]) => { setBlocks(bs); onChange(serializeBlocks(bs)); };
+  const patch = (bi: number, b: Block) => update(blocks.map((x, i) => (i === bi ? b : x)));
+  const delBlock = (bi: number) => update(blocks.filter((_, i) => i !== bi));
+  const moveBlock = (bi: number, d: number) => {
+    const j = bi + d;
+    if (j < 0 || j >= blocks.length) return;
+    const bs = blocks.slice();
+    [bs[bi], bs[j]] = [bs[j], bs[bi]];
+    update(bs);
+  };
+  const addText = () => update([...blocks, { type: "text", text: "" }]);
+  const addTable = () => update([...blocks, { type: "table", rows: [["항목", "값"], ["", ""]] }]);
+
+  // 표 셀/행/열 조작.
+  const setCell = (bi: number, ri: number, ci: number, v: string) => {
+    const b = blocks[bi];
+    if (b.type !== "table") return;
+    patch(bi, { type: "table", rows: b.rows.map((r, i) => (i === ri ? r.map((c, j) => (j === ci ? v : c)) : r)) });
+  };
+  const addRow = (bi: number) => { const b = blocks[bi]; if (b.type !== "table") return; patch(bi, { type: "table", rows: [...b.rows, b.rows[0].map(() => "")] }); };
+  const delRow = (bi: number, ri: number) => { const b = blocks[bi]; if (b.type !== "table" || b.rows.length <= 1) return; patch(bi, { type: "table", rows: b.rows.filter((_, i) => i !== ri) }); };
+  const addCol = (bi: number) => { const b = blocks[bi]; if (b.type !== "table") return; patch(bi, { type: "table", rows: b.rows.map((r) => [...r, ""]) }); };
+  const delCol = (bi: number, ci: number) => { const b = blocks[bi]; if (b.type !== "table" || b.rows[0].length <= 1) return; patch(bi, { type: "table", rows: b.rows.map((r) => r.filter((_, j) => j !== ci)) }); };
+
+  if (mode === "text") {
+    return (
+      <div className="wbe">
+        <div className="wbe-bar">
+          <span className="wbe-hint">직접 입력 — `머리 | 값` 줄은 표가 됩니다.</span>
+          <button type="button" className="btn ghost sm" onClick={() => { setBlocks(parseBlocks(value)); setMode("block"); }}>쉬운 편집으로</button>
+        </div>
+        <textarea className="input wiki-body-edit" rows={16} value={value} onChange={(e) => onChange(e.target.value)} placeholder="본문 (자유 입력)" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="wbe">
+      <div className="wbe-bar">
+        <span className="wbe-hint">글과 표를 블록으로 추가·수정하세요. 표는 칸을 눌러 바로 입력합니다.</span>
+        <button type="button" className="btn ghost sm" onClick={() => setMode("text")}>직접 입력으로</button>
+      </div>
+
+      {blocks.length === 0 && <div className="wbe-empty">아래 버튼으로 글이나 표를 추가하세요.</div>}
+
+      {blocks.map((b, bi) => (
+        <div className="wbe-block" key={bi}>
+          <div className="wbe-block-side">
+            <button type="button" className="wbe-ic" title="위로" onClick={() => moveBlock(bi, -1)} disabled={bi === 0}><Icon name="chev" /></button>
+            <button type="button" className="wbe-ic down" title="아래로" onClick={() => moveBlock(bi, 1)} disabled={bi === blocks.length - 1}><Icon name="chev" /></button>
+            <button type="button" className="wbe-ic del" title="블록 삭제" onClick={() => delBlock(bi)}><Icon name="trash" /></button>
+          </div>
+          <div className="wbe-block-body">
+            {b.type === "text" ? (
+              <textarea className="input wbe-text" rows={Math.min(10, Math.max(2, b.text.split("\n").length))} value={b.text} placeholder="내용을 입력하세요. 【제목】 줄은 소제목이 됩니다." onChange={(e) => patch(bi, { type: "text", text: e.target.value })} />
+            ) : (
+              <div className="wbe-table-wrap">
+                <table className="wbe-table">
+                  <tbody>
+                    {b.rows.map((r, ri) => (
+                      <tr key={ri} className={ri === 0 ? "head" : ""}>
+                        {r.map((c, ci) => (
+                          <td key={ci}>
+                            {ri === 0 && <button type="button" className="wbe-colx" title="열 삭제" onClick={() => delCol(bi, ci)}>×</button>}
+                            <input className="wbe-cell" value={c} placeholder={ri === 0 ? "머리글" : ""} onChange={(e) => setCell(bi, ri, ci, e.target.value)} />
+                          </td>
+                        ))}
+                        <td className="wbe-rowact">
+                          <button type="button" className="wbe-ic del" title="행 삭제" onClick={() => delRow(bi, ri)} disabled={b.rows.length <= 1}><Icon name="trash" /></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="wbe-table-act">
+                  <button type="button" className="btn ghost sm" onClick={() => addRow(bi)}><Icon name="plus" /> 행</button>
+                  <button type="button" className="btn ghost sm" onClick={() => addCol(bi)}><Icon name="plus" /> 열</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+
+      <div className="wbe-add">
+        <button type="button" className="btn ghost" onClick={addText}><Icon name="plus" /> 글 추가</button>
+        <button type="button" className="btn ghost" onClick={addTable}><Icon name="plus" /> 표 추가</button>
+      </div>
+    </div>
+  );
 }
 
 const IMPORTANCE = [
@@ -282,13 +413,7 @@ export function Wiki() {
                 </select>
               </label>
             </div>
-            <textarea
-              className="input wiki-body-edit"
-              rows={16}
-              value={edit.body}
-              onChange={(e) => setEdit({ ...edit, body: e.target.value })}
-              placeholder="본문 (자유 입력)"
-            />
+            <BodyEditor value={edit.body} onChange={(v) => setEdit({ ...edit, body: v })} />
             <div className="wiki-edit-act">
               <button className="btn primary" onClick={save} disabled={!edit.title.trim()}>저장</button>
               <button className="btn ghost" onClick={() => setEdit(null)}>취소</button>
