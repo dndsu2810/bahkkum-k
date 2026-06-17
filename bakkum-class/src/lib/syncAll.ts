@@ -25,28 +25,33 @@ async function jget(url: string): Promise<Record<string, number> & { error?: str
   return j;
 }
 
-// 가져오기 단계 정의 — 순서대로 실행. count는 응답에서 "들어온 건수"를 뽑는다.
-const STEPS: { key: string; label: string; run: () => Promise<number> }[] = [
-  { key: "roster", label: "학생 명단·생일", run: async () => (await jget("/api/sync/roster?dry=0")).willInsert ?? 0 },
-  { key: "events", label: "학원 일정", run: async () => (await jpost("/api/sync/events")).imported ?? 0 },
-  { key: "engDaily", label: "영어(중고등) 숙제", run: async () => (await jpost("/api/sync/eng-daily")).imported ?? 0 },
-  { key: "engAtt", label: "영어 출결·포인트", run: async () => (await jpost("/api/sync/eng-attendance")).imported ?? 0 },
-  { key: "elemLog", label: "영어(초등) 수업일지", run: async () => (await jpost("/api/sync/eng-elem-log")).imported ?? 0 },
-  { key: "tasks", label: "강사 업무(할 일 배정)", run: async () => (await jpost("/api/sync/tasks")).imported ?? 0 },
-  { key: "wiki", label: "매뉴얼 위키", run: async () => (await jpost("/api/sync/wiki")).imported ?? 0 },
-  { key: "sns", label: "SNS 기록", run: async () => (await jpost("/api/sync/sns")).imported ?? 0 },
+// 가져오기 단계 정의 — count는 응답에서 "들어온 건수"를 뽑는다.
+// mirror=true 는 노션 기준으로 '전체 교체'하는 항목(앱 수동수정분이 덮일 수 있음 → 더 주의).
+const STEPS: { key: string; label: string; mirror: boolean; run: () => Promise<number> }[] = [
+  { key: "roster", label: "학생 명단·생일", mirror: false, run: async () => (await jget("/api/sync/roster?dry=0")).willInsert ?? 0 },
+  { key: "events", label: "학원 일정", mirror: false, run: async () => (await jpost("/api/sync/events")).imported ?? 0 },
+  { key: "engDaily", label: "영어(중고등) 숙제", mirror: false, run: async () => (await jpost("/api/sync/eng-daily")).imported ?? 0 },
+  { key: "engAtt", label: "영어 출결·포인트", mirror: false, run: async () => (await jpost("/api/sync/eng-attendance")).imported ?? 0 },
+  { key: "elemLog", label: "영어(초등) 수업일지", mirror: false, run: async () => (await jpost("/api/sync/eng-elem-log")).imported ?? 0 },
+  { key: "tasks", label: "강사 업무(할 일 배정)", mirror: false, run: async () => (await jpost("/api/sync/tasks")).imported ?? 0 },
+  { key: "wiki", label: "매뉴얼 위키", mirror: true, run: async () => (await jpost("/api/sync/wiki")).imported ?? 0 },
+  { key: "sns", label: "SNS 기록", mirror: true, run: async () => (await jpost("/api/sync/sns")).imported ?? 0 },
 ];
 
-/** 모든 노션 연결을 순차로 가져온다. 단계마다 onProgress로 현재 상태 배열을 넘긴다.
+/** UI 표시용 단계 메타(체크박스 목록). */
+export const SYNC_STEPS: { key: string; label: string; mirror: boolean }[] = STEPS.map((s) => ({ key: s.key, label: s.label, mirror: s.mirror }));
+
+/** 선택한 노션 연결만 순차로 가져온다(keys 미지정 시 전체). 단계마다 onProgress로 상태 배열을 넘긴다.
  *  한 단계가 실패해도 멈추지 않고 다음으로 진행한다(노션 권한 누락 등은 부분 성공). */
-export async function syncAllFromNotion(onProgress: (steps: SyncStep[]) => void): Promise<SyncStep[]> {
-  const steps: SyncStep[] = STEPS.map((s) => ({ key: s.key, label: s.label, status: "pending", count: 0 }));
+export async function syncAllFromNotion(onProgress: (steps: SyncStep[]) => void, keys?: string[]): Promise<SyncStep[]> {
+  const run = keys && keys.length ? STEPS.filter((s) => keys.includes(s.key)) : STEPS;
+  const steps: SyncStep[] = run.map((s) => ({ key: s.key, label: s.label, status: "pending", count: 0 }));
   onProgress(steps.map((s) => ({ ...s })));
-  for (let i = 0; i < STEPS.length; i++) {
+  for (let i = 0; i < run.length; i++) {
     steps[i].status = "running";
     onProgress(steps.map((s) => ({ ...s })));
     try {
-      steps[i].count = await STEPS[i].run();
+      steps[i].count = await run[i].run();
       steps[i].status = "done";
     } catch (e) {
       steps[i].status = "error";

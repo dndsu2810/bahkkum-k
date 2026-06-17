@@ -64,7 +64,7 @@ function Calendar({ data }: { data: ReportData }) {
     const dow = new Date(year, month - 1, day).getDay();
     const dCls = hol || dow === 0 ? "r-d sun" : dow === 6 ? "r-d sat" : "r-d";
     const bs = att.days[day] || [];
-    const label: Record<string, string> = { p: "출석", m: "보강", a: "결석" };
+    const label: Record<string, string> = { p: "출석", l: "지각", m: "보강", a: "결석" };
     // 단일 기록이면 셀 배경을 옅게 틴트, 여러 기록이면 흰 셀에 태그 모두 표시. 공휴일(기록 없음)은 회색.
     const cls = bs.length === 1 ? "r-cell att-" + bs[0] : hol && bs.length === 0 ? "r-cell att-h" : "r-cell";
     cells.push(
@@ -88,6 +88,7 @@ function Calendar({ data }: { data: ReportData }) {
     <div className="r-cal-card">
       <div className="r-cal-legend">
         <span><i className="r-lg g" />출석</span>
+        <span><i className="r-lg w" />지각</span>
         <span><i className="r-lg b" />보강</span>
         <span><i className="r-lg r" />결석</span>
         <span><i className="r-lg n" />수업 없음</span>

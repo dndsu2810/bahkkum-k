@@ -64,7 +64,7 @@ export interface ReportExtras {
 }
 
 /** day-of-month → attendance bucket for the calendar */
-export type DayBucket = "p" | "m" | "a"; // 출석류 / 보강 / 결석류
+export type DayBucket = "p" | "l" | "m" | "a"; // 출석 / 지각 / 보강 / 결석류
 
 export interface AttSummary {
   total: number;

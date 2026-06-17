@@ -2339,6 +2339,14 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .skel-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:16px}
 
 /* 노션 가져오기 진행 단계 목록 */
+/* 노션 가져오기 — 항목별 선택 체크박스 */
+.sync-pick{display:flex;flex-direction:column;gap:6px}
+.sync-pick-item{display:flex;align-items:center;gap:9px;padding:8px 11px;border:1px solid var(--line2);border-radius:var(--r-sm);
+  background:var(--card);cursor:pointer;font-size:var(--t-sm)}
+.sync-pick-item.on{border-color:var(--brand);background:var(--brand-soft)}
+.sync-pick-item input{flex:none}
+.sync-pick-label{flex:1;color:var(--ink)}
+.sync-pick-tag{flex:none;font-size:var(--t-cap);font-weight:700;color:var(--bad);background:var(--bad-soft,#fdeaea);border:1px solid #f6cccc;border-radius:var(--r-full);padding:1px 8px}
 .sync-steps{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
 .sync-step{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);font-size:var(--t-sm)}
 .sync-step+.sync-step{border-top:1px solid var(--line)}

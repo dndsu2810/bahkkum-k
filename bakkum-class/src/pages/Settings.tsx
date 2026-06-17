@@ -4,7 +4,7 @@ import { useStore } from "../store";
 import { importRecords } from "../api";
 import { getConfig, setConfig, getSecretSet, uploadImage } from "../lib/configApi";
 import { feedbackApi, type Notice } from "../lib/feedbackApi";
-import { syncAllFromNotion, type SyncStep } from "../lib/syncAll";
+import { syncAllFromNotion, SYNC_STEPS, type SyncStep } from "../lib/syncAll";
 import { Icon } from "../icons";
 
 /** 학원 로고 업로드 — 사이드바 "바" 자리에 쓰임(원장). 없으면 기본 박스 유지. */
@@ -73,13 +73,21 @@ function NotionImport() {
   const { reload, toast } = useStore();
   const [importing, setImporting] = useState(false);
   const [steps, setSteps] = useState<SyncStep[]>([]);
+  const [sel, setSel] = useState<Record<string, boolean>>({}); // 선택한 항목만 가져옴(기본 전부 해제)
+
+  const chosen = SYNC_STEPS.filter((s) => sel[s.key]);
+  const toggle = (k: string) => setSel((v) => ({ ...v, [k]: !v[k] }));
 
   async function onImport() {
-    if (importing) return;
-    if (!window.confirm("노션에 쌓인 기록을 앱으로 가져옵니다.\n이미 있는 건 건너뛰고, 추가된 것만 들어와요. 진행할까요?")) return;
+    if (importing || !chosen.length) return;
+    const mirrorNames = chosen.filter((s) => s.mirror).map((s) => s.label);
+    const warn = mirrorNames.length
+      ? `\n\n⚠️ ${mirrorNames.join(", ")}은(는) 노션 내용으로 전체 교체됩니다. 앱에서 직접 고친 내용이 있으면 노션 기준으로 바뀝니다.`
+      : "";
+    if (!window.confirm(`선택한 항목만 노션에서 가져옵니다:\n· ${chosen.map((s) => s.label).join("\n· ")}${warn}\n\n진행할까요?`)) return;
     setImporting(true);
     try {
-      const result = await syncAllFromNotion(setSteps);
+      const result = await syncAllFromNotion(setSteps, chosen.map((s) => s.key));
       await reload();
       const total = result.reduce((a, s) => a + s.count, 0);
       const failed = result.filter((s) => s.status === "error").length;
@@ -91,17 +99,25 @@ function NotionImport() {
 
   return (
     <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
-      <div className="card-title" style={{ marginBottom: 6 }}>노션에서 가져오기</div>
+      <div className="card-title" style={{ marginBottom: 6 }}>노션에서 가져오기 (선택 항목만)</div>
       <div className="page-desc" style={{ marginBottom: 12 }}>
-        노션에 쌓인 기록을 앱으로 가져옵니다. 이미 있는 건 건너뜁니다.
-        학생 명단·생일·학원 일정·출결·숙제·진도·테스트·영어 기록을 한 번에 끌어와요.
-        (평소엔 이 앱이 원본이라 쓸 일이 거의 없습니다.)
+        <b>이 앱이 원본입니다.</b> 평소엔 노션에서 가져올 일이 없어요. 꼭 필요한 항목만 골라서 가져오세요.
+        체크한 항목만 들어오고, 고르지 않은 데이터는 그대로 둡니다.
       </div>
-      <button className="btn" onClick={onImport} disabled={importing}>
+      <div className="sync-pick">
+        {SYNC_STEPS.map((s) => (
+          <label key={s.key} className={"sync-pick-item" + (sel[s.key] ? " on" : "")}>
+            <input type="checkbox" checked={!!sel[s.key]} onChange={() => toggle(s.key)} disabled={importing} />
+            <span className="sync-pick-label">{s.label}</span>
+            {s.mirror && <span className="sync-pick-tag" title="노션 내용으로 전체 교체됩니다">전체 교체</span>}
+          </label>
+        ))}
+      </div>
+      <button className="btn" onClick={onImport} disabled={importing || !chosen.length} style={{ marginTop: 10 }}>
         <span className={importing ? "spin" : undefined}>
           <Icon name="refresh" />
         </span>
-        {importing ? "가져오는 중…" : "노션에서 가져오기"}
+        {importing ? "가져오는 중…" : chosen.length ? `선택한 ${chosen.length}개 가져오기` : "가져올 항목을 선택하세요"}
       </button>
       {steps.length > 0 && (
         <ul className="sync-steps">

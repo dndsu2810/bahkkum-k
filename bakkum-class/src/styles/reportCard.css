@@ -8,7 +8,7 @@
   --green:#16A36B; --green-tint:#E6F5EE;
   --blue:#2E6BE0; --blue-tint:#E9EFFC;
   --red:#E04A4F; --red-tint:#FCEBEC;
-  --amber:#E08A0C;
+  --amber:#E08A0C; --amber-tint:#FCF1DE;
 
   font-family:'Pretendard','Pretendard Variable',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
   color:var(--ink); line-height:1.5; letter-spacing:-0.01em; font-feature-settings:"tnum" 1;
@@ -100,7 +100,7 @@
 .r-cal-legend{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px }
 .r-cal-legend span{ font-size:12.5px; font-weight:600; color:var(--ink-2); display:flex; align-items:center; gap:7px }
 .r-lg{ width:9px; height:9px; border-radius:50%; display:inline-block }
-.r-lg.g{ background:var(--green) } .r-lg.b{ background:var(--blue) } .r-lg.r{ background:var(--red) } .r-lg.n{ background:#D7DCE0 }
+.r-lg.g{ background:var(--green) } .r-lg.w{ background:var(--amber) } .r-lg.b{ background:var(--blue) } .r-lg.r{ background:var(--red) } .r-lg.n{ background:#D7DCE0 }
 /* 고정폭 7열 — html2canvas는 1fr(minmax(auto,1fr)) 트랙을 콘텐츠 최소폭으로 키워
    달력이 오른쪽으로 넘쳐 잘린다. 시트 768px·본문/카드 패딩 기준 셀폭을 고정해 캡처에서도 안 깨지게. */
 .r-cal{ display:grid; grid-template-columns:repeat(7,86px); gap:6px; justify-content:space-between }
@@ -116,6 +116,7 @@
 .r-celltags{ margin-top:auto; display:flex; flex-direction:column; gap:4px; align-items:flex-start }
 .r-celltags .r-celltag{ margin-top:0 }
 .r-celltag.tag-p{ color:#0E7A4C; background:rgba(22,163,107,.16) }
+.r-celltag.tag-l{ color:#A35F06; background:rgba(224,138,12,.18) }
 .r-celltag.tag-m{ color:#274FB0; background:rgba(46,107,224,.15) }
 .r-celltag.tag-a{ color:#C23A40; background:rgba(224,74,79,.15) }
 /* 공휴일 — 이름 표기(긴 이름은 줄바꿈), 결석(빨강)과 구분되게 회색 */
@@ -123,6 +124,8 @@
 .r-celltag.tag-h{ margin-top:auto; color:#7C8597; background:#e9ebf0; font-size:9.5px; font-weight:700; line-height:1.15; white-space:normal; text-align:left; letter-spacing:-0.03em; padding:3px 7px; border-radius:7px }
 .r-cell.att-p{ background:var(--green-tint); border-color:transparent }
 .r-cell.att-p .r-d{ color:#0E7A4C } .r-cell.att-p .r-celltag{ color:#0E7A4C; background:rgba(22,163,107,.2) }
+.r-cell.att-l{ background:var(--amber-tint); border-color:transparent }
+.r-cell.att-l .r-d{ color:#A35F06 } .r-cell.att-l .r-celltag{ color:#A35F06; background:rgba(224,138,12,.22) }
 .r-cell.att-m{ background:var(--blue-tint); border-color:transparent }
 .r-cell.att-m .r-d{ color:#274FB0 } .r-cell.att-m .r-celltag{ color:#274FB0; background:rgba(46,107,224,.18) }
 .r-cell.att-a{ background:var(--red-tint); border-color:transparent }

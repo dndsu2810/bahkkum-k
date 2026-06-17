@@ -2,12 +2,13 @@ import type { DataSnapshot } from "../types";
 import type { AttSummary, DayBucket, NoteItem } from "./reportTypes";
 import { pad, parseD } from "./dates";
 
-const PRIORITY: Record<DayBucket, number> = { a: 3, m: 2, p: 1 };
+const PRIORITY: Record<DayBucket, number> = { a: 4, m: 3, l: 2, p: 1 };
 
 function bucketOf(status: string): DayBucket | null {
   if (status === "결석" || status === "무단결석") return "a";
   if (status === "보강") return "m";
-  if (status === "출석" || status === "지각" || status === "조퇴") return "p";
+  if (status === "지각") return "l"; // 달력에 '지각'(주황)으로 따로 표시
+  if (status === "출석" || status === "조퇴") return "p";
   return null;
 }
 
@@ -56,7 +57,7 @@ export function computeAtt(data: DataSnapshot, studentId: string, year: number, 
     if (status === "출석") pure++;
     else if (status === "지각") { late++; lateMin += Number(data.attendance[key].lateMinutes) || 0; }
     else if (status === "조퇴") outroEarly++;
-    if (b === "p") present++;
+    if (b === "p" || b === "l") present++; // 지각·조퇴도 출석 집계엔 포함(present=출석+지각+조퇴)
     else if (b === "m") makeup++;
     else if (b === "a") absent++;
 
