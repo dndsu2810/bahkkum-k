@@ -104,9 +104,23 @@ function WikiBody({ text }: { text: string }) {
       const rows = recs.map((r) => cols.map((col) => r.find((f) => f.label === col)?.value ?? ""));
       blocks.push(<DataTable head={cols} rows={rows} k={key++} />);
     } else if (c.t === "pipe") {
-      const run = c.lines.map((l) => l.split("|").map((x) => x.trim()));
-      const [head, ...body] = run;
-      blocks.push(<DataTable head={head} rows={body} k={key++} />);
+      // 파이프 표 청크에 섞인 비-파이프 줄(【제목】·설명)은 표 헤더로 먹지 말고 따로 렌더.
+      // (빈 줄 없이 제목이 표 위에 붙으면 그 줄이 1칸 헤더가 돼 값이 사라지던 문제 방지.)
+      let tbl: string[] = [];
+      const flush = () => {
+        if (!tbl.length) return;
+        const run = tbl.map((l) => l.split("|").map((x) => x.trim()));
+        const [head, ...body] = run;
+        blocks.push(<DataTable head={head} rows={body} k={key++} />);
+        tbl = [];
+      };
+      for (const ln of c.lines) {
+        if (ln.includes("|")) { tbl.push(ln); continue; }
+        flush();
+        if (isHead(ln)) blocks.push(<h4 className="wiki-sub" key={key++}>{ln.trim().replace(/^【|】$/g, "").trim()}</h4>);
+        else if (ln.trim()) blocks.push(<p className="wiki-p" key={key++}>{ln.trim()}</p>);
+      }
+      flush();
     } else if (c.t === "head") {
       blocks.push(<h4 className="wiki-sub" key={key++}>{c.text}</h4>);
     } else if (c.text) {
