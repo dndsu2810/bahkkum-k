@@ -34,6 +34,8 @@ export interface Student {
   birthdate: string; // YYYY-MM-DD or ''
   parentPhone: string;
   studentPhone: string;
+  /** 수학 첫 등원일(class_student_meta.math_start) — 조회용. 수학 학생관리에 표시. */
+  mathStart?: string;
   /** 현재(최신) 적용 시간표. schedule이 있으면 마지막 버전의 lessons와 동일. */
   lessons: Lesson[];
   /** 시간표 변경 이력(적용 시작일 오름차순). 없으면 lessons를 단일 시간표로 사용. */
@@ -89,15 +91,25 @@ export interface HwLog {
   carriedFrom?: string;
 }
 
-/** A progress record (진도 관리). 날짜가 아니라 진행중/완료(완성도 100)가 기준. */
+/** A progress record (진도·교재관리). 교재 단위로 관리: 시작일 입력 → 완료 전까지 '진행중' → 완료하면 '교재 완료'. */
 export interface ProgLog {
   id: string;
   studentId: string;
-  unit: string;
-  area: string;
-  pct: number; // 달성률 0..100 (100 = 완료)
+  unit: string; // 교재명
+  area: string; // 범위·단계(선택)
+  pct: number; // 완료 여부 플래그: 0=진행중, 100=완료 (UI는 %를 노출하지 않음)
   startDate: string; // 학습 시작일
+  endDate?: string; // 완료일(완료 시 기록)
   memo: string;
+}
+
+/** 보충수업 기록 — 그날 채우지 못해 '남은' 수업 분과 사유. 오늘 화면에서 입력 → 월말리포트 반영. */
+export interface SupLog {
+  id: string;
+  studentId: string;
+  date: string; // YYYY-MM-DD
+  minutes: number; // 남은(보충 필요) 분
+  reason: string; // 왜 남았는지
 }
 
 /** A test/평가 record (테스트 관리 → 노션 수학 테스트 DB와 동일 양식 → 월말리포트 평가에 누적). */
@@ -142,6 +154,8 @@ export interface DataSnapshot {
   homeworkLog: HwLog[];
   progressLog: ProgLog[];
   testLog: TestLog[];
+  /** 보충수업(남은 분·사유) 기록 — 월말리포트 반영. */
+  supplements?: SupLog[];
   /** 강사 업무 보드 카드. */
   tasks?: Task[];
   /** 사용자가 직접 삭제한 보강(결석)의 attKey 목록 — 노션 재가져오기/재체크 때
@@ -150,4 +164,20 @@ export interface DataSnapshot {
   /** '오늘 숙제 없음'으로 정리한 표식 목록 (key = "studentId|YYYY-MM-DD"). 숙제 기록을
    *  만들지 않고 '내줄 숙제 정리 완료'만 기억한다. */
   noHomework?: string[];
+  /** 이 세션에서 삭제한 기록들(병합 저장용). 전체 교체 대신 upsert + 이 목록만 삭제하여
+   *  여러 강사가 동시에 써도 서로의 작업을 덮어쓰지 않게 한다. */
+  deletions?: SnapshotDeletions;
+}
+
+/** 병합 저장 시 서버가 삭제할 레코드 식별자들. */
+export interface SnapshotDeletions {
+  homework?: string[]; // class_homework id
+  progress?: string[]; // class_progress id
+  test?: string[]; // class_tests id
+  supplement?: string[]; // class_supplement id
+  makeup?: string[]; // class_makeups id
+  task?: string[]; // class_tasks id
+  attendance?: string[]; // class_attendance att_key
+  dismissed?: string[]; // class_makeup_dismissed att_key (해제)
+  noHomework?: string[]; // class_homework_none mark_key (해제)
 }

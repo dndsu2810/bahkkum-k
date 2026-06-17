@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Student, StudentStatus } from "../types";
 import { durTotal, freqLabel, lessonDays, weekCount } from "../lib/logic";
-import { getCategories } from "../lib/categories";
+import { GRADE_OPTIONS } from "../lib/grade";
 import { GradeBadge, StatusBadge, Empty } from "./ui";
 import { Icon } from "../icons";
 
@@ -37,7 +37,8 @@ export function StudentTable({
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const seq = useMemo(() => list.flatMap((s) => EDIT_FIELDS.map((f) => ({ id: s.id, field: f }))), [list]);
-  const gradeOpts = getCategories().map((c) => c.name);
+  // 학년은 공통 학생명단과 동일한 세부학년(초1~고3)으로 — 따로 놀지 않게.
+  const gradeOpts = GRADE_OPTIONS;
 
   const begin = useCallback(
     (id: string, field: EditField) => {
@@ -104,6 +105,7 @@ export function StudentTable({
           autoFocus
           aria-label={field === "name" ? "이름" : "학교"}
           value={draft}
+          onClick={(e) => e.stopPropagation()}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") { e.preventDefault(); skipBlur.current = true; void persistClose(id, field, draft); }
@@ -118,7 +120,7 @@ export function StudentTable({
       );
     }
     return (
-      <button type="button" className={"cell-edit" + flashCls(id, field)} onClick={() => begin(id, field)} title="클릭해서 바로 수정">
+      <button type="button" className={"cell-edit" + flashCls(id, field)} onClick={(e) => { e.stopPropagation(); begin(id, field); }} title="클릭해서 바로 수정">
         {children}
         <span className="cell-pencil"><Icon name="edit" /></span>
         {flash?.ok && flash.id === id && flash.field === field && <span className="saved-tag">저장됨</span>}
@@ -134,6 +136,7 @@ export function StudentTable({
           ref={openPicker}
           aria-label={field === "grade" ? "구분" : "상태"}
           value={draft}
+          onClick={(e) => e.stopPropagation()}
           onChange={(e) => { setDraft(e.target.value); skipBlur.current = true; void persistClose(id, field, e.target.value); }}
           onKeyDown={(e) => {
             if (e.key === "Escape") { e.preventDefault(); skipBlur.current = true; close(); }
@@ -176,7 +179,7 @@ export function StudentTable({
           <th>구분</th>
           {withActions && <th>상태</th>}
           {withActions && <th>학교</th>}
-          <th>등록일</th>
+          <th>첫 등원일</th>
           <th>주 횟수</th>
           <th>요일</th>
           {withActions ? <th style={{ textAlign: "right" }}>수정</th> : <th>비고</th>}
@@ -186,7 +189,7 @@ export function StudentTable({
         {list.map((s) => {
           const chips = lessonDays(s);
           return (
-            <tr key={s.id}>
+            <tr key={s.id} className={editable ? "tbl-row-click" : undefined} onClick={editable ? () => onEdit?.(s.id) : undefined}>
               <td>
                 {editable ? (
                   <TextCell id={s.id} field="name"><span className="t-name">{s.name}</span></TextCell>
@@ -219,7 +222,7 @@ export function StudentTable({
                   )}
                 </td>
               )}
-              <td className="muted">{s.startDate}</td>
+              <td className="muted">{s.mathStart || s.startDate || "—"}</td>
               <td>
                 <span className="badge b-gray">{freqLabel(s)}</span>
               </td>
@@ -232,7 +235,7 @@ export function StudentTable({
               </td>
               {withActions ? (
                 <td className="t-actions">
-                  <button className="btn ghost sm" onClick={() => onEdit?.(s.id)}>
+                  <button className="btn ghost sm" onClick={(e) => { e.stopPropagation(); onEdit?.(s.id); }}>
                     <Icon name="edit" />
                     수정
                   </button>

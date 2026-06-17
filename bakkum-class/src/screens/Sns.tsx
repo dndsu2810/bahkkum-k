@@ -67,6 +67,7 @@ export function Sns() {
   const [posts, setPosts] = useState<SnsPost[]>([]);
   const [draft, setDraft] = useState<Draft>(null);
   const [copiedId, setCopiedId] = useState("");
+  const [openId, setOpenId] = useState(""); // 본문 펼친 카드(제목 클릭 시)
   const [filter, setFilter] = useState<SnsStatus | "all">("wait");
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState("");
@@ -238,19 +239,23 @@ export function Sns() {
         {shown.length === 0 ? (
           <div className="hub-muted">{filter === "all" ? "등록된 글이 없어요." : "이 상태의 글이 없어요."}</div>
         ) : (
-          shown.map((p) => (
-            <div className="sns-card" key={p.id}>
+          shown.map((p) => {
+            const open = openId === p.id;
+            return (
+            <div className={"sns-card" + (open ? " open" : "")} key={p.id}>
               <div className="sns-card-h">
-                <b>{p.title}</b>
+                <button className="sns-title-btn" onClick={() => setOpenId(open ? "" : p.id)} title="제목을 누르면 본문이 펼쳐져요">
+                  <Icon name="chev" /><b>{p.title}</b>
+                </button>
                 {splitCh(p.channel).map((ch) => (
                   <span className="sns-ch" key={ch}>{ch}</span>
                 ))}
                 <span className={"sns-st st-" + p.status}>{stLabel(p.status)}</span>
                 <span className="sns-meta">{p.authorName} · {fmtWhen(p.createdAt)}</span>
               </div>
-              {p.body && <div className="sns-body">{p.body}</div>}
               {p.images.length > 0 && <ImageGrid images={p.images} />}
-              {p.link && (
+              {open && p.body && <div className="sns-body">{p.body}</div>}
+              {open && p.link && (
                 <a className="sns-link" href={p.link} target="_blank" rel="noreferrer">{p.link}</a>
               )}
               <div className="sns-card-act">
@@ -277,7 +282,8 @@ export function Sns() {
                 <button className="btn ghost sm" onClick={() => remove(p)}>삭제</button>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

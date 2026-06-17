@@ -1,108 +1,133 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { HwLog } from "../types";
 import { useStore } from "../store";
-import { curMonthStr, inMonth, monthOptions, studentById } from "../lib/logic";
-import { fmtDayBand, ymd } from "../lib/dates";
-import { Select, TodayLink } from "../components/ui";
-import { InlineTable, type InlineCol } from "../components/InlineTable";
-import { RecordFilters, EMPTY_FILTER, filterActive } from "../components/RecordFilters";
-import { HomeworkModal } from "../components/modals";
+import { activeStudents } from "../lib/logic";
+import { TodayLink } from "../components/ui";
 import { Icon } from "../icons";
 
-const HW_STATUS = ["pending", "done", "late"];
 const HW_STATUS_LABEL: Record<string, string> = { pending: "검사 전", done: "검사완료", late: "지연" };
-const HW_STATUS_OPTS = [{ v: "done", label: "검사완료" }, { v: "pending", label: "검사 전" }, { v: "late", label: "지연" }];
+const mdDate = (d: string) => (d && d.length >= 10 ? `${+d.slice(5, 7)}/${+d.slice(8, 10)}` : "—");
 
+/**
+ * 수학 숙제 기록 — 중고등영어 숙제기록과 동일 레이아웃.
+ * 왼쪽 학생 선택 → 오른쪽에 그 학생 숙제 기록을 '월별 접기'로 컴팩트하게.
+ */
 export function Homework() {
-  const { data, openModal, mutate, mutateAsync, toast } = useStore();
-  const [ym, setYm] = useState(curMonthStr());
-  const [flt, setFlt] = useState(EMPTY_FILTER);
+  const { data, mutate, mutateAsync, toast } = useStore();
+  const [sel, setSel] = useState("");
+  const [q, setQ] = useState("");
+  const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
 
-  const monthRows = data.homeworkLog.filter((h) => inMonth(h.date, ym)).sort((a, b) => (a.date < b.date ? 1 : -1));
-  const nameOf = (h: HwLog) => studentById(data.students, h.studentId)?.name ?? "(삭제된 학생)";
-  const q = flt.q.trim().toLowerCase();
-  const rows = monthRows.filter((h) =>
-    (!flt.student || h.studentId === flt.student) &&
-    (!flt.status || h.status === flt.status) &&
-    (!q || (nameOf(h) + " " + h.book + " " + h.tags.join(",") + " " + h.memo).toLowerCase().includes(q))
+  const students = useMemo(
+    () => activeStudents(data.students).slice().sort((a, b) => a.name.localeCompare(b.name, "ko")),
+    [data.students]
   );
-  const studentOpts = [...new Map(monthRows.map((h) => [h.studentId, { id: h.studentId, name: nameOf(h) }])).values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  const qq = q.trim().toLowerCase();
+  const shownStudents = qq ? students.filter((s) => (s.name + " " + (s.grade || "")).toLowerCase().includes(qq)) : students;
+  const selStudent = students.find((s) => s.id === sel) || null;
 
-  // 날짜 그룹: 오늘·어제만 펼치고 과거는 접기. 접힌 헤더엔 검사 현황 요약.
-  const yest = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return ymd(d); })();
-  function hwSummary(list: HwLog[]): string {
-    let done = 0, pending = 0, late = 0;
-    for (const h of list) h.status === "done" ? done++ : h.status === "late" ? late++ : pending++;
-    return [done && `검사완료 ${done}`, pending && `검사 전 ${pending}`, late && `지연 ${late}`].filter(Boolean).join(" · ");
-  }
+  // 월별 그룹(최신 월 먼저), 월 안에서는 날짜 오름차순.
+  const months = useMemo(() => {
+    const byMonth = new Map<string, HwLog[]>();
+    for (const h of data.homeworkLog.filter((h) => h.studentId === sel)) {
+      const ym = (h.date || "").slice(0, 7);
+      if (!byMonth.has(ym)) byMonth.set(ym, []);
+      byMonth.get(ym)!.push(h);
+    }
+    const arr = [...byMonth.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
+    for (const [, rows] of arr) rows.sort((a, b) => (a.date < b.date ? -1 : 1));
+    return arr;
+  }, [data.homeworkLog, sel]);
 
-  function apply(d: { homeworkLog: HwLog[] }, id: string, key: string, v: string) {
+  function apply(d: { homeworkLog: HwLog[] }, id: string, fn: (h: HwLog) => void) {
     const h = d.homeworkLog.find((x) => x.id === id);
-    if (!h) return;
-    if (key === "date") h.date = v;
-    else if (key === "book") h.book = v;
-    else if (key === "tags") h.tags = v.split(",").map((t) => t.trim()).filter(Boolean);
-    else if (key === "completion") h.completion = Math.max(0, Math.min(100, Math.round(+v) || 0));
-    else if (key === "status") h.status = (v as HwLog["status"]) || "pending";
-    else if (key === "memo") h.memo = v;
+    if (h) fn(h);
   }
-  async function onPatch(id: string, key: string, value: string, orig: string): Promise<boolean> {
-    const ok = await mutateAsync((d) => apply(d, id, key, value));
-    if (!ok) { mutate((d) => apply(d, id, key, orig)); toast("저장하지 못했어요 · 잠시 후 다시 시도해 주세요"); }
-    return ok;
+  async function patch(h: HwLog, fn: (x: HwLog) => void) {
+    const ok = await mutateAsync((d) => apply(d, h.id, fn));
+    if (!ok) toast("저장하지 못했어요 · 잠시 후 다시 시도해 주세요");
   }
-  function onDelete(id: string) {
-    if (!window.confirm("이 숙제 기록을 삭제할까요?")) return;
-    mutate((d) => { d.homeworkLog = d.homeworkLog.filter((x) => x.id !== id); });
+  function remove(h: HwLog) {
+    if (!window.confirm(`'${h.book || "이 숙제"}' 기록을 삭제할까요?`)) return;
+    mutate((d) => { d.homeworkLog = d.homeworkLog.filter((x) => x.id !== h.id); });
     toast("숙제 기록을 삭제했어요.");
   }
-
-  const cols: InlineCol<HwLog>[] = [
-    { key: "student", label: "학생", type: "readonly", width: "14%", get: nameOf, display: (h) => <span className="t-name">{nameOf(h)}</span> },
-    { key: "book", label: "교재 / 내용", type: "text", width: "30%", placeholder: "교재·내용", get: (h) => h.book, display: (h) => <span>{h.book || "—"}</span> },
-    { key: "tags", label: "태그", type: "text", width: "14%", placeholder: "쉼표로 구분", get: (h) => h.tags.join(", ") },
-    { key: "completion", label: "완성도", type: "number", width: "9%", min: 0, max: 100, get: (h) => String(h.completion), display: (h) => <span style={{ fontWeight: 700 }}>{h.completion}%</span> },
-    {
-      key: "status", label: "상태", type: "select", width: "11%", options: HW_STATUS, optionLabels: HW_STATUS_LABEL,
-      get: (h) => h.status,
-      display: (h) => <span className={"badge " + (h.status === "done" ? "b-green" : h.status === "late" ? "b-orange" : "b-gray")}>{HW_STATUS_LABEL[h.status]}</span>,
-    },
-    { key: "memo", label: "메모", type: "text", width: "13%", placeholder: "특이사항", get: (h) => h.memo },
-  ];
 
   return (
     <section className="page active">
       <div className="page-head">
         <div>
           <h1 className="page-title">수학 숙제 기록</h1>
-          <div className="page-desc">오늘 숙제 검사·내주기는 <TodayLink /> 화면에서, 여기선 쌓인 숙제 기록을 모아 보고 수정해요.</div>
-        </div>
-        <div className="head-actions">
-          <Select value={ym} onChange={setYm} options={monthOptions()} />
-          <button className="btn primary" onClick={() => openModal(<HomeworkModal id={null} />)}>
-            <Icon name="plus" />
-            숙제 기록
-          </button>
+          <div className="page-desc">학생을 고르면 월별로 숙제 기록을 봐요. 숙제 내주기·검사는 <TodayLink /> 화면에서.</div>
         </div>
       </div>
 
-      <div className="card">
-        <RecordFilters value={flt} onChange={setFlt} students={studentOpts} statusOptions={HW_STATUS_OPTS} />
-        <div className="tbl-wrap">
-          <InlineTable
-            rows={rows}
-            cols={cols}
-            rowId={(h) => h.id}
-            onPatch={onPatch}
-            onDelete={onDelete}
-            groupBy={(h) => ({ key: h.date, label: fmtDayBand(h.date) })}
-            collapsible
-            groupSummary={hwSummary}
-            openInitially={(key) => key >= yest}
-            pageSize={14}
-            forceOpen={filterActive(flt)}
-            empty={<div className="empty">아직 숙제 기록이 없어요. <TodayLink /> 화면에서 입력하면 여기에 쌓여요.</div>}
-          />
+      <div className="eng-split">
+        <div className="eng-side-wrap card">
+          <input className="input" style={{ marginBottom: 8 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="학생 검색" />
+          <div className="eng-side">
+            {shownStudents.length === 0 ? (
+              <div className="eng-side-empty">학생이 없어요.</div>
+            ) : (
+              shownStudents.map((s) => (
+                <div key={s.id} className={"eng-stu" + (sel === s.id ? " on" : "")}>
+                  <button className="eng-stu-name" onClick={() => { setSel(s.id); setOpenMonths({}); }}>
+                    {s.name}{s.grade && <span className="eng-lv">{s.grade}</span>}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="eng-main">
+          {!selStudent ? (
+            <div className="hub-muted" style={{ padding: 20 }}>왼쪽에서 학생을 선택하면 숙제 기록을 볼 수 있어요.</div>
+          ) : (
+            <div className="eng-panel">
+              <h2>{selStudent.name} · 숙제 기록</h2>
+              {months.length === 0 ? (
+                <div className="hub-muted">숙제 기록이 없어요. <TodayLink /> 화면에서 숙제를 내주면 여기 쌓여요.</div>
+              ) : (
+                <div className="eng-hwm-list">
+                  {months.map(([ym, rows], mi) => {
+                    const [y, mo] = ym.split("-");
+                    const open = openMonths[ym] ?? mi === 0;
+                    return (
+                      <div className="eng-hwm" key={ym}>
+                        <button className={"eng-hwm-h" + (open ? " open" : "")} onClick={() => setOpenMonths((m) => ({ ...m, [ym]: !open }))}>
+                          <Icon name="chev" />{y}년 {Number(mo)}월 <span>{rows.length}회</span>
+                        </button>
+                        {open && (
+                          <table className="eng-hwt math-hwt">
+                            <thead>
+                              <tr><th>날짜</th><th>교재</th><th>태그</th><th>진행</th><th>상태</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                              {rows.map((h) => (
+                                <tr key={h.id}>
+                                  <td className="eng-hwt-date">{mdDate(h.date)}</td>
+                                  <td className="math-hwt-book">{h.book || "—"}</td>
+                                  <td className="math-hwt-tags">{h.tags.length ? h.tags.join(", ") : "—"}</td>
+                                  <td className="eng-hwt-prog">{h.completion ? h.completion + "%" : "—"}</td>
+                                  <td>
+                                    <select className="math-hwt-sel" value={h.status} onChange={(e) => patch(h, (x) => { x.status = (e.target.value as HwLog["status"]) || "pending"; })}>
+                                      {(["pending", "done", "late"] as const).map((s) => <option key={s} value={s}>{HW_STATUS_LABEL[s]}</option>)}
+                                    </select>
+                                  </td>
+                                  <td><button className="ci-del-x" onClick={() => remove(h)} title="삭제">×</button></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </section>

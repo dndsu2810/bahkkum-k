@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Gowun+Dodum&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#e9e8e3; }
+    * { box-sizing:border-box; }
+  </style>
+</helmet>
+
+<div style="font-family:'Gaegu',cursive; background:#e9e8e3; min-height:100vh; padding:48px 56px 96px; color:#2c2c2c;">
+
+  <!-- ===== BOARD HEADER ===== -->
+  <div style="max-width:1680px; margin:0 auto 40px;">
+    <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+      <div style="width:48px; height:48px; border-radius:12px; background:#1f2d4d; display:flex; align-items:center; justify-content:center; box-shadow:4px 4px 0 rgba(44,44,44,0.15);">
+        <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+          <path d="M3 18c0-5 5-9 11-9s12 3 12 8c0 1.4-1.2 2.4-2.6 2.4l3.6 3.2-5.4-1.2c-2 1.8-4.8 2.8-7.6 2.8C8 24.2 3 21 3 18z" fill="#ffffff"/>
+          <path d="M25 8.5c1.6-1.4 3.4-2 4.8-2-0.4 1.8-1.4 3.6-3 4.6z" fill="#ffffff"/>
+          <circle cx="10.5" cy="16.5" r="1.3" fill="#1f2d4d"/>
+        </svg>
+      </div>
+      <div>
+        <div style="font-size:34px; font-weight:700; line-height:1.1;">바꿈 등하원 · 와이어프레임</div>
+        <div style="font-family:'Gowun Dodum',sans-serif; font-size:14px; color:#6f6f6f; margin-top:4px;">바꿈영수학원 수업관리 앱 — 등하원 화면 3종 구조 시안 (저해상도 스케치)</div>
+      </div>
+    </div>
+
+    <!-- legend -->
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:22px; align-items:center;">
+      <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#8a8a8a; margin-right:2px;">범례</span>
+      <span style="display:inline-flex; align-items:center; gap:7px; font-size:15px; background:#fff; border:2px solid #2c2c2c; border-radius:999px; padding:5px 13px;"><span style="width:13px; height:13px; border-radius:4px; background:#1f2d4d;"></span>주요 액션</span>
+      <span style="display:inline-flex; align-items:center; gap:7px; font-size:15px; background:#fff; border:2px solid #2c2c2c; border-radius:999px; padding:5px 13px;"><span style="width:13px; height:13px; border-radius:4px; background:#51618a;"></span>슬레이트(보조)</span>
+      <span style="display:inline-flex; align-items:center; gap:7px; font-size:15px; background:#fff; border:2px solid #2c2c2c; border-radius:999px; padding:5px 13px;"><span style="width:13px; height:13px; border-radius:4px; background:#d23b3b;"></span>미발송 강조</span>
+      <span style="display:inline-flex; align-items:center; gap:7px; font-size:15px; background:#fff; border:2px solid #2c2c2c; border-radius:999px; padding:5px 13px;"><span style="width:13px; height:13px; border-radius:4px; background:#e0dfd9; border:1px solid #c5c4bd;"></span>플레이스홀더</span>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SECTION A — 선생님 등하원 관리 (메인) -->
+  <!-- ============================================================ -->
+  <div style="max-width:1680px; margin:0 auto 64px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:6px;">
+      <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#fff; background:#1f2d4d; border-radius:999px; padding:5px 14px;">화면 1 · 가장 중요</span>
+      <span style="font-size:26px; font-weight:700;">선생님용 등하원 관리</span>
+      <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#8a8a8a;">PC / 태블릿 · 한눈에 스캔 1순위</span>
+    </div>
+    <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#7a7a7a; border-bottom:2px dashed #c9c8c1; padding-bottom:14px; margin-bottom:26px;">학생 목록 표현을 두 방향으로 — 좌: <b>카드형</b>(여유·태블릿 터치) · 우: <b>표·행형</b>(밀도·PC 스캔). 둘 다 상단 요약 + 날짜별 접기 포함.</div>
+
+    <div style="display:flex; gap:36px; flex-wrap:wrap; align-items:flex-start;">
+
+      <!-- ---------- A1 : 카드형 ---------- -->
+      <div style="flex:1 1 720px; min-width:680px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+          <span style="font-size:18px; font-weight:700;">A · 카드형</span>
+          <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#8a8a8a;">여백 넉넉 · 터치 친화</span>
+        </div>
+
+        <div style="background:#fff; border:2.5px solid #2c2c2c; border-radius:18px; box-shadow:8px 8px 0 rgba(44,44,44,0.12); overflow:hidden;">
+          <!-- app top bar -->
+          <div style="display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:2px solid #2c2c2c; background:#1f2d4d;">
+            <div style="width:26px; height:26px; border-radius:7px; background:#fff; display:flex; align-items:center; justify-content:center;">
+              <svg width="17" height="17" viewBox="0 0 32 32" fill="none"><path d="M3 18c0-5 5-9 11-9s12 3 12 8c0 1.4-1.2 2.4-2.6 2.4l3.6 3.2-5.4-1.2c-2 1.8-4.8 2.8-7.6 2.8C8 24.2 3 21 3 18z" fill="#1f2d4d"/></svg>
+            </div>
+            <span style="color:#fff; font-size:17px; font-weight:700;">등하원 관리</span>
+            <span style="color:#aeb8d0; font-family:'Gowun Dodum',sans-serif; font-size:12px;">바꿈영수학원</span>
+            <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+              <span style="color:#aeb8d0; font-family:'Gowun Dodum',sans-serif; font-size:12px;">김선생</span>
+              <span style="width:24px; height:24px; border-radius:50%; background:#7a86a8;"></span>
+              <span style="width:24px; height:24px; border-radius:50%; background:#51618a;"></span>
+            </div>
+          </div>
+
+          <div style="display:flex;">
+            <!-- side nav -->
+            <div style="width:130px; border-right:2px solid #2c2c2c; background:#f6f6f3; padding:14px 10px; display:flex; flex-direction:column; gap:6px;">
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#9a9a9a; padding-left:6px;">메뉴</span>
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#7a7a7a; padding:7px 8px;">대시보드</span>
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#7a7a7a; padding:7px 8px;">수업관리</span>
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#7a7a7a; padding:7px 8px;">학생</span>
+              <span style="display:flex; align-items:center; gap:7px; font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#1f2d4d; background:#e4e8f2; border:2px solid #1f2d4d; border-radius:9px; padding:7px 8px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1f2d4d" stroke-width="2"><path d="M3 12h4l2-5 3 11 2-6h7"/></svg>등하원</span>
+            </div>
+
+            <!-- main -->
+            <div style="flex:1; padding:18px 20px 22px;">
+              <!-- date + summary -->
+              <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+                <div>
+                  <div style="font-size:22px; font-weight:700;">2026년 6월 17일 (수)</div>
+                  <div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#8a8a8a; margin-top:2px;">오늘 등하원 현황</div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                  <div style="text-align:center; border:2px solid #51618a; border-radius:12px; padding:8px 16px; min-width:78px;">
+                    <div style="font-size:24px; font-weight:700; color:#51618a;">12</div>
+                    <div style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#7a7a7a;">등원</div>
+                  </div>
+                  <div style="text-align:center; border:2px solid #1f2d4d; border-radius:12px; padding:8px 16px; min-width:78px;">
+                    <div style="font-size:24px; font-weight:700; color:#1f2d4d;">8</div>
+                    <div style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#7a7a7a;">하원</div>
+                  </div>
+                  <div style="text-align:center; border:2px solid #d23b3b; background:#fbe9e9; border-radius:12px; padding:8px 16px; min-width:78px;">
+                    <div style="font-size:24px; font-weight:700; color:#d23b3b;">3</div>
+                    <div style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#d23b3b; font-weight:700;">미발송</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- search/filter row -->
+              <div style="display:flex; gap:10px; align-items:center; margin-bottom:18px;">
+                <div style="flex:1; display:flex; align-items:center; gap:8px; border:2px solid #c5c4bd; border-radius:10px; padding:8px 12px; background:#faf9f6;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9a9a9a" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
+                  <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#a8a8a8;">학생 이름·반 검색</span>
+                </div>
+                <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; border:2px solid #2c2c2c; border-radius:10px; padding:8px 14px; background:#fff;">전체</span>
+                <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; border:2px solid #c5c4bd; border-radius:10px; padding:8px 14px; color:#7a7a7a;">미발송만</span>
+              </div>
+
+              <!-- TODAY group (collapsible) -->
+              <div style="border:2px solid #2c2c2c; border-radius:14px; overflow:hidden; margin-bottom:14px;">
+                <div onClick="{{ toggleToday }}" style="display:flex; align-items:center; gap:10px; padding:11px 15px; background:#eef0f5; cursor:pointer;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1f2d4d" stroke-width="2.5" style="transform:{{ chevToday }}; transition:transform .15s;"><path d="M6 9l6 6 6-6"/></svg>
+                  <span style="font-size:17px; font-weight:700;">오늘 · 6/17 (수)</span>
+                  <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#7a7a7a;">23명</span>
+                  <span style="margin-left:auto; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#d23b3b; font-weight:700;">미발송 3</span>
+                </div>
+
+                <sc-if value="{{ isToday }}" hint-placeholder-val="{{ true }}">
+                <div style="padding:14px; display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+
+                  <!-- card: 등원완료 -->
+                  <div style="border:2px solid #2c2c2c; border-radius:13px; padding:13px 14px; display:flex; align-items:center; gap:12px;">
+                    <span style="width:42px; height:42px; border-radius:50%; background:#e0dfd9; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; color:#6f6f6f;">이</span>
+                    <div style="flex:1;">
+                      <div style="font-size:17px; font-weight:700;">이서연 <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#9a9a9a; font-weight:400;">중2-A</span></div>
+                      <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                        <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#51618a; border:1.5px solid #51618a; border-radius:7px; padding:1px 8px;">등원완료</span>
+                        <span style="display:inline-flex; align-items:center; gap:4px; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#6f6f6f;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9a9a9a" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>15:02</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9a9a9a" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>
+                      </div>
+                    </div>
+                    <button style-hover="background:#16213b;" style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#fff; background:#1f2d4d; border:none; border-radius:9px; padding:9px 12px; cursor:pointer; display:flex; align-items:center; gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>알림</button>
+                  </div>
+
+                  <!-- card: 하원완료 -->
+                  <div style="border:2px solid #2c2c2c; border-radius:13px; padding:13px 14px; display:flex; align-items:center; gap:12px;">
+                    <span style="width:42px; height:42px; border-radius:50%; background:#e0dfd9; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; color:#6f6f6f;">박</span>
+                    <div style="flex:1;">
+                      <div style="font-size:17px; font-weight:700;">박지후 <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#9a9a9a; font-weight:400;">중2-A</span></div>
+                      <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                        <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#fff; background:#1f2d4d; border-radius:7px; padding:2px 9px;">하원완료</span>
+                        <span style="display:inline-flex; align-items:center; gap:4px; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#6f6f6f;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9a9a9a" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>18:30</span>
+                      </div>
+                    </div>
+                    <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#51618a; border:2px solid #51618a; border-radius:9px; padding:8px 12px; display:flex; align-items:center; gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#51618a" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>발송됨</span>
+                  </div>
+
+                  <!-- card: 미발송 (RED) -->
+                  <div style="border:2.5px solid #d23b3b; background:#fdf2f2; border-radius:13px; padding:13px 14px; display:flex; align-items:center; gap:12px;">
+                    <span style="width:42px; height:42px; border-radius:50%; background:#f6d4d4; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; color:#d23b3b;">최</span>
+                    <div style="flex:1;">
+                      <div style="font-size:17px; font-weight:700;">최도윤 <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#9a9a9a; font-weight:400;">중2-B</span></div>
+                      <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                        <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#fff; background:#d23b3b; border-radius:7px; padding:2px 9px;">미발송</span>
+                        <span style="display:inline-flex; align-items:center; gap:4px; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#d23b3b;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d23b3b" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>15:10</span>
+                      </div>
+                    </div>
+                    <button style-hover="background:#b62f2f;" style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#fff; background:#d23b3b; border:none; border-radius:9px; padding:9px 14px; cursor:pointer; display:flex; align-items:center; gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>알림 보내기</button>
+                  </div>
+
+                  <!-- card: 정정됨 -->
+                  <div style="border:2px solid #2c2c2c; border-radius:13px; padding:13px 14px; display:flex; align-items:center; gap:12px;">
+                    <span style="width:42px; height:42px; border-radius:50%; background:#e0dfd9; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; color:#6f6f6f;">정</span>
+                    <div style="flex:1;">
+                      <div style="font-size:17px; font-weight:700;">정하은 <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#9a9a9a; font-weight:400;">중3-A</span></div>
+                      <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                        <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#8a6d1f; background:#f5ecd0; border-radius:7px; padding:2px 9px;">정정됨</span>
+                        <span style="display:inline-flex; align-items:center; gap:4px; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#6f6f6f;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9a9a9a" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>15:40</span>
+                      </div>
+                    </div>
+                    <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#51618a; border:2px solid #51618a; border-radius:9px; padding:8px 12px; display:flex; align-items:center; gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#51618a" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>정정 발송됨</span>
+                  </div>
+
+                </div>
+                </sc-if>
+              </div>
+
+              <!-- yesterday (collapsed) -->
+              <div onClick="{{ toggleD16 }}" style="display:flex; align-items:center; gap:10px; padding:11px 15px; border:2px solid #c5c4bd; border-radius:12px; background:#f6f6f3; cursor:pointer; margin-bottom:8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="2.5" style="transform:{{ chevD16 }}; transition:transform .15s;"><path d="M6 9l6 6 6-6"/></svg>
+                <span style="font-size:16px; font-weight:700; color:#6f6f6f;">어제 · 6/16 (화)</span>
+                <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#9a9a9a;">24명 · 전원 발송</span>
+                <span style="margin-left:auto; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#a8a8a8;">접힘</span>
+              </div>
+              <sc-if value="{{ isD16 }}" hint-placeholder-val="{{ false }}">
+                <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#8a8a8a; padding:10px 16px; border:2px dashed #c5c4bd; border-radius:10px; margin-bottom:8px;">… 6/16 학생 24명 기록 (등원/하원/시간) …</div>
+              </sc-if>
+              <div style="display:flex; align-items:center; gap:10px; padding:11px 15px; border:2px solid #c5c4bd; border-radius:12px; background:#f6f6f3;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="2.5" style="transform:rotate(-90deg);"><path d="M6 9l6 6 6-6"/></svg>
+                <span style="font-size:16px; font-weight:700; color:#6f6f6f;">6/15 (월)</span>
+                <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#9a9a9a;">22명 · 전원 발송</span>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; gap:6px; margin-top:14px;">
+          <span style="font-size:15px; color:#d23b3b; display:flex; align-items:center; gap:6px;"><span style="font-size:18px;">↑</span> 미발송 카드는 빨간 테두리 + 빨간 배지로 즉시 눈에 띄게</span>
+          <span style="font-size:15px; color:#51618a; display:flex; align-items:center; gap:6px;"><span style="font-size:18px;">↑</span> 날짜 헤더 클릭 → 접기/펼치기 (지난 날짜는 기본 접힘)</span>
+        </div>
+        </sc-if>
+      </div>
+
+      <!-- ---------- A2 : 표·행형 ---------- -->
+      <div style="flex:1 1 560px; min-width:520px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+          <span style="font-size:18px; font-weight:700;">B · 표·행형</span>
+          <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#8a8a8a;">고밀도 · PC 빠른 스캔</span>
+        </div>
+
+        <div style="background:#fff; border:2.5px solid #2c2c2c; border-radius:18px; box-shadow:8px 8px 0 rgba(44,44,44,0.12); overflow:hidden;">
+          <div style="display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:2px solid #2c2c2c;">
+            <span style="font-size:19px; font-weight:700;">등하원 관리</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#8a8a8a;">6/17 (수)</span>
+            <div style="margin-left:auto; display:flex; gap:7px;">
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#51618a; border:1.5px solid #51618a; border-radius:8px; padding:3px 9px;">등원 12</span>
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#1f2d4d; border:1.5px solid #1f2d4d; border-radius:8px; padding:3px 9px;">하원 8</span>
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#fff; background:#d23b3b; border-radius:8px; padding:3px 9px;">미발송 3</span>
+            </div>
+          </div>
+
+          <!-- date header -->
+          <div style="display:flex; align-items:center; gap:9px; padding:9px 16px; background:#eef0f5; border-bottom:2px solid #2c2c2c;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1f2d4d" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+            <span style="font-size:15px; font-weight:700;">오늘 · 6/17</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#7a7a7a;">23명</span>
+          </div>
+
+          <!-- table header -->
+          <div style="display:grid; grid-template-columns:1.4fr 0.8fr 1fr 0.8fr 1fr; gap:8px; padding:8px 16px; font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#9a9a9a; border-bottom:1.5px solid #d8d7d0;">
+            <span>학생</span><span>반</span><span>상태</span><span>시간</span><span style="text-align:right;">알림</span>
+          </div>
+
+          <!-- rows -->
+          <div style="display:grid; grid-template-columns:1.4fr 0.8fr 1fr 0.8fr 1fr; gap:8px; align-items:center; padding:11px 16px; border-bottom:1.5px solid #ecebe4;">
+            <span style="font-size:15px; font-weight:700;">이서연</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#7a7a7a;">중2-A</span>
+            <span><span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#51618a; border:1.5px solid #51618a; border-radius:6px; padding:1px 7px;">등원완료</span></span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px;">15:02</span>
+            <span style="text-align:right;"><button style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#fff; background:#1f2d4d; border:none; border-radius:7px; padding:6px 11px; cursor:pointer;">알림</button></span>
+          </div>
+          <div style="display:grid; grid-template-columns:1.4fr 0.8fr 1fr 0.8fr 1fr; gap:8px; align-items:center; padding:11px 16px; border-bottom:1.5px solid #ecebe4;">
+            <span style="font-size:15px; font-weight:700;">박지후</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#7a7a7a;">중2-A</span>
+            <span><span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#fff; background:#1f2d4d; border-radius:6px; padding:1px 8px;">하원완료</span></span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px;">18:30</span>
+            <span style="text-align:right; font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#51618a; font-weight:700;">발송됨 ✓</span>
+          </div>
+          <!-- 미발송 row RED -->
+          <div style="display:grid; grid-template-columns:1.4fr 0.8fr 1fr 0.8fr 1fr; gap:8px; align-items:center; padding:11px 16px; border-bottom:1.5px solid #ecebe4; background:#fdf2f2; border-left:4px solid #d23b3b;">
+            <span style="font-size:15px; font-weight:700; color:#d23b3b;">최도윤</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#7a7a7a;">중2-B</span>
+            <span><span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#fff; background:#d23b3b; border-radius:6px; padding:1px 8px;">미발송</span></span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#d23b3b;">15:10</span>
+            <span style="text-align:right;"><button style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#fff; background:#d23b3b; border:none; border-radius:7px; padding:6px 11px; cursor:pointer;">보내기</button></span>
+          </div>
+          <div style="display:grid; grid-template-columns:1.4fr 0.8fr 1fr 0.8fr 1fr; gap:8px; align-items:center; padding:11px 16px; border-bottom:1.5px solid #ecebe4;">
+            <span style="font-size:15px; font-weight:700;">정하은</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#7a7a7a;">중3-A</span>
+            <span><span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#8a6d1f; background:#f5ecd0; border-radius:6px; padding:1px 7px;">정정됨</span></span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px;">15:40</span>
+            <span style="text-align:right; font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#51618a; font-weight:700;">정정 발송 ✓</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1.4fr 0.8fr 1fr 0.8fr 1fr; gap:8px; align-items:center; padding:11px 16px;">
+            <span style="font-size:15px; font-weight:700;">김민준</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#7a7a7a;">중3-A</span>
+            <span><span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#51618a; border:1.5px solid #51618a; border-radius:6px; padding:1px 7px;">등원완료</span></span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px;">15:05</span>
+            <span style="text-align:right;"><button style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#fff; background:#1f2d4d; border:none; border-radius:7px; padding:6px 11px; cursor:pointer;">알림</button></span>
+          </div>
+
+          <!-- collapsed past -->
+          <div style="display:flex; align-items:center; gap:9px; padding:10px 16px; background:#f6f6f3; border-top:2px solid #2c2c2c;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="2.5" style="transform:rotate(-90deg);"><path d="M6 9l6 6 6-6"/></svg>
+            <span style="font-size:14px; font-weight:700; color:#6f6f6f;">6/16 (화)</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#9a9a9a;">24명 · 접힘</span>
+          </div>
+        </div>
+
+        <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; gap:6px; margin-top:14px;">
+          <span style="font-size:15px; color:#d23b3b; display:flex; align-items:center; gap:6px;"><span style="font-size:18px;">←</span> 미발송 행: 좌측 빨간 바 + 연한 빨강 배경으로 줄 단위 강조</span>
+          <span style="font-size:15px; color:#51618a; display:flex; align-items:center; gap:6px;"><span style="font-size:18px;">←</span> 발송 완료 행은 버튼 대신 "발송됨 ✓" 텍스트 — 중복 발송 실수 방지</span>
+        </div>
+        </sc-if>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SECTION B — 학생용 찍기 (태블릿) -->
+  <!-- ============================================================ -->
+  <div style="max-width:1680px; margin:0 auto 64px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:6px;">
+      <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#fff; background:#51618a; border-radius:999px; padding:5px 14px;">화면 2</span>
+      <span style="font-size:26px; font-weight:700;">학생용 찍기</span>
+      <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#8a8a8a;">태블릿 · 아이들이 쓰는 화면, 크고 단순하게</span>
+    </div>
+    <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#7a7a7a; border-bottom:2px dashed #c9c8c1; padding-bottom:14px; margin-bottom:26px;">흐름: <b>① 출석번호 입력</b> (키패드) → <b>② 등원/하원 선택</b> → <b>③ 완료 확인</b>. 글씨·버튼 크게, 터치 영역 넉넉히.</div>
+
+    <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start;">
+
+      <!-- STEP 1 : 본인 찾기 -->
+      <div style="flex:0 0 auto;">
+        <div style="font-size:16px; font-weight:700; margin-bottom:8px;">눌러보세요 · 실제 동작</div>
+        <div style="width:520px; background:#fff; border:2.5px solid #2c2c2c; border-radius:20px; box-shadow:8px 8px 0 rgba(44,44,44,0.12); overflow:hidden;">
+          <div style="background:#1f2d4d; padding:18px 22px; display:flex; align-items:center; gap:12px;">
+            <div style="width:30px; height:30px; border-radius:8px; background:#fff; display:flex; align-items:center; justify-content:center;"><svg width="19" height="19" viewBox="0 0 32 32" fill="none"><path d="M3 18c0-5 5-9 11-9s12 3 12 8c0 1.4-1.2 2.4-2.6 2.4l3.6 3.2-5.4-1.2c-2 1.8-4.8 2.8-7.6 2.8C8 24.2 3 21 3 18z" fill="#1f2d4d"/></svg></div>
+            <span style="color:#fff; font-size:22px; font-weight:700;">등하원 체크</span>
+          </div>
+          <div style="padding:22px; min-height:540px;">
+
+            <!-- ===== SCREEN: 번호 입력 ===== -->
+            <sc-if value="{{ screenKeypad }}" hint-placeholder-val="{{ true }}">
+              <div style="font-size:22px; font-weight:700; margin-bottom:14px;">출석번호를 누르세요</div>
+
+              <sc-if value="{{ error }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:9px; background:#fdf2f2; border:2px solid #d23b3b; border-radius:12px; padding:11px 14px; margin-bottom:12px;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d23b3b" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>
+                  <span style="font-size:15px; font-weight:700; color:#d23b3b;">없는 번호예요. 다시 확인해서 눌러주세요.</span>
+                </div>
+              </sc-if>
+
+              <div style="display:flex; align-items:center; justify-content:center; gap:10px; border:2.5px solid #1f2d4d; border-radius:14px; padding:16px; margin-bottom:10px; min-height:64px; background:#faf9f6;">
+                <sc-if value="{{ hasCode }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size:40px; font-weight:700; letter-spacing:8px; color:#1f2d4d;">{{ code }}</span>
+                </sc-if>
+                <sc-if value="{{ noCode }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-size:34px; font-weight:700; letter-spacing:10px; color:#cdccc4;">– –</span>
+                </sc-if>
+              </div>
+              <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#a8a8a8; text-align:center; margin-bottom:16px;">번호를 누르고 '확인'을 눌러요</div>
+
+              <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:11px;">
+                <button onClick="{{ k1 }}" style-hover="background:#eef0f5;" style="font-family:'Gaegu',cursive; font-size:30px; font-weight:700; color:#2c2c2c; background:#fff; border:2px solid #c5c4bd; border-radius:14px; padding:16px 0; cursor:pointer;">1</button>
+                <button onClick="{{ k2 }}" style-hover="background:#eef0f5;" style="font-family:'Gaegu',cursive; font-size:30px; font-weight:700; color:#2c2c2c; background:#fff; border:2px solid #c5c4bd; border-radius:14px; padding:16px 0; cursor:pointer;">2</button>
+                <button onClick="{{ k3 }}" style-hover="background:#eef0f5;" style="font-family:'Gaegu',cursive; font-size:30px; font-weight:700; color:#2c2c2c; background:#fff; border:2px solid #c5c4bd; border-radius:14px; padding:16px 0; cursor:pointer;">3</button>
+                <button onClick="{{ k4 }}" style-hover="background:#eef0f5;" style="font-family:'Gaegu',cursive; font-size:30px; font-weight:700; color:#2c2c2c; background:#fff; border:2px solid #c5c4bd; border-radius:14px; padding:16px 0; cursor:pointer;">4</button>
+                <button onClick="{{ k5 }}" style-hover="background:#eef0f5;" style="font-family:'Gaegu',cursive; font-size:30px; font-weight:700; color:#2c2c2c; background:#fff; border:2px solid #c5c4bd; border-radius:14px; padding:16px 0; cursor:pointer;">5</button>
+                <button onClick="{{ k6 }}" style-hover="background:#eef0f5;" style="font-family:'Gaegu',cursive; font-size:30px; font-weight:700; color:#2c2c2c; background:#fff; border:2px solid #c5c4bd; border-radius:14px; padding:16px 0; cursor:pointer;">6</button>
+                <button onClick="{{ k7 }}" style-hover="background:#eef0f5;" style="font-family:'Gaegu',cursive; font-size:30px; font-weight:700; color:#2c2c2c; background:#fff; border:2px solid #c5c4bd; border-radius:14px; padding:16px 0; cursor:pointer;">7</button>
+                <button onClick="{{ k8 }}" style-hover="background:#eef0f5;" style="font-family:'Gaegu',cursive; font-size:30px; font-weight:700; color:#2c2c2c; background:#fff; border:2px solid #c5c4bd; border-radius:14px; padding:16px 0; cursor:pointer;">8</button>
+                <button onClick="{{ k9 }}" style-hover="background:#eef0f5;" style="font-family:'Gaegu',cursive; font-size:30px; font-weight:700; color:#2c2c2c; background:#fff; border:2px solid #c5c4bd; border-radius:14px; padding:16px 0; cursor:pointer;">9</button>
+                <button onClick="{{ kClear }}" style-hover="background:#f0eef0;" style="font-family:'Gowun Dodum',sans-serif; font-size:17px; font-weight:700; color:#6f6f6f; background:#f2f1ec; border:2px solid #c5c4bd; border-radius:14px; padding:16px 0; cursor:pointer;">지움</button>
+                <button onClick="{{ k0 }}" style-hover="background:#eef0f5;" style="font-family:'Gaegu',cursive; font-size:30px; font-weight:700; color:#2c2c2c; background:#fff; border:2px solid #c5c4bd; border-radius:14px; padding:16px 0; cursor:pointer;">0</button>
+                <button onClick="{{ kConfirm }}" style-hover="background:#16213b;" style="font-family:'Gowun Dodum',sans-serif; font-size:17px; font-weight:700; color:#fff; background:#1f2d4d; border:2px solid #1f2d4d; border-radius:14px; padding:16px 0; cursor:pointer;">확인</button>
+              </div>
+            </sc-if>
+
+            <!-- ===== SCREEN: 등하원 선택 ===== -->
+            <sc-if value="{{ screenAction }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
+                <button onClick="{{ goBack }}" style-hover="background:#f0eef0;" style="display:flex; align-items:center; justify-content:center; width:42px; height:42px; border:2px solid #c5c4bd; background:#fff; border-radius:12px; cursor:pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2c2c2c" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg></button>
+                <span style="width:46px; height:46px; border-radius:50%; background:#cdd4e4; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:700; color:#1f2d4d;">{{ studentInitial }}</span>
+                <div>
+                  <div style="font-size:21px; font-weight:700;">{{ studentName }} <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#9a9a9a; font-weight:400;">{{ studentClass }}</span></div>
+                  <div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#51618a;">{{ subjectLabel }}</div>
+                </div>
+              </div>
+
+              <sc-if value="{{ isDual }}" hint-placeholder-val="{{ true }}">
+                <div style="font-size:19px; font-weight:700; text-align:center; margin-bottom:8px;">과목과 등하원을 골라요</div>
+                <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#9a9a9a; text-align:center; margin-bottom:18px;">영어·수학 둘 다 들어요</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                  <button onClick="{{ actEngIn }}" style-hover="background:#e4e8f2;" style="font-family:'Gaegu',cursive; border:3px solid #51618a; background:#fff; border-radius:18px; padding:24px 8px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:8px;">
+                    <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#51618a; background:#e4e8f2; border-radius:8px; padding:3px 14px;">영어</span>
+                    <span style="font-size:30px; font-weight:700; color:#51618a;">등원</span>
+                  </button>
+                  <button onClick="{{ actMathIn }}" style-hover="background:#e4e8f2;" style="font-family:'Gaegu',cursive; border:3px solid #51618a; background:#fff; border-radius:18px; padding:24px 8px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:8px;">
+                    <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#51618a; background:#e4e8f2; border-radius:8px; padding:3px 14px;">수학</span>
+                    <span style="font-size:30px; font-weight:700; color:#51618a;">등원</span>
+                  </button>
+                  <button onClick="{{ actEngOut }}" style-hover="background:#16213b;" style="font-family:'Gaegu',cursive; border:3px solid #1f2d4d; background:#1f2d4d; border-radius:18px; padding:24px 8px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:8px;">
+                    <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#1f2d4d; background:#fff; border-radius:8px; padding:3px 14px;">영어</span>
+                    <span style="font-size:30px; font-weight:700; color:#fff;">하원</span>
+                  </button>
+                  <button onClick="{{ actMathOut }}" style-hover="background:#16213b;" style="font-family:'Gaegu',cursive; border:3px solid #1f2d4d; background:#1f2d4d; border-radius:18px; padding:24px 8px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:8px;">
+                    <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#1f2d4d; background:#fff; border-radius:8px; padding:3px 14px;">수학</span>
+                    <span style="font-size:30px; font-weight:700; color:#fff;">하원</span>
+                  </button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isSingle }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:19px; font-weight:700; text-align:center; margin-bottom:18px;">무엇을 할까요?</div>
+                <div style="display:flex; gap:16px;">
+                  <button onClick="{{ actIn }}" style-hover="background:#e4e8f2;" style="flex:1; font-family:'Gaegu',cursive; border:3px solid #51618a; background:#fff; border-radius:18px; padding:36px 8px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:10px;">
+                    <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#51618a" stroke-width="2"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>
+                    <span style="font-size:32px; font-weight:700; color:#51618a;">등원</span>
+                  </button>
+                  <button onClick="{{ actOut }}" style-hover="background:#16213b;" style="flex:1; font-family:'Gaegu',cursive; border:3px solid #1f2d4d; background:#1f2d4d; border-radius:18px; padding:36px 8px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:10px;">
+                    <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
+                    <span style="font-size:32px; font-weight:700; color:#fff;">하원</span>
+                  </button>
+                </div>
+              </sc-if>
+
+              <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#9a9a9a; text-align:center; margin-top:20px;">누르면 지금 시간이 자동으로 기록돼요</div>
+            </sc-if>
+
+            <!-- ===== SCREEN: 완료 ===== -->
+            <sc-if value="{{ screenDone }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#1f2d4d; border-radius:18px; padding:44px 24px; text-align:center;">
+                <div style="width:84px; height:84px; border-radius:50%; background:#fff; margin:0 auto 20px; display:flex; align-items:center; justify-content:center;"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#1f2d4d" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg></div>
+                <div style="font-size:34px; font-weight:700; color:#fff; line-height:1.25;">{{ doneName }}<br>{{ doneLabel }} 완료</div>
+                <div style="font-size:22px; color:#aeb8d0; margin-top:12px;">{{ doneTime }}</div>
+              </div>
+              <button onClick="{{ reset }}" style-hover="background:#eef0f5;" style="width:100%; font-family:'Gowun Dodum',sans-serif; font-size:16px; font-weight:700; color:#1f2d4d; background:#fff; border:2px solid #1f2d4d; border-radius:14px; padding:14px; margin-top:16px; cursor:pointer;">처음으로</button>
+            </sc-if>
+
+          </div>
+        </div>
+        <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}">
+        <div style="font-size:15px; color:#51618a; margin-top:12px; display:flex; align-items:center; gap:6px;"><span style="font-size:18px;">↑</span> 번호 입력 → 확인 → 맞으면 등하원 화면, 틀리면 오류 안내 → 과목·등하원 선택 → 완료</div>
+        </sc-if>
+      </div>
+
+      <!-- Reference states (static) -->
+      <div style="flex:0 0 auto; display:flex; flex-direction:column; gap:24px;">
+
+        <!-- ref: 번호 오류 -->
+        <div>
+          <div style="font-size:16px; font-weight:700; margin-bottom:8px;">상태 참고 · 번호 오류</div>
+          <div style="width:380px; background:#fff; border:2.5px solid #2c2c2c; border-radius:18px; box-shadow:8px 8px 0 rgba(44,44,44,0.12); overflow:hidden;">
+            <div style="background:#1f2d4d; padding:13px 18px;"><span style="color:#fff; font-size:18px; font-weight:700;">등하원 체크</span></div>
+            <div style="padding:18px;">
+              <div style="display:flex; align-items:center; gap:9px; background:#fdf2f2; border:2px solid #d23b3b; border-radius:12px; padding:11px 14px; margin-bottom:12px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d23b3b" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>
+                <span style="font-size:14px; font-weight:700; color:#d23b3b;">없는 번호예요. 다시 확인해서 눌러주세요.</span>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:center; border:2.5px solid #d23b3b; border-radius:12px; padding:14px; background:#faf9f6;"><span style="font-size:32px; font-weight:700; letter-spacing:8px; color:#d23b3b;">99</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ref: 영어·수학 동시 수강 (4버튼) -->
+        <div>
+          <div style="font-size:16px; font-weight:700; margin-bottom:8px;">상태 참고 · 영어·수학 동시 수강</div>
+          <div style="width:380px; background:#fff; border:2.5px solid #2c2c2c; border-radius:18px; box-shadow:8px 8px 0 rgba(44,44,44,0.12); overflow:hidden;">
+            <div style="background:#1f2d4d; padding:12px 18px; display:flex; align-items:center; gap:9px;">
+              <span style="width:34px; height:34px; border-radius:50%; background:#cdd4e4; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; color:#1f2d4d;">정</span>
+              <span style="color:#fff; font-size:18px; font-weight:700;">정하은 <span style="color:#aeb8d0; font-size:13px;">중3-A</span></span>
+            </div>
+            <div style="padding:16px 18px 20px;">
+              <div style="font-size:15px; font-weight:700; text-align:center; margin-bottom:14px;">과목과 등하원을 골라요</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
+                <div style="border:2.5px solid #51618a; background:#fff; border-radius:14px; padding:16px 8px; text-align:center;"><div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#51618a; margin-bottom:4px;">영어</div><div style="font-size:24px; font-weight:700; color:#51618a;">등원</div></div>
+                <div style="border:2.5px solid #51618a; background:#fff; border-radius:14px; padding:16px 8px; text-align:center;"><div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#51618a; margin-bottom:4px;">수학</div><div style="font-size:24px; font-weight:700; color:#51618a;">등원</div></div>
+                <div style="border:2.5px solid #1f2d4d; background:#1f2d4d; border-radius:14px; padding:16px 8px; text-align:center;"><div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#fff; margin-bottom:4px;">영어</div><div style="font-size:24px; font-weight:700; color:#fff;">하원</div></div>
+                <div style="border:2.5px solid #1f2d4d; background:#1f2d4d; border-radius:14px; padding:16px 8px; text-align:center;"><div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#fff; margin-bottom:4px;">수학</div><div style="font-size:24px; font-weight:700; color:#fff;">하원</div></div>
+              </div>
+            </div>
+          </div>
+          <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}">
+          <div style="font-size:15px; color:#51618a; margin-top:12px; display:flex; align-items:center; gap:6px; max-width:380px;"><span style="font-size:18px;">↑</span> 영수 동시 수강생은 영어/수학 × 등원/하원 4개 중 선택</div>
+          </sc-if>
+        </div>
+
+        <!-- ref: 단일 과목 (2버튼) -->
+        <div>
+          <div style="font-size:16px; font-weight:700; margin-bottom:8px;">상태 참고 · 단일 과목</div>
+          <div style="width:380px; background:#fff; border:2.5px solid #2c2c2c; border-radius:18px; box-shadow:8px 8px 0 rgba(44,44,44,0.12); overflow:hidden;">
+            <div style="background:#1f2d4d; padding:12px 18px; display:flex; align-items:center; gap:9px;">
+              <span style="width:34px; height:34px; border-radius:50%; background:#cdd4e4; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; color:#1f2d4d;">박</span>
+              <span style="color:#fff; font-size:18px; font-weight:700;">박지후 <span style="color:#aeb8d0; font-size:13px;">중2-A · 수학</span></span>
+            </div>
+            <div style="padding:18px;">
+              <div style="display:flex; gap:12px;">
+                <div style="flex:1; border:2.5px solid #51618a; background:#fff; border-radius:14px; padding:26px 8px; text-align:center;"><div style="font-size:28px; font-weight:700; color:#51618a;">등원</div></div>
+                <div style="flex:1; border:2.5px solid #1f2d4d; background:#1f2d4d; border-radius:14px; padding:26px 8px; text-align:center;"><div style="font-size:28px; font-weight:700; color:#fff;">하원</div></div>
+              </div>
+            </div>
+          </div>
+          <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}">
+          <div style="font-size:15px; color:#51618a; margin-top:12px; display:flex; align-items:center; gap:6px; max-width:380px;"><span style="font-size:18px;">↑</span> 한 과목만 듣는 학생은 등원/하원 2개만</div>
+          </sc-if>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SECTION C — 학생 상세 이력 (조회용) -->
+  <!-- ============================================================ -->
+  <div style="max-width:1680px; margin:0 auto;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:6px;">
+      <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#fff; background:#51618a; border-radius:999px; padding:5px 14px;">화면 3</span>
+      <span style="font-size:26px; font-weight:700;">학생 상세 — 등하원 이력</span>
+      <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#8a8a8a;">조회용 (읽기만) · 학부모 상담 시 사용</span>
+    </div>
+    <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#7a7a7a; border-bottom:2px dashed #c9c8c1; padding-bottom:14px; margin-bottom:26px;">수정·발송 없음. 두 표현 — 좌: <b>타임라인</b>(정돈된 느낌) · 우: <b>표</b>(밀도·집계). 학생 상세 화면 안의 한 섹션.</div>
+
+    <div style="display:flex; gap:36px; flex-wrap:wrap; align-items:flex-start;">
+
+      <!-- C1 타임라인 -->
+      <div style="flex:1 1 600px; min-width:520px;">
+        <div style="font-size:18px; font-weight:700; margin-bottom:10px;">A · 타임라인</div>
+        <div style="background:#fff; border:2.5px solid #2c2c2c; border-radius:18px; box-shadow:8px 8px 0 rgba(44,44,44,0.12); overflow:hidden;">
+          <!-- student header -->
+          <div style="display:flex; align-items:center; gap:14px; padding:18px 20px; border-bottom:2px solid #2c2c2c; background:#f6f6f3;">
+            <span style="width:52px; height:52px; border-radius:50%; background:#cdd4e4; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; color:#1f2d4d;">이</span>
+            <div>
+              <div style="font-size:22px; font-weight:700;">이서연 <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#9a9a9a; font-weight:400;">중2-A</span></div>
+              <div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#8a8a8a;">학부모 연락처 · 010-****-1234</div>
+            </div>
+            <div style="margin-left:auto; display:flex; gap:8px;">
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#7a7a7a; border:2px solid #c5c4bd; border-radius:8px; padding:5px 11px;">숙제</span>
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#7a7a7a; border:2px solid #c5c4bd; border-radius:8px; padding:5px 11px;">진도</span>
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#1f2d4d; border:2px solid #1f2d4d; background:#e4e8f2; border-radius:8px; padding:5px 11px;">등하원</span>
+            </div>
+          </div>
+
+          <div style="padding:20px 22px;">
+            <!-- day group -->
+            <div style="font-size:15px; font-weight:700; color:#6f6f6f; margin-bottom:12px;">6월 17일 (수)</div>
+            <div style="position:relative; padding-left:26px; border-left:2.5px solid #d8d7d0; display:flex; flex-direction:column; gap:18px; margin-bottom:22px;">
+              <div style="position:relative;">
+                <span style="position:absolute; left:-34px; top:2px; width:15px; height:15px; border-radius:50%; background:#51618a; border:2px solid #fff; box-shadow:0 0 0 2px #51618a;"></span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#51618a; border:1.5px solid #51618a; border-radius:7px; padding:1px 9px;">등원</span>
+                  <span style="font-size:18px; font-weight:700;">15:02</span>
+                  <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#9a9a9a;">알림 발송됨 15:03</span>
+                </div>
+              </div>
+              <div style="position:relative;">
+                <span style="position:absolute; left:-34px; top:2px; width:15px; height:15px; border-radius:50%; background:#1f2d4d; border:2px solid #fff; box-shadow:0 0 0 2px #1f2d4d;"></span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#fff; background:#1f2d4d; border-radius:7px; padding:2px 10px;">하원</span>
+                  <span style="font-size:18px; font-weight:700;">18:30</span>
+                  <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#9a9a9a;">알림 발송됨 18:31</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="font-size:15px; font-weight:700; color:#6f6f6f; margin-bottom:12px;">6월 16일 (화)</div>
+            <div style="position:relative; padding-left:26px; border-left:2.5px solid #d8d7d0; display:flex; flex-direction:column; gap:18px;">
+              <div style="position:relative;">
+                <span style="position:absolute; left:-34px; top:2px; width:15px; height:15px; border-radius:50%; background:#51618a; border:2px solid #fff; box-shadow:0 0 0 2px #51618a;"></span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#51618a; border:1.5px solid #51618a; border-radius:7px; padding:1px 9px;">등원</span>
+                  <span style="font-size:18px; font-weight:700;">15:00</span>
+                  <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#8a6d1f;">정정됨 → 15:10</span>
+                </div>
+              </div>
+              <div style="position:relative;">
+                <span style="position:absolute; left:-34px; top:2px; width:15px; height:15px; border-radius:50%; background:#1f2d4d; border:2px solid #fff; box-shadow:0 0 0 2px #1f2d4d;"></span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#fff; background:#1f2d4d; border-radius:7px; padding:2px 10px;">하원</span>
+                  <span style="font-size:18px; font-weight:700;">18:25</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}">
+        <div style="font-size:15px; color:#51618a; margin-top:12px; display:flex; align-items:center; gap:6px;"><span style="font-size:18px;">↑</span> 읽기 전용 — 버튼 없음. 날짜별로 등/하원 점을 시간순 정렬</div>
+        </sc-if>
+      </div>
+
+      <!-- C2 표 -->
+      <div style="flex:1 1 480px; min-width:440px;">
+        <div style="font-size:18px; font-weight:700; margin-bottom:10px;">B · 표</div>
+        <div style="background:#fff; border:2.5px solid #2c2c2c; border-radius:18px; box-shadow:8px 8px 0 rgba(44,44,44,0.12); overflow:hidden;">
+          <div style="display:flex; align-items:center; gap:10px; padding:15px 18px; border-bottom:2px solid #2c2c2c; background:#f6f6f3;">
+            <span style="width:40px; height:40px; border-radius:50%; background:#cdd4e4; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:700; color:#1f2d4d;">이</span>
+            <span style="font-size:19px; font-weight:700;">이서연 <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#9a9a9a; font-weight:400;">중2-A · 등하원 이력</span></span>
+          </div>
+          <div style="display:grid; grid-template-columns:1.1fr 0.8fr 0.8fr 1.2fr; gap:6px; padding:9px 18px; font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#9a9a9a; border-bottom:1.5px solid #d8d7d0;">
+            <span>날짜</span><span>구분</span><span>시간</span><span>발송</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1.1fr 0.8fr 0.8fr 1.2fr; gap:6px; align-items:center; padding:11px 18px; border-bottom:1.5px solid #ecebe4;">
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px;">6/17 (수)</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#51618a;">등원</span>
+            <span style="font-size:14px; font-weight:700;">15:02</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#51618a;">발송 15:03 ✓</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1.1fr 0.8fr 0.8fr 1.2fr; gap:6px; align-items:center; padding:11px 18px; border-bottom:1.5px solid #ecebe4;">
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#bbb;">″</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#1f2d4d;">하원</span>
+            <span style="font-size:14px; font-weight:700;">18:30</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#51618a;">발송 18:31 ✓</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1.1fr 0.8fr 0.8fr 1.2fr; gap:6px; align-items:center; padding:11px 18px; border-bottom:1.5px solid #ecebe4; background:#fbfaf4;">
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px;">6/16 (화)</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#51618a;">등원</span>
+            <span style="font-size:14px; font-weight:700;">15:10</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#8a6d1f;">정정 발송 ✓</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1.1fr 0.8fr 0.8fr 1.2fr; gap:6px; align-items:center; padding:11px 18px; border-bottom:1.5px solid #ecebe4;">
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#bbb;">″</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#1f2d4d;">하원</span>
+            <span style="font-size:14px; font-weight:700;">18:25</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#51618a;">발송 ✓</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1.1fr 0.8fr 0.8fr 1.2fr; gap:6px; align-items:center; padding:11px 18px;">
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px;">6/15 (월)</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; font-weight:700; color:#51618a;">등원</span>
+            <span style="font-size:14px; font-weight:700;">15:05</span>
+            <span style="font-family:'Gowun Dodum',sans-serif; font-size:11px; color:#51618a;">발송 ✓</span>
+          </div>
+          <div style="padding:11px 18px; text-align:center; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#a8a8a8; background:#f6f6f3; border-top:2px solid #2c2c2c;">이전 기록 더 보기 ▾</div>
+        </div>
+        <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}">
+        <div style="font-size:15px; color:#51618a; margin-top:12px; display:flex; align-items:center; gap:6px;"><span style="font-size:18px;">↑</span> 상담 출력에 적합한 정돈된 표 — 정정 행은 옅게 구분</div>
+        </sc-if>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SECTION D — 학생별 수업시간 리포트 -->
+  <!-- ============================================================ -->
+  <div style="max-width:1680px; margin:64px auto 0;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:6px;">
+      <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#fff; background:#1f2d4d; border-radius:999px; padding:5px 14px;">화면 4 · 신규 제안</span>
+      <span style="font-size:26px; font-weight:700;">학생별 수업시간 리포트</span>
+      <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#8a8a8a;">월별 집계 · 등록 대비 초과/부족 · 상담·청구용</span>
+    </div>
+    <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#7a7a7a; border-bottom:2px dashed #c9c8c1; padding-bottom:14px; margin-bottom:26px;">등하원 기록을 <b>월 단위로 합산</b>해 한 화면에. 등록 수업시간 대비 초과/부족, 지난달 대비, 남은 수업을 그래프로 보여줘 <b>수업 추가·청구 상담</b>에 바로 쓰는 용도. 길게 쌓이던 일별 기록은 맨 아래 <b>월별 접기</b>로 정리.</div>
+
+    <div style="background:#fff; border:2.5px solid #2c2c2c; border-radius:20px; box-shadow:8px 8px 0 rgba(44,44,44,0.12); overflow:hidden; max-width:1040px;">
+
+      <!-- header: student + month nav -->
+      <div style="display:flex; align-items:center; gap:14px; padding:18px 24px; border-bottom:2px solid #2c2c2c; background:#f6f6f3; flex-wrap:wrap;">
+        <span style="width:52px; height:52px; border-radius:50%; background:#cdd4e4; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; color:#1f2d4d;">이</span>
+        <div>
+          <div style="font-size:22px; font-weight:700;">이서연 <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#9a9a9a; font-weight:400;">중2-A</span></div>
+          <div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#8a8a8a;">등록 수업 · 영어 주2회 · 수학 주1회 · 회당 90분</div>
+        </div>
+        <div style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+          <button style-hover="background:#eef0f5;" style="width:38px; height:38px; border:2px solid #c5c4bd; background:#fff; border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2c2c2c" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <span style="font-size:19px; font-weight:700; min-width:130px; text-align:center;">2026년 6월</span>
+          <button style-hover="background:#eef0f5;" style="width:38px; height:38px; border:2px solid #c5c4bd; background:#fff; border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2c2c2c" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg></button>
+        </div>
+      </div>
+
+      <!-- sub tabs -->
+      <div style="display:flex; gap:8px; padding:12px 24px; border-bottom:1.5px solid #ecebe4;">
+        <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#7a7a7a; border:2px solid #c5c4bd; border-radius:8px; padding:5px 13px;">숙제</span>
+        <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#7a7a7a; border:2px solid #c5c4bd; border-radius:8px; padding:5px 13px;">진도</span>
+        <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#7a7a7a; border:2px solid #c5c4bd; border-radius:8px; padding:5px 13px;">등하원</span>
+        <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; color:#1f2d4d; border:2px solid #1f2d4d; background:#e4e8f2; border-radius:8px; padding:5px 13px;">수업시간</span>
+      </div>
+
+      <!-- metric cards -->
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px; padding:22px 24px;">
+        <div style="border:2px solid #2c2c2c; border-radius:14px; padding:16px;">
+          <div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#8a8a8a; margin-bottom:8px;">이번 달 누적</div>
+          <div style="font-size:30px; font-weight:700; line-height:1;">18<span style="font-size:17px;">시간</span> 00<span style="font-size:17px;">분</span></div>
+          <div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#7a7a7a; margin-top:6px;">총 12회 수업</div>
+        </div>
+        <div style="border:2.5px solid #1f2d4d; background:#eef0f5; border-radius:14px; padding:16px;">
+          <div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#1f2d4d; margin-bottom:8px;">등록 대비</div>
+          <div style="font-size:30px; font-weight:700; line-height:1; color:#1f2d4d;">+1<span style="font-size:17px;">시간</span> 30<span style="font-size:17px;">분</span></div>
+          <div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#1f2d4d; margin-top:6px; font-weight:700;">초과 · 등록 16시간 30분</div>
+        </div>
+        <div style="border:2px solid #2c2c2c; border-radius:14px; padding:16px;">
+          <div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#8a8a8a; margin-bottom:8px;">지난달 대비</div>
+          <div style="display:flex; align-items:baseline; gap:6px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#51618a" stroke-width="3"><path d="M6 15l6-6 6 6"/></svg><div style="font-size:30px; font-weight:700; line-height:1; color:#51618a;">1<span style="font-size:17px;">시간</span> 20<span style="font-size:17px;">분</span></div></div>
+          <div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#7a7a7a; margin-top:6px;">5월 16시간 40분</div>
+        </div>
+        <div style="border:2px solid #2c2c2c; border-radius:14px; padding:16px;">
+          <div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#8a8a8a; margin-bottom:8px;">이번 달 남은 수업</div>
+          <div style="font-size:30px; font-weight:700; line-height:1;">3<span style="font-size:17px;">회</span></div>
+          <div style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#7a7a7a; margin-top:6px;">6/19 · 6/24 · 6/26</div>
+        </div>
+      </div>
+
+      <!-- viz row -->
+      <div style="display:grid; grid-template-columns:1.3fr 1fr; gap:20px; padding:6px 24px 22px;">
+
+        <!-- weekly bar chart -->
+        <div style="border:2px solid #2c2c2c; border-radius:14px; padding:18px 18px 14px;">
+          <div style="font-size:15px; font-weight:700; margin-bottom:16px;">주차별 수업시간</div>
+          <div style="display:flex; align-items:flex-end; gap:16px; height:160px;">
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; height:100%; justify-content:flex-end;">
+              <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#6f6f6f; margin-bottom:6px;">4:30</div>
+              <div style="width:60%; height:75%; background:#51618a; border:2px solid #2c2c2c; border-radius:8px 8px 0 0;"></div>
+            </div>
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; height:100%; justify-content:flex-end;">
+              <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#1f2d4d; margin-bottom:6px;">6:00</div>
+              <div style="width:60%; height:100%; background:#1f2d4d; border:2px solid #2c2c2c; border-radius:8px 8px 0 0;"></div>
+            </div>
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; height:100%; justify-content:flex-end;">
+              <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#6f6f6f; margin-bottom:6px;">4:30</div>
+              <div style="width:60%; height:75%; background:#51618a; border:2px solid #2c2c2c; border-radius:8px 8px 0 0;"></div>
+            </div>
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; height:100%; justify-content:flex-end;">
+              <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#6f6f6f; margin-bottom:6px;">3:00</div>
+              <div style="width:60%; height:50%; background:#51618a; border:2px solid #2c2c2c; border-radius:8px 8px 0 0;"></div>
+            </div>
+          </div>
+          <div style="display:flex; gap:16px; border-top:2px solid #2c2c2c; padding-top:8px; margin-top:0;">
+            <span style="flex:1; text-align:center; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#7a7a7a;">1주</span>
+            <span style="flex:1; text-align:center; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#7a7a7a;">2주</span>
+            <span style="flex:1; text-align:center; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#7a7a7a;">3주</span>
+            <span style="flex:1; text-align:center; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#7a7a7a;">4주</span>
+          </div>
+        </div>
+
+        <!-- right column: gauge + compare -->
+        <div style="display:flex; flex-direction:column; gap:18px;">
+          <!-- registered gauge -->
+          <div style="border:2px solid #2c2c2c; border-radius:14px; padding:16px 18px;">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px;">
+              <span style="font-size:15px; font-weight:700;">등록 수업시간 대비</span>
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; font-weight:700; color:#1f2d4d;">109%</span>
+            </div>
+            <div style="position:relative; height:30px; background:#eceae3; border:2px solid #2c2c2c; border-radius:8px; overflow:visible;">
+              <div style="display:flex; height:100%; width:90.8%; border-radius:6px 0 0 6px; overflow:hidden;">
+                <div style="width:91.8%; background:#1f2d4d;"></div>
+                <div style="flex:1; background:#d23b3b;"></div>
+              </div>
+              <div style="position:absolute; left:83.3%; top:-5px; bottom:-5px; width:0; border-left:2.5px dashed #2c2c2c;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:10px; font-family:'Gowun Dodum',sans-serif; font-size:12px;">
+              <span style="color:#1f2d4d; font-weight:700;">실제 18:00</span>
+              <span style="color:#7a7a7a;">등록 16:30</span>
+              <span style="color:#d23b3b; font-weight:700;">초과 +1:30</span>
+            </div>
+          </div>
+          <!-- this vs last month -->
+          <div style="border:2px solid #2c2c2c; border-radius:14px; padding:16px 18px;">
+            <div style="font-size:15px; font-weight:700; margin-bottom:14px;">지난달 대비</div>
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#7a7a7a; width:34px;">5월</span>
+              <div style="flex:1; height:20px; background:#eceae3; border-radius:6px; overflow:hidden;"><div style="width:83.3%; height:100%; background:#9aa6c2;"></div></div>
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; width:62px; text-align:right;">16:40</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#1f2d4d; font-weight:700; width:34px;">6월</span>
+              <div style="flex:1; height:20px; background:#eceae3; border-radius:6px; overflow:hidden;"><div style="width:90%; height:100%; background:#1f2d4d;"></div></div>
+              <span style="font-family:'Gowun Dodum',sans-serif; font-size:12px; font-weight:700; width:62px; text-align:right;">18:00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 상담 메모 -->
+      <div style="margin:0 24px 22px; display:flex; align-items:center; gap:10px; background:#eef0f5; border:2px solid #51618a; border-radius:12px; padding:13px 16px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1f2d4d" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#1f2d4d;">상담 메모 — 6월은 등록보다 1시간 30분 초과 진행. 추가 수업료 또는 다음 달 차감 협의 가능.</span>
+      </div>
+
+      <!-- monthly collapsible log -->
+      <div style="border-top:2px solid #2c2c2c; padding:18px 24px 22px;">
+        <div style="font-size:15px; font-weight:700; margin-bottom:12px;">월별 수업 기록</div>
+
+        <!-- June open -->
+        <div style="border:2px solid #2c2c2c; border-radius:13px; overflow:hidden; margin-bottom:10px;">
+          <div style="display:flex; align-items:center; gap:10px; padding:11px 15px; background:#eef0f5;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1f2d4d" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+            <span style="font-size:16px; font-weight:700;">2026년 6월</span>
+            <span style="margin-left:auto; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#7a7a7a;">12회 · 18시간 00분</span>
+          </div>
+          <div>
+            <div style="display:grid; grid-template-columns:0.9fr 0.7fr 1.3fr 0.7fr; gap:8px; align-items:center; padding:10px 16px; border-top:1.5px solid #ecebe4; font-family:'Gowun Dodum',sans-serif; font-size:13px;">
+              <span style="font-weight:700;">6/17 (수)</span><span style="color:#51618a; font-weight:700;">영어</span><span style="color:#6f6f6f;">15:02 → 16:32</span><span style="text-align:right; font-weight:700;">90분</span>
+            </div>
+            <div style="display:grid; grid-template-columns:0.9fr 0.7fr 1.3fr 0.7fr; gap:8px; align-items:center; padding:10px 16px; border-top:1.5px solid #ecebe4; font-family:'Gowun Dodum',sans-serif; font-size:13px;">
+              <span style="font-weight:700;">6/16 (화)</span><span style="color:#1f2d4d; font-weight:700;">수학</span><span style="color:#6f6f6f;">15:10 → 16:50</span><span style="text-align:right; font-weight:700; color:#d23b3b;">100분</span>
+            </div>
+            <div style="display:grid; grid-template-columns:0.9fr 0.7fr 1.3fr 0.7fr; gap:8px; align-items:center; padding:10px 16px; border-top:1.5px solid #ecebe4; font-family:'Gowun Dodum',sans-serif; font-size:13px;">
+              <span style="font-weight:700;">6/15 (월)</span><span style="color:#51618a; font-weight:700;">영어</span><span style="color:#6f6f6f;">15:05 → 16:35</span><span style="text-align:right; font-weight:700;">90분</span>
+            </div>
+            <div style="padding:9px 16px; text-align:center; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#a8a8a8; border-top:1.5px solid #ecebe4;">6월 12회 전체 보기 ▾</div>
+          </div>
+        </div>
+
+        <!-- May collapsed -->
+        <div onClick="{{ toggleRp5 }}" style="display:flex; align-items:center; gap:10px; padding:11px 15px; border:2px solid #c5c4bd; border-radius:12px; background:#f6f6f3; cursor:pointer; margin-bottom:10px;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="2.5" style="transform:{{ chevRp5 }}; transition:transform .15s;"><path d="M6 9l6 6 6-6"/></svg>
+          <span style="font-size:16px; font-weight:700; color:#6f6f6f;">2026년 5월</span>
+          <span style="margin-left:auto; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#9a9a9a;">11회 · 16시간 40분</span>
+        </div>
+        <sc-if value="{{ isRp5 }}" hint-placeholder-val="{{ false }}">
+          <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#8a8a8a; padding:10px 16px; border:2px dashed #c5c4bd; border-radius:10px; margin-bottom:10px;">… 5월 수업 11회 (날짜 · 과목 · 시간 · 분) …</div>
+        </sc-if>
+
+        <!-- April collapsed -->
+        <div onClick="{{ toggleRp4 }}" style="display:flex; align-items:center; gap:10px; padding:11px 15px; border:2px solid #c5c4bd; border-radius:12px; background:#f6f6f3; cursor:pointer;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="2.5" style="transform:{{ chevRp4 }}; transition:transform .15s;"><path d="M6 9l6 6 6-6"/></svg>
+          <span style="font-size:16px; font-weight:700; color:#6f6f6f;">2026년 4월</span>
+          <span style="margin-left:auto; font-family:'Gowun Dodum',sans-serif; font-size:12px; color:#9a9a9a;">12회 · 18시간 00분</span>
+        </div>
+        <sc-if value="{{ isRp4 }}" hint-placeholder-val="{{ false }}">
+          <div style="font-family:'Gowun Dodum',sans-serif; font-size:13px; color:#8a8a8a; padding:10px 16px; border:2px dashed #c5c4bd; border-radius:10px; margin-top:10px;">… 4월 수업 12회 …</div>
+        </sc-if>
+      </div>
+
+    </div>
+
+    <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex; flex-direction:column; gap:6px; margin-top:14px;">
+      <span style="font-size:15px; color:#1f2d4d; display:flex; align-items:center; gap:6px;"><span style="font-size:18px;">↑</span> 상단 4개 숫자 + 그래프로 "이번 달 / 등록 대비 / 지난달 대비 / 남은 수업"을 한눈에</span>
+      <span style="font-size:15px; color:#d23b3b; display:flex; align-items:center; gap:6px;"><span style="font-size:18px;">↑</span> 등록 초과분은 빨강으로 — 추가 수업료·청구 상담 근거</span>
+      <span style="font-size:15px; color:#51618a; display:flex; align-items:center; gap:6px;"><span style="font-size:18px;">↑</span> 일별 기록은 길어지지 않게 월 단위로 접어서 정리</span>
+    </div>
+    </sc-if>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showAnnotations&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { open: { today: true, d16: false, rp5: false, rp4: false }, code: '', screen: 'keypad', error: false, student: null, doneName: '', doneLabel: '', doneTime: '' };
+
+  students() {
+    return {
+      '07': { name: '이서연', cls: '중2-A', subjects: ['영어', '수학'] },
+      '12': { name: '박지후', cls: '중2-A', subjects: ['수학'] },
+      '03': { name: '최도윤', cls: '중2-B', subjects: ['영어'] },
+      '21': { name: '정하은', cls: '중3-A', subjects: ['영어', '수학'] },
+    };
+  }
+
+  t(k) {
+    this.setState(s => ({ open: { ...s.open, [k]: !s.open[k] } }));
+  }
+
+  press(d) {
+    this.setState(s => ({ code: s.code.length < 3 ? s.code + d : s.code, error: false }));
+  }
+
+  confirm() {
+    const st = this.students()[this.state.code];
+    if (st) this.setState({ screen: 'action', student: st, error: false });
+    else this.setState({ error: true, code: '' });
+  }
+
+  nowStr() {
+    const d = new Date();
+    const h = d.getHours();
+    const m = String(d.getMinutes()).padStart(2, '0');
+    const ap = h < 12 ? '오전' : '오후';
+    let hh = h % 12; if (hh === 0) hh = 12;
+    return ap + ' ' + hh + '시 ' + m + '분';
+  }
+
+  choose(label) {
+    this.setState({ screen: 'done', doneName: this.state.student.name, doneLabel: label, doneTime: this.nowStr() });
+  }
+
+  reset() {
+    this.setState({ screen: 'keypad', code: '', error: false, student: null });
+  }
+
+  renderVals() {
+    const open = this.state.open;
+    const notes = this.props.showAnnotations ?? true;
+    const code = this.state.code;
+    const st = this.state.student;
+    const subjects = st ? st.subjects : [];
+    const isDual = subjects.length > 1;
+    return {
+      notes,
+      isToday: !!open.today,
+      isD16: !!open.d16,
+      toggleToday: () => this.t('today'),
+      toggleD16: () => this.t('d16'),
+      chevToday: open.today ? 'rotate(0deg)' : 'rotate(-90deg)',
+      chevD16: open.d16 ? 'rotate(0deg)' : 'rotate(-90deg)',
+      isRp5: !!open.rp5,
+      isRp4: !!open.rp4,
+      toggleRp5: () => this.t('rp5'),
+      toggleRp4: () => this.t('rp4'),
+      chevRp5: open.rp5 ? 'rotate(0deg)' : 'rotate(-90deg)',
+      chevRp4: open.rp4 ? 'rotate(0deg)' : 'rotate(-90deg)',
+      code,
+      hasCode: code.length > 0,
+      noCode: code.length === 0,
+      error: this.state.error,
+      screenKeypad: this.state.screen === 'keypad',
+      screenAction: this.state.screen === 'action',
+      screenDone: this.state.screen === 'done',
+      studentName: st ? st.name : '',
+      studentClass: st ? st.cls : '',
+      studentInitial: st ? st.name.charAt(0) : '',
+      subjectLabel: st ? subjects.join('·') + ' 수업' : '',
+      isDual,
+      isSingle: !!st && !isDual,
+      doneName: this.state.doneName,
+      doneLabel: this.state.doneLabel,
+      doneTime: this.state.doneTime,
+      k0: () => this.press('0'),
+      k1: () => this.press('1'),
+      k2: () => this.press('2'),
+      k3: () => this.press('3'),
+      k4: () => this.press('4'),
+      k5: () => this.press('5'),
+      k6: () => this.press('6'),
+      k7: () => this.press('7'),
+      k8: () => this.press('8'),
+      k9: () => this.press('9'),
+      kClear: () => this.setState(s => ({ code: s.code.slice(0, -1), error: false })),
+      kConfirm: () => this.confirm(),
+      actEngIn: () => this.choose('영어 등원'),
+      actMathIn: () => this.choose('수학 등원'),
+      actEngOut: () => this.choose('영어 하원'),
+      actMathOut: () => this.choose('수학 하원'),
+      actIn: () => this.choose(subjects[0] + ' 등원'),
+      actOut: () => this.choose(subjects[0] + ' 하원'),
+      goBack: () => this.reset(),
+      reset: () => this.reset(),
+    };
+  }
+}
+</script>
+</body>
+</html>

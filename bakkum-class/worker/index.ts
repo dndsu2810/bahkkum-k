@@ -68,6 +68,8 @@ import { handleHub, ensureHubTables } from "./hub";
 import { handleEng, handleStudent, ensureEngTables } from "./eng";
 import { handleFeedback } from "./feedback";
 import { handleMessages } from "./message";
+import { handleCheckin } from "./checkin";
+import { handleOrders } from "./orders";
 
 const DEFAULT_APP_URL = "https://bakkum-class.dndsu2810.workers.dev";
 
@@ -97,6 +99,17 @@ export default {
     if (p.startsWith("/api/")) {
       try {
         if (p === "/api/health") return json({ ok: true });
+
+        // 등하원(체크인) — lookup·punch는 공개(학생 키오스크), 나머지는 핸들러 내부에서 세션 확인.
+        if (p.startsWith("/api/checkin")) {
+          const res = await handleCheckin(env, request, p, url);
+          if (res) return res;
+        }
+        // 교재·비품 주문 관리 — 스태프 전용(핸들러 내부에서 세션 확인).
+        if (p.startsWith("/api/orders")) {
+          const res = await handleOrders(env, request, p);
+          if (res) return res;
+        }
 
         // 업로드 이미지 서빙(공개) / 업로드(스태프)
         if (p.startsWith("/api/media/") && request.method === "GET") {
@@ -345,6 +358,12 @@ export default {
           if (res) return res;
         }
 
+        // 수학 앱 핵심 데이터(로스터·기록·포인트) — 스태프(학생 제외) 로그인 필요.
+        // (이전엔 무인증이라 PII 노출·무단 덮어쓰기 위험이 있었음)
+        if (p === "/api/data" || p === "/api/students" || p === "/api/students/hide" || p === "/api/points") {
+          const me = await readSession(env, request);
+          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
+        }
         if (p === "/api/data" && request.method === "GET") return json(await readSnapshot(env));
         if (p === "/api/data" && request.method === "PUT") return await putData(env, request);
         if (p === "/api/students" && request.method === "POST") return await postStudents(env, request);
@@ -527,6 +546,11 @@ async function ensureStudentMeta(env: Env): Promise<void> {
     "ALTER TABLE class_student_meta ADD COLUMN attend_days TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_student_meta ADD COLUMN memo TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_student_meta ADD COLUMN photo TEXT NOT NULL DEFAULT ''",
+    // 등하원 키오스크용 출석번호 — 학원이 직접 부여(학생이 키패드로 입력).
+    "ALTER TABLE class_student_meta ADD COLUMN checkin_no TEXT NOT NULL DEFAULT ''",
+    // 과목별 첫 등원일 — 영수 동시 수강생은 수학·영어 첫 등원일이 다를 수 있어 따로 둔다.
+    "ALTER TABLE class_student_meta ADD COLUMN math_start TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_student_meta ADD COLUMN eng_start TEXT NOT NULL DEFAULT ''",
   ]) {
     try {
       await env.DB.prepare(col).run();
@@ -553,6 +577,9 @@ interface RosterStudent {
   attendDays: string[]; // 등원요일 ["월","수","금"]
   memo: string; // 메모/특이사항(누적 자유 입력)
   photo: string; // 프로필 사진 URL(선택)
+  checkinNo: string; // 등하원 키오스크 출석번호(학원이 부여)
+  mathStart: string; // 수학 첫 등원일
+  engStart: string; // 영어 첫 등원일
   mathSlots: Slot[]; // 수학 수업 요일·시간 (class_lessons 공유 — 수학 앱과 양방향)
   engSlots: Slot[]; // 영어 수업 요일·시간 (class_eng_lessons)
 }
@@ -570,11 +597,11 @@ async function readRoster(env: Env): Promise<RosterStudent[]> {
     )
     .all<Record<string, unknown>>();
 
-  const metaMap: Record<string, { online_id: string; subjects: string; english_band: string; attend_days?: string; memo?: string; photo?: string }> = {};
+  const metaMap: Record<string, { online_id: string; subjects: string; english_band: string; attend_days?: string; memo?: string; photo?: string; checkin_no?: string; math_start?: string; eng_start?: string }> = {};
   try {
     const m = await env.DB
-      .prepare("SELECT student_id, online_id, subjects, english_band, attend_days, memo, photo FROM class_student_meta")
-      .all<{ student_id: string; online_id: string; subjects: string; english_band: string; attend_days: string; memo: string; photo: string }>();
+      .prepare("SELECT student_id, online_id, subjects, english_band, attend_days, memo, photo, checkin_no, math_start, eng_start FROM class_student_meta")
+      .all<{ student_id: string; online_id: string; subjects: string; english_band: string; attend_days: string; memo: string; photo: string; checkin_no: string; math_start: string; eng_start: string }>();
     for (const r of m.results || []) metaMap[String(r.student_id)] = r;
   } catch {
     /* meta 없으면 기본값 */
@@ -625,6 +652,9 @@ async function readRoster(env: Env): Promise<RosterStudent[]> {
       attendDays: parseStrArr(meta?.attend_days),
       memo: meta?.memo || "",
       photo: meta?.photo || "",
+      checkinNo: meta?.checkin_no || "",
+      mathStart: meta?.math_start || "",
+      engStart: meta?.eng_start || "",
       mathSlots: mathSlotMap[id] || [],
       engSlots: engSlotMap[id] || [],
     };
@@ -650,6 +680,9 @@ async function rosterMetaUpsert(env: Env, request: Request): Promise<Response> {
     attendDays?: string[];
     memo?: string;
     photo?: string;
+    checkinNo?: string;
+    mathStart?: string;
+    engStart?: string;
   };
   const sid = String(b.studentId || "");
   if (!sid) return json({ error: "studentId_required" }, 400);
@@ -660,11 +693,14 @@ async function rosterMetaUpsert(env: Env, request: Request): Promise<Response> {
   const attendDays = Array.isArray(b.attendDays) ? b.attendDays.map(String).filter((d) => DOW.includes(d)) : [];
   const memo = typeof b.memo === "string" ? b.memo.slice(0, 4000) : "";
   const photo = typeof b.photo === "string" ? b.photo.slice(0, 400) : "";
+  const checkinNo = typeof b.checkinNo === "string" ? b.checkinNo.trim().slice(0, 20) : "";
+  const mathStart = typeof b.mathStart === "string" ? b.mathStart.slice(0, 20) : "";
+  const engStart = typeof b.engStart === "string" ? b.engStart.slice(0, 20) : "";
   await env.DB
     .prepare(
-      "INSERT INTO class_student_meta(student_id,online_id,subjects,english_band,attend_days,memo,photo,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(student_id) DO UPDATE SET online_id=excluded.online_id, subjects=excluded.subjects, english_band=excluded.english_band, attend_days=excluded.attend_days, memo=excluded.memo, photo=excluded.photo, updated_at=excluded.updated_at"
+      "INSERT INTO class_student_meta(student_id,online_id,subjects,english_band,attend_days,memo,photo,checkin_no,math_start,eng_start,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id) DO UPDATE SET online_id=excluded.online_id, subjects=excluded.subjects, english_band=excluded.english_band, attend_days=excluded.attend_days, memo=excluded.memo, photo=excluded.photo, checkin_no=excluded.checkin_no, math_start=excluded.math_start, eng_start=excluded.eng_start, updated_at=excluded.updated_at"
     )
-    .bind(sid, onlineId, JSON.stringify(subjects), band, JSON.stringify(attendDays), memo, photo, Date.now())
+    .bind(sid, onlineId, JSON.stringify(subjects), band, JSON.stringify(attendDays), memo, photo, checkinNo, mathStart, engStart, Date.now())
     .run();
   return json({ ok: true });
 }
@@ -1060,7 +1096,7 @@ function gradeFromTitles(titles: string[]): string {
 function bandFrom(engTitles: string[], grade: string): string {
   if (engTitles.some((t) => t.includes("초등"))) return "elem";
   if (engTitles.some((t) => t.includes("중") || t.includes("고"))) return "mid";
-  return grade === "초등" ? "elem" : "mid";
+  return String(grade).startsWith("초") ? "elem" : "mid"; // 실제 학년(초3 등)도 초등으로 인식
 }
 async function syncRoster(env: Env, url: URL): Promise<Response> {
   const dry = url.searchParams.get("dry") === "1";
@@ -1350,6 +1386,16 @@ async function importEngTimetable(env: Env, request: Request): Promise<Response>
     const stmts: D1PreparedStatement[] = [env.DB.prepare("DELETE FROM class_eng_lessons WHERE student_id=?").bind(sid)];
     slots.forEach((s, i) =>
       stmts.push(env.DB.prepare("INSERT INTO class_eng_lessons(id,student_id,day,time,duration) VALUES(?,?,?,?,?)").bind(`${sid}-e${i}`, sid, s.day, s.time, s.duration))
+    );
+    // 이 가져오기는 '중고등영어 시간표'(MID) 전용 — 매칭된 학생은 영어 과목 + 중고등(mid) 밴드로 보정한다.
+    // (이전엔 학년이 '초등'이면 englishBand가 elem으로 자동 추정돼 이유리·장진혁이 초등으로 잘못 분류됨)
+    const metaRow = await env.DB.prepare("SELECT subjects FROM class_student_meta WHERE student_id=?").bind(sid).first<{ subjects: string }>();
+    const subjList = String(metaRow?.subjects ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+    if (!subjList.includes("english")) subjList.push("english");
+    stmts.push(
+      env.DB.prepare(
+        "INSERT INTO class_student_meta(student_id,subjects,english_band,updated_at) VALUES(?,?,?,?) ON CONFLICT(student_id) DO UPDATE SET subjects=excluded.subjects, english_band='mid', updated_at=excluded.updated_at"
+      ).bind(sid, subjList.join(","), "mid", Date.now())
     );
     try {
       await env.DB.batch(stmts);
@@ -1665,6 +1711,8 @@ async function ensureSchedulesTable(env: Env): Promise<void> {
     "ALTER TABLE class_homework ADD COLUMN recheck_date TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_homework ADD COLUMN delay_count INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE class_homework ADD COLUMN carried_from TEXT NOT NULL DEFAULT ''",
+    // 진도·교재관리 개편 — 교재 완료일(완료 시점). 월말리포트 '이번 달 완료 교재' 집계용.
+    "ALTER TABLE class_progress ADD COLUMN end_date TEXT NOT NULL DEFAULT ''",
   ]) {
     try { await env.DB.prepare(a).run(); } catch { /* 이미 있으면 무시 */ }
   }
@@ -1765,9 +1813,11 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
   // 영어만 듣는 학생(class_student_meta.subjects에 'math' 없음)은 수학 앱 명단에서 제외.
   // meta가 없으면(레거시) 수학으로 간주해 그대로 표시(회귀 방지).
   const mathExcluded = new Set<string>();
+  const mathStartMap: Record<string, string> = {};
   try {
-    const mr = await env.DB.prepare("SELECT student_id, subjects FROM class_student_meta").all<{ student_id: string; subjects: string }>();
+    const mr = await env.DB.prepare("SELECT student_id, subjects, math_start FROM class_student_meta").all<{ student_id: string; subjects: string; math_start: string }>();
     for (const r of mr.results || []) {
+      if (r.math_start) mathStartMap[String(r.student_id)] = String(r.math_start);
       try {
         const s = JSON.parse(String(r.subjects || "[]"));
         if (Array.isArray(s) && s.length > 0 && !s.includes("math")) mathExcluded.add(String(r.student_id));
@@ -1788,8 +1838,11 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
     return {
       id,
       name: String(r.name),
-      grade: r.grade === "중등" ? "중등" : "초등",
+      // 실제 학년(초6·중2·고1 등) 그대로 — 수학 앱은 startsWith("초"/"중")로 초·중등을 구분하므로
+      // 공통 학생명단과 학년이 어긋나지 않게 한다. (이전엔 초등/중등으로 뭉개 표시됐음)
+      grade: String(r.grade ?? "") || "초등",
       startDate: String(r.start_date ?? ""),
+      mathStart: mathStartMap[id] || "",
       excluded: Number(r.excluded) === 1,
       status: (r.status as Student["status"]) || "재원",
       school: String(r.school ?? ""),
@@ -1887,6 +1940,7 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
       area: String(r.area ?? ""),
       pct: Number(r.pct),
       startDate: String(r.start_date ?? ""),
+      endDate: String(r.end_date ?? ""),
       memo: String(r.memo ?? ""),
     }));
 
@@ -1912,6 +1966,19 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
     /* class_tests 없으면 빈 배열 */
   }
 
+  // 보충수업(남은 분·사유) — 별도 쿼리 + try/catch(테이블 없어도 안전).
+  const supplements: { id: string; studentId: string; date: string; minutes: number; reason: string }[] = [];
+  try {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_supplement (id TEXT PRIMARY KEY, student_id TEXT NOT NULL, date TEXT NOT NULL DEFAULT '', minutes INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)").run();
+    const sRes = await env.DB.prepare("SELECT * FROM class_supplement ORDER BY date DESC").all();
+    for (const r of sRes.results as Record<string, unknown>[]) {
+      if (!rosterIds.has(String(r.student_id))) continue;
+      supplements.push({ id: String(r.id), studentId: String(r.student_id), date: String(r.date ?? ""), minutes: Number(r.minutes ?? 0), reason: String(r.reason ?? "") });
+    }
+  } catch {
+    /* class_supplement 없으면 빈 배열 */
+  }
+
   // 강사 업무 보드 카드 — 별도 쿼리 + try/catch
   const tasks: Task[] = [];
   try {
@@ -1935,7 +2002,7 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
     /* class_tasks 없으면 빈 배열 */
   }
 
-  return { students, makeups, attendance, homeworkLog, progressLog, testLog, tasks, dismissedMakeups: [...dismissedSet], noHomework: [...noHomeworkSet] };
+  return { students, makeups, attendance, homeworkLog, progressLog, testLog, supplements, tasks, dismissedMakeups: [...dismissedSet], noHomework: [...noHomeworkSet] };
 }
 
 /* ---------------- write (class_* only; roster never bulk-touched) ---------------- */
@@ -1951,18 +2018,14 @@ async function putData(env: Env, request: Request): Promise<Response> {
   } catch {
     /* 컬럼/테이블 없으면 보존할 것도 없음 */
   }
+  // 병합 저장(여러 강사 동시 사용 안전): 기록류(출결·보강·숙제·진도·테스트·업무카드)는
+  // 전체 삭제하지 않고 upsert + 명시적 삭제목록(snap.deletions)만 지운다. 다른 강사가
+  // 추가한 기록을 stale 스냅샷이 덮어쓰지 못하게 한다.
+  // 시간표(lessons)·시간표이력(schedules)은 학생별 재구성이라 그대로 전체 교체.
+  // class_student_overrides 는 전체 삭제하지 않는다(허브 '앱 소유' 표시 보존).
   const stmts: D1PreparedStatement[] = [
-    env.DB.prepare("DELETE FROM class_attendance"),
-    env.DB.prepare("DELETE FROM class_makeups"),
     env.DB.prepare("DELETE FROM class_lessons"),
     env.DB.prepare("DELETE FROM class_schedules"),
-    env.DB.prepare("DELETE FROM class_homework"),
-    env.DB.prepare("DELETE FROM class_progress"),
-    env.DB.prepare("DELETE FROM class_tests"),
-    env.DB.prepare("DELETE FROM class_makeup_dismissed"),
-    env.DB.prepare("DELETE FROM class_student_overrides"),
-    env.DB.prepare("DELETE FROM class_homework_none"),
-    env.DB.prepare("DELETE FROM class_tasks"),
   ];
 
   // 강사 업무 보드 카드 — hub 전용 컬럼은 기존 값 보존(수학 스냅샷엔 없음).
@@ -1971,7 +2034,7 @@ async function putData(env: Env, request: Request): Promise<Response> {
     stmts.push(
       env.DB
         .prepare(
-          "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,admin_only,assign_date,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+          "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,admin_only,assign_date,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,status=excluded.status,tag=excluded.tag,due=excluded.due,student_id=excluded.student_id,memo=excluded.memo,assignee=excluded.assignee,priority=excluded.priority,admin_only=excluded.admin_only,assign_date=excluded.assign_date,source=excluded.source,done_at=excluded.done_at,archived=excluded.archived"
         )
         .bind(
           k.id,
@@ -2008,7 +2071,7 @@ async function putData(env: Env, request: Request): Promise<Response> {
     stmts.push(
       env.DB
         .prepare(
-          "INSERT INTO class_tests(id,student_id,date,type,round,range_,score,status,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)"
+          "INSERT INTO class_tests(id,student_id,date,type,round,range_,score,status,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET student_id=excluded.student_id,date=excluded.date,type=excluded.type,round=excluded.round,range_=excluded.range_,score=excluded.score,status=excluded.status,memo=excluded.memo"
         )
         .bind(
           t.id,
@@ -2025,11 +2088,21 @@ async function putData(env: Env, request: Request): Promise<Response> {
     );
   }
 
+  // 보충수업(남은 분·사유) — 테이블 보장 후 upsert.
+  stmts.push(env.DB.prepare("CREATE TABLE IF NOT EXISTS class_supplement (id TEXT PRIMARY KEY, student_id TEXT NOT NULL, date TEXT NOT NULL DEFAULT '', minutes INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)"));
+  for (const sp of snap.supplements || []) {
+    stmts.push(
+      env.DB
+        .prepare("INSERT INTO class_supplement(id,student_id,date,minutes,reason,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET student_id=excluded.student_id,date=excluded.date,minutes=excluded.minutes,reason=excluded.reason")
+        .bind(sp.id, sp.studentId, sp.date || "", sp.minutes || 0, sp.reason || "", Date.now())
+    );
+  }
+
   for (const h of snap.homeworkLog || []) {
     stmts.push(
       env.DB
         .prepare(
-          "INSERT INTO class_homework(id,student_id,date,book,tags,completion,status,memo,recheck_date,delay_count,carried_from,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
+          "INSERT INTO class_homework(id,student_id,date,book,tags,completion,status,memo,recheck_date,delay_count,carried_from,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET student_id=excluded.student_id,date=excluded.date,book=excluded.book,tags=excluded.tags,completion=excluded.completion,status=excluded.status,memo=excluded.memo,recheck_date=excluded.recheck_date,delay_count=excluded.delay_count,carried_from=excluded.carried_from"
         )
         .bind(h.id, h.studentId, h.date, h.book || "", (h.tags || []).join(","), h.completion || 0, h.status || "done", h.memo || "", h.recheckDate || "", h.delayCount || 0, h.carriedFrom || "", Date.now())
     );
@@ -2038,9 +2111,9 @@ async function putData(env: Env, request: Request): Promise<Response> {
     stmts.push(
       env.DB
         .prepare(
-          "INSERT INTO class_progress(id,student_id,date,unit,area,pct,start_date,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?)"
+          "INSERT INTO class_progress(id,student_id,date,unit,area,pct,start_date,end_date,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET student_id=excluded.student_id,date=excluded.date,unit=excluded.unit,area=excluded.area,pct=excluded.pct,start_date=excluded.start_date,end_date=excluded.end_date,memo=excluded.memo"
         )
-        .bind(pr.id, pr.studentId, pr.startDate || "", pr.unit || "", pr.area || "", pr.pct || 0, pr.startDate || "", pr.memo || "", Date.now())
+        .bind(pr.id, pr.studentId, pr.startDate || "", pr.unit || "", pr.area || "", pr.pct || 0, pr.startDate || "", pr.endDate || "", pr.memo || "", Date.now())
     );
   }
 
@@ -2060,11 +2133,12 @@ async function putData(env: Env, request: Request): Promise<Response> {
           .bind(s.id, JSON.stringify(s.schedule))
       );
     }
-    // 앱에서 인라인 수정한 '앱 소유' 필드 목록 — 노션 동기화가 덮어쓰지 않게 보관
+    // 앱에서 인라인 수정한 '앱 소유' 필드 목록 — 노션 동기화가 덮어쓰지 않게 보관.
+    // 전체 삭제 대신 병합(upsert)해 기존 표시를 보존한다.
     if (s.appEdited && s.appEdited.length) {
       stmts.push(
         env.DB
-          .prepare("INSERT INTO class_student_overrides(student_id,fields) VALUES(?,?)")
+          .prepare("INSERT INTO class_student_overrides(student_id,fields) VALUES(?,?) ON CONFLICT(student_id) DO UPDATE SET fields=excluded.fields")
           .bind(s.id, JSON.stringify([...new Set(s.appEdited)]))
       );
     }
@@ -2074,7 +2148,7 @@ async function putData(env: Env, request: Request): Promise<Response> {
     stmts.push(
       env.DB
         .prepare(
-          "INSERT INTO class_makeups(id,student_id,absent_date,absent_time,absent_duration,att_key,status,makeup_date,makeup_time,makeup_duration,parent_contacted,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
+          "INSERT INTO class_makeups(id,student_id,absent_date,absent_time,absent_duration,att_key,status,makeup_date,makeup_time,makeup_duration,parent_contacted,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET student_id=excluded.student_id,absent_date=excluded.absent_date,absent_time=excluded.absent_time,absent_duration=excluded.absent_duration,att_key=excluded.att_key,status=excluded.status,makeup_date=excluded.makeup_date,makeup_time=excluded.makeup_time,makeup_duration=excluded.makeup_duration,parent_contacted=excluded.parent_contacted,memo=excluded.memo"
         )
         .bind(
           k.id,
@@ -2099,37 +2173,55 @@ async function putData(env: Env, request: Request): Promise<Response> {
     stmts.push(
       env.DB
         .prepare(
-          "INSERT INTO class_attendance(att_key,status,late_minutes,attitude,note,points_awarded) VALUES(?,?,?,?,?,?)"
+          "INSERT INTO class_attendance(att_key,status,late_minutes,attitude,note,points_awarded) VALUES(?,?,?,?,?,?) ON CONFLICT(att_key) DO UPDATE SET status=excluded.status,late_minutes=excluded.late_minutes,attitude=excluded.attitude,note=excluded.note,points_awarded=excluded.points_awarded"
         )
         .bind(key, a.status, a.lateMinutes == null ? null : a.lateMinutes, a.attitude || "", a.note || "", a.pointsAwarded ? 1 : 0)
     );
   }
 
-  await env.DB.batch(stmts);
+  // 명시적 삭제(병합 저장) — 이 세션에서 삭제한 레코드만 지운다.
+  const del = snap.deletions || {};
+  const delIn = (table: string, col: string, ids?: string[]) => {
+    for (const id of [...new Set(ids || [])]) {
+      if (id) stmts.push(env.DB.prepare(`DELETE FROM ${table} WHERE ${col}=?`).bind(id));
+    }
+  };
+  delIn("class_homework", "id", del.homework);
+  delIn("class_progress", "id", del.progress);
+  delIn("class_tests", "id", del.test);
+  delIn("class_supplement", "id", del.supplement);
+  delIn("class_makeups", "id", del.makeup);
+  delIn("class_tasks", "id", del.task);
+  delIn("class_attendance", "att_key", del.attendance);
+  delIn("class_makeup_dismissed", "att_key", del.dismissed);
+  delIn("class_homework_none", "mark_key", del.noHomework);
+
+  // 50개씩 나눠 실행 — 한 번에 너무 많으면(대규모 로스터) D1 batch 한도로 저장이 통째로 실패할 수 있음.
+  await runChunked(env, stmts);
 
   // Persist academic fields to the shared roster — UPDATE only (never DELETE,
   // never touch points/photo_url/notion_page_id). Per-row + try/catch so a
   // UNIQUE-name conflict can't break the class_* persistence above.
+  // 로스터 핵심 필드는 '앱 소유(appEdited)'로 표시된 것만 덮어쓴다. 표시되지 않은 필드는
+  // DB 값을 그대로 둬, 다른 화면(학생 명단)·다른 탭의 stale 스냅샷이 학년을 되돌리지 못하게 한다.
+  // (excluded는 수학 앱 전용 플래그라 항상 반영)
   for (const s of snap.students) {
     if (!/^\d+$/.test(s.id)) continue;
+    const ae = new Set(s.appEdited || []);
+    const sets: string[] = ["excluded=?"];
+    const binds: (string | number)[] = [s.excluded ? 1 : 0];
+    const add = (key: string, col: string, val: string) => { if (ae.has(key)) { sets.push(col + "=?"); binds.push(val); } };
+    add("name", "name", s.name);
+    add("grade", "grade", s.grade);
+    add("status", "status", s.status || "재원");
+    add("school", "school", s.school || "");
+    add("birthdate", "birth_date", s.birthdate || "");
+    add("parentPhone", "parent_phone", s.parentPhone || "");
+    add("studentPhone", "student_phone", s.studentPhone || "");
+    add("startDate", "start_date", s.startDate || "");
+    binds.push(Number(s.id));
     try {
-      await env.DB
-        .prepare(
-          "UPDATE students SET name=?,grade=?,status=?,school=?,birth_date=?,parent_phone=?,student_phone=?,start_date=?,excluded=? WHERE id=?"
-        )
-        .bind(
-          s.name,
-          s.grade,
-          s.status || "재원",
-          s.school || "",
-          s.birthdate || "",
-          s.parentPhone || "",
-          s.studentPhone || "",
-          s.startDate || "",
-          s.excluded ? 1 : 0,
-          Number(s.id)
-        )
-        .run();
+      await env.DB.prepare(`UPDATE students SET ${sets.join(",")} WHERE id=?`).bind(...binds).run();
     } catch {
       /* ignore unique-name conflicts */
     }

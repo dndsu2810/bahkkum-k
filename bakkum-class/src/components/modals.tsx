@@ -1,11 +1,14 @@
 import { useState } from "react";
-import type { HwLog, Lesson, Makeup, ProgLog, ScheduleVersion, StudentStatus, TestLog } from "../types";
+import type { Lesson, Makeup, ScheduleVersion, StudentStatus, TestLog } from "../types";
 import { useStore } from "../store";
-import { createStudent, hideStudent, pushHomeworkNotion, pushProgressNotion, pushTestNotion } from "../api";
+import { createStudent, hideStudent, pushTestNotion } from "../api";
 import { DOW_ORDER, fmtMDDow, todayStr, uid } from "../lib/dates";
 import { activeStudents, studentById } from "../lib/logic";
-import { getCategories } from "../lib/categories";
+import { GRADE_OPTIONS } from "../lib/grade";
 import { Icon } from "../icons";
+
+// 수학 테스트 평가 종류(선택). 첫 항목이 기본값.
+export const TEST_TYPES = ["주간test", "KTC수학경시대회"];
 
 function StudentSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const { data } = useStore();
@@ -13,6 +16,7 @@ function StudentSelect({ value, onChange }: { value: string; onChange: (v: strin
   return (
     <div className="select-wrap" style={{ width: "100%" }}>
       <select className="input" style={{ appearance: "none" }} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">학생 선택</option>
         {list.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name} ({s.grade})
@@ -29,9 +33,8 @@ export function StudentModal({ id }: { id: string | null }) {
   const { data, mutate, toast, closeModal } = useStore();
   const existing = id ? studentById(data.students, id) : null;
 
-  const cats = getCategories();
   const [name, setName] = useState(existing?.name ?? "");
-  const [grade, setGrade] = useState<string>(existing?.grade ?? cats[0]?.name ?? "초등");
+  const [grade, setGrade] = useState<string>(existing?.grade ?? "초1");
   const [status, setStatus] = useState<StudentStatus>(existing?.status ?? "재원");
   const [startDate, setStartDate] = useState(existing?.startDate ?? todayStr());
   const [school, setSchool] = useState(existing?.school ?? "");
@@ -92,6 +95,8 @@ export function StudentModal({ id }: { id: string | null }) {
         const s = studentById(d.students, id);
         if (!s) return;
         Object.assign(s, baseFields);
+        // 수정한 핵심 필드를 '앱 소유'로 표시 → 저장 시 반영되고, 노션/다른 저장이 덮어쓰지 않음.
+        s.appEdited = [...new Set([...(s.appEdited || []), "name", "grade", "status", "school", "birthdate", "parentPhone", "studentPhone", "startDate"])];
         // 이전 버전 이력 (스케줄 없으면 등록일 기준 단일, 그것도 없으면 빈 이력)
         const prev: ScheduleVersion[] =
           s.schedule && s.schedule.length
@@ -118,7 +123,7 @@ export function StudentModal({ id }: { id: string | null }) {
       // roster id is allocated by the shared `students` table (links by name if it exists)
       const { id: newId } = await createStudent(fields);
       mutate((d) => {
-        d.students.push({ id: newId, ...fields });
+        d.students.push({ id: newId, ...fields, appEdited: ["name", "grade", "status", "school", "birthdate", "parentPhone", "studentPhone", "startDate"] });
       });
       closeModal();
       toast("학생을 추가했어요.");
@@ -130,7 +135,7 @@ export function StudentModal({ id }: { id: string | null }) {
     if (!id) return;
     mutate((d) => {
       const s = studentById(d.students, id);
-      if (s) s.status = "퇴원";
+      if (s) { s.status = "퇴원"; s.appEdited = [...new Set([...(s.appEdited || []), "status"])]; }
     });
     closeModal();
     toast("퇴원 처리했어요.");
@@ -174,18 +179,13 @@ export function StudentModal({ id }: { id: string | null }) {
             />
           </div>
           <div className="field">
-            <label>구분</label>
-            <div className="seg" style={{ flexWrap: "wrap" }}>
-              {cats.map((c) => (
-                <button
-                  key={c.name}
-                  type="button"
-                  className={"seg-btn" + (grade === c.name ? " on" : "")}
-                  onClick={() => setGrade(c.name)}
-                >
-                  {c.name}
-                </button>
-              ))}
+            <label>학년</label>
+            <div className="select-wrap" style={{ width: "100%" }}>
+              <select className="input" style={{ appearance: "none" }} value={grade} onChange={(e) => setGrade(e.target.value)}>
+                {GRADE_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
+                {grade && !GRADE_OPTIONS.includes(grade) && <option value={grade}>{grade}</option>}
+              </select>
+              <Icon name="chev" />
             </div>
           </div>
         </div>
@@ -664,209 +664,14 @@ export function SkipModal({ id }: { id: string }) {
   );
 }
 
-/* ---------------- Homework add / edit ---------------- */
-export function HomeworkModal({ id, presetStudentId }: { id: string | null; presetStudentId?: string }) {
-  const { data, mutate, toast, closeModal } = useStore();
-  const ex = id ? data.homeworkLog.find((h) => h.id === id) : null;
-  const first = activeStudents(data.students)[0];
-  const [studentId, setStudentId] = useState(ex?.studentId ?? presetStudentId ?? first?.id ?? "");
-  const [date, setDate] = useState(ex?.date ?? todayStr());
-  const [book, setBook] = useState(ex?.book ?? "");
-  const [tags, setTags] = useState((ex?.tags ?? []).join(", "));
-  const [completion, setCompletion] = useState(ex?.completion ?? 0);
-  const [status, setStatus] = useState<HwLog["status"]>(ex?.status ?? "pending");
-  const [memo, setMemo] = useState(ex?.memo ?? "");
-
-  function save() {
-    if (!studentId) {
-      toast("학생을 선택해 주세요.");
-      return;
-    }
-    const tagArr = tags.split(",").map((t) => t.trim()).filter(Boolean);
-    const rec: HwLog = { id: id || uid(), studentId, date, book: book.trim(), tags: tagArr, completion: +completion || 0, status, memo: memo.trim() };
-    mutate((d) => {
-      if (id) {
-        const i = d.homeworkLog.findIndex((h) => h.id === id);
-        if (i >= 0) d.homeworkLog[i] = rec;
-      } else {
-        d.homeworkLog.push(rec);
-      }
-    });
-    pushHomeworkNotion(studentId, {
-      date,
-      book: rec.book,
-      tags: rec.tags,
-      completion: rec.completion,
-      done: status === "done",
-      memo: rec.memo,
-    });
-    closeModal();
-    toast(id ? "숙제 기록을 저장했어요." : "숙제를 기록했어요.");
-  }
-
-  return (
-    <>
-      <div className="modal-head">
-        <div className="modal-title">{ex ? "숙제 기록 수정" : "숙제 기록"}</div>
-        <button className="modal-x" onClick={closeModal}>
-          <Icon name="x" />
-        </button>
-      </div>
-      <div className="modal-body">
-        <div className="field-row">
-          <div className="field">
-            <label>학생</label>
-            <StudentSelect value={studentId} onChange={setStudentId} />
-          </div>
-          <div className="field">
-            <label>숙제 마감일</label>
-            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
-        </div>
-        <div className="field">
-          <label>교재</label>
-          <input className="input" placeholder="예: 디딤돌 개념" value={book} onChange={(e) => setBook(e.target.value)} />
-        </div>
-        <div className="field">
-          <label>태그</label>
-          <input className="input" placeholder="쉼표로 구분 (예: 개념, 오답)" value={tags} onChange={(e) => setTags(e.target.value)} />
-        </div>
-        <div className="field-row">
-          <div className="field">
-            <label>완성도(%)</label>
-            <input className="input" type="number" min={0} max={100} value={completion} onChange={(e) => setCompletion(+e.target.value || 0)} />
-          </div>
-          <div className="field">
-            <label>상태</label>
-            <div className="seg">
-              {(["pending", "done", "late"] as const).map((s) => (
-                <button key={s} type="button" className={"seg-btn" + (status === s ? " on" : "")} onClick={() => setStatus(s)}>
-                  {s === "pending" ? "검사 전" : s === "done" ? "검사완료" : "지연"}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <label>선생님 메모</label>
-          <input className="input" placeholder="선택" value={memo} onChange={(e) => setMemo(e.target.value)} />
-        </div>
-      </div>
-      <div className="modal-foot">
-        {ex && (
-          <button className="btn danger" onClick={() => { mutate((d) => { d.homeworkLog = d.homeworkLog.filter((h) => h.id !== id); }); closeModal(); toast("숙제 기록을 삭제했어요."); }}>
-            <Icon name="trash" />
-            삭제
-          </button>
-        )}
-        <button className="btn ghost" onClick={closeModal}>취소</button>
-        <button className="btn primary" onClick={save}>
-          <Icon name="check" />
-          저장
-        </button>
-      </div>
-    </>
-  );
-}
-
-/* ---------------- Progress add / edit ---------------- */
-export function ProgressModal({ id, presetStudentId }: { id: string | null; presetStudentId?: string }) {
-  const { data, mutate, toast, closeModal } = useStore();
-  const ex = id ? data.progressLog.find((p) => p.id === id) : null;
-  const first = activeStudents(data.students)[0];
-  const [studentId, setStudentId] = useState(ex?.studentId ?? presetStudentId ?? first?.id ?? "");
-  const [unit, setUnit] = useState(ex?.unit ?? "");
-  const [area, setArea] = useState(ex?.area ?? "");
-  const [pct, setPct] = useState(ex?.pct ?? 0);
-  const [startDate, setStartDate] = useState(ex?.startDate ?? todayStr());
-  const [memo, setMemo] = useState(ex?.memo ?? "");
-
-  function save() {
-    if (!studentId) {
-      toast("학생을 선택해 주세요.");
-      return;
-    }
-    if (!unit.trim()) {
-      toast("단원을 입력해 주세요.");
-      return;
-    }
-    const rec: ProgLog = { id: id || uid(), studentId, unit: unit.trim(), area: area.trim(), pct: +pct || 0, startDate, memo: memo.trim() };
-    mutate((d) => {
-      if (id) {
-        const i = d.progressLog.findIndex((p) => p.id === id);
-        if (i >= 0) d.progressLog[i] = rec;
-      } else {
-        d.progressLog.push(rec);
-      }
-    });
-    pushProgressNotion(studentId, { unit: rec.unit, area: rec.area, pct: rec.pct, startDate: rec.startDate, memo: rec.memo });
-    closeModal();
-    toast(id ? "진도 기록을 저장했어요." : "진도를 기록했어요.");
-  }
-
-  return (
-    <>
-      <div className="modal-head">
-        <div className="modal-title">{ex ? "진도 기록 수정" : "진도 기록"}</div>
-        <button className="modal-x" onClick={closeModal}>
-          <Icon name="x" />
-        </button>
-      </div>
-      <div className="modal-body">
-        <div className="field-row">
-          <div className="field">
-            <label>학생</label>
-            <StudentSelect value={studentId} onChange={setStudentId} />
-          </div>
-          <div className="field">
-            <label>학습 시작일</label>
-            <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-          </div>
-        </div>
-        <div className="field">
-          <label>단원</label>
-          <input className="input" placeholder="예: 3단원 소수의 나눗셈" value={unit} onChange={(e) => setUnit(e.target.value)} />
-        </div>
-        <div className="field-row">
-          <div className="field">
-            <label>학습 영역</label>
-            <input className="input" placeholder="예: 개념" value={area} onChange={(e) => setArea(e.target.value)} />
-          </div>
-          <div className="field">
-            <label>달성률(%) · 100이면 완료</label>
-            <input className="input" type="number" min={0} max={100} value={pct} onChange={(e) => setPct(+e.target.value || 0)} />
-          </div>
-        </div>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <label>메모</label>
-          <input className="input" placeholder="선택" value={memo} onChange={(e) => setMemo(e.target.value)} />
-        </div>
-      </div>
-      <div className="modal-foot">
-        {ex && (
-          <button className="btn danger" onClick={() => { mutate((d) => { d.progressLog = d.progressLog.filter((p) => p.id !== id); }); closeModal(); toast("진도 기록을 삭제했어요."); }}>
-            <Icon name="trash" />
-            삭제
-          </button>
-        )}
-        <button className="btn ghost" onClick={closeModal}>취소</button>
-        <button className="btn primary" onClick={save}>
-          <Icon name="check" />
-          저장
-        </button>
-      </div>
-    </>
-  );
-}
-
 /* ---------------- Test add / edit (테스트 관리) ---------------- */
 export function TestModal({ id, presetStudentId }: { id: string | null; presetStudentId?: string }) {
   const { data, mutate, toast, closeModal } = useStore();
   const ex = id ? data.testLog.find((t) => t.id === id) : null;
-  const first = activeStudents(data.students)[0];
-  const [studentId, setStudentId] = useState(ex?.studentId ?? presetStudentId ?? first?.id ?? "");
+  // 학생은 직접 선택하게 한다(자동으로 첫 학생을 고르지 않음 — '민서준 디폴트' 방지).
+  const [studentId, setStudentId] = useState(ex?.studentId ?? presetStudentId ?? "");
   const [date, setDate] = useState(ex?.date ?? todayStr());
-  const [type, setType] = useState(ex?.type ?? "주간평가");
+  const [type, setType] = useState(ex?.type ?? TEST_TYPES[0]);
   const [round, setRound] = useState(ex?.round ?? "");
   const [range, setRange] = useState(ex?.range ?? "");
   const [status, setStatus] = useState<TestLog["status"]>(ex?.status ?? "예정");
@@ -931,8 +736,14 @@ export function TestModal({ id, presetStudentId }: { id: string | null; presetSt
         </div>
         <div className="field-row">
           <div className="field">
-            <label>시험 유형</label>
-            <input className="input" placeholder="예: 주간평가" value={type} onChange={(e) => setType(e.target.value)} />
+            <label>평가 종류</label>
+            <div className="select-wrap" style={{ width: "100%" }}>
+              <select className="input" style={{ appearance: "none" }} value={type} onChange={(e) => setType(e.target.value)}>
+                {TEST_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                {type && !TEST_TYPES.includes(type) && <option value={type}>{type}</option>}
+              </select>
+              <Icon name="chev" />
+            </div>
           </div>
           <div className="field">
             <label>회차</label>
@@ -945,7 +756,7 @@ export function TestModal({ id, presetStudentId }: { id: string | null; presetSt
         </div>
         <div className="field-row">
           <div className="field">
-            <label>평가</label>
+            <label>상태</label>
             <div className="seg">
               {(["예정", "완료"] as const).map((s) => (
                 <button key={s} type="button" className={"seg-btn" + (status === s ? " on" : "")} onClick={() => setStatus(s)}>

@@ -1226,8 +1226,9 @@ function EngAttExtra({ status, lateMin, attitude, note, absentReason, onPatch }:
 function EngHomework({ students }: { students: RosterStudent[] }) {
   const [sel, setSel] = useState("");
   const [list, setList] = useState<EngDaily[]>([]);
+  const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
   const reload = () => { if (sel) engApi.dailyByStudent(sel).then(setList).catch(() => {}); };
-  useEffect(() => { setList([]); reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [sel]);
+  useEffect(() => { setList([]); setOpenMonths({}); reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [sel]);
 
   const withHw = list.filter((d) => d.hwWord || d.hwReading || d.hwGrammar || d.wrongCheck || d.homework || d.hwChecked);
   const name = students.find((s) => s.id === sel)?.name || "";
@@ -1263,31 +1264,36 @@ function EngHomework({ students }: { students: RosterStudent[] }) {
               <div className="hub-muted">숙제 기록이 없어요. ‘오늘’에서 단어·리딩·문법 숙제를 입력하면 여기 누적됩니다.</div>
             ) : (
               <div className="eng-hwm-list">
-                {months.map(([ym, rows]) => {
+                {months.map(([ym, rows], mi) => {
                   const [y, mo] = ym.split("-");
+                  const open = openMonths[ym] ?? mi === 0; // 기본: 최신 월만 펼침
                   return (
                     <div className="eng-hwm" key={ym}>
-                      <div className="eng-hwm-h">{y}년 {Number(mo)}월 <span>{rows.length}회</span></div>
-                      <table className="eng-hwt">
-                        <thead>
-                          <tr><th>날짜</th><th>단어</th><th>리딩</th><th>문법</th><th>틀단</th><th>진행</th></tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((d) => {
-                            const p = hwProgress(d);
-                            return (
-                              <tr key={d.date}>
-                                <td className="eng-hwt-date">{Number(mo)}/{Number(d.date.slice(8, 10))}</td>
-                                <td>{hwCell(d.hwWord)}</td>
-                                <td>{hwCell(d.hwReading)}</td>
-                                <td>{hwCell(d.hwGrammar)}</td>
-                                <td className="eng-hwt-chk">{d.wrongCheck ? "✓" : ""}</td>
-                                <td className="eng-hwt-prog">{p === null ? "" : p + "%"}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                      <button className={"eng-hwm-h" + (open ? " open" : "")} onClick={() => setOpenMonths((m) => ({ ...m, [ym]: !open }))}>
+                        <Icon name="chev" />{y}년 {Number(mo)}월 <span>{rows.length}회</span>
+                      </button>
+                      {open && (
+                        <table className="eng-hwt">
+                          <thead>
+                            <tr><th>날짜</th><th>단어</th><th>리딩</th><th>문법</th><th>틀단</th><th>진행</th></tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((d) => {
+                              const p = hwProgress(d);
+                              return (
+                                <tr key={d.date}>
+                                  <td className="eng-hwt-date">{Number(mo)}/{Number(d.date.slice(8, 10))}</td>
+                                  <td>{hwCell(d.hwWord)}</td>
+                                  <td>{hwCell(d.hwReading)}</td>
+                                  <td>{hwCell(d.hwGrammar)}</td>
+                                  <td className="eng-hwt-chk">{d.wrongCheck ? "✓" : ""}</td>
+                                  <td className="eng-hwt-prog">{p === null ? "" : p + "%"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
                     </div>
                   );
                 })}

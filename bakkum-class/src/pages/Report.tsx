@@ -72,9 +72,18 @@ export function Report() {
       .filter((p) => p.studentId === studentId)
       .sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
     const current = progList.find((p) => p.pct < 100) || progList[0];
+    // 이 달 기준 교재: 진행중(이 달까지 시작했고 아직 미완료) / 완료(이 달에 완료한 교재)
+    const toBook = (p: (typeof progList)[number]) => ({ unit: p.unit, area: p.area, startDate: p.startDate, endDate: p.endDate });
+    const booksInProgress = progList
+      .filter((p) => p.pct < 100 && (!p.startDate || p.startDate.slice(0, 7) <= ym))
+      .map(toBook);
+    const booksCompleted = progList
+      .filter((p) => p.pct >= 100 && p.endDate && inMonth(p.endDate, ym))
+      .sort((a, b) => ((a.endDate || "") < (b.endDate || "") ? -1 : 1))
+      .map(toBook);
     const progress: ProgressInfo = current
-      ? { pct: current.pct, unit: current.unit, area: current.area, startDate: current.startDate, weeks: "" }
-      : { ...emptyExtras().progress };
+      ? { pct: current.pct, unit: current.unit, area: current.area, startDate: current.startDate, weeks: "", booksInProgress, booksCompleted }
+      : { ...emptyExtras().progress, booksInProgress, booksCompleted };
     // 테스트(완료) 기록을 이 달 '평가 결과'에 자동 반영 + 수동 입력 평가와 합침
     const testEvals: EvalItem[] = data.testLog
       .filter((t) => t.studentId === studentId && t.status === "완료" && inMonth(t.date, ym))
@@ -87,6 +96,11 @@ export function Report() {
         date: t.date,
         score: t.score,
       }));
+    // 보충수업(남은 분·사유) — 이번 달 자동 반영.
+    const supplements = (data.supplements || [])
+      .filter((sp) => sp.studentId === studentId && inMonth(sp.date, ym))
+      .sort((a, b) => (a.date < b.date ? -1 : 1))
+      .map((sp) => ({ id: sp.id, date: sp.date, minutes: sp.minutes, reason: sp.reason }));
     return {
       studentId,
       studentName: s ? s.name : "학생",
@@ -94,7 +108,7 @@ export function Report() {
       month,
       teacher: TEACHER,
       att: computeAtt(data, studentId, year, month),
-      extras: { ...stored, homeworks, progress, evals: [...testEvals, ...stored.evals] },
+      extras: { ...stored, homeworks, progress, evals: [...testEvals, ...stored.evals], supplements },
     };
   }
 

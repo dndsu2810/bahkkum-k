@@ -29,7 +29,7 @@ const MATH: WsEntry[] = [
   { key: "dashboard", label: "대시보드", icon: "dashboard", kind: "math", page: "dashboard" },
   { key: "attendance", label: "출결 기록", icon: "clipboard", kind: "math", page: "attendance" },
   { key: "homework", label: "숙제 기록", icon: "book", kind: "math", page: "homework" },
-  { key: "progress", label: "진도 기록", icon: "chart", kind: "math", page: "progress" },
+  { key: "progress", label: "진도·교재관리", icon: "chart", kind: "math", page: "progress" },
   { key: "tests", label: "테스트 기록", icon: "cap", kind: "math", page: "tests" },
   { key: "students", label: "학생 관리", icon: "students", kind: "math", page: "students" },
   { key: "makeup", label: "보강 관리", icon: "refresh", kind: "math", page: "makeup" },
@@ -79,6 +79,9 @@ const MATERIALS: WsEntry = { key: "materials", label: "자료 배부", icon: "co
 const POINT_CATALOG: WsEntry = { key: "point_catalog", label: "포인트 항목", icon: "chart", kind: "hub" };
 const ENGREPORT: WsEntry = { key: "engreport", label: "영어 월말리포트", icon: "fileText", kind: "hub" };
 const ISSUES: WsEntry = { key: "issues", label: "오류·개선 요청", icon: "clipboard", kind: "hub" };
+const CHECKIN: WsEntry = { key: "checkin", label: "등하원", icon: "today", kind: "hub" };
+const ORDERS: WsEntry = { key: "orders", label: "주문 관리", icon: "copy", kind: "hub" };
+const CHECKIN_REPORT: WsEntry = { key: "checkin_report", label: "수업시간 리포트", icon: "chart", kind: "hub" };
 const GUIDE: WsEntry = { key: "guide", label: "사용 가이드", icon: "book", kind: "hub" };
 const ACCOUNTS: WsEntry = { key: "accounts", label: "강사 관리", icon: "users", kind: "hub" };
 const ADMIN_DASH: WsEntry = { key: "admin_dash", label: "원장 대시보드", icon: "dashboard", kind: "hub" };
@@ -120,12 +123,16 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   const isTeacher = role === "admin" || areas.has("math") || role === "english_mid" || role === "english_elem";
   if (isTeacher) common.push(POINT_CATALOG);
   if (isTeacher) common.push(MATERIALS);
+  common.push(ORDERS); // 교재·비품 주문 관리 — 공통(모든 스태프).
   common.push(REQS);
   if (areas.has("wiki")) common.push(WIKI);
   if (areas.has("sns")) common.push(SNS);
   common.push(ISSUES); // 오류·개선 요청 — 모두 접근.
   common.push(GUIDE); // 사용 가이드 — 역할별 안내(모두 접근).
   if (common.length) groups.push({ label: "공통", entries: common });
+
+  // 등하원 — 공통 카테고리(모든 스태프). 관리·발송 + 수업시간 리포트.
+  groups.push({ label: "등하원", entries: [CHECKIN, CHECKIN_REPORT] });
 
   // 학생 메시지 — 원장·수학 담당 공통, 별도 카테고리(동일 위치).
   if (role === "admin" || role === "math") groups.push({ label: "학생 메시지", entries: [MSG] });

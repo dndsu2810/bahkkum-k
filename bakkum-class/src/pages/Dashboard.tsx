@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { Student } from "../types";
 import { useStore } from "../store";
 import {
   activeStudents,
@@ -11,13 +12,21 @@ import {
 } from "../lib/logic";
 import { fmtMD, parseD } from "../lib/dates";
 import { buildReport, copyText } from "../lib/report";
-import { getCategories } from "../lib/categories";
+import { parseGrade } from "../lib/grade";
 import { WeekdayBars } from "../components/charts";
 import { StudentTable } from "../components/StudentTable";
 import { Select } from "../components/ui";
 import { Icon, type IconName } from "../icons";
 
 const BASE = 5; // 기본 인원 (이 인원까지는 인센티브 없음, 초과분부터 지급)
+// 학년은 세부학년(중1·고2…)으로 저장되므로, 대시보드는 구분(초/중/고)으로 묶어 표시한다.
+const DIVS: { key: "초" | "중" | "고"; label: string; tone: string }[] = [
+  { key: "초", label: "초등", tone: "blue" },
+  { key: "중", label: "중등", tone: "purple" },
+  { key: "고", label: "고등", tone: "pink" },
+];
+// 수학 등록일 기준으로 정산 — 수학 첫 등원일(mathStart)이 있으면 그걸 등록일로 사용.
+const mathDated = (s: Student): Student => (s.mathStart ? { ...s, startDate: s.mathStart } : s);
 
 /** 한 줄 통계 바의 한 칸 — 아이콘 + 숫자 + 라벨 + 보조설명(콤팩트). */
 function Stat({ icon, tone, num, label, sub }: { icon: IconName; tone: string; num: number; label: string; sub: string }) {
@@ -41,12 +50,13 @@ export function Dashboard() {
   const [curMonth, setCurMonth] = useState(curMonthStr());
 
   const active = activeStudents(data.students); // 전체 재원 (명단엔 전원 표시)
-  const enrolled = enrolledStudents(data.students, curMonth); // 이번 달 재적 (첫주=7일 이전 등록)
+  // 정산·재적은 수학 등록일(mathStart) 기준 — 학생 목록을 수학 등록일로 매핑해 계산.
+  const calcStudents = data.students.map(mathDated);
+  const enrolled = enrolledStudents(calcStudents, curMonth); // 이번 달 재적 (첫주=7일 이전 등록)
   const excludedActive = active.filter((s) => s.excluded); // 정산 제외(원장 가족 등)
-  const fresh = newThisMonth(data.students, curMonth).filter((s) => !s.excluded); // 둘째 주 이후 신규 → 다음 달
-  const cats = getCategories();
-  // 카테고리(초등/중등)는 '총 재적(전체 재원)' 기준으로 — 합이 총 재적 수와 맞게.
-  const catCounts = cats.map((c) => ({ c, n: active.filter((s) => s.grade === c.name).length }));
+  const fresh = newThisMonth(calcStudents, curMonth).filter((s) => !s.excluded); // 둘째 주 이후 신규 → 다음 달
+  // 구분(초/중/고)별 인원 — 합이 총 재적과 맞게(세부학년은 구분으로 묶음). 0명 구분은 숨김.
+  const catCounts = DIVS.map((d) => ({ c: { name: d.label, tone: d.tone }, n: active.filter((s) => parseGrade(s.grade)?.div === d.key).length })).filter((x) => x.n > 0);
 
   // 인센티브 정산은 '정산 제외' 학생을 빼고 계산
   const billableEnrolled = enrolled.filter((s) => !s.excluded);

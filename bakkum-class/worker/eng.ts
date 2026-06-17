@@ -143,10 +143,16 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
   const url = new URL(request.url);
 
   /* ---------------- 포인트 랭킹 ---------------- */
+  // 영어 수업기록 포인트(class_eng_daily)와 수학 출결·칭찬 포인트(point_history, category='learn')를
+  // 함께 합산한 통합 랭킹. (이전에는 영어만 집계되어 수학 등원 포인트가 빠져 있었음)
   if (p === "/api/eng/ranking" && m === "GET") {
     const r = await env.DB
       .prepare(
-        "SELECT d.student_id sid, SUM(d.points) pts, COUNT(*) cnt, s.name name, s.grade grade FROM class_eng_daily d JOIN students s ON s.id = CAST(d.student_id AS INTEGER) WHERE (s.hidden IS NULL OR s.hidden=0) GROUP BY d.student_id ORDER BY pts DESC, s.name"
+        "SELECT t.sid sid, SUM(t.pts) pts, SUM(t.cnt) cnt, s.name name, s.grade grade FROM (" +
+          "SELECT CAST(student_id AS INTEGER) sid, SUM(points) pts, COUNT(*) cnt FROM class_eng_daily GROUP BY student_id" +
+          " UNION ALL " +
+          "SELECT student_id sid, SUM(delta) pts, COUNT(DISTINCT date(created_at)) cnt FROM point_history WHERE category='learn' GROUP BY student_id" +
+          ") t JOIN students s ON s.id = t.sid WHERE (s.hidden IS NULL OR s.hidden=0) GROUP BY t.sid ORDER BY pts DESC, s.name"
       )
       .all<Record<string, unknown>>();
     return json({

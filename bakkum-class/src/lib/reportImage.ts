@@ -1,4 +1,5 @@
-import html2canvas from "html2canvas";
+// html2canvas(~200KB)는 '이미지 저장'을 누를 때만 동적으로 불러온다(초기 로딩 가벼워짐).
+async function loadH2C() { return (await import("html2canvas")).default; }
 
 /**
  * Capture #report-card and save it as two stacked PNGs (top/bottom half) —
@@ -11,6 +12,7 @@ export async function saveReportAsImages(
 ): Promise<void> {
   const card = document.getElementById("report-card");
   if (!card) return;
+  const html2canvas = await loadH2C();
 
   const canvas = await html2canvas(card, {
     scale: 2,
@@ -59,6 +61,15 @@ export async function saveReportAsImages(
   downloadCanvas(top, prefix + "_1.png");
   await new Promise((r) => setTimeout(r, 500)); // 브라우저 다운로드 간격
   downloadCanvas(bottom, prefix + "_2.png");
+}
+
+/** 임의 요소를 PNG 1장으로 저장 — 수업시간 리포트 등 단일 카드용. */
+export async function saveElementAsImage(elementId: string, filename: string, width = 720): Promise<void> {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const html2canvas = await loadH2C();
+  const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff", width, windowWidth: width });
+  downloadCanvas(canvas, filename.endsWith(".png") ? filename : filename + ".png");
 }
 
 function downloadCanvas(c: HTMLCanvasElement, filename: string) {

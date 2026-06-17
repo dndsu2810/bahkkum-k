@@ -32,7 +32,7 @@ export const ALL_NAV: NavItem[] = [
   { id: "timetable", label: "시간표", icon: "cal" },
   { id: "makeup", label: "보강 관리", icon: "refresh" },
   { id: "homework", label: "숙제 기록", icon: "book" },
-  { id: "progress", label: "진도 기록", icon: "chart" },
+  { id: "progress", label: "진도·교재관리", icon: "chart" },
   { id: "tests", label: "테스트 기록", icon: "cap" },
   { id: "report", label: "월말리포트", icon: "fileText" },
   { id: "settings", label: "설정", icon: "gear" },

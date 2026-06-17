@@ -126,7 +126,7 @@ export function Attendance() {
       .map((p) => [p[1], { id: p[1], name: studentById(data.students, p[1])?.name ?? "(삭제된 학생)" }])
   ).values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
 
-  // 날짜별 그룹 (커스텀 테이블도 InlineTable과 동일한 '날짜 띠' 형태로)
+  // 날짜별 그룹 (커스텀 테이블도 동일한 '날짜 띠' 형태로)
   const recordGroups: { date: string; rows: typeof recordRows }[] = (() => {
     const groups: { date: string; rows: typeof recordRows }[] = [];
     const idx = new Map<string, number>();
@@ -139,6 +139,8 @@ export function Attendance() {
   })();
 
   const counts = { 출석: 0, 지각: 0, 결석류: 0, checked: 0 };
+  // 현황 카드(영어 출결과 동일): 출석(=출석+지각+조퇴 등원) · 지각 · 결석(결석+무단결석) · 보강
+  const kpi = { attend: 0, late: 0, absent: 0, makeup: 0 };
   lessons.forEach((it) => {
     const r = data.attendance[attDate + "|" + it.student.id + "|" + it.time];
     if (!r) return;
@@ -146,6 +148,10 @@ export function Attendance() {
     if (r.status === "출석") counts.출석++;
     else if (r.status === "지각") counts.지각++;
     else if (r.status === "결석" || r.status === "무단결석" || r.status === "조퇴") counts.결석류++;
+    if (r.status === "보강") kpi.makeup++;
+    else if (r.status === "출석" || r.status === "지각" || r.status === "조퇴") kpi.attend++;
+    if (r.status === "지각") kpi.late++;
+    if (r.status === "결석" || r.status === "무단결석") kpi.absent++;
   });
   const unchecked = lessons.length - counts.checked;
 
@@ -280,6 +286,13 @@ export function Attendance() {
         </div>
       ) : (
         <div className="card">
+          <div className="dash-kpis" style={{ gridTemplateColumns: "repeat(5,1fr)", maxWidth: 720, marginBottom: 14 }}>
+            <div className="kpi"><div className="kpi-v" style={{ color: "var(--ok)" }}>{kpi.attend}<span className="kpi-u">명</span></div><div className="kpi-l">출석</div></div>
+            <div className="kpi"><div className="kpi-v" style={{ color: "var(--warn)" }}>{kpi.late}<span className="kpi-u">명</span></div><div className="kpi-l">지각</div></div>
+            <div className="kpi"><div className="kpi-v" style={{ color: "var(--bad)" }}>{kpi.absent}<span className="kpi-u">명</span></div><div className="kpi-l">결석</div></div>
+            <div className="kpi"><div className="kpi-v" style={{ color: "#8b5cf6" }}>{kpi.makeup}<span className="kpi-u">명</span></div><div className="kpi-l">보강</div></div>
+            <div className="kpi"><div className="kpi-v" style={{ color: "var(--ink3)" }}>{unchecked}<span className="kpi-u">명</span></div><div className="kpi-l">미체크</div></div>
+          </div>
           <div className="card-head">
             <div>
               <div className="card-title">오늘 수업 {lessons.length}건</div>

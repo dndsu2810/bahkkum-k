@@ -7,9 +7,54 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import type { DataSnapshot } from "./types";
+import type { DataSnapshot, SnapshotDeletions } from "./types";
 import type { PageId } from "./lib/nav";
 import { loadData, saveData, saveDataNow } from "./api";
+
+/* ---- 병합 저장용 삭제 추적 ----
+   전체 교체 대신 'upsert + 삭제 목록'으로 저장해 여러 강사가 동시에 써도 서로 덮어쓰지 않게 한다.
+   세션 동안 삭제한 레코드 id를 누적했다가 저장 때 함께 보내고, 새로 불러오면(reload) 비운다. */
+interface DelSets {
+  homework: Set<string>; progress: Set<string>; test: Set<string>; supplement: Set<string>; makeup: Set<string>;
+  task: Set<string>; attendance: Set<string>; dismissed: Set<string>; noHomework: Set<string>;
+}
+function emptyDel(): DelSets {
+  return { homework: new Set(), progress: new Set(), test: new Set(), supplement: new Set(), makeup: new Set(), task: new Set(), attendance: new Set(), dismissed: new Set(), noHomework: new Set() };
+}
+function accumulateRemovals(cur: DataSnapshot, next: DataSnapshot, del: DelSets): void {
+  const removedById = (before: { id: string }[] = [], after: { id: string }[] = [], set: Set<string>) => {
+    const a = new Set(after.map((x) => x.id));
+    for (const x of before) if (!a.has(x.id)) set.add(x.id);
+    for (const x of after) set.delete(x.id); // 재추가되면 삭제표시 해제
+  };
+  removedById(cur.homeworkLog, next.homeworkLog, del.homework);
+  removedById(cur.progressLog, next.progressLog, del.progress);
+  removedById(cur.testLog, next.testLog, del.test);
+  removedById(cur.supplements || [], next.supplements || [], del.supplement);
+  removedById(cur.makeups, next.makeups, del.makeup);
+  removedById(cur.tasks || [], next.tasks || [], del.task);
+  const removedByKey = (before: string[] = [], after: string[] = [], set: Set<string>) => {
+    const a = new Set(after);
+    for (const k of before) if (!a.has(k)) set.add(k);
+    for (const k of after) set.delete(k);
+  };
+  removedByKey(Object.keys(cur.attendance || {}), Object.keys(next.attendance || {}), del.attendance);
+  removedByKey(cur.dismissedMakeups || [], next.dismissedMakeups || [], del.dismissed);
+  removedByKey(cur.noHomework || [], next.noHomework || [], del.noHomework);
+}
+function serializeDel(del: DelSets): SnapshotDeletions | undefined {
+  const out: SnapshotDeletions = {};
+  if (del.homework.size) out.homework = [...del.homework];
+  if (del.progress.size) out.progress = [...del.progress];
+  if (del.test.size) out.test = [...del.test];
+  if (del.supplement.size) out.supplement = [...del.supplement];
+  if (del.makeup.size) out.makeup = [...del.makeup];
+  if (del.task.size) out.task = [...del.task];
+  if (del.attendance.size) out.attendance = [...del.attendance];
+  if (del.dismissed.size) out.dismissed = [...del.dismissed];
+  if (del.noHomework.size) out.noHomework = [...del.noHomework];
+  return Object.keys(out).length ? out : undefined;
+}
 
 interface ToastItem {
   id: number;
@@ -64,6 +109,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const toastId = useRef(0);
   // 로드 실패 동안 저장을 막아 원격 데이터가 빈 값으로 덮어써지지 않게 한다.
   const blockSave = useRef(false);
+  // 마지막 편집 시각 — 탭 복귀 시 '오래된 탭'을 자동 새로고침할지 판단(편집 직후엔 보호).
+  const lastMutate = useRef(0);
+  // 이 세션에서 삭제한 레코드(병합 저장용). 새로 불러올 때 비운다.
+  const pendingDel = useRef<DelSets>(emptyDel());
 
   const doLoad = useCallback(() => {
     let alive = true;
@@ -74,6 +123,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setData(snap);
         setLoaded(true);
         blockSave.current = false;
+        pendingDel.current = emptyDel(); // 최신 데이터 — 이전 삭제표시 비움
       })
       .catch((e) => {
         if (!alive) return;
@@ -97,10 +147,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ]);
       return;
     }
+    lastMutate.current = Date.now();
     setData((cur) => {
       const next: DataSnapshot = structuredClone(cur);
       fn(next);
-      saveData(next);
+      accumulateRemovals(cur, next, pendingDel.current);
+      saveData({ ...next, deletions: serializeDel(pendingDel.current) });
       return next;
     });
   }, []);
@@ -113,13 +165,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ]);
       return false;
     }
+    lastMutate.current = Date.now();
     let next: DataSnapshot | null = null;
     setData((cur) => {
       next = structuredClone(cur);
-      fn(next);
+      fn(next!);
+      accumulateRemovals(cur, next!, pendingDel.current);
       return next;
     });
-    return next ? await saveDataNow(next) : false;
+    return next ? await saveDataNow({ ...(next as DataSnapshot), deletions: serializeDel(pendingDel.current) }) : false;
   }, []);
 
   const reload = useCallback(async () => {
@@ -128,12 +182,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setData(snap);
       blockSave.current = false;
       setLoadError(null);
+      pendingDel.current = emptyDel(); // 최신 데이터 반영 — 삭제표시 비움
     } catch (e) {
       // 실패해도 기존 데이터는 유지(덮어쓰지 않음)
       setToasts((t) => [...t, { id: ++toastId.current, msg: "최신 데이터를 불러오지 못했어요." }]);
       void e;
     }
   }, []);
+
+  // 여러 탭/기기를 함께 쓸 때 — 다른 탭에서 정리(삭제·학년수정)한 내용이 '오래된 탭'의
+  // 전체 저장으로 되살아나는 문제 방지. 탭으로 돌아오면(focus/visible) 최근 편집이 없을 때
+  // 최신 데이터로 새로고침한다. (편집 직후 3초는 보호 — 입력 중 덮어쓰기 방지)
+  useEffect(() => {
+    const onVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (blockSave.current) return;
+      if (Date.now() - lastMutate.current < 3000) return;
+      void reload();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    // 두 화면을 계속 띄워두는 경우(데스크+강사 등)도 수렴하도록 주기적으로도 최신화.
+    const iv = window.setInterval(onVisible, 45000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      window.clearInterval(iv);
+    };
+  }, [reload]);
 
   const toast = useCallback((msg: string, undo?: () => void) => {
     const id = ++toastId.current;

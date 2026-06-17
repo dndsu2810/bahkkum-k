@@ -35,14 +35,21 @@ export interface Issue {
   reply: string; // 지현T 답변
   replyAt: number;
   seen: boolean; // 작성자가 답변·해결을 확인했는지
-  status: string; // 접수 | 해결중 | 완료
+  status: string; // 접수 | 진행중 | 보류 | 완료
   createdAt: number;
   updatedAt: number;
 }
 
-export const ISSUE_STATUSES = ["접수", "해결중", "완료"];
-/** 오류 신고 시 고를 화면 목록(군더더기 없이 핵심만). 노션도 포함. */
-export const ISSUE_PAGES = ["오늘", "출결", "숙제", "시간표", "학생 명단", "월말리포트", "학생 화면", "노션", "로그인", "기타"];
+export const ISSUE_STATUSES = ["접수", "진행중", "보류", "완료"];
+/** '전체' 보기 정렬 순서: 접수 → 진행중 → 보류 → 완료. */
+export const ISSUE_STATUS_ORDER: Record<string, number> = { 접수: 0, 진행중: 1, 해결중: 1, 보류: 2, 완료: 3 };
+/** 오류 신고 시 고를 화면 목록 — 수학·영어·공통·데스크·학생 화면까지 폭넓게. */
+export const ISSUE_PAGES = [
+  "오늘", "출결", "숙제", "진도·교재관리", "테스트", "시간표", "보강관리", "대시보드", "월말리포트",
+  "학생 명단", "포인트 랭킹", "메시지", "등하원",
+  "데스크-전체시간표", "데스크-오늘", "데스크-계정", "강사 업무보드", "학원일정",
+  "중고등영어", "초등영어", "학생 화면", "노션", "로그인", "기타",
+];
 
 export const feedbackApi = {
   /** 활성 공지 배너(모든 로그인). */

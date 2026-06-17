@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { feedbackApi, ISSUE_PAGES, ISSUE_STATUSES, type Issue } from "../lib/feedbackApi";
+import { feedbackApi, ISSUE_PAGES, ISSUE_STATUSES, ISSUE_STATUS_ORDER, type Issue } from "../lib/feedbackApi";
 import { uploadImage } from "../lib/configApi";
 import { fmtWhen } from "../lib/dates";
 import { Icon } from "../icons";
 
-const ROLE_LABEL: Record<string, string> = { admin: "원장", math: "수학", english_mid: "영어(중고등)", english_elem: "영어(초등)", desk: "데스크", student: "학생" };
-const statusCls = (s: string) => (s === "완료" ? "done" : s === "해결중" ? "doing" : "new");
+const ROLE_LABEL: Record<string, string> = { admin: "원장", developer: "개발자", math: "수학", english_mid: "영어(중고등)", english_elem: "영어(초등)", desk: "데스크", student: "학생" };
+const statusCls = (s: string) => (s === "완료" ? "done" : s === "보류" ? "hold" : s === "진행중" || s === "해결중" ? "doing" : "new");
 
 /** 오류·개선 요청 — 누구나 작성(작성자 자동), 원장이 상태 변경. */
 export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
@@ -95,7 +95,15 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
     }
   }
 
-  const shown = filter === "all" ? issues : issues.filter((i) => i.status === filter);
+  // '전체' 보기는 접수→진행중→보류→완료 순으로, 같은 상태 안에서는 최신순.
+  const shown =
+    filter === "all"
+      ? [...issues].sort((a, b) => {
+          const oa = ISSUE_STATUS_ORDER[a.status] ?? 9;
+          const ob = ISSUE_STATUS_ORDER[b.status] ?? 9;
+          return oa !== ob ? oa - ob : b.createdAt - a.createdAt;
+        })
+      : issues.filter((i) => i.status === filter);
   const countOf = (s: string) => (s === "all" ? issues.length : issues.filter((i) => i.status === s).length);
 
   return (

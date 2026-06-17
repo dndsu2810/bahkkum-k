@@ -83,6 +83,18 @@
 .r-prog-grid .r-it .r-l{ font-size:12px; font-weight:700; color:var(--ink-3); margin-bottom:5px }
 .r-prog-grid .r-it .r-v{ font-size:16px; font-weight:800; color:var(--ink) }
 
+/* 교재 진도 — 이번 달 진행중 / 완료 교재 두 칸 */
+.r-books{ display:grid; grid-template-columns:1fr 1fr; gap:14px }
+.r-books-col{ border:1px solid var(--line); border-radius:14px; padding:16px 18px; background:var(--teal-soft) }
+.r-books-col .r-tag{ display:inline-block; font-size:12px; font-weight:700; color:var(--teal); background:var(--teal-tint); padding:4px 10px; border-radius:7px; margin-bottom:12px }
+.r-book-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px }
+.r-book-list li{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 12px }
+.r-book-list li b{ font-size:15px; font-weight:800; color:var(--ink) }
+.r-book-list li.done b{ color:var(--green) }
+.r-book-range{ font-size:11px; font-weight:600; color:var(--ink-2); background:var(--card); border:1px solid var(--line); border-radius:999px; padding:1px 8px }
+.r-book-date{ margin-left:auto; font-size:12px; font-weight:600; color:var(--ink-3); white-space:nowrap }
+.r-book-empty{ font-size:13px; color:var(--ink-3); padding:6px 2px }
+
 /* CALENDAR */
 .r-cal-card{ border:1px solid var(--line); border-radius:18px; padding:20px 20px 18px; background:#fff }
 .r-cal-legend{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px }
@@ -172,3 +184,10 @@
 .r-ft{ padding:24px 44px 30px; border-top:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:14px }
 .r-ft img{ height:30px; width:auto; opacity:.92 }
 .r-ft .r-ftmeta{ font-size:12px; color:var(--ink-3); font-weight:600; text-align:right; line-height:1.6 }
+
+/* 보충수업 현황 */
+.r-sup{ display:flex; flex-direction:column; gap:8px }
+.r-sup-item{ display:flex; align-items:center; gap:12px; border:1px solid var(--line); border-radius:10px; padding:10px 14px; background:#fff }
+.r-sup-date{ font-size:13px; font-weight:700; color:#334155; white-space:nowrap; min-width:48px }
+.r-sup-min{ font-size:14px; font-weight:800; color:#1b3a63; white-space:nowrap; min-width:54px }
+.r-sup-reason{ font-size:13px; color:#475569; flex:1 }

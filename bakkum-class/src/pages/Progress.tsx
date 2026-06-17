@@ -1,140 +1,139 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ProgLog } from "../types";
 import { useStore } from "../store";
-import { studentById } from "../lib/logic";
-import { fmtDayBand, ymd } from "../lib/dates";
-import { InlineTable, type InlineCol } from "../components/InlineTable";
-import { RecordFilters, EMPTY_FILTER, filterActive } from "../components/RecordFilters";
-import { ProgressModal } from "../components/modals";
+import { activeStudents } from "../lib/logic";
+import { fmtDayBand, todayStr, uid } from "../lib/dates";
 import { TodayLink } from "../components/ui";
 import { Icon } from "../icons";
 
-type ProgTab = "all" | "ing" | "done";
-const TABS: { v: ProgTab; label: string }[] = [
-  { v: "ing", label: "진행중" },
-  { v: "all", label: "전체" },
-  { v: "done", label: "완료" },
-];
-
+/**
+ * 진도 · 교재관리 — 중고등영어와 동일한 레이아웃.
+ * 왼쪽에서 학생을 고르면, 그 학생의 교재 진도를 입력한다.
+ * %가 아니라 '시작일'을 입력하고, 완료 전까지는 '진행중', 완료하면 '교재 완료'.
+ */
 export function Progress() {
-  const { data, openModal, mutate, mutateAsync, toast } = useStore();
-  const [tab, setTab] = useState<ProgTab>("ing");
-  const [flt, setFlt] = useState(EMPTY_FILTER);
+  const { data, mutate, mutateAsync, toast } = useStore();
+  const [sel, setSel] = useState("");
+  const [q, setQ] = useState("");
 
-  const all = data.progressLog.slice().sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
-  const q = flt.q.trim().toLowerCase();
-  const sorted = all
-    .filter((p) => (tab === "all" ? true : tab === "done" ? p.pct >= 100 : p.pct < 100))
-    .filter((p) =>
-      (!flt.student || p.studentId === flt.student) &&
-      (!q || ((studentById(data.students, p.studentId)?.name ?? "") + " " + p.unit + " " + p.area + " " + p.memo).toLowerCase().includes(q))
-    );
-  const studentOpts = [...new Map(all.map((p) => [p.studentId, { id: p.studentId, name: studentById(data.students, p.studentId)?.name ?? "(삭제된 학생)" }])).values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
-  const ingCount = all.filter((p) => p.pct < 100).length;
-  const doneCount = all.length - ingCount;
-  const nameOf = (p: ProgLog) => studentById(data.students, p.studentId)?.name ?? "(삭제된 학생)";
-  const yest = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return ymd(d); })();
-  const progSummary = (list: ProgLog[]) => {
-    const ing = list.filter((p) => p.pct < 100).length;
-    return [ing && `진행중 ${ing}`, list.length - ing && `완료 ${list.length - ing}`].filter(Boolean).join(" · ");
-  };
+  const students = useMemo(
+    () => activeStudents(data.students).slice().sort((a, b) => a.name.localeCompare(b.name, "ko")),
+    [data.students]
+  );
+  const qq = q.trim().toLowerCase();
+  const shownStudents = qq ? students.filter((s) => (s.name + " " + (s.grade || "")).toLowerCase().includes(qq)) : students;
+  const ingCountOf = (sid: string) => data.progressLog.filter((p) => p.studentId === sid && p.pct < 100).length;
 
-  function apply(d: { progressLog: ProgLog[] }, id: string, key: string, v: string) {
+  const selStudent = students.find((s) => s.id === sel) || null;
+  const myProg = useMemo(
+    () =>
+      data.progressLog
+        .filter((p) => p.studentId === sel)
+        .slice()
+        .sort((a, b) => {
+          // 진행중 먼저, 그 안에서 시작일 최신순.
+          if ((a.pct < 100) !== (b.pct < 100)) return a.pct < 100 ? -1 : 1;
+          return (a.startDate < b.startDate ? 1 : -1);
+        }),
+    [data.progressLog, sel]
+  );
+
+  // 입력 폼(선택한 학생 기준).
+  const [book, setBook] = useState("");
+  const [range, setRange] = useState("");
+  const [start, setStart] = useState(todayStr());
+
+  function add() {
+    const title = book.trim();
+    if (!title || !sel) return;
+    const rec: ProgLog = { id: uid(), studentId: sel, unit: title, area: range.trim(), pct: 0, startDate: start || todayStr(), endDate: "", memo: "" };
+    mutate((d) => { d.progressLog.push(rec); });
+    setBook(""); setRange("");
+    setStart(todayStr());
+    toast("교재를 추가했어요.");
+  }
+
+  function apply(d: { progressLog: ProgLog[] }, id: string, fn: (p: ProgLog) => void) {
     const p = d.progressLog.find((x) => x.id === id);
-    if (!p) return;
-    if (key === "unit") p.unit = v;
-    else if (key === "area") p.area = v;
-    else if (key === "pct") p.pct = Math.max(0, Math.min(100, Math.round(+v) || 0));
-    else if (key === "startDate") p.startDate = v;
-    else if (key === "memo") p.memo = v;
+    if (p) fn(p);
   }
-  async function onPatch(id: string, key: string, value: string, orig: string): Promise<boolean> {
-    const ok = await mutateAsync((d) => apply(d, id, key, value));
-    if (!ok) {
-      mutate((d) => apply(d, id, key, orig));
-      toast("저장하지 못했어요 · 잠시 후 다시 시도해 주세요");
-    }
-    return ok;
+  async function setDone(p: ProgLog, done: boolean) {
+    const ok = await mutateAsync((d) => apply(d, p.id, (x) => { x.pct = done ? 100 : 0; x.endDate = done ? todayStr() : ""; }));
+    if (!ok) toast("저장하지 못했어요 · 잠시 후 다시 시도해 주세요");
   }
-  function onDelete(id: string) {
-    const p = data.progressLog.find((x) => x.id === id);
-    if (!window.confirm(`'${p?.unit || "이 진도"}' 기록을 삭제할까요?`)) return;
-    mutate((d) => { d.progressLog = d.progressLog.filter((x) => x.id !== id); });
-    toast("진도 기록을 삭제했어요.");
+  function remove(p: ProgLog) {
+    if (!window.confirm(`'${p.unit || "이 교재"}' 진도를 삭제할까요?`)) return;
+    mutate((d) => { d.progressLog = d.progressLog.filter((x) => x.id !== p.id); });
+    toast("교재 진도를 삭제했어요.");
   }
-
-  // 같은 학생·같은 단원이 여러 건이면 가장 진행된(진행률↑, 동률이면 시작일↑) 1건만 남긴다.
-  function dedupe() {
-    const keep = new Map<string, ProgLog>();
-    for (const p of data.progressLog) {
-      const u = p.unit.trim();
-      if (!u) { keep.set("id:" + p.id, p); continue; } // 단원 없는 건 그대로
-      const k = p.studentId + "|" + u;
-      const ex = keep.get(k);
-      if (!ex || p.pct > ex.pct || (p.pct === ex.pct && p.startDate > ex.startDate)) keep.set(k, p);
-    }
-    const keepIds = new Set([...keep.values()].map((p) => p.id));
-    const removed = data.progressLog.length - keepIds.size;
-    if (!removed) { toast("정리할 중복이 없어요."); return; }
-    if (!window.confirm(`중복 진도 ${removed}건을 정리할까요?\n(학생·단원이 같으면 가장 진행된 1건만 남깁니다)`)) return;
-    mutate((d) => { d.progressLog = d.progressLog.filter((p) => keepIds.has(p.id)); });
-    toast(`중복 ${removed}건을 정리했어요.`);
-  }
-
-  const cols: InlineCol<ProgLog>[] = [
-    { key: "student", label: "학생", type: "readonly", width: "12%", get: nameOf, display: (p) => <span className="t-name">{nameOf(p)}</span> },
-    { key: "unit", label: "단원", type: "text", width: "23%", placeholder: "예: 3단원 소수의 나눗셈", get: (p) => p.unit, display: (p) => <span>{p.unit || "단원 미정"}</span> },
-    { key: "area", label: "영역", type: "text", width: "11%", placeholder: "예: 개념", get: (p) => p.area },
-    { key: "pct", label: "진행률", type: "number", width: "12%", min: 0, max: 100, get: (p) => String(p.pct), display: (p) => <span style={{ fontWeight: 700 }}>{p.pct}%</span> },
-    { key: "status", label: "상태", type: "readonly", width: "11%", get: (p) => (p.pct >= 100 ? "완료" : "진행중"), display: (p) => <span className={"badge " + (p.pct >= 100 ? "b-green" : "b-blue")}>{p.pct >= 100 ? "완료" : "진행중"}</span> },
-    { key: "memo", label: "메모", type: "text", width: "21%", placeholder: "특이사항", get: (p) => p.memo },
-  ];
 
   return (
     <section className="page active">
       <div className="page-head">
         <div>
-          <h1 className="page-title">수학 진도 기록</h1>
-          <div className="page-desc">오늘 진도는 <TodayLink /> 화면에서, 여기선 전체 진도 기록을 모아 보고 수정해요.</div>
-        </div>
-        <div className="head-actions">
-          <button className="btn" onClick={dedupe} title="학생·단원이 같은 중복 진도 정리">
-            <Icon name="refresh" />
-            중복 정리
-          </button>
-          <button className="btn primary" onClick={() => openModal(<ProgressModal id={null} />)}>
-            <Icon name="plus" />
-            진도 기록
-          </button>
+          <h1 className="page-title">진도 · 교재관리</h1>
+          <div className="page-desc">학생을 고르면 교재별 진도를 입력해요. 오늘 진도는 <TodayLink /> 화면에서도 됩니다.</div>
         </div>
       </div>
 
-      <div className="seg-toggle" style={{ marginBottom: 14 }}>
-        {TABS.map((t) => (
-          <button key={t.v} className={tab === t.v ? "on" : ""} onClick={() => setTab(t.v)}>
-            {t.label}
-            <span className="seg-count">{t.v === "all" ? all.length : t.v === "ing" ? ingCount : doneCount}</span>
-          </button>
-        ))}
-      </div>
+      <div className="eng-split">
+        <div className="eng-side-wrap card">
+          <input className="input" style={{ marginBottom: 8 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="학생 검색" />
+          <div className="eng-side">
+            {shownStudents.length === 0 ? (
+              <div className="eng-side-empty">학생이 없어요.</div>
+            ) : (
+              shownStudents.map((s) => {
+                const ing = ingCountOf(s.id);
+                return (
+                  <div key={s.id} className={"eng-stu" + (sel === s.id ? " on" : "")}>
+                    <button className="eng-stu-name" onClick={() => setSel(s.id)}>
+                      {s.name}
+                      {s.grade && <span className="eng-lv">{s.grade}</span>}
+                      {ing > 0 && <span className="eng-stu-time">진행 {ing}</span>}
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
 
-      <div className="card">
-        <RecordFilters value={flt} onChange={setFlt} students={studentOpts} />
-        <div className="tbl-wrap">
-          <InlineTable
-            rows={sorted}
-            cols={cols}
-            rowId={(p) => p.id}
-            onPatch={onPatch}
-            onDelete={onDelete}
-            groupBy={(p) => ({ key: p.startDate || "미정", label: p.startDate ? fmtDayBand(p.startDate) + " 시작" : "시작일 미정" })}
-            collapsible
-            groupSummary={progSummary}
-            openInitially={(key) => key >= yest}
-            pageSize={14}
-            forceOpen={filterActive(flt)}
-            empty={<div className="empty">{tab === "done" ? "완료된 진도가 없습니다." : tab === "ing" ? "진행중인 진도가 없습니다." : <>아직 진도 기록이 없어요. <TodayLink /> 화면에서 입력하면 여기에 쌓여요.</>}</div>}
-          />
+        <div className="eng-main">
+          {!selStudent ? (
+            <div className="hub-muted" style={{ padding: 20 }}>왼쪽에서 학생을 선택하면 교재 진도를 입력할 수 있어요.</div>
+          ) : (
+            <div className="eng-panel">
+              <h2>{selStudent.name} · 진도 · 교재</h2>
+              <div className="eng-add-row">
+                <input className="input" value={book} onChange={(e) => setBook(e.target.value)} placeholder="교재명 (예: 디딤돌 개념원리)" onKeyDown={(e) => e.key === "Enter" && add()} />
+                <input className="input" style={{ maxWidth: 150 }} value={range} onChange={(e) => setRange(e.target.value)} placeholder="범위·단계(선택)" />
+                <input className="inline-input" style={{ maxWidth: 150 }} type="date" value={start} onChange={(e) => setStart(e.target.value)} aria-label="시작일" />
+                <button className="btn primary" onClick={add} disabled={!book.trim()}>추가</button>
+              </div>
+              <div className="eng-rows">
+                {myProg.map((p) => (
+                  <div className={"eng-row" + (p.pct >= 100 ? " mat-arow done" : "")} key={p.id}>
+                    <div className="eng-row-main">
+                      <b>{p.unit || "교재 미정"}</b>
+                      {p.area && <span className="eng-lv">{p.area}</span>}
+                      <span className={"badge " + (p.pct >= 100 ? "b-green" : "b-blue")} style={{ marginLeft: 4 }}>{p.pct >= 100 ? "교재 완료" : "진행중"}</span>
+                    </div>
+                    <span className="prog-dates">
+                      {fmtDayBand(p.startDate) || "시작일 미정"} 시작{p.pct >= 100 && p.endDate ? ` · ${fmtDayBand(p.endDate)} 완료` : ""}
+                    </span>
+                    {p.pct >= 100 ? (
+                      <button className="btn ghost sm" onClick={() => setDone(p, false)}>진행중으로</button>
+                    ) : (
+                      <button className="btn sm" onClick={() => setDone(p, true)}>교재 완료</button>
+                    )}
+                    <button className="btn ghost sm" onClick={() => remove(p)} title="삭제"><Icon name="trash" /></button>
+                  </div>
+                ))}
+                {myProg.length === 0 && <div className="hub-muted">아직 등록된 교재가 없어요. 위에서 교재명을 입력해 추가하세요.</div>}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>

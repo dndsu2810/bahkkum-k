@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useStore } from "../store";
-import type { AttRecord, Attitude, AttStatus, HwLog, Makeup, Student } from "../types";
+import type { AttRecord, Attitude, AttStatus, HwLog, Makeup, Student, SupLog } from "../types";
 import { DOW, fmtFull, fmtMDDow, parseD, timeToMin, todayStr, uid, ymd } from "../lib/dates";
 import { activeStudents, attendsOn, effectiveLessons, nextLessonDate, studentById } from "../lib/logic";
 import { applyMakeup, findBoKey } from "../lib/attendanceLogic";
@@ -63,6 +63,8 @@ export function Today() {
   const [tagDraft, setTagDraft] = useState<Record<string, string[]>>({});
   const [pctDraft, setPctDraft] = useState<Record<string, string>>({});
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({}); // 결석 사유 입력 임시값(blur 시 저장)
+  const [supMinDraft, setSupMinDraft] = useState<Record<string, string>>({}); // 보충수업 남은 분
+  const [supReasonDraft, setSupReasonDraft] = useState<Record<string, string>>({}); // 보충수업 사유
   const [gradeTab, setGradeTab] = useState<"all" | "cho" | "jung">("all");
   // 영어식 마스터-디테일: 왼쪽에서 고른 학생을 오른쪽 상세에 표시.
   const [sel, setSel] = useState<string>("");
@@ -111,6 +113,9 @@ export function Today() {
   // 내준(예정) 숙제들 = 마감일이 오늘 이후 — 여러 개 가능
   const assignedHwsOf = (sid: string): HwLog[] =>
     data.homeworkLog.filter((h) => h.studentId === sid && h.date > day).sort((a, b) => (a.date < b.date ? -1 : 1));
+  // 그 학생이 '진행중'인 교재 목록 — 내줄 숙제를 더 간편하게 고르도록(없으면 직접 입력).
+  const ingBooksOf = (sid: string): string[] =>
+    [...new Set(data.progressLog.filter((p) => p.studentId === sid && p.pct < 100 && p.unit.trim()).map((p) => p.unit.trim()))];
 
   /* ---------- 출결 ---------- */
   async function mark(it: LessonOnDate, status: AttStatus) {
@@ -430,6 +435,23 @@ export function Today() {
     });
   }
 
+  /* ---------- 보충수업 (남은 분·사유) ---------- */
+  const supsOf = (sid: string): SupLog[] =>
+    (data.supplements || []).filter((x) => x.studentId === sid).sort((a, b) => (a.date < b.date ? 1 : -1));
+  function addSup(s: Student) {
+    const min = Math.max(0, Math.round(+(supMinDraft[s.id] ?? "")) || 0);
+    const reason = (supReasonDraft[s.id] ?? "").trim();
+    if (!min) { toast("보충 남은 시간(분)을 입력해 주세요."); return; }
+    const rec: SupLog = { id: uid(), studentId: s.id, date: day, minutes: min, reason };
+    mutate((d) => { d.supplements = [...(d.supplements || []), rec]; });
+    setSupMinDraft((m) => ({ ...m, [s.id]: "" }));
+    setSupReasonDraft((m) => ({ ...m, [s.id]: "" }));
+    toast(`${s.name} · 보충 ${min}분 남김`);
+  }
+  function removeSup(id: string) {
+    mutate((d) => { d.supplements = (d.supplements || []).filter((x) => x.id !== id); });
+  }
+
   /* ---------- 진행 집계 ---------- */
   const attDone = (it: LessonOnDate) => !!data.attendance[keyOf(it)]?.status;
   // 오늘 검사 대상 숙제 중 아직 '검사완료'가 아닌 건 수(전체)
@@ -486,7 +508,8 @@ export function Today() {
   const shownEntries = gradeTab === "all" ? entries : entries.filter((e) => (gradeTab === "cho" ? entryIsCho(e) : !entryIsCho(e)));
   const todayCount = new Set(entries.map((e) => e.student.id)).size;
   // 선택된 학생(없거나 필터에서 빠지면 첫 학생). 오른쪽 상세에 표시.
-  const activeEntry = shownEntries.find((e) => e.key === sel) || shownEntries[0] || null;
+  // 학생은 직접 선택해야 상세가 뜬다(자동으로 첫 학생을 고르지 않음 — '민서준 디폴트' 방지).
+  const activeEntry = sel ? shownEntries.find((e) => e.key === sel) ?? null : null;
 
   return (
     <section className="page active">
@@ -773,10 +796,25 @@ export function Today() {
                             <button className="btn ghost sm" onClick={() => removeHw(hw.id)} title="삭제"><Icon name="trash" /></button>
                           </div>
                         ))}
+                        {ingBooksOf(s.id).length > 0 && (
+                          <div className="today-bookchips">
+                            <span className="today-bookchips-lbl">진행중 교재</span>
+                            {ingBooksOf(s.id).map((bk) => (
+                              <button
+                                key={bk}
+                                className={"today-bookchip" + ((assignDraft[s.id] ?? "") === bk ? " on" : "")}
+                                onClick={() => setAssignDraft((m) => ({ ...m, [s.id]: bk }))}
+                                title="이 교재로 숙제 채우기"
+                              >
+                                {bk}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <div className="today-assignrow">
                           <input
                             className="today-assign-input"
-                            placeholder="내줄 숙제 입력 후 Enter (계속 추가 가능)"
+                            placeholder="내줄 숙제 입력 후 Enter (진행중 교재 선택 또는 직접 입력)"
                             value={assignDraft[s.id] ?? ""}
                             onChange={(e) => setAssignDraft((m) => ({ ...m, [s.id]: e.target.value }))}
                             onKeyDown={(e) => { if (e.key === "Enter") assignHw(s); }}
@@ -802,6 +840,37 @@ export function Today() {
                         </div>
                       </>
                     )}
+                  </div>
+
+                  {/* 보충수업 — 남은 분 + 사유 (월말리포트 반영) */}
+                  <div className="eng-field today-hwsec">
+                    <div className="eng-label">보충수업 <span className="today-sup-hint">못 채운 시간을 남겨두면 월말리포트에 반영돼요</span></div>
+                    {supsOf(s.id).map((sp) => (
+                      <div className="today-hwitem assigned" key={sp.id}>
+                        <span className="today-hwitem-name">
+                          <b>{sp.minutes}분 보충</b>
+                          {sp.reason ? <span className="muted"> · {sp.reason}</span> : null}
+                          <span className="muted"> · {fmtMDDow(sp.date)}</span>
+                        </span>
+                        <button className="btn ghost sm" onClick={() => removeSup(sp.id)} title="삭제"><Icon name="trash" /></button>
+                      </div>
+                    ))}
+                    <div className="today-assignrow">
+                      <input
+                        className="today-due-input" style={{ maxWidth: 110 }} type="number" min={0} step={5}
+                        placeholder="남은 분"
+                        value={supMinDraft[s.id] ?? ""}
+                        onChange={(e) => setSupMinDraft((m) => ({ ...m, [s.id]: e.target.value }))}
+                      />
+                      <input
+                        className="today-assign-input"
+                        placeholder="사유 (예: 늦게 와서 30분 부족)"
+                        value={supReasonDraft[s.id] ?? ""}
+                        onChange={(e) => setSupReasonDraft((m) => ({ ...m, [s.id]: e.target.value }))}
+                        onKeyDown={(e) => { if (e.key === "Enter") addSup(s); }}
+                      />
+                      <button className="btn sm" onClick={() => addSup(s)} disabled={!(supMinDraft[s.id] ?? "").trim()}>추가</button>
+                    </div>
                   </div>
                 </div>
                 );

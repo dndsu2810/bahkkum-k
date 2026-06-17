@@ -14,7 +14,7 @@ function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}${(seq++).toString(36)}`;
 }
 
-const ISSUE_STATUS = ["접수", "해결중", "완료"];
+const ISSUE_STATUS = ["접수", "진행중", "보류", "완료"];
 
 export async function ensureFeedbackTables(env: Env): Promise<void> {
   const stmts = [
@@ -41,6 +41,8 @@ export async function ensureFeedbackTables(env: Env): Promise<void> {
   ]) {
     try { await env.DB.prepare(a).run(); } catch { /* 이미 있으면 무시 */ }
   }
+  // 상태 명칭 통일: 기존 '해결중' → '진행중'(보류 단계 신설에 맞춰 정리).
+  try { await env.DB.prepare("UPDATE class_issue SET status='진행중' WHERE status='해결중'").run(); } catch { /* ignore */ }
 }
 
 async function cfg(env: Env, k: string): Promise<string> {
@@ -124,8 +126,11 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
     const shot = String(b.shot || "");
     const link = String(b.link || "").slice(0, 500);
     const now = Date.now();
+    // 표시용 역할(displayRole)이 있으면 그걸 저장 — 개발자 계정은 실효 role이 admin이라
+    // 그대로 두면 '원장'으로 표시됨. displayRole('developer')을 저장해 '개발자'로 보이게.
+    const authorRole = me.displayRole || me.role;
     await env.DB.prepare("INSERT INTO class_issue(id,page,author_sub,author_name,author_role,body,shot,link,status,seen,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,1,?,?)")
-      .bind(id, page, me.sub, me.name, me.role, body.slice(0, 2000), shot, link, "접수", now, now)
+      .bind(id, page, me.sub, me.name, authorRole, body.slice(0, 2000), shot, link, "접수", now, now)
       .run();
     // 원장 카카오워크 알림(웹훅 설정 시). 실패해도 등록은 성공.
     try {
@@ -188,7 +193,7 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
 }
 
 function roleLabel(role: string): string {
-  const m: Record<string, string> = { admin: "원장", math: "수학", english_mid: "영어(중고등)", english_elem: "영어(초등)", desk: "데스크", student: "학생" };
+  const m: Record<string, string> = { admin: "원장", developer: "개발자", math: "수학", english_mid: "영어(중고등)", english_elem: "영어(초등)", desk: "데스크", student: "학생" };
   return m[role] || role;
 }
 

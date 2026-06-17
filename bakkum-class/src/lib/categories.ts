@@ -2,6 +2,8 @@
 // 모듈 캐시로 두고 gradeColor 등 leaf에서 prop 없이 읽음. 설정 변경 시 App이
 // setCategories + 리렌더하면 캐시 갱신 + 화면 반영.
 
+import { parseGrade } from "./grade";
+
 export type Tone = "blue" | "purple" | "pink" | "green" | "orange";
 export const TONES: Tone[] = ["blue", "purple", "pink", "green", "orange"];
 
@@ -45,10 +47,16 @@ export function setCategories(c: Category[]): void {
 }
 export function toneOf(name: string): Tone {
   const c = cache.find((x) => x.name === name);
-  return c ? c.tone : cache[0]?.tone || "blue";
+  if (c) return c.tone;
+  // 실제 학년(초6·중2·고1)도 구분별로 색을 준다 — 카테고리(초등/중등)와 일관.
+  const p = parseGrade(name);
+  if (p) return p.div === "초" ? "blue" : p.div === "중" ? "purple" : "pink";
+  return cache[0]?.tone || "blue";
 }
-/** category order index for sorting (unknown → end) */
+/** 정렬용 인덱스 — 학년은 구분(초<중<고)+세부학년 순. 카테고리/미상은 보조 처리. */
 export function catIndex(name: string): number {
+  const p = parseGrade(name);
+  if (p) return (p.div === "초" ? 0 : p.div === "중" ? 100 : 200) + p.n;
   const i = cache.findIndex((x) => x.name === name);
   return i < 0 ? 999 : i;
 }

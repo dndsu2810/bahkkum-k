@@ -27,6 +27,11 @@ import { ChangeRequests } from "./screens/ChangeRequests";
 import { PointRanking } from "./screens/PointRanking";
 import { PointCatalog } from "./screens/PointCatalog";
 import { IssueBoard } from "./screens/IssueBoard";
+import { Checkin } from "./screens/Checkin";
+import { CheckinReport } from "./screens/CheckinReport";
+import { Orders } from "./screens/Orders";
+import { ordersApi } from "./lib/ordersApi";
+import { NotificationBell } from "./components/NotificationBell";
 import { Materials } from "./screens/Materials";
 import { Guide } from "./screens/Guide";
 import { NoticeBanner } from "./components/NoticeBanner";
@@ -223,6 +228,21 @@ export function Workspace() {
     return () => { alive = false; clearInterval(iv); window.removeEventListener("focus", onFocus); window.removeEventListener("issue-seen", onSeen); };
   }, [noBackend, user]);
 
+  // 교재·비품 주문 — 구매 전 건수(사이드바 주황 배지)
+  const [ordersPending, setOrdersPending] = useState(0);
+  useEffect(() => {
+    if (noBackend || !user) return;
+    let alive = true;
+    const load = () => ordersApi.pendingCount().then((n) => { if (alive) setOrdersPending(n); }).catch(() => {});
+    void load();
+    const iv = setInterval(load, 30000);
+    const onFocus = () => void load();
+    const onChanged = () => void load();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("orders-changed", onChanged);
+    return () => { alive = false; clearInterval(iv); window.removeEventListener("focus", onFocus); window.removeEventListener("orders-changed", onChanged); };
+  }, [noBackend, user]);
+
   // 시간표 변경 요청 — 나에게 온 대기 건수(사이드바 알림 배지)
   const [reqPending, setReqPending] = useState(0);
   useEffect(() => {
@@ -388,6 +408,7 @@ export function Workspace() {
     if (e.key === "eng_makeup_elem") return engWait.elem > 0 ? <span className="nav-badge warn">{engWait.elem}</span> : null;
     if (e.key === "messages_send") return replyUnseen > 0 ? <span className="nav-badge bad">{replyUnseen}</span> : null;
     if (e.key === "issues") return issueUnseen > 0 ? <span className="nav-badge bad">{issueUnseen}</span> : null;
+    if (e.key === "orders") return ordersPending > 0 ? <span className="nav-badge orange">{ordersPending}</span> : null;
     return null;
   }
 
@@ -528,15 +549,13 @@ export function Workspace() {
             </div>
           )}
           <div className="top-actions">
-            <button
-              className="topbell"
-              onClick={() => setView(issueUnseen > 0 ? "issues" : "reqs")}
-              title={issueUnseen > 0 ? (issueKind === "new" ? `새 오류·개선 요청 ${issueUnseen}건` : `요청 답변·해결 ${issueUnseen}건`) : reqPending > 0 ? `받은 시간표 변경 요청 ${reqPending}건` : "알림"}
-              aria-label="알림"
-            >
-              <Icon name="bell" />
-              {reqPending + issueUnseen > 0 && <span className="topbell-badge">{reqPending + issueUnseen}</span>}
-            </button>
+            <NotificationBell
+              onGo={goKey}
+              canMessage={byKey.has("messages_send")}
+              isAdmin={user.role === "admin"}
+              reqPending={reqPending}
+              ordersPending={ordersPending}
+            />
             <ThemeToggle />
             <span className="acct-chip">
               {user.name} · <span className="role">{ROLE_LABEL[shownRole(user)]}</span>
@@ -577,6 +596,9 @@ function Body({ view, cats, jumpStudent, reqPrefill, homeTiles, homeSummary, cta
   if (view === "ranking") return <PointRanking />;
   if (view === "point_catalog") return <PointCatalog />;
   if (view === "issues") return <IssueBoard />;
+  if (view === "checkin") return <Checkin />;
+  if (view === "checkin_report") return <CheckinReport />;
+  if (view === "orders") return <Orders />;
   if (view === "materials") return <Materials />;
   if (view === "guide") return <Guide />;
   if (view === "board") return <BoardShared />;

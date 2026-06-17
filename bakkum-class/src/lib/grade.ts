@@ -7,6 +7,8 @@ export const GRADE_DIVS: { key: "초" | "중" | "고"; label: string; max: numbe
   { key: "고", label: "고등", max: 3 },
 ];
 export const DIV_MAX: Record<string, number> = { 초: 6, 중: 3, 고: 3 };
+/** 세부학년 전체 목록 — 초1..초6, 중1..중3, 고1..고3. 학년 선택 드롭다운용. */
+export const GRADE_OPTIONS: string[] = GRADE_DIVS.flatMap((d) => Array.from({ length: d.max }, (_, i) => d.key + (i + 1)));
 
 /** "초6" → {div:"초", n:6}. 레거시 "초등" → {div:"초", n:0}. 못 읽으면 null. */
 export function parseGrade(g: string): { div: "초" | "중" | "고"; n: number } | null {

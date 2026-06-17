@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import html2canvas from "html2canvas";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { ENG_CRITERIA, ENG_GRADES, engApi, type EngReport as Rep } from "../lib/engApi";
 import { listUsers, type UserRow } from "../lib/authApi";
@@ -16,6 +15,7 @@ const NAME_KEY = "__name";
 async function captureEl(id: string, filename: string) {
   const el = document.getElementById(id);
   if (!el) return;
+  const html2canvas = (await import("html2canvas")).default; // 저장 시에만 로드(초기 번들 경량화)
   const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", width: 720, windowWidth: 720 });
   const a = document.createElement("a");
   a.download = filename;

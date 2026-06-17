@@ -1,5 +1,5 @@
 // 월말리포트 섹션 순서 설정 (localStorage).
-export type SectionKey = "summary" | "comment" | "progress" | "attendance" | "evals" | "homework";
+export type SectionKey = "summary" | "comment" | "progress" | "attendance" | "evals" | "homework" | "supplements";
 
 export const SECTION_LABELS: Record<SectionKey, string> = {
   summary: "이달의 학습 요약",
@@ -8,9 +8,10 @@ export const SECTION_LABELS: Record<SectionKey, string> = {
   attendance: "월간 출결 현황",
   evals: "평가 결과 상세",
   homework: "숙제 및 수행 기록",
+  supplements: "보충수업 현황",
 };
 
-export const DEFAULT_ORDER: SectionKey[] = ["summary", "comment", "progress", "attendance", "evals", "homework"];
+export const DEFAULT_ORDER: SectionKey[] = ["summary", "comment", "progress", "attendance", "evals", "homework", "supplements"];
 
 const KEY = "bk_reportsections";
 let cache: SectionKey[] = read();

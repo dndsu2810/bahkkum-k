@@ -29,12 +29,28 @@ export interface NoteItem {
   text: string;
 }
 
+export interface ProgressBook {
+  unit: string; // 교재명
+  area: string; // 범위·단계
+  startDate: string; // 시작일
+  endDate?: string; // 완료일(완료한 경우)
+}
+
 export interface ProgressInfo {
   pct: number; // 달성률 0..100
   unit: string; // 현재 학습 단원
   area: string; // 학습 영역
   startDate: string; // 학습 시작일
   weeks: string; // 학습 기간 (예: 약 6주차)
+  booksInProgress?: ProgressBook[]; // 이 달에 진행중인 교재
+  booksCompleted?: ProgressBook[]; // 이 달에 완료한 교재
+}
+
+export interface SupItem {
+  id: string;
+  date: string; // YYYY-MM-DD
+  minutes: number;
+  reason: string;
 }
 
 export interface ReportExtras {
@@ -43,6 +59,8 @@ export interface ReportExtras {
   evals: EvalItem[];
   homeworks: HwItem[];
   notes: NoteItem[];
+  /** 이번 달 보충수업(남은 분·사유) — 오늘 화면에서 입력된 것 자동 반영. */
+  supplements?: SupItem[];
 }
 
 /** day-of-month → attendance bucket for the calendar */

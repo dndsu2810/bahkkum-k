@@ -128,9 +128,14 @@ export function ReportCard({ data }: { data: ReportData }) {
     : 0;
 
   const showComment = !!extras.comment.trim();
-  const showProgress = !!extras.progress.unit.trim();
+  const booksIp = extras.progress.booksInProgress || [];
+  const booksCp = extras.progress.booksCompleted || [];
+  const showProgress = booksIp.length > 0 || booksCp.length > 0 || !!extras.progress.unit.trim();
   const showEvals = extras.evals.length > 0;
   const showHw = extras.homeworks.length > 0;
+  const sups = extras.supplements || [];
+  const showSup = sups.length > 0;
+  const supTotal = sups.reduce((a, s) => a + (s.minutes || 0), 0);
 
   // 섹션 본문 (제목/번호는 순서대로 렌더링하며 부여)
   const bodies: Record<SectionKey, { show: boolean; aside?: ReactNode; body: ReactNode }> = {
@@ -184,7 +189,30 @@ export function ReportCard({ data }: { data: ReportData }) {
     },
     progress: {
       show: showProgress,
-      body: (
+      body: (booksIp.length || booksCp.length) ? (
+        <div className="r-books">
+          <div className="r-books-col">
+            <div className="r-tag">이번 달 진행중인 교재</div>
+            {booksIp.length ? (
+              <ul className="r-book-list">
+                {booksIp.map((b, i) => (
+                  <li key={"ip" + i}><b>{b.unit || "교재"}</b>{b.area && <span className="r-book-range">{b.area}</span>}<span className="r-book-date">{fmtYmd(b.startDate)} 시작</span></li>
+                ))}
+              </ul>
+            ) : <div className="r-book-empty">없음</div>}
+          </div>
+          <div className="r-books-col">
+            <div className="r-tag">이번 달 완료한 교재</div>
+            {booksCp.length ? (
+              <ul className="r-book-list">
+                {booksCp.map((b, i) => (
+                  <li key={"cp" + i} className="done"><b>{b.unit || "교재"}</b>{b.area && <span className="r-book-range">{b.area}</span>}<span className="r-book-date">{fmtYmd(b.endDate || "")} 완료</span></li>
+                ))}
+              </ul>
+            ) : <div className="r-book-empty">없음</div>}
+          </div>
+        </div>
+      ) : (
         <div className="r-progress">
           <Ring pct={extras.progress.pct} />
           <div className="r-prog-info">
@@ -270,6 +298,24 @@ export function ReportCard({ data }: { data: ReportData }) {
                     <span className="r-ctxt">{h.memo}</span>
                   </div>
                 )}
+              </div>
+            );
+          })}
+        </div>
+      ),
+    },
+    supplements: {
+      show: showSup,
+      aside: <span className="r-sec-aside">총 {supTotal}분 · {sups.length}건</span>,
+      body: (
+        <div className="r-sup">
+          {sups.map((sp) => {
+            const md = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sp.date);
+            return (
+              <div className="r-sup-item" key={sp.id}>
+                <span className="r-sup-date">{md ? `${md[2]}/${md[3]}` : sp.date}</span>
+                <span className="r-sup-min">{sp.minutes}분</span>
+                <span className="r-sup-reason">{sp.reason || "—"}</span>
               </div>
             );
           })}

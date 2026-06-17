@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth";
+import { checkinApi, type CheckinRow } from "../lib/checkinApi";
 import {
   type EnglishBand,
   type RosterStudent,
@@ -301,7 +302,7 @@ function ProfileModal({
     try {
       const url = await uploadImage(file);
       setF((cur) => ({ ...cur, photo: url }));
-      await saveStudentMeta({ studentId: f.id, onlineId: f.onlineId, subjects: f.subjects, englishBand: f.englishBand, attendDays: f.attendDays, memo: f.memo, photo: url });
+      await saveStudentMeta({ studentId: f.id, onlineId: f.onlineId, subjects: f.subjects, englishBand: f.englishBand, attendDays: f.attendDays, memo: f.memo, photo: url, checkinNo: f.checkinNo, mathStart: f.mathStart, engStart: f.engStart });
     } catch { setErr("사진 업로드에 실패했어요."); } finally { setPhotoBusy(false); }
   }
   // 등원요일 = 수동 지정값이 있으면 그것, 없으면 수업시간(요일)에서 자동 반영.
@@ -340,6 +341,9 @@ function ProfileModal({
         attendDays: effectiveDays,
         memo: f.memo,
         photo: f.photo,
+        checkinNo: f.checkinNo,
+        mathStart: f.mathStart,
+        engStart: f.engStart,
       });
       await saveStudentCore({
         studentId: f.id,
@@ -416,7 +420,7 @@ function ProfileModal({
                 </select>
               )}
             </Field>
-            <Field label="생년월일"><Txt ro={ro} value={f.birthdate} onChange={(v) => set("birthdate", v)} placeholder="YYYY-MM-DD" /></Field>
+            <Field label="생년월일"><DateTxt ro={ro} value={f.birthdate} onChange={(v) => set("birthdate", v)} /></Field>
             <Field label="학교"><Txt ro={ro} value={f.school} onChange={(v) => set("school", v)} placeholder="학교명" /></Field>
           </Section>
 
@@ -450,7 +454,14 @@ function ProfileModal({
               </div>
             </Field>
             <Field label="온라인ID"><Txt ro={ro} value={f.onlineId} onChange={(v) => set("onlineId", v)} placeholder="—" /></Field>
-            <Field label="등록일"><Txt ro={ro} value={f.startDate} onChange={(v) => set("startDate", v)} placeholder="YYYY-MM-DD" /></Field>
+            <Field label="출석번호"><Txt ro={ro} value={f.checkinNo} onChange={(v) => set("checkinNo", v)} placeholder="등하원 키오스크용 번호" /></Field>
+            {f.subjects.includes("math") && (
+              <Field label="수학 첫 등원일"><DateTxt ro={ro} value={f.mathStart} onChange={(v) => set("mathStart", v)} /></Field>
+            )}
+            {hasEng && (
+              <Field label="영어 첫 등원일"><DateTxt ro={ro} value={f.engStart} onChange={(v) => set("engStart", v)} /></Field>
+            )}
+            <Field label="등록일"><DateTxt ro={ro} value={f.startDate} onChange={(v) => set("startDate", v)} /></Field>
             {f.subjects.includes("math") && (
               <div className="prof-slot-block">
                 <span className="prof-field-l">수학 수업시간 <span className="prof-slot-tag math">시간표 반영</span></span>
@@ -477,6 +488,12 @@ function ProfileModal({
           <section className="prof-sec">
             <h4 className="prof-sec-t">강사 특이사항 (누적)</h4>
             <StudentNotes studentId={f.id} canEdit={canEdit} />
+          </section>
+
+          {/* 등하원 이력(조회용) — 수정·발송 없음. 상담 시 보여주는 용도. */}
+          <section className="prof-sec">
+            <h4 className="prof-sec-t">등하원 이력 (조회용)</h4>
+            <CheckinHistory studentId={f.id} />
           </section>
         </div>
 
@@ -573,6 +590,11 @@ function Txt({ ro, value, onChange, placeholder }: { ro: boolean; value: string;
   if (ro) return <span className="prof-val">{value || "—"}</span>;
   return <input className="inline-input" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />;
 }
+/** 날짜 입력 — 달력(date picker)으로 골라 넣는다(타이핑보다 편함). */
+function DateTxt({ ro, value, onChange }: { ro: boolean; value: string; onChange: (v: string) => void }) {
+  if (ro) return <span className="prof-val">{value || "—"}</span>;
+  return <input className="inline-input" type="date" value={value} onChange={(e) => onChange(e.target.value)} />;
+}
 
 /** 학년 = 구분(초/중/고) + 세부학년(N) 선택 → "초6" 형태로 저장. */
 function GradeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -619,6 +641,45 @@ function SlotEditor({ ro, slots, onChange }: { ro: boolean; slots: Slot[]; onCha
         </div>
       ))}
       <button type="button" className="add-slot" onClick={add}>+ 수업시간 추가</button>
+    </div>
+  );
+}
+
+/** 학생 상세 — 등하원 이력(조회용, 읽기 전용). 날짜별로 등/하원을 시간순 표시. */
+function CheckinHistory({ studentId }: { studentId: string }) {
+  const [rows, setRows] = useState<CheckinRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    checkinApi.student(studentId)
+      .then((r) => { if (alive) { setRows(r.history); setLoading(false); } })
+      .catch(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [studentId]);
+
+  if (loading) return <div className="prof-memo-ro">불러오는 중…</div>;
+  if (rows.length === 0) return <p className="prof-memo-ro">등하원 기록이 없어요.</p>;
+
+  const byDate = new Map<string, CheckinRow[]>();
+  for (const r of rows) { const a = byDate.get(r.date) || []; a.push(r); byDate.set(r.date, a); }
+
+  return (
+    <div className="cih">
+      {[...byDate.entries()].map(([date, list]) => (
+        <div className="cih-day" key={date}>
+          <div className="cih-date">{date}</div>
+          <div className="cih-items">
+            {list.map((r) => (
+              <div className="cih-item" key={r.id}>
+                <span className={"ci-st " + (r.kind === "등원" ? "in" : "out")}>{r.subject ? r.subject + " " : ""}{r.kind}</span>
+                <span className="cih-time">{r.time}</span>
+                {r.sent && <span className="cih-sent">알림 발송됨</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
