@@ -91,9 +91,10 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
   const m = request.method;
   await ensureFeedbackTables(env);
   const isAdmin = me.role === "admin";
-  // 오류·개선 요청은 '지현T(개발자)'가 받아 처리하는 창구 → 원장+개발자가 전체 조회·관리.
+  // 오류·개선 요청은 '지현T'가 받아 처리하는 창구('To. 지현T') → 원장·개발자·지현T가 전체 조회·관리.
+  // 지현T는 수학강사 계정(이지현)으로 로그인하므로 role이 admin/developer가 아님 → 이름으로도 인정.
   // (공지 배너는 원장만: isAdmin 유지)
-  const isIssueMgr = isAdmin || me.role === "developer" || me.displayRole === "developer";
+  const isIssueMgr = isAdmin || me.role === "developer" || me.displayRole === "developer" || me.name === "이지현";
 
   /* ============ 공지 배너 ============ */
   if (p === "/api/notice" && m === "GET") {
