@@ -45,6 +45,11 @@ export interface StudentLogRow {
   startTime: string;
   endTime: string;
   comment: string;
+  // 중고등 숙제(강사가 '오늘'에서 체크 — 학생 페이지는 조회).
+  hwWord: string;
+  hwReading: string;
+  hwGrammar: string;
+  wrongCheck: boolean;
   updatedAt: number;
 }
 export interface StudentPageData {

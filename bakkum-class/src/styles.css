@@ -2138,7 +2138,16 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .sp-tag{font-size:var(--t-cap);padding:2px 8px;border-radius:var(--r-sm);background:var(--card);
   border:1px solid var(--line2);color:var(--ink2)}
 .sp-tag-done{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-d)}
+.sp-tag-warn{background:#fdf6e3;border-color:#f3e6bf;color:#ca8a04}
+.sp-tag-bad{background:var(--bad-soft,#fdeaea);border-color:#f6cccc;color:var(--bad)}
 .sp-hist-note{margin-top:6px;font-size:var(--t-sm);color:var(--ink2);white-space:pre-wrap}
+/* 중고등 숙제 조회(학생 페이지) */
+.sp-hw{display:flex;flex-wrap:wrap;gap:6px}
+.sp-hw-chip{font-size:var(--t-cap);font-weight:700;padding:3px 9px;border-radius:var(--r-full);background:var(--card2);color:var(--ink2);border:1px solid var(--line2)}
+.sp-hw-chip.ok{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-d)}
+.sp-hw-chip.warn{background:#fdf6e3;border-color:#f3e6bf;color:#ca8a04}
+.sp-hw-chip.bad{background:var(--bad-soft,#fdeaea);border-color:#f6cccc;color:var(--bad)}
+[data-theme="dark"] .sp-tag-warn,[data-theme="dark"] .sp-hw-chip.warn{background:rgba(202,138,4,.18);border-color:rgba(202,138,4,.38);color:#e6c266}
 
 /* 강사용 개별 페이지 오버레이(프로필 모달 위) */
 .prof-pagebtn{margin-top:8px}

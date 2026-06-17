@@ -83,13 +83,13 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
       {/* 일지 입력 */}
       <section className="sp-card">
         <h3 className="sp-card-h">{canEditCur ? "수업 일지 입력" : "오늘 수업 일지"}</h3>
-        <LogEditor studentId={canEditCur ? s.id : undefined} existing={data.daily} slots={data.engSlots} options={data.doneItemOptions} onSaved={reloadSilent} />
+        <LogEditor studentId={canEditCur ? s.id : undefined} existing={data.daily} slots={data.engSlots} options={data.doneItemOptions} band={s.band} onSaved={reloadSilent} />
       </section>
 
       {/* 일지 이력 */}
       <section className="sp-card">
         <h3 className="sp-card-h">지난 일지</h3>
-        <LogHistory rows={data.daily} />
+        <LogHistory rows={data.daily} band={s.band} />
       </section>
     </div>
   );
@@ -224,8 +224,31 @@ function addMin(hm: string, min: number): string {
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
 
-function LogEditor({ studentId, existing, slots, options, onSaved }: { studentId?: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; options?: string[]; onSaved: () => void }) {
+/* 중고등 숙제(단어/리딩/문법) 상태 — 강사가 '오늘'에서 확인한 결과를 조회용으로 표시. */
+const hwCls = (v: string) => (v === "완료" ? "ok" : v === "미흡" ? "warn" : v === "안함" ? "bad" : "");
+const hwTagCls = (v: string) => (v === "완료" ? "sp-tag-done" : v === "미흡" ? "sp-tag-warn" : v === "안함" ? "sp-tag-bad" : "");
+function HwView({ row }: { row?: StudentLogRow }) {
+  const cats: [string, string][] = [["단어", row?.hwWord || ""], ["리딩", row?.hwReading || ""], ["문법", row?.hwGrammar || ""]];
+  const shown = cats.filter(([, v]) => v && v !== "없음");
+  const any = shown.length > 0 || !!row?.wrongCheck;
+  return (
+    <div className="sp-f">
+      <span>숙제 (선생님 확인)</span>
+      {any ? (
+        <div className="sp-hw">
+          {shown.map(([k, v]) => <span key={k} className={"sp-hw-chip " + hwCls(v)}>{k} · {v}</span>)}
+          {row?.wrongCheck && <span className="sp-hw-chip ok">틀단 확인</span>}
+        </div>
+      ) : (
+        <div className="sp-muted">아직 선생님이 숙제를 등록하지 않았어요.</div>
+      )}
+    </div>
+  );
+}
+
+function LogEditor({ studentId, existing, slots, options, band, onSaved }: { studentId?: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; options?: string[]; band: string; onSaved: () => void }) {
   const items = options && options.length ? options : STUDENT_LOG_ITEMS;
+  const isMid = band === "mid" || band === "bridge"; // 중고등(Bridge 포함) — 숙제 3분류·교재 진도
   const [date, setDate] = useState(todayStr());
   const [bookNo, setBookNo] = useState("");
   const [wordTest, setWordTest] = useState("");
@@ -321,30 +344,35 @@ function LogEditor({ studentId, existing, slots, options, onSaved }: { studentId
       </div>
 
       <div className="sp-f">
-        <span>원서 진도번호</span>
-        <input className="input" value={bookNo} onChange={(e) => setBookNo(e.target.value)} placeholder="예: 145" />
+        <span>{isMid ? "교재 · 진도" : "원서 진도번호"}</span>
+        <input className="input" value={bookNo} onChange={(e) => setBookNo(e.target.value)} placeholder={isMid ? "예: 그래머인유즈 3과 p.40~45" : "예: 145"} />
       </div>
 
-      {/* 오늘 한 것 — 체크박스, 체크하면 줄이 그어져 '완료' 표시 */}
-      <div className="sp-f">
-        <span>오늘 한 것 (한 것에 체크!)</span>
-        <div className="sp-checks">
-          {items.map((it) => {
-            const on = doneItems.includes(it);
-            return (
-              <label key={it} className={"sp-check" + (on ? " on" : "")}>
-                <input
-                  type="checkbox"
-                  checked={on}
-                  onChange={() => setDoneItems(on ? doneItems.filter((x) => x !== it) : [...doneItems, it])}
-                />
-                <span className="sp-check-box" aria-hidden="true" />
-                <span className="sp-check-label">{it}</span>
-              </label>
-            );
-          })}
+      {isMid ? (
+        /* 숙제 — 강사가 '오늘'에서 확인한 결과(조회용). */
+        <HwView row={existing.find((r) => r.date === date)} />
+      ) : (
+        /* 오늘 한 것 — 체크박스, 체크하면 줄이 그어져 '완료' 표시 */
+        <div className="sp-f">
+          <span>오늘 한 것 (한 것에 체크!)</span>
+          <div className="sp-checks">
+            {items.map((it) => {
+              const on = doneItems.includes(it);
+              return (
+                <label key={it} className={"sp-check" + (on ? " on" : "")}>
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => setDoneItems(on ? doneItems.filter((x) => x !== it) : [...doneItems, it])}
+                  />
+                  <span className="sp-check-box" aria-hidden="true" />
+                  <span className="sp-check-label">{it}</span>
+                </label>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="sp-f">
         <span>단어시험</span>
@@ -370,7 +398,8 @@ function fmtMonth(ym: string): string {
   const [y, m] = ym.split("-");
   return `${y}년 ${Number(m)}월`;
 }
-function LogHistory({ rows }: { rows: StudentLogRow[] }) {
+function LogHistory({ rows, band }: { rows: StudentLogRow[]; band: string }) {
+  const isMid = band === "mid" || band === "bridge";
   // 데이터에 있는 월 목록(최신순).
   const months = Array.from(new Set(rows.map((r) => r.date.slice(0, 7)))).sort().reverse();
   const [month, setMonth] = useState<string>(months[0] || "");
@@ -403,11 +432,20 @@ function LogHistory({ rows }: { rows: StudentLogRow[] }) {
               {r.attStatus && <span className={"sp-att sp-att-" + (r.attStatus === "결석" ? "x" : r.attStatus === "지각" ? "l" : "o")}>{r.attStatus}</span>}
             </div>
             <div className="sp-hist-body">
-              {r.bookNo && <span className="sp-tag">원서 {r.bookNo}</span>}
+              {r.bookNo && <span className="sp-tag">{isMid ? "교재" : "원서"} {r.bookNo}</span>}
               {r.wordTest && <span className="sp-tag">단어 {r.wordTest}</span>}
-              {r.doneItems.map((it) => (
-                <span className="sp-tag sp-tag-done" key={it}>✓ {it}</span>
-              ))}
+              {isMid ? (
+                <>
+                  {r.hwWord && r.hwWord !== "없음" && <span className={"sp-tag " + hwTagCls(r.hwWord)}>단어숙제 {r.hwWord}</span>}
+                  {r.hwReading && r.hwReading !== "없음" && <span className={"sp-tag " + hwTagCls(r.hwReading)}>리딩 {r.hwReading}</span>}
+                  {r.hwGrammar && r.hwGrammar !== "없음" && <span className={"sp-tag " + hwTagCls(r.hwGrammar)}>문법 {r.hwGrammar}</span>}
+                  {r.wrongCheck && <span className="sp-tag sp-tag-done">✓ 틀단확인</span>}
+                </>
+              ) : (
+                r.doneItems.map((it) => (
+                  <span className="sp-tag sp-tag-done" key={it}>✓ {it}</span>
+                ))
+              )}
             </div>
             {r.comment && <div className="sp-hist-note">{r.comment}</div>}
           </div>
