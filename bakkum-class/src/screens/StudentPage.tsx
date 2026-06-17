@@ -77,6 +77,8 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
           ) : (
             <CurriculumView cur={data.curriculum} />
           )}
+          {/* 학생이 스스로 반복할 학습을 추가(강사 커리큘럼과 별개). */}
+          <SelfLearning items={data.selfCurriculum} studentId={canEditCur ? s.id : undefined} onSaved={reloadSilent} />
         </section>
       </div>
 
@@ -141,6 +143,49 @@ function CurriculumView({ cur }: { cur: Curriculum }) {
           </ol>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ---------------- 내가 추가한 학습(학생 본인이 자율 추가) ---------------- */
+function SelfLearning({ items, studentId, onSaved }: { items: CurriculumRow[]; studentId?: string; onSaved: () => void }) {
+  const [rows, setRows] = useState<CurriculumRow[]>(items);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  useEffect(() => setRows(items), [items]);
+  const dirty = JSON.stringify(rows) !== JSON.stringify(items);
+  const add = () => setRows([...rows, { name: "", amount: "" }]);
+  const setRow = (i: number, patch: Partial<CurriculumRow>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const del = (i: number) => setRows(rows.filter((_, j) => j !== i));
+  async function save() {
+    setSaving(true);
+    setMsg("");
+    try {
+      await studentApi.saveSelfCurriculum(rows.filter((r) => r.name.trim() || r.amount.trim()), studentId);
+      setMsg("저장됐어요 ✓");
+      onSaved();
+    } catch {
+      setMsg("저장에 실패했어요. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <div className="sp-self">
+      <div className="sp-self-h">내가 추가한 학습 <span className="sp-self-sub">스스로 반복할 학습을 추가해요</span></div>
+      {rows.length === 0 && <div className="sp-muted">아직 추가한 학습이 없어요. 아래 ‘추가’로 넣어보세요.</div>}
+      {rows.map((r, i) => (
+        <div className="sp-self-row" key={i}>
+          <input className="input" value={r.name} placeholder="학습 (예: 단어 복습)" onChange={(e) => setRow(i, { name: e.target.value })} />
+          <input className="input sp-self-amt" value={r.amount} placeholder="분량(선택)" onChange={(e) => setRow(i, { amount: e.target.value })} />
+          <button type="button" className="sp-self-del" onClick={() => del(i)} aria-label="삭제"><Icon name="x" /></button>
+        </div>
+      ))}
+      <div className="sp-self-act">
+        <button type="button" className="btn ghost sm" onClick={add}><Icon name="plus" /> 추가</button>
+        <button type="button" className="btn primary sm" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : "저장"}</button>
+        {msg && <span className="sp-saved">{msg}</span>}
+      </div>
     </div>
   );
 }

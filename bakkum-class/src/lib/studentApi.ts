@@ -58,6 +58,7 @@ export interface StudentPageData {
   student: { id: string; name: string; grade: string; school: string; band: string; photo: string };
   engSlots: StudentSlot[];
   curriculum: Curriculum;
+  selfCurriculum: CurriculumRow[]; // 학생이 직접 추가한 '내가 추가한 학습'
   daily: StudentLogRow[];
   doneItemOptions?: string[]; // 그 학생의 '오늘 한 것' 선택지(기본+전체공통+학생별)
 }
@@ -73,6 +74,8 @@ export const studentApi = {
     jpost("/api/student/log", d),
   /** 커리큘럼 저장(초등영어 권한자·원장). */
   saveCurriculum: (studentId: string, cur: Curriculum) => jpost("/api/student/curriculum", { studentId, note: cur.note, sections: cur.sections }),
+  /** '내가 추가한 학습' 저장(학생 본인은 studentId 생략, 강사는 지정). */
+  saveSelfCurriculum: (items: CurriculumRow[], studentId?: string) => jpost("/api/student/curriculum-self", { studentId, items }),
   /** 기본 커리큘럼 양식. */
   curriculumDefaults: () => jget<{ defaults: Curriculum }>("/api/student/curriculum/defaults").then((j) => j.defaults),
 };

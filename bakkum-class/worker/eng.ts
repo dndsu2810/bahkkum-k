@@ -79,6 +79,8 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "CREATE TABLE IF NOT EXISTS class_eng_makeup (id TEXT PRIMARY KEY, student_id TEXT NOT NULL, absent_date TEXT NOT NULL DEFAULT '', makeup_date TEXT NOT NULL DEFAULT '', makeup_time TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '예정', memo TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)",
     // 학생 개별 페이지 커리큘럼 — 학생-1건. 항목 배열 [{label,value}](단어시험·class5·Link교재·원서·기초영문법·필기체 등). 강사 편집.
     "CREATE TABLE IF NOT EXISTS class_eng_curriculum (student_id TEXT PRIMARY KEY, items TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL DEFAULT 0)",
+    // 학생이 직접 추가하는 '내가 추가한 학습'(강사 커리큘럼과 분리 — 강사 것을 덮지 않음).
+    "CREATE TABLE IF NOT EXISTS class_eng_curriculum_self (student_id TEXT PRIMARY KEY, items TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL DEFAULT 0)",
     // '오늘 한 것' 학생별 추가 항목(전체공통은 class_config). 학생-1건, items JSON 배열.
     "CREATE TABLE IF NOT EXISTS class_eng_done_items (student_id TEXT PRIMARY KEY, items TEXT NOT NULL DEFAULT '[]')",
     // 내신기간 모드 — 학생별 ON/OFF + 기간(시작·종료) + 학교·시험일(D-day). 기간 안에서만 '오늘' 숙제가 자유입력+배부자료 기준으로 바뀐다.
@@ -592,6 +594,8 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
 
     const curRow = await env.DB.prepare("SELECT items FROM class_eng_curriculum WHERE student_id=?").bind(sid).first<{ items: string }>();
     const curriculum = parseCurriculum(curRow?.items);
+    const selfRow = await env.DB.prepare("SELECT items FROM class_eng_curriculum_self WHERE student_id=?").bind(sid).first<{ items: string }>();
+    const selfCurriculum = cleanRows((() => { try { return JSON.parse(String(selfRow?.items ?? "[]")); } catch { return []; } })());
 
     const dRes = await env.DB.prepare("SELECT * FROM class_eng_daily WHERE student_id=? ORDER BY date DESC LIMIT 120").bind(sid).all<Record<string, unknown>>();
     const daily = (dRes.results || []).map(dailyRow);
@@ -602,6 +606,7 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
       student: { id: String(sRow.id), name: String(sRow.name ?? ""), grade: String(sRow.grade ?? ""), school: String(sRow.school ?? ""), band, photo },
       engSlots,
       curriculum,
+      selfCurriculum,
       daily,
       doneItemOptions: await doneItemsFor(env, sid),
     });
@@ -639,6 +644,19 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
     await env.DB
       .prepare("INSERT INTO class_eng_curriculum(student_id,items,updated_at) VALUES(?,?,?) ON CONFLICT(student_id) DO UPDATE SET items=excluded.items, updated_at=excluded.updated_at")
       .bind(sid, JSON.stringify(payload), Date.now())
+      .run();
+    return json({ ok: true });
+  }
+
+  /* ---- '내가 추가한 학습' 저장(학생 본인·강사) — 강사 커리큘럼과 분리 ---- */
+  if (p === "/api/student/curriculum-self" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const sid = targetId(b.studentId as string);
+    if (!sid) return json({ error: "student_required" }, 400);
+    const items = cleanRows(b.items);
+    await env.DB
+      .prepare("INSERT INTO class_eng_curriculum_self(student_id,items,updated_at) VALUES(?,?,?) ON CONFLICT(student_id) DO UPDATE SET items=excluded.items, updated_at=excluded.updated_at")
+      .bind(sid, JSON.stringify(items), Date.now())
       .run();
     return json({ ok: true });
   }
