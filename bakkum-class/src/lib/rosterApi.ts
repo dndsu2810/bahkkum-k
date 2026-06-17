@@ -1,7 +1,14 @@
 // 공통 학생 마스터 API — 로스터 조회 + 허브 전용 필드(수강과목·영어반·온라인ID) 저장.
 
 export type Subject = "math" | "english";
-export type EnglishBand = "elem" | "mid" | "";
+// bridge = 초등 고학년이지만 중고등처럼 수업받는 학생. 중고등(mid)에서 함께 관리.
+export type EnglishBand = "elem" | "mid" | "bridge" | "";
+
+/** 학생 영어반(band)이 화면 band("elem"|"mid")에 속하는지. bridge는 중고등(mid)에 포함. */
+export function inEngBand(studentBand: EnglishBand, screenBand: "elem" | "mid"): boolean {
+  if (screenBand === "mid") return studentBand === "mid" || studentBand === "bridge";
+  return studentBand === "elem";
+}
 
 export interface Slot {
   day: string; // 월~일

@@ -52,7 +52,7 @@ export function Orders() {
       <div className="sm-head">
         <div>
           <h1 className="sm-title">주문 관리</h1>
-          <p className="sm-desc">교재·비품을 신청하면 구매 → 배송 → 배부(교재)/비치(비품)까지 단계별로 관리해요. 구매 전 건은 위에 주황색으로 표시됩니다.</p>
+          <p className="sm-desc">교재·비품을 신청하면 주문 → 배송 → 배부(교재)/비치(비품)까지 단계별로 관리해요. 주문 전 건은 위에 주황색으로 표시됩니다.</p>
         </div>
         <button className="btn primary" onClick={() => { setEditOrder(null); setShowForm((v) => !v); }}><Icon name="plus" /> 신청하기</button>
       </div>
@@ -71,7 +71,7 @@ export function Orders() {
             {t === "all" ? "전체" : t} <span className="sns-fcnt">{t === "all" ? orders.length : orders.filter((o) => o.kind === t).length}</span>
           </button>
         ))}
-        {preCount > 0 && <span className="ord-pre-badge">구매 전 {preCount}</span>}
+        {preCount > 0 && <span className="ord-pre-badge">주문 전 {preCount}</span>}
       </div>
 
       {err && <div className="auth-err" style={{ marginBottom: 8 }}>{err}</div>}
@@ -83,13 +83,13 @@ export function Orders() {
         <>
           {pre.length > 0 && (
             <section className="ord-sec">
-              <h2 className="ord-sec-t pre">구매 전 <span>{pre.length}</span></h2>
+              <h2 className="ord-sec-t pre">주문 전 <span>{pre.length}</span></h2>
               <div className="ord-list">{pre.map((o) => <OrderCard key={o.id} o={o} nameOf={nameOf} onPatch={patch} onRemove={remove} onEdit={() => { setEditOrder(o); setShowForm(false); window.scrollTo({ top: 0, behavior: "smooth" }); }} />)}</div>
             </section>
           )}
           {post.length > 0 && (
             <section className="ord-sec">
-              <h2 className="ord-sec-t post">구매 후 <span>{post.length}</span></h2>
+              <h2 className="ord-sec-t post">주문 후 <span>{post.length}</span></h2>
               <div className="ord-list">{post.map((o) => <OrderCard key={o.id} o={o} nameOf={nameOf} onPatch={patch} onRemove={remove} onEdit={() => { setEditOrder(o); setShowForm(false); window.scrollTo({ top: 0, behavior: "smooth" }); }} />)}</div>
             </section>
           )}
@@ -197,7 +197,7 @@ function OrderCard({ o, nameOf, onPatch, onRemove, onEdit }: { o: Order; nameOf:
 
       <div className="ord-steps">
         <label className={"ord-step" + (o.purchased ? " on" : "")}>
-          <input type="checkbox" checked={o.purchased} onChange={(e) => onPatch(o, { purchased: e.target.checked })} /> 구매완료
+          <input type="checkbox" checked={o.purchased} onChange={(e) => onPatch(o, { purchased: e.target.checked })} /> 주문 완료
         </label>
         <label className={"ord-step" + (o.shipped ? " on" : "")}>
           <input type="checkbox" checked={o.shipped} onChange={(e) => onPatch(o, { shipped: e.target.checked })} /> 배송완료

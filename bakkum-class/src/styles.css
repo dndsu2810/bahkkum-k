@@ -2414,6 +2414,7 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 
 /* ---------------- 내신모드 자유 숙제 + 배부 자료 연결 ---------------- */
 .eng-stu-naesin{margin-left:6px;padding:1px 6px;border-radius:var(--r-full);font-size:10px;font-weight:800;background:var(--purple-bg);color:var(--purple)}
+.eng-stu-bridge{margin-left:6px;padding:1px 6px;border-radius:var(--r-full);font-size:10px;font-weight:800;background:var(--blue-soft,#e6f0ff);color:var(--blue,#2563eb)}
 .eng-mk-tag.soft{background:var(--card2,#eef2f7);color:var(--ink3);font-weight:700}
 .eng-hwfree{display:flex;flex-direction:column;gap:6px}
 .eng-hwfree-row{display:flex;align-items:center;gap:10px}

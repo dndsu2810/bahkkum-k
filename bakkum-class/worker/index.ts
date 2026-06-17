@@ -688,7 +688,7 @@ async function rosterMetaUpsert(env: Env, request: Request): Promise<Response> {
   if (!sid) return json({ error: "studentId_required" }, 400);
   await ensureStudentMeta(env);
   const subjects = Array.isArray(b.subjects) ? b.subjects.map(String).filter((s) => s === "math" || s === "english") : [];
-  const band = b.englishBand === "elem" || b.englishBand === "mid" ? b.englishBand : "";
+  const band = b.englishBand === "elem" || b.englishBand === "mid" || b.englishBand === "bridge" ? b.englishBand : "";
   const onlineId = typeof b.onlineId === "string" ? b.onlineId.slice(0, 120) : "";
   const attendDays = Array.isArray(b.attendDays) ? b.attendDays.map(String).filter((d) => DOW.includes(d)) : [];
   const memo = typeof b.memo === "string" ? b.memo.slice(0, 4000) : "";

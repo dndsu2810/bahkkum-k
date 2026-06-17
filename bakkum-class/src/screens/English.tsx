@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth";
-import { getRoster, type RosterStudent } from "../lib/rosterApi";
+import { getRoster, inEngBand, type RosterStudent } from "../lib/rosterApi";
 import { engApi, hwProgress, naesinActiveOn, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, ELEM_LOG_ITEMS, type AttStatus, type EngDaily, type EngMakeup, type EngNaesin, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
 import { materialsApi, eventsApi, type MaterialAssign, type EventItem } from "../lib/hubApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
@@ -107,7 +107,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   useEffect(() => { if (band === "mid") void loadNaesin(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [band]);
 
   const students = useMemo(
-    () => roster.filter((s) => s.subjects.includes("english") && s.englishBand === band),
+    () => roster.filter((s) => s.subjects.includes("english") && inEngBand(s.englishBand, band)),
     [roster, band]
   );
 
@@ -311,6 +311,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                 <div key={s.id} className={"eng-stu" + (tab === "today" ? " today-side-row" : "") + (sel === s.id ? " on" : "")}>
                   <button className="eng-stu-name" onClick={() => setSel(s.id)}>
                     <span className="today-side-nm">{s.name}</span>
+                    {band === "mid" && s.englishBand === "bridge" && <span className="eng-stu-bridge" title="Bridge — 초등 고학년·중고등 수업">Bridge</span>}
                     {tab === "today" && scheduledIds.has(s.id) && slotTimeOf(s) && <span className="eng-stu-time">{slotTimeOf(s)}</span>}
                     {tab === "today" && (() => { const ch = arrivalOf(approvedChanges, s.id, "english", date); return ch ? <span className="eng-stu-chg" title="승인된 시간 변경">{arrivedIds.has(s.id) ? "이동 " : ""}{ch.toTime}</span> : null; })()}
                     {tab === "today" && st && <span className={"today-side-st " + (st === "출석" ? "g" : st === "지각" || st === "조퇴" ? "w" : "b")}>{st}{st === "지각" && d?.lateMin ? ` ${d.lateMin}분` : ""}</span>}

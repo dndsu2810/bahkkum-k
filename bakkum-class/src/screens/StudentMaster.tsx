@@ -6,6 +6,7 @@ import {
   type RosterStudent,
   type Slot,
   type Subject,
+  inEngBand,
   getRoster,
   saveStudentCore,
   saveStudentMeta,
@@ -32,7 +33,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "mid", label: "중고등영어" },
 ];
 
-const BAND_LABEL: Record<Exclude<EnglishBand, "">, string> = { elem: "초등", mid: "중고등" };
+const BAND_LABEL: Record<Exclude<EnglishBand, "">, string> = { elem: "초등", mid: "중고등", bridge: "Bridge" };
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
 const STATUSES = ["재원", "휴원", "퇴원", "상담"];
 type StatusKey = "all" | "재원" | "휴원" | "퇴원";
@@ -133,7 +134,7 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
     const kw = q.trim();
     return rows.filter((r) => {
       if (bandLock) {
-        if (!(r.subjects.includes("english") && r.englishBand === bandLock)) return false;
+        if (!(r.subjects.includes("english") && inEngBand(r.englishBand, bandLock))) return false;
       }
       if (kw && !r.name.includes(kw) && !(r.school || "").includes(kw) && !(r.onlineId || "").includes(kw)) return false;
       if (bandLock) return true;
@@ -144,7 +145,7 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
       if (filter === "math" && !r.subjects.includes("math")) return false;
       if (filter === "english" && !r.subjects.includes("english")) return false;
       if (filter === "elem" && !(r.subjects.includes("english") && r.englishBand === "elem")) return false;
-      if (filter === "mid" && !(r.subjects.includes("english") && r.englishBand === "mid")) return false;
+      if (filter === "mid" && !(r.subjects.includes("english") && inEngBand(r.englishBand, "mid"))) return false;
       return true;
     });
   }, [rows, q, filter, statusF, bandLock, schoolF, gradeF]);
@@ -442,6 +443,7 @@ function ProfileModal({
                   <select className="inline-select" value={f.englishBand || ""} onChange={(e) => set("englishBand", e.target.value as EnglishBand)}>
                     <option value="elem">초등</option>
                     <option value="mid">중고등</option>
+                    <option value="bridge">Bridge (초등·중고등 수업)</option>
                   </select>
                 )}
               </Field>
