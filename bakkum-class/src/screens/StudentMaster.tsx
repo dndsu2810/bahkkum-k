@@ -21,6 +21,7 @@ import { uploadImage } from "../lib/configApi";
 import { notesApi, type NoteItem } from "../lib/hubApi";
 import { StudentPage } from "./StudentPage";
 import { SkeletonList } from "../components/Skeleton";
+import { HexAvatar } from "../soez";
 import { Icon } from "../icons";
 
 type FilterKey = "all" | "math" | "english" | "elem" | "mid";
@@ -44,7 +45,6 @@ const STATUS_FILTERS: { key: StatusKey; label: string }[] = [
   { key: "퇴원", label: "퇴원" },
 ];
 
-const initials = (name: string) => (name || "?").trim().slice(0, 2);
 // 등원요일: 지정값이 있으면 그것, 없으면 수업시간(요일)에서 자동 반영.
 const effAttendDays = (r: RosterStudent) =>
   r.attendDays.length ? r.attendDays : DOW.filter((dd) => r.mathSlots.some((s) => s.day === dd) || r.engSlots.some((s) => s.day === dd));
@@ -247,7 +247,7 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
                 <tr key={r.id} onClick={() => setOpenId(r.id)} tabIndex={0}
                   onKeyDown={(e) => { if (e.key === "Enter") setOpenId(r.id); }}>
                   <td className="sm-name">
-                    {r.photo ? <img className="sm-row-av sm-row-av-img" src={r.photo} alt={r.name} /> : <span className="sm-row-av">{initials(r.name)}</span>}
+                    <HexAvatar name={r.name} photo={r.photo} size={34} className="sm-row-av-hex" />
                     {r.name}
                   </td>
                   <td>{r.grade || "—"}</td>
@@ -377,7 +377,7 @@ function ProfileModal({
       <div className="prof" onClick={(e) => e.stopPropagation()}>
         <div className="prof-top">
           <div className="prof-av-wrap">
-            {f.photo ? <img className="av av-lg prof-av prof-av-img" src={f.photo} alt={f.name} /> : <div className="av av-lg prof-av">{initials(f.name)}</div>}
+            <HexAvatar name={f.name} photo={f.photo} size={68} className="prof-av-hex" />
             {!ro && (
               <label className="prof-av-edit" title="사진 변경">
                 {photoBusy ? "…" : <Icon name="camera" />}

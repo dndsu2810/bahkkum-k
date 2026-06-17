@@ -1555,13 +1555,29 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .rank-list{display:flex;flex-direction:column;gap:6px;max-width:560px}
 .rank-row{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);padding:11px 14px}
 .rank-row.top{border-color:var(--brand-line);background:var(--brand-soft)}
-.rank-no{width:30px;text-align:center;font-size:var(--t-md);font-weight:800;color:var(--ink2)}
+.rank-row.queen{border-color:var(--honey-300);background:var(--honey-100);box-shadow:var(--shadow-card)}
+.rank-no{width:22px;text-align:center;font-size:var(--t-md);font-weight:800;color:var(--ink3)}
+.rank-av{position:relative;flex:none;display:flex;line-height:0}
+.rank-crown{position:absolute;top:-13px;left:50%;transform:translateX(-50%) rotate(-6deg)}
 .rank-name{flex:1;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px}
 .rank-grade{font-size:var(--t-cap);font-weight:600;color:var(--ink3);background:var(--card2);border-radius:var(--r-full);padding:1px 8px}
 .rank-days{font-size:var(--t-cap);color:var(--ink3)}
-.rank-pts{font-size:var(--t-lg);font-weight:800;color:var(--brand-d);min-width:72px;text-align:right}
-.rank-pts span{font-size:var(--t-cap);font-weight:600;color:var(--ink3);margin-left:2px}
+.rank-pts{font-size:var(--t-lg);font-weight:800;color:var(--brand-d);min-width:78px;text-align:right;display:inline-flex;align-items:center;justify-content:flex-end;gap:3px}
+.rank-drop{flex:none}
+.rank-pts span{font-size:var(--t-cap);font-weight:600;color:var(--ink3);margin-left:1px}
 .rank-pts.minus{color:var(--bad)}
+.rank-pts.minus .rank-drop{display:none}
+/* 벌집 아바타 공통 */
+.hexav{display:inline-block;vertical-align:middle}
+.sm-row-av-hex{margin-right:8px}
+.logo-bee{background:none!important;border:none!important;box-shadow:none!important;display:grid;place-items:center}
+.brand:hover .logo-bee{box-shadow:none!important;transform:scale(1.04);transition:transform .15s}
+/* 빈 화면(빈 벌집 + 꿀벌) */
+.soez-empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:30px 16px;text-align:center}
+.soez-empty-art{position:relative;width:132px;height:70px}
+.soez-empty-bee{position:absolute;top:-16px;right:6px;transform:rotate(8deg);filter:drop-shadow(0 3px 5px rgba(138,90,43,.18))}
+.soez-empty-cap{font-size:var(--t-md);font-weight:700;color:var(--ink2);margin-top:6px}
+.soez-empty-sub{font-size:var(--t-sm);color:var(--ink3)}
 /* 프로필 사진 */
 .prof-av-wrap{position:relative;flex-shrink:0}
 .prof-av-img{object-fit:cover;padding:0}

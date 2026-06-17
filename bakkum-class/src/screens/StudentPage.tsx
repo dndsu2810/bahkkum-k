@@ -9,6 +9,7 @@ import { getCachedLogo } from "../lib/configApi";
 import { IssueBoard } from "./IssueBoard";
 import { Guide } from "./Guide";
 import { Icon } from "../icons";
+import { HexAvatar } from "../soez";
 
 /** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
  *  - 학생 본인: studentId 생략(본인). 일지 입력 가능, 커리큘럼 조회.
@@ -53,7 +54,7 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
     <div className={"sp" + (embedded ? " is-embed" : "")}>
       {/* 헤더 — 학생 프로필 */}
       <div className="sp-head">
-        {s.photo ? <img className="sp-avatar" src={s.photo} alt="" /> : <div className="sp-avatar sp-avatar-empty">{s.name.slice(0, 1)}</div>}
+        <HexAvatar name={s.name} photo={s.photo} size={56} className="sp-avatar-hex" />
         <div className="sp-head-info">
           <h2>{s.name}</h2>
           <div className="sp-sub">

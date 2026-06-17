@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { engApi, type EngRanking } from "../lib/engApi";
 import { SkeletonList } from "../components/Skeleton";
+import { HexAvatar, HoneyDrop, Crown, EmptyHive } from "../soez";
 
 /** 학생 포인트 랭킹 — 영어 수업기록 포인트(적립−차감) 누적 합 순위. 공통. */
 export function PointRanking() {
@@ -16,14 +17,13 @@ export function PointRanking() {
   }, []);
 
   const ranked = list.filter((r) => r.points !== 0 || r.days > 0);
-  const medal = (i: number) => (i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "");
 
   return (
     <div className="sm-wrap">
       <div className="sm-head">
         <div>
           <h1 className="sm-title">포인트 랭킹</h1>
-          <p className="sm-desc">출석·숙제·칭찬 등 적립과 지각·차감을 합산한 학생별 누적 포인트입니다.</p>
+          <p className="sm-desc">출석·숙제·칭찬으로 모은 꿀(포인트) 순위예요. 지각·차감은 빼서 합산해요.</p>
         </div>
         <div className="sm-count">{ranked.length}명</div>
       </div>
@@ -32,15 +32,22 @@ export function PointRanking() {
       {loading ? (
         <SkeletonList rows={6} />
       ) : ranked.length === 0 ? (
-        <div className="hub-muted" style={{ padding: 20 }}>아직 포인트 기록이 없어요. 영어 출결·포인트를 입력하거나 노션에서 가져오면 여기 모여요.</div>
+        <EmptyHive caption="아직 모인 꿀이 없어요" sub="출석·숙제·칭찬을 기록하면 여기 쌓여요." />
       ) : (
         <div className="rank-list">
           {ranked.map((r, i) => (
-            <div className={"rank-row" + (i < 3 ? " top" : "")} key={r.studentId}>
-              <div className="rank-no">{medal(i) || i + 1}</div>
+            <div className={"rank-row" + (i < 3 ? " top" : "") + (i === 0 ? " queen" : "")} key={r.studentId}>
+              <div className="rank-no">{i + 1}</div>
+              <div className="rank-av">
+                {i === 0 && <Crown className="rank-crown" />}
+                <HexAvatar name={r.name} size={40} />
+              </div>
               <div className="rank-name">{r.name}{r.grade ? <span className="rank-grade">{r.grade}</span> : null}</div>
               <div className="rank-days">{r.days}일</div>
-              <div className={"rank-pts" + (r.points < 0 ? " minus" : "")}>{r.points.toLocaleString()}<span>점</span></div>
+              <div className={"rank-pts" + (r.points < 0 ? " minus" : "")}>
+                {r.points >= 0 && <HoneyDrop size={15} className="rank-drop" />}
+                {r.points.toLocaleString()}<span>꿀</span>
+              </div>
             </div>
           ))}
         </div>

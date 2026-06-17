@@ -3,6 +3,7 @@ import { useStore } from "./store";
 import { useAuth } from "./auth";
 import { getMyPrefs, saveMyPrefs } from "./lib/authApi";
 import { Icon, StarIcon } from "./icons";
+import { Bee } from "./soez";
 import { ThemeToggle } from "./components/Header";
 import { ModalHost, ToastHost } from "./components/ModalHost";
 import { type Category, getCategories, setCategories } from "./lib/categories";
@@ -454,7 +455,7 @@ export function Workspace() {
           {logoUrl ? (
             <img className="logo logo-img" src={logoUrl} alt="바꿈" style={logoSize ? { width: logoSize, height: logoSize, borderRadius: Math.round(logoSize * 0.26) } : undefined} />
           ) : (
-            <div className="logo" style={logoSize ? { width: logoSize, height: logoSize } : undefined}>바</div>
+            <span className="logo logo-bee" style={logoSize ? { width: logoSize, height: logoSize } : undefined}><Bee size={logoSize ? Math.round(logoSize * 0.95) : 36} title="쏘이지" /></span>
           )}
           <div>
             <b>바꿈영수학원</b>
