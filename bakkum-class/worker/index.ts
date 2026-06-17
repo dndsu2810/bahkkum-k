@@ -1297,18 +1297,48 @@ async function importWiki(env: Env): Promise<Response> {
   } catch (e) {
     return json({ error: String(e) }, 500);
   }
+  // 노션 이미지(로고·스크린샷)를 R2로 옮겨 영구 URL로. 노션 원본 URL은 임시라 그대로 두면 곧 깨진다.
+  let imgCount = 0;
+  for (const p of pages) {
+    const urls = await rehostWikiImages(env, p.images);
+    (p as typeof p & { _imgUrls?: string[] })._imgUrls = urls;
+    imgCount += urls.length;
+  }
   // 매뉴얼은 노션 미러 — 전체 교체(임시로 들어온 기존분 포함 정리).
   await env.DB.prepare("DELETE FROM class_wiki").run();
   const stmts: D1PreparedStatement[] = [];
   for (const p of pages) {
+    const imgs = JSON.stringify((p as typeof p & { _imgUrls?: string[] })._imgUrls || []);
     stmts.push(
       env.DB
-        .prepare("INSERT INTO class_wiki(id,title,body,importance,status,updated_by,updated_at,src) VALUES(?,?,?,?,?,?,?,?)")
-        .bind(`w_${Date.now().toString(36)}${importSeq++}`, p.title, p.body, mapImportance(p.importance), mapWikiStatus(p.status), "노션", Date.now(), p.pageId)
+        .prepare("INSERT INTO class_wiki(id,title,body,importance,status,images,updated_by,updated_at,src) VALUES(?,?,?,?,?,?,?,?,?)")
+        .bind(`w_${Date.now().toString(36)}${importSeq++}`, p.title, p.body, mapImportance(p.importance), mapWikiStatus(p.status), imgs, "노션", Date.now(), p.pageId)
     );
   }
   await runChunked(env, stmts);
-  return json({ ok: true, imported: pages.length });
+  return json({ ok: true, imported: pages.length, images: imgCount });
+}
+
+/** 노션 이미지 참조를 R2(MEDIA)로 이관 → 앱 영구 URL(/api/media/wiki/{blockId}). 이미 있으면 재다운로드 생략. */
+async function rehostWikiImages(env: Env, imgs: { id: string; url: string; caption: string }[]): Promise<string[]> {
+  const out: string[] = [];
+  if (!env.MEDIA) return out;
+  for (const im of imgs) {
+    const key = `wiki/${im.id.replace(/-/g, "")}`;
+    try {
+      const head = await env.MEDIA.head(key);
+      if (!head) {
+        const r = await fetch(im.url);
+        if (!r.ok) continue;
+        const ct = r.headers.get("content-type") || "image/png";
+        await env.MEDIA.put(key, await r.arrayBuffer(), { httpMetadata: { contentType: ct } });
+      }
+      out.push(`/api/media/${key}`);
+    } catch {
+      /* 이 이미지 실패는 건너뛴다(나머지는 계속) */
+    }
+  }
+  return out;
 }
 // 노션 '학원 일정' → 앱 class_events 로 1회 가져오기. 노션 페이지 id(src)로 중복 방지(재가져오기 시 갱신).
 function mapEventCat(c: string): string {

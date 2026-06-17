@@ -383,11 +383,23 @@ function blockText(b: Record<string, any>): string {
   return s;
 }
 
+// 페이지에 박힌 이미지(로고·스크린샷 등) 참조. url은 노션 임시 URL일 수 있어 가져온 뒤 R2로 옮긴다.
+export interface ImgRef { id: string; url: string; caption: string }
+function imageOf(b: Record<string, any>): ImgRef | null {
+  if (b.type !== "image") return null;
+  const im = b.image || {};
+  const url = im.type === "external" ? im.external?.url : im.file?.url;
+  if (!url) return null;
+  const caption = Array.isArray(im.caption) ? im.caption.map((x: any) => x.plain_text || "").join("") : "";
+  return { id: String(b.id), url: String(url), caption };
+}
+
 // 하위 페이지·하위 데이터베이스까지 펼치다 보면 깊어질 수 있어 깊이 상한만 둔다.
 const MAX_BLOCK_DEPTH = 5;
 
-/** 페이지(블록) 본문을 평문으로. 토글/리스트는 들여쓰기로, 하위 페이지·하위 DB는 통째로 펼친다. */
-export async function fetchPageText(env: NotionEnv, pageId: string, depth = 0): Promise<string> {
+/** 페이지(블록) 본문을 평문으로. 토글/리스트는 들여쓰기로, 하위 페이지·하위 DB는 통째로 펼친다.
+ *  images 누적기를 넘기면 페이지 안 이미지(로고·스크린샷)를 빠짐없이 모아준다(나중에 R2로 이관). */
+export async function fetchPageText(env: NotionEnv, pageId: string, depth = 0, images?: ImgRef[]): Promise<string> {
   if (depth > MAX_BLOCK_DEPTH) return "";
   const out: string[] = [];
   let cursor: string | undefined;
@@ -408,8 +420,22 @@ export async function fetchPageText(env: NotionEnv, pageId: string, depth = 0): 
         if (b.type === "child_page") {
           const t = b.child_page?.title || "";
           if (t) out.push("\n■ " + t);
-          const sub = await fetchPageText(env, b.id, depth + 1);
+          const sub = await fetchPageText(env, b.id, depth + 1, images);
           if (sub) out.push(sub);
+          continue;
+        }
+        // 이미지 — 참조를 모으고, 설명(caption)이 있으면 본문에도 남긴다.
+        const img = imageOf(b);
+        if (img) {
+          if (images) images.push(img);
+          if (img.caption) out.push((depth ? "  " : "") + img.caption);
+          continue;
+        }
+        // 제목(heading) — 【제목】으로 감싸고 위아래 빈 줄을 둬 소제목으로 또렷하게 렌더되게.
+        if (typeof b.type === "string" && b.type.startsWith("heading")) {
+          const ht = blockText(b).trim();
+          if (ht) out.push("", "【" + ht + "】", "");
+          if (b.has_children) { const sub = await fetchPageText(env, b.id, depth + 1, images); if (sub) out.push(sub); }
           continue;
         }
         const txt = blockText(b);
@@ -418,7 +444,7 @@ export async function fetchPageText(env: NotionEnv, pageId: string, depth = 0): 
           b.has_children &&
           ["toggle", "bulleted_list_item", "numbered_list_item", "callout", "quote", "column_list", "column", "table", "synced_block"].includes(b.type)
         ) {
-          const sub = await fetchPageText(env, b.id, depth + 1);
+          const sub = await fetchPageText(env, b.id, depth + 1, images);
           if (sub) out.push(sub);
         }
       }
@@ -490,6 +516,7 @@ export interface NotionManual {
   importance: string; // 낮음/보통/높음/매우 높음/핵심
   status: string; // 초안/작성중/검토중/최신/업데이트 필요
   body: string;
+  images: ImgRef[];
 }
 export async function fetchManualPages(env: NotionEnv): Promise<NotionManual[]> {
   if (!env.NOTION_TOKEN) throw new Error("NOTION_TOKEN not set");
@@ -503,12 +530,15 @@ export async function fetchManualPages(env: NotionEnv): Promise<NotionManual[]> 
       const props = (pg.properties || {}) as Record<string, Prop>;
       const title = findTitle(props);
       if (!title) continue;
+      const images: ImgRef[] = [];
+      const body = await fetchPageText(env, pg.id, 0, images);
       out.push({
         pageId: pg.id,
         title,
         importance: propText(props["중요도"]),
         status: propText(props["상태"]),
-        body: await fetchPageText(env, pg.id),
+        body,
+        images,
       });
     }
     cursor = j.has_more ? j.next_cursor : undefined;
