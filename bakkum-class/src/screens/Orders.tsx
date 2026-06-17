@@ -6,7 +6,7 @@ import { Icon } from "../icons";
 
 type Tab = "all" | "교재" | "비품";
 
-// 교재: 구매·배송·배부(대상 전원) / 비품: 구매·배송·비치(위치 입력)
+// 교재: 주문·배송·배부(대상 전원) / 비품: 주문·배송·비치(위치 입력)
 function isDone(o: Order): boolean {
   if (!o.purchased || !o.shipped) return false;
   if (o.kind === "교재") return o.studentIds.length === 0 || o.studentIds.every((id) => o.distributedIds.includes(id));
@@ -141,8 +141,8 @@ function OrderForm({ roster, edit, onDone }: { roster: RosterStudent[]; edit?: O
         {kind === "비품" && <>
           <label className="ord-f"><span>수량</span><input className="input" type="number" min={0} value={qty} onChange={(e) => setQty(e.target.value)} /></label>
           <label className="ord-f"><span>필요한 수업</span><input className="input" value={forClass} onChange={(e) => setForClass(e.target.value)} placeholder="예: 중등 수학" /></label>
-          <label className="ord-f wide"><span>구매 링크</span><input className="input" value={link} onChange={(e) => setLink(e.target.value)} placeholder="구매처 주소(선택)" /></label>
-          <label className="ord-f wide"><span>구매 사유</span><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="왜 필요한지(선택)" /></label>
+          <label className="ord-f wide"><span>주문 링크</span><input className="input" value={link} onChange={(e) => setLink(e.target.value)} placeholder="주문처 주소(선택)" /></label>
+          <label className="ord-f wide"><span>주문 사유</span><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="왜 필요한지(선택)" /></label>
         </>}
       </div>
       {kind === "교재" && (
@@ -188,7 +188,7 @@ function OrderCard({ o, nameOf, onPatch, onRemove, onEdit }: { o: Order; nameOf:
           {o.qty > 0 && <span>수량 {o.qty}</span>}
           {o.forClass && <span>· {o.forClass}</span>}
           {o.reason && <span>· {o.reason}</span>}
-          {o.link && <a href={o.link} target="_blank" rel="noopener noreferrer">구매 링크</a>}
+          {o.link && <a href={o.link} target="_blank" rel="noopener noreferrer">주문 링크</a>}
         </div>
       )}
       {o.kind === "교재" && o.studentIds.length > 0 && (
