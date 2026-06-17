@@ -32,7 +32,7 @@ export function PointRanking() {
       {loading ? (
         <SkeletonList rows={6} />
       ) : ranked.length === 0 ? (
-        <div className="hub-muted" style={{ padding: 20 }}>아직 포인트 기록이 없어요. 영어 출결·포인트를 입력하거나 노션에서 가져오면 집계됩니다.</div>
+        <div className="hub-muted" style={{ padding: 20 }}>아직 포인트 기록이 없어요. 영어 출결·포인트를 입력하거나 노션에서 가져오면 여기 모여요.</div>
       ) : (
         <div className="rank-list">
           {ranked.map((r, i) => (

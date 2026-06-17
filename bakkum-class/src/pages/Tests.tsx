@@ -83,7 +83,7 @@ export function Tests() {
       <div className="page-head">
         <div>
           <h1 className="page-title">수학 테스트 기록</h1>
-          <div className="page-desc">학생을 고르면 그 학생의 테스트를 입력해요. 오늘 테스트는 <TodayLink /> 화면에서도 됩니다.</div>
+          <div className="page-desc">학생을 고르면 그 학생의 테스트를 입력해요. 오늘 테스트는 <TodayLink /> 화면에서도 돼요.</div>
         </div>
       </div>
 

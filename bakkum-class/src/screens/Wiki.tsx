@@ -197,7 +197,7 @@ function BodyEditor({ value, onChange }: { value: string; onChange: (v: string) 
     return (
       <div className="wbe">
         <div className="wbe-bar">
-          <span className="wbe-hint">직접 입력 — `머리 | 값` 줄은 표가 됩니다.</span>
+          <span className="wbe-hint">직접 입력 — `머리 | 값` 줄은 표로 바뀌어요.</span>
           <button type="button" className="btn ghost sm" onClick={() => { setBlocks(parseBlocks(value)); setMode("block"); }}>쉬운 편집으로</button>
         </div>
         <textarea className="input wiki-body-edit" rows={16} value={value} onChange={(e) => onChange(e.target.value)} placeholder="본문 (자유 입력)" />
@@ -223,7 +223,7 @@ function BodyEditor({ value, onChange }: { value: string; onChange: (v: string) 
           </div>
           <div className="wbe-block-body">
             {b.type === "text" ? (
-              <textarea className="input wbe-text" rows={Math.min(10, Math.max(2, b.text.split("\n").length))} value={b.text} placeholder="내용을 입력하세요. 【제목】 줄은 소제목이 됩니다." onChange={(e) => patch(bi, { type: "text", text: e.target.value })} />
+              <textarea className="input wbe-text" rows={Math.min(10, Math.max(2, b.text.split("\n").length))} value={b.text} placeholder="내용을 입력하세요. 【제목】 줄은 소제목이 돼요." onChange={(e) => patch(bi, { type: "text", text: e.target.value })} />
             ) : (
               <div className="wbe-table-wrap">
                 <table className="wbe-table">

@@ -141,15 +141,15 @@ export function MakeupPage() {
       <MkGroup
         title="보강 대기"
         list={pending}
-        desc="출결 체크에서 결석 처리된 학생입니다. 보강 일정을 잡거나, 미진행으로 정리하세요."
-        emptyMsg="보강 대기 중인 결석이 없습니다."
+        desc="출결에서 결석 처리된 학생이에요. 보강 일정을 잡거나, 미진행으로 정리하세요."
+        emptyMsg="보강 대기 중인 결석이 없어요."
       >
         <MakeupList
           list={pending}
           students={data.students}
           manage
           actions={actions}
-          emptyMsg="보강 대기 중인 결석이 없습니다."
+          emptyMsg="보강 대기 중인 결석이 없어요."
         />
       </MkGroup>
 

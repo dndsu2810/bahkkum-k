@@ -203,7 +203,7 @@ export function StudentModal({ id }: { id: string | null }) {
               </button>
             ))}
           </div>
-          <div className="hint">대시보드·출결·시간표에는 '재원' 학생만 표시됩니다.</div>
+          <div className="hint">대시보드·출결·시간표에는 '재원' 학생만 보여요.</div>
         </div>
         <div className="field-row">
           <div className="field">
@@ -480,7 +480,7 @@ export function MakeupModal() {
               onChange={(e) => setMkTime(e.target.value)}
             />
           </div>
-          <div className="hint">날짜를 비워두면 '보강 대기'로 저장됩니다. 나중에 일정을 잡을 수 있어요.</div>
+          <div className="hint">날짜를 비워두면 '보강 대기'로 저장돼요. 나중에 일정을 잡을 수 있어요.</div>
         </div>
       </div>
       <div className="modal-foot">

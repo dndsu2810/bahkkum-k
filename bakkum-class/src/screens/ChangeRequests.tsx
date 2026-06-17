@@ -79,7 +79,7 @@ export function ChangeRequests({ prefill }: { prefill?: (ReqPrefill & { n: numbe
           <NewRequest roster={roster} users={users} logMode onCreated={() => void load()} />
           <div className="req-list" style={{ marginTop: 14 }}>
             {logs.map((r) => <ReqCard key={r.id} r={r} incoming={false} onRespond={respond} onWithdraw={withdraw} />)}
-            {logs.length === 0 && <div className="hub-muted" style={{ padding: 20 }}>아직 변경 기록이 없어요. 위에서 1회성 변경을 기록하면 해당 날짜 ‘오늘’에 바로 반영됩니다.</div>}
+            {logs.length === 0 && <div className="hub-muted" style={{ padding: 20 }}>아직 변경 기록이 없어요. 위에서 1회성 변경을 기록하면 그날 ‘오늘’ 화면에 바로 반영돼요.</div>}
           </div>
         </>
       ) : tab === "new" ? (
@@ -246,8 +246,8 @@ function NewRequest({ roster, users, prefill, logMode, onCreated }: { roster: Ro
       {err && <div className="auth-err" style={{ marginBottom: 10 }}>{err}</div>}
       <p className="hub-muted" style={{ marginBottom: 12 }}>
         {logMode
-          ? <>학생의 1회성 요일·시간 변경을 <b>기록</b>합니다(승인 없이 그 날짜 ‘오늘’에 바로 반영). 학생을 고르고 옮길 수업·날짜·시간만 정하면 돼요.</>
-          : <>학생을 고르고 <b>옮길 수업</b>을 누른 뒤, <b>언제로</b> 옮길지(날짜·시간)만 정하면 됩니다. 과목은 고른 수업으로 자동 지정돼요.</>}
+          ? <>학생의 1회성 요일·시간 변경을 <b>기록</b>해요(승인 없이 그날 ‘오늘’에 바로 반영). 학생을 고르고 옮길 수업·날짜·시간만 정하면 돼요.</>
+          : <>학생을 고르고 <b>옮길 수업</b>을 누른 뒤, <b>언제로</b> 옮길지(날짜·시간)만 정하면 돼요. 과목은 고른 수업으로 자동 지정돼요.</>}
       </p>
 
       <label className="prof-field">

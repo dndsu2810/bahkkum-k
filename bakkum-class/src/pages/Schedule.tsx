@@ -210,7 +210,7 @@ export function Schedule() {
       ) : (
         <>
           {groupByMonth(upcoming).length === 0 ? (
-            <div className="card"><Empty>다가오는 일정이 없습니다.</Empty></div>
+            <div className="card"><Empty>다가오는 일정이 없어요.</Empty></div>
           ) : (
             groupByMonth(upcoming).map((g) => <MonthCard key={g.ym} ym={g.ym} items={g.items} />)
           )}

@@ -177,7 +177,7 @@ export function MakeupList({
   emptyMsg?: string;
 }) {
   if (!list.length) {
-    return <Empty>{emptyMsg ?? (manage ? "보강 항목이 없습니다." : "이 달의 보강 내역이 없습니다.")}</Empty>;
+    return <Empty>{emptyMsg ?? (manage ? "보강 항목이 없어요." : "이 달 보강 내역이 없어요.")}</Empty>;
   }
   return (
     <div className="mk-list">

@@ -26,7 +26,7 @@ function LogoSetting() {
       const url = await uploadImage(file);
       await setConfig({ logoUrl: url });
       setLogo(url);
-      setMsg("로고를 저장했어요. 새로고침하면 사이드바에 반영됩니다.");
+      setMsg("로고를 저장했어요. 새로고침하면 사이드바에 보여요.");
     } catch { setMsg("업로드 실패"); } finally { setBusy(false); }
   }
   async function clearLogo() {
@@ -39,7 +39,7 @@ function LogoSetting() {
   function onSize(v: number) {
     setSize(v);
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => { void setConfig({ logoSize: String(v) }).then(() => setMsg("로고 크기를 저장했어요. 새로고침하면 반영됩니다.")).catch(() => {}); }, 500);
+    saveTimer.current = setTimeout(() => { void setConfig({ logoSize: String(v) }).then(() => setMsg("로고 크기를 저장했어요. 새로고침하면 적용돼요.")).catch(() => {}); }, 500);
   }
 
   return (
@@ -82,7 +82,7 @@ function NotionImport() {
     if (importing || !chosen.length) return;
     const mirrorNames = chosen.filter((s) => s.mirror).map((s) => s.label);
     const warn = mirrorNames.length
-      ? `\n\n⚠️ ${mirrorNames.join(", ")}은(는) 노션 내용으로 전체 교체됩니다. 앱에서 직접 고친 내용이 있으면 노션 기준으로 바뀝니다.`
+      ? `\n\n⚠️ ${mirrorNames.join(", ")}은(는) 노션 내용으로 통째로 바뀌어요. 앱에서 직접 고친 내용이 있으면 노션 기준으로 덮어써요.`
       : "";
     if (!window.confirm(`선택한 항목만 노션에서 가져옵니다:\n· ${chosen.map((s) => s.label).join("\n· ")}${warn}\n\n진행할까요?`)) return;
     setImporting(true);
@@ -109,7 +109,7 @@ function NotionImport() {
           <label key={s.key} className={"sync-pick-item" + (sel[s.key] ? " on" : "")}>
             <input type="checkbox" checked={!!sel[s.key]} onChange={() => toggle(s.key)} disabled={importing} />
             <span className="sync-pick-label">{s.label}</span>
-            {s.mirror && <span className="sync-pick-tag" title="노션 내용으로 전체 교체됩니다">전체 교체</span>}
+            {s.mirror && <span className="sync-pick-tag" title="노션 내용으로 통째로 바뀌어요">전체 교체</span>}
           </label>
         ))}
       </div>
@@ -217,7 +217,7 @@ function NoticeSetting() {
       <div className="card-title" style={{ marginBottom: 6 }}>공지 배너</div>
       <div className="page-desc" style={{ marginBottom: 12 }}>대상에 따라 강사만 또는 학생 포함 전체 화면 상단에 한 줄로 떠요. 끄거나 지우면 사라집니다.</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <input className="input" style={{ flex: 1, minWidth: 200 }} value={text} onChange={(e) => setText(e.target.value)} placeholder="공지 문구 (예: 오늘 6시 회의 있습니다)" onKeyDown={(e) => e.key === "Enter" && post()} />
+        <input className="input" style={{ flex: 1, minWidth: 200 }} value={text} onChange={(e) => setText(e.target.value)} placeholder="공지 문구 (예: 오늘 6시 회의 있어요)" onKeyDown={(e) => e.key === "Enter" && post()} />
         <select className="input" style={{ width: 116 }} value={audience} onChange={(e) => setAudience(e.target.value as "all" | "staff")}>
           <option value="staff">강사만</option>
           <option value="all">학생 포함 전체</option>

@@ -1878,10 +1878,13 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .plan-q{font-weight:800;color:var(--ink);padding-bottom:8px!important}
 .plan-m{font-weight:600;min-width:90px}
 /* '항목' 헤더는 아래로 정렬해 월 라벨과 같은 줄에 맞춤 */
-.plan-cat-h{left:0;z-index:3;vertical-align:bottom}
-.plan-rowh{position:sticky;left:0;background:var(--card);z-index:1;text-align:left;padding:12px 14px;line-height:1.5;white-space:nowrap;min-width:152px;vertical-align:middle}
-.plan-cat{display:block;font-size:10px;font-weight:800;color:var(--brand-d);margin-bottom:3px}
+.plan-cat-h{left:0;z-index:3;vertical-align:bottom;text-align:center}
+.plan-rowh{position:sticky;left:0;background:var(--card);z-index:1;text-align:center;padding:12px 14px;line-height:1.5;white-space:nowrap;min-width:152px;vertical-align:middle}
+.plan-cat{display:block;font-size:10px;font-weight:800;color:var(--brand-d);margin-bottom:3px;text-align:center}
 .plan-item{font-weight:600;color:var(--ink)}
+.plan-rowdel{margin-left:7px;border:none;background:none;color:var(--ink3);font-size:15px;line-height:1;cursor:pointer;padding:0 2px;opacity:0;transition:opacity .1s}
+.plan-rowh:hover .plan-rowdel{opacity:1}
+.plan-rowdel:hover{color:var(--bad)}
 .plan-catstart th,.plan-catstart td{border-top:2px solid var(--line2)}
 .plan-cell{vertical-align:middle}
 /* 여백 패치 2-c — 셀 전체 옅은 파랑 채움이 텍스트를 묻어서 제거(일정명만 또렷). 이번 달 컬럼 강조는 .plan-cell.now로 유지. */

@@ -72,7 +72,7 @@ export function Progress() {
       <div className="page-head">
         <div>
           <h1 className="page-title">진도 · 교재관리</h1>
-          <div className="page-desc">학생을 고르면 교재별 진도를 입력해요. 오늘 진도는 <TodayLink /> 화면에서도 됩니다.</div>
+          <div className="page-desc">학생을 고르면 교재별 진도를 입력해요. 오늘 진도는 <TodayLink /> 화면에서도 돼요.</div>
         </div>
       </div>
 

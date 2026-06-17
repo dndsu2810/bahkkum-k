@@ -332,7 +332,7 @@ export const GUIDES: Record<Exclude<Role, "developer">, RoleGuide> = {
   },
   desk: {
     title: "데스크 사용 가이드",
-    summary: "데스크는 전체 시간표·학생·강사 계정을 조회하고, 학원 일정과 SNS 업로드를 돕습니다(조회 중심).",
+    summary: "데스크는 전체 시간표·학생·강사 계정을 조회하고, 학원 일정과 SNS 업로드를 도와요(조회 중심).",
     start: "로그인하면 데스크 '오늘' 화면으로 들어갑니다. 현재 등원 현황을 바로 확인하세요.",
     groups: [topGroup(true), DESK_GROUP, commonGroup({ master: true, wiki: true, sns: true })],
   },

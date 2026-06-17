@@ -157,7 +157,7 @@ export function EngReportCard({ baseId, data }: { baseId: string; data: EngRepor
       <div id={`${baseId}-3`} className="erc3 erc3-p3">
         <Header right={`${who} · ${ym}`} />
         <div className="erc3-sec-tag">Teacher's Comments · 선생님 코멘트</div>
-        <div className="erc3-comment">{data.comments?.trim() ? data.comments : "코멘트가 아직 없습니다."}</div>
+        <div className="erc3-comment">{data.comments?.trim() ? data.comments : "아직 코멘트가 없어요."}</div>
         <Foot />
       </div>
     </>

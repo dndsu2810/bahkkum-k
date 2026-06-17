@@ -728,7 +728,7 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
           <label className="eng-late-row">지각 <input className="sm-input" style={{ maxWidth: 90 }} type="number" min={0} step={5} value={d.lateMin || 0} onChange={(e) => setD({ ...d, lateMin: Number(e.target.value) || 0 })} /> 분</label>
         )}
         {(d.attStatus === "결석" || d.attStatus === "무단결석") && (
-          <input className="input" style={{ marginTop: 6 }} value={d.absentReason} onChange={(e) => setD({ ...d, absentReason: e.target.value })} placeholder="결석 사유 (보강 관리에 자동 연결됩니다)" />
+          <input className="input" style={{ marginTop: 6 }} value={d.absentReason} onChange={(e) => setD({ ...d, absentReason: e.target.value })} placeholder="결석 사유 (보강 관리에 자동으로 연결돼요)" />
         )}
       </div>
 
@@ -1262,7 +1262,7 @@ function EngHomework({ students }: { students: RosterStudent[] }) {
           <div className="eng-panel">
             <h2>{name} · 숙제 기록</h2>
             {withHw.length === 0 ? (
-              <div className="hub-muted">숙제 기록이 없어요. ‘오늘’에서 단어·리딩·문법 숙제를 입력하면 여기 누적됩니다.</div>
+              <div className="hub-muted">아직 숙제 기록이 없어요. ‘오늘’에서 단어·리딩·문법 숙제를 입력하면 여기에 쌓여요.</div>
             ) : (
               <div className="eng-hwm-list">
                 {months.map(([ym, rows], mi) => {
@@ -1467,7 +1467,7 @@ function EngTimetable({
           <div className="tt-legend">
             <div className="tt-leg"><span className="sw" style={{ background: "var(--brand-soft)", border: "1px solid #cfe0fb" }} />정규 수업</div>
             <div className="tt-leg"><span className="sw" style={{ background: "var(--warn-soft)", border: "1px solid #ffd9b8" }} />보강</div>
-            <div className="tt-leg" style={{ marginLeft: "auto", color: "var(--ink3)" }}>오늘은 파란색으로 강조됩니다</div>
+            <div className="tt-leg" style={{ marginLeft: "auto", color: "var(--ink3)" }}>오늘은 파란색으로 표시돼요</div>
           </div>
         </div>
       )}

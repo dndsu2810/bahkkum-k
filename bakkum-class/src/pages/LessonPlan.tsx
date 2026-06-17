@@ -33,6 +33,19 @@ const PLAN_ROWS: PlanRow[] = [
 ];
 const key = (r: PlanRow, m: number) => `${r.cat}|${r.item}|${m}`;
 
+// 항목(행) 목록도 config에 저장 — 강사·원장이 행을 추가/삭제할 수 있게. 없으면 기본 PLAN_ROWS.
+const ROWS_KEY = "math_year_plan_rows";
+function rowsFor(cfg: Record<string, string>): PlanRow[] {
+  const raw = cfg[ROWS_KEY];
+  if (raw) {
+    try {
+      const a = JSON.parse(raw);
+      if (Array.isArray(a) && a.length) return a.map((r) => ({ cat: String(r.cat || ""), item: String(r.item || "") })).filter((r) => r.cat && r.item);
+    } catch { /* 깨졌으면 기본값 */ }
+  }
+  return PLAN_ROWS;
+}
+
 // 시트 기본 내용(월 기준 요약) — 비어 보이지 않게 미리 채움. 원장이 자유롭게 수정.
 const DEFAULT_CELLS: Record<string, string> = {
   "학기 진도|예습|0": "1학기 진도 예습(A)",
@@ -99,6 +112,32 @@ function PlanCellModal({ item, sub, name, detail, onSave }: { item: string; sub:
   );
 }
 
+// 항목(행) 추가 모달 — 분류와 항목 이름을 입력. 분류는 기존에서 고르거나 새로 적을 수 있어요.
+function AddRowModal({ cats, onAdd }: { cats: string[]; onAdd: (cat: string, item: string) => void }) {
+  const { closeModal } = useStore();
+  const [cat, setCat] = useState("");
+  const [item, setItem] = useState("");
+  return (
+    <>
+      <div className="modal-head">
+        <div className="modal-title">항목 추가</div>
+        <button className="modal-x" onClick={closeModal} aria-label="닫기"><Icon name="x" /></button>
+      </div>
+      <div className="modal-body">
+        <label className="plan-flabel">분류</label>
+        <input className="input" list="plan-cats" value={cat} onChange={(e) => setCat(e.target.value)} placeholder="기존 분류를 고르거나 새로 적어요 (예: 특강)" autoFocus />
+        <datalist id="plan-cats">{cats.map((c) => <option key={c} value={c} />)}</datalist>
+        <label className="plan-flabel" style={{ marginTop: 14 }}>항목 이름</label>
+        <input className="input" value={item} onChange={(e) => setItem(e.target.value)} placeholder="예: 사고력 특강" />
+      </div>
+      <div className="modal-foot">
+        <button className="btn ghost" onClick={closeModal}>취소</button>
+        <button className="btn primary" disabled={!cat.trim() || !item.trim()} onClick={() => { onAdd(cat.trim(), item.trim()); closeModal(); }}>추가</button>
+      </div>
+    </>
+  );
+}
+
 export function LessonPlan() {
   const { user } = useAuth();
   const { openModal } = useStore();
@@ -111,6 +150,7 @@ export function LessonPlan() {
   const cfgRef = useRef<Record<string, string>>({});
   const [year, setYear] = useState(nowYear);
   const [cells, setCells] = useState<Record<string, CellRaw>>({});
+  const [rows, setRows] = useState<PlanRow[]>(PLAN_ROWS);
   const [loaded, setLoaded] = useState(false);
   const [savedAt, setSavedAt] = useState("");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,7 +159,7 @@ export function LessonPlan() {
 
   useEffect(() => {
     getConfig()
-      .then((c) => { cfgRef.current = c; setCells(cellsFor(c, nowYear)); })
+      .then((c) => { cfgRef.current = c; setCells(cellsFor(c, nowYear)); setRows(rowsFor(c)); })
       .catch(() => setCells(DEFAULT_CELLS))
       .finally(() => setLoaded(true));
   }, [nowYear]);
@@ -147,6 +187,29 @@ export function LessonPlan() {
       void setConfig({ [yearKey(y)]: json }).then(() => setSavedAt("저장됨 " + new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }))).catch(() => setSavedAt("저장 실패"));
     }, 700);
   }
+  // 항목(행) 목록 저장 — 연도와 무관한 공통 구조라 ROWS_KEY 한 곳에 둔다.
+  function saveRows(next: PlanRow[]) {
+    setRows(next);
+    const json = JSON.stringify(next);
+    cfgRef.current = { ...cfgRef.current, [ROWS_KEY]: json };
+    void setConfig({ [ROWS_KEY]: json })
+      .then(() => setSavedAt("저장됨 " + new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })))
+      .catch(() => setSavedAt("저장 실패"));
+  }
+  function addRow(cat: string, item: string) {
+    if (rows.some((r) => r.cat === cat && r.item === item)) return; // 중복 방지
+    const next = rows.slice();
+    let idx = -1;
+    for (let i = 0; i < next.length; i++) if (next[i].cat === cat) idx = i; // 같은 분류 끝에 끼워 그룹 유지
+    if (idx >= 0) next.splice(idx + 1, 0, { cat, item });
+    else next.push({ cat, item });
+    saveRows(next);
+  }
+  function removeRow(r: PlanRow) {
+    if (!window.confirm(`'${r.item}' 항목을 지울까요?`)) return;
+    saveRows(rows.filter((x) => !(x.cat === r.cat && x.item === r.item)));
+  }
+
   // 칸을 눌러 일정명·상세설명 입력(모달). 저장 시 즉시 반영 + 자동 저장 예약.
   // 상세설명이 없으면 문자열(일정명)로 컴팩트 저장 → 구버전과 동일 포맷 유지.
   function editCell(k: string, name: string, detail: string) {
@@ -169,7 +232,8 @@ export function LessonPlan() {
   // 카테고리별 그룹(첫 행에 카테고리명 표시용)
   const catFirst = new Set<string>();
   const seen = new Set<string>();
-  for (const r of PLAN_ROWS) { if (!seen.has(r.cat)) { seen.add(r.cat); catFirst.add(r.cat + "|" + r.item); } }
+  for (const r of rows) { if (!seen.has(r.cat)) { seen.add(r.cat); catFirst.add(r.cat + "|" + r.item); } }
+  const cats = Array.from(seen);
 
   return (
     <section className="page active">
@@ -180,6 +244,11 @@ export function LessonPlan() {
         </div>
         <div className="head-actions plan-head-actions">
           {savedAt && <span className="page-desc">{savedAt}</span>}
+          {canEdit && (
+            <button className="btn ghost sm" onClick={() => openModal(<AddRowModal cats={cats} onAdd={addRow} />)}>
+              <Icon name="plus" /> 항목 추가
+            </button>
+          )}
           <div className="plan-yearnav">
             <button className="btn ghost sm" onClick={() => changeYear(-1)} aria-label="이전 연도">‹</button>
             <span className="plan-year">{year}년{year === nowYear && <span className="plan-year-now">올해</span>}</span>
@@ -215,13 +284,14 @@ export function LessonPlan() {
               </tr>
             </thead>
             <tbody>
-              {PLAN_ROWS.map((r) => {
+              {rows.map((r) => {
                 const isCatFirst = catFirst.has(r.cat + "|" + r.item);
                 return (
                   <tr key={r.cat + "|" + r.item} className={isCatFirst ? "plan-catstart" : ""}>
                     <th className="plan-rowh">
                       {isCatFirst && <span className="plan-cat">{r.cat}</span>}
                       <span className="plan-item">{r.item}</span>
+                      {canEdit && <button type="button" className="plan-rowdel" onClick={() => removeRow(r)} aria-label="항목 삭제" title="항목 삭제">×</button>}
                     </th>
                     {MONTHS.map((_, m) => {
                       const k = key(r, m);

@@ -59,7 +59,7 @@ export function Checkin() {
       <div className="sm-head">
         <div>
           <h1 className="sm-title">등하원 관리</h1>
-          <p className="sm-desc">학생이 찍은 등하원을 확인하고, 학부모에게 알림을 보냅니다. 미발송은 빨간색으로 강조됩니다.</p>
+          <p className="sm-desc">학생이 찍은 등하원을 확인하고, 학부모에게 알림을 보내세요. 아직 안 보낸 건 빨간색으로 표시돼요.</p>
         </div>
         <input className="ctrl" type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="날짜" />
       </div>

@@ -91,7 +91,7 @@ export function StudentTable({
     }
   }, []);
 
-  if (!list.length) return <Empty>표시할 학생이 없습니다.</Empty>;
+  if (!list.length) return <Empty>표시할 학생이 없어요.</Empty>;
 
   const flashCls = (id: string, field: EditField) =>
     flash && flash.id === id && flash.field === field ? (flash.ok ? " cell-ok" : " cell-err") : "";

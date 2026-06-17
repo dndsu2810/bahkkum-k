@@ -281,7 +281,7 @@ export function Attendance() {
       {!lessons.length ? (
         <div className="card">
           <div className="empty">
-            {holiday ? holiday + " — 공휴일이라 휴원입니다." : "이 날에는 예정된 수업이 없습니다."}
+            {holiday ? holiday + " — 공휴일이라 쉬어요." : "이 날은 예정된 수업이 없어요."}
           </div>
         </div>
       ) : (
