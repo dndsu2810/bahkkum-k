@@ -3,6 +3,7 @@ import { ordersApi, type Order, type OrderKind } from "../lib/ordersApi";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { fmtWhen } from "../lib/dates";
 import { Icon } from "../icons";
+import { EmptyHive } from "../soez";
 
 type Tab = "all" | "교재" | "비품";
 
@@ -78,7 +79,7 @@ export function Orders() {
       {loading ? (
         <div className="sp-muted" style={{ padding: 16 }}>불러오는 중…</div>
       ) : shown.length === 0 ? (
-        <div className="issue-empty">아직 신청한 주문이 없어요.</div>
+        <EmptyHive caption="아직 신청한 주문이 없어요" sub="필요한 교재·비품을 신청하면 여기에 모여요." />
       ) : (
         <>
           {pre.length > 0 && (

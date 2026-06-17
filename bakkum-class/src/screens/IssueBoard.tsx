@@ -4,6 +4,7 @@ import { uploadImage } from "../lib/configApi";
 import { fmtWhen } from "../lib/dates";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
+import { EmptyHive } from "../soez";
 
 const ROLE_LABEL: Record<string, string> = { admin: "원장", developer: "개발자", math: "수학", english_mid: "영어(중고등)", english_elem: "영어(초등)", desk: "데스크", student: "학생" };
 const statusCls = (s: string) => (s === "완료" ? "done" : s === "보류" ? "hold" : s === "진행중" || s === "해결중" ? "doing" : "new");
@@ -172,7 +173,7 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
       {loading ? (
         <div className="sp-muted">불러오는 중…</div>
       ) : !shown.length ? (
-        <div className="issue-empty">{filter === "all" ? "아직 등록된 요청이 없어요." : `'${filter}' 상태의 요청이 없어요.`}</div>
+        <EmptyHive caption={filter === "all" ? "아직 등록된 요청이 없어요" : `'${filter}' 상태의 요청이 없어요`} sub={filter === "all" ? "고치고 싶은 점이 있으면 위에서 남겨 주세요." : undefined} />
       ) : (
         <div className="issue-list">
           {shown.map((i) => (

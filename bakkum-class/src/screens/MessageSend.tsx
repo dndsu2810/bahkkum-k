@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { messageApi, type Message } from "../lib/messageApi";
 import { fmtWhen } from "../lib/dates";
 import { Icon } from "../icons";
+import { EmptyHive } from "../soez";
 
 /** 학생에게 메시지 보내기 — 원장·수학 담당. 단체/다중 발송, 학생 1명당 1건 개별 생성. */
 export function MessageSend() {
@@ -129,7 +130,7 @@ export function MessageSend() {
       {/* 보낸 기록 */}
       <div className="msg-sec-h">보낸 기록</div>
       {batches.length === 0 ? (
-        <div className="issue-empty">아직 보낸 메시지가 없어요.</div>
+        <EmptyHive caption="아직 보낸 메시지가 없어요" />
       ) : (
         <div className="msg-sent-list">
           {batches.map((grp) => {

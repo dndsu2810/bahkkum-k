@@ -36,6 +36,59 @@ export function Bee({ size = 44, className, title }: { size?: number; className?
   );
 }
 
+/** 마스코트 '쏘이' — 얼굴(표정)이 있는 꿀벌. 빈 화면·로딩·축하 등 다정한 순간에. */
+export function SoezMascot({ size = 64, expr = "happy", className }: { size?: number; expr?: "happy" | "wink" | "cheer" | "think"; className?: string }) {
+  const u = useId().replace(/[:]/g, "");
+  const eyeY = expr === "think" ? 31 : 32;
+  return (
+    <svg width={size} height={Math.round((size * 60) / 64)} viewBox="0 0 64 60" className={className} role="img" aria-label="쏘이">
+      <defs>
+        <linearGradient id={u + "g"} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FAC775" /><stop offset="1" stopColor="#F4A93C" /></linearGradient>
+        <clipPath id={u + "c"}><ellipse cx="32" cy="36" rx="19" ry="16" /></clipPath>
+      </defs>
+      <path d="M27 16 Q23 7 19 6" stroke={INK} strokeWidth="1.7" fill="none" strokeLinecap="round" />
+      <circle cx="19" cy="6" r="2" fill={INK} />
+      <path d="M37 16 Q41 7 45 6" stroke={INK} strokeWidth="1.7" fill="none" strokeLinecap="round" />
+      <circle cx="45" cy="6" r="2" fill={INK} />
+      <ellipse cx="22" cy="20" rx="9" ry="11.5" fill="#fff" stroke={INK} strokeWidth="1.7" transform="rotate(-20 22 20)" />
+      <ellipse cx="42" cy="20" rx="9" ry="11.5" fill="#fff" stroke={INK} strokeWidth="1.7" transform="rotate(20 42 20)" />
+      <ellipse cx="32" cy="36" rx="19" ry="16" fill={`url(#${u}g)`} stroke={INK} strokeWidth="1.7" />
+      {/* 아래쪽 줄무늬 2선 (얼굴 자리는 비움) */}
+      <g clipPath={`url(#${u}c)`}>
+        <path d="M11 43 Q32 47 53 43" stroke={INK} strokeWidth="3.4" fill="none" />
+        <path d="M14 50 Q32 53 50 50" stroke={INK} strokeWidth="3.4" fill="none" />
+      </g>
+      {/* 볼터치 */}
+      <ellipse cx="23.5" cy="35.5" rx="2.6" ry="1.7" fill="#E8804D" opacity="0.4" />
+      <ellipse cx="40.5" cy="35.5" rx="2.6" ry="1.7" fill="#E8804D" opacity="0.4" />
+      {/* 눈 */}
+      {expr === "cheer" ? (
+        <>
+          <path d="M23.5 33 Q26 30 28.5 33" stroke={INK} strokeWidth="2" fill="none" strokeLinecap="round" />
+          <path d="M35.5 33 Q38 30 40.5 33" stroke={INK} strokeWidth="2" fill="none" strokeLinecap="round" />
+        </>
+      ) : (
+        <>
+          <circle cx="26" cy={eyeY} r="1.8" fill={INK} />
+          {expr === "wink" ? (
+            <path d="M35.5 32 Q38 34 40.5 32" stroke={INK} strokeWidth="2" fill="none" strokeLinecap="round" />
+          ) : (
+            <circle cx="38" cy={eyeY} r="1.8" fill={INK} />
+          )}
+        </>
+      )}
+      {/* 입 */}
+      {expr === "think" ? (
+        <path d="M30 38.5 Q32 37.5 34 38.5" stroke={INK} strokeWidth="1.7" fill="none" strokeLinecap="round" />
+      ) : expr === "cheer" ? (
+        <path d="M27 37 Q32 43 37 37 Z" fill={INK} />
+      ) : (
+        <path d="M27.5 37 Q32 41 36.5 37" stroke={INK} strokeWidth="1.9" fill="none" strokeLinecap="round" />
+      )}
+    </svg>
+  );
+}
+
 const HEX = "M24 1.6 L46.4 14 L46.4 40 L24 52.4 L1.6 40 L1.6 14 Z";
 
 /** 벌집 아바타 — 사진 없으면 육각 칸 + 이름 초성. 사진 있으면 육각으로 잘라 보여줌. */
@@ -116,7 +169,7 @@ export function EmptyHive({ caption = "아직 모인 꿀이 없어요", sub }: {
           {cell(49.5, 22, "d")}
           {cell(72.5, 22, "e")}
         </svg>
-        <span className="soez-empty-bee"><Bee size={42} /></span>
+        <span className="soez-empty-bee"><SoezMascot size={48} expr="think" /></span>
       </div>
       <div className="soez-empty-cap">{caption}</div>
       {sub && <div className="soez-empty-sub">{sub}</div>}

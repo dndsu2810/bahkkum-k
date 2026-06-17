@@ -1,6 +1,7 @@
 import { useAuth } from "../auth";
 import { AREAS, ROLE_LABEL, areasForUser, type Role } from "../lib/roles";
 import { getCachedLogo } from "../lib/configApi";
+import { SoezMascot } from "../soez";
 
 /** 학생 화면 + 운영(스태프) 임시 홈.
  *  - 스태프: 원장이 이 계정에 허용한 화면(영역) 목록을 보여준다(아직 미구현은 '준비 중').
@@ -72,8 +73,8 @@ export function AuthSplash() {
   return (
     <div className="splash">
       <div className="splash-in">
-        {logo.url ? <img className="splash-logo splash-logo-img" src={logo.url} alt="바꿈영수학원" /> : <div className="splash-logo">바</div>}
-        <div className="splash-name">바꿈영수학원</div>
+        {logo.url ? <img className="splash-logo splash-logo-img" src={logo.url} alt="쏘이지" /> : <span className="splash-logo splash-logo-bee"><SoezMascot size={64} expr="happy" /></span>}
+        <div className="splash-name">쏘이지</div>
         <div className="splash-dots" aria-label="불러오는 중"><span></span><span></span><span></span></div>
       </div>
     </div>
