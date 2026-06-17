@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FAC775"/>
+      <stop offset="1" stop-color="#F4A93C"/>
+    </linearGradient>
+    <clipPath id="body"><ellipse cx="256" cy="302" rx="150" ry="126"/></clipPath>
+  </defs>
+  <rect x="22" y="22" width="468" height="468" rx="118" fill="url(#bg)" stroke="#2A2926" stroke-width="12"/>
+  <!-- antennae -->
+  <path d="M218 152 Q190 80 150 70" stroke="#2A2926" stroke-width="13" fill="none" stroke-linecap="round"/>
+  <circle cx="150" cy="70" r="15" fill="#2A2926"/>
+  <path d="M294 152 Q322 80 362 70" stroke="#2A2926" stroke-width="13" fill="none" stroke-linecap="round"/>
+  <circle cx="362" cy="70" r="15" fill="#2A2926"/>
+  <!-- wings -->
+  <ellipse cx="176" cy="184" rx="70" ry="90" fill="#fff" stroke="#2A2926" stroke-width="13" transform="rotate(-20 176 184)"/>
+  <ellipse cx="336" cy="184" rx="70" ry="90" fill="#fff" stroke="#2A2926" stroke-width="13" transform="rotate(20 336 184)"/>
+  <!-- body (white) -->
+  <ellipse cx="256" cy="302" rx="150" ry="126" fill="#fff" stroke="#2A2926" stroke-width="14"/>
+  <!-- stripes -->
+  <g clip-path="url(#body)">
+    <path d="M96 250 Q256 288 416 250" stroke="#2A2926" stroke-width="28" fill="none"/>
+    <path d="M86 322 Q256 362 426 322" stroke="#2A2926" stroke-width="28" fill="none"/>
+    <path d="M106 394 Q256 432 406 394" stroke="#2A2926" stroke-width="28" fill="none"/>
+  </g>
+</svg>

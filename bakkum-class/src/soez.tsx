@@ -89,6 +89,17 @@ export function SoezMascot({ size = 64, expr = "happy", className }: { size?: nu
   );
 }
 
+/** 쏘이지 영문 로고 — 'S' + 꿀벌(='o') + 'ez' → "S🐝ez"(Soez). */
+export function SoezLogo({ size = 30, className }: { size?: number; className?: string }) {
+  return (
+    <span className={"soez-logo " + (className || "")} style={{ fontSize: size }}>
+      <span>S</span>
+      <Bee size={Math.round(size * 0.96)} className="soez-logo-bee" title="쏘이지" />
+      <span>ez</span>
+    </span>
+  );
+}
+
 const HEX = "M24 1.6 L46.4 14 L46.4 40 L24 52.4 L1.6 40 L1.6 14 Z";
 
 /** 벌집 아바타 — 사진 없으면 육각 칸 + 이름 초성. 사진 있으면 육각으로 잘라 보여줌. */

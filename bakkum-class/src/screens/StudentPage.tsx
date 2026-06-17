@@ -9,7 +9,7 @@ import { getCachedLogo } from "../lib/configApi";
 import { IssueBoard } from "./IssueBoard";
 import { Guide } from "./Guide";
 import { Icon } from "../icons";
-import { HexAvatar, CombGauge } from "../soez";
+import { HexAvatar, CombGauge, Bee, SoezLogo } from "../soez";
 
 /** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
  *  - 학생 본인: studentId 생략(본인). 일지 입력 가능, 커리큘럼 조회.
@@ -525,9 +525,9 @@ export function StudentHome() {
     <div className="sp-shell">
       <header className="sp-shell-top">
         <div className="sp-shell-brand">
-          {logo.url ? <img className="hub-logo logo-img" src={logo.url} alt="바꿈영수학원" /> : <div className="hub-logo">바</div>}
+          {logo.url ? <img className="hub-logo logo-img" src={logo.url} alt="바꿈영수학원" /> : <span className="hub-logo logo-bee"><Bee size={34} /></span>}
           <div>
-            <b>바꿈 영어</b>
+            <b className="sp-shell-name">바꿈영수학원 <SoezLogo size={15} className="sp-shell-soez" /></b>
             <span>{fmtFull(parseD(todayStr()))}</span>
           </div>
         </div>

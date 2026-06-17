@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../auth";
 import { loginStudent, loginTeacher } from "../lib/authApi";
 import { getCachedLogo } from "../lib/configApi";
+import { SoezLogo, Bee } from "../soez";
 
 type Tab = "teacher" | "student";
 
@@ -44,12 +45,13 @@ export function Login() {
 
   return (
     <div className="auth-wrap">
+      <div className="auth-hero"><SoezLogo size={46} /></div>
       <form className="auth-card" onSubmit={submit}>
         <div className="auth-brand">
-          {logo.url ? <img className="auth-logo auth-logo-img" src={logo.url} alt="쏘이지" /> : <div className="auth-logo soez-mark">쏘</div>}
+          {logo.url ? <img className="auth-logo auth-logo-img" src={logo.url} alt="바꿈영수학원" /> : <span className="auth-logo soez-mark-bee"><Bee size={34} /></span>}
           <div>
-            <b className="auth-wordmark">쏘이지</b>
-            <span>바꿈영수학원 · 선생님·학생 로그인</span>
+            <b>바꿈영수학원</b>
+            <span>선생님·학생 로그인</span>
           </div>
         </div>
 

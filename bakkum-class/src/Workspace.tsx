@@ -3,7 +3,7 @@ import { useStore } from "./store";
 import { useAuth } from "./auth";
 import { getMyPrefs, saveMyPrefs } from "./lib/authApi";
 import { Icon, StarIcon } from "./icons";
-import { Bee } from "./soez";
+import { Bee, SoezLogo } from "./soez";
 import { ThemeToggle } from "./components/Header";
 import { ModalHost, ToastHost } from "./components/ModalHost";
 import { type Category, getCategories, setCategories } from "./lib/categories";
@@ -513,6 +513,7 @@ export function Workspace() {
           </div>
           <p>별(★)로 즐겨찾기하면 위로 모입니다. 설정은 로그인 계정별로 저장됩니다.</p>
         </div>
+        <div className="side-poweredby"><SoezLogo size={20} /></div>
       </aside>
 
       <div className="main">

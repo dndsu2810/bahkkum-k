@@ -91,6 +91,9 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
   const m = request.method;
   await ensureFeedbackTables(env);
   const isAdmin = me.role === "admin";
+  // 오류·개선 요청은 '지현T(개발자)'가 받아 처리하는 창구 → 원장+개발자가 전체 조회·관리.
+  // (공지 배너는 원장만: isAdmin 유지)
+  const isIssueMgr = isAdmin || me.role === "developer" || me.displayRole === "developer";
 
   /* ============ 공지 배너 ============ */
   if (p === "/api/notice" && m === "GET") {
@@ -137,8 +140,8 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
 
   /* ============ 오류·개선 요청 ============ */
   if (p === "/api/issue" && m === "GET") {
-    // 원장은 전체, 그 외는 본인 글만.
-    const q = isAdmin
+    // 원장·개발자(지현T)는 전체, 그 외는 본인 글만.
+    const q = isIssueMgr
       ? env.DB.prepare("SELECT * FROM class_issue ORDER BY created_at DESC LIMIT 500")
       : env.DB.prepare("SELECT * FROM class_issue WHERE author_sub=? ORDER BY created_at DESC LIMIT 200").bind(me.sub);
     const r = await q.all<Record<string, unknown>>();
@@ -154,7 +157,7 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
       for (const row of rr.results || []) (byIssue[String(row.issue_id)] ||= []).push(replyRow(row));
       for (const i of issues) i.replies = byIssue[i.id] || [];
     }
-    return json({ issues, isAdmin });
+    return json({ issues, isAdmin: isIssueMgr });
   }
   if (p === "/api/issue" && m === "POST") {
     const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -185,7 +188,7 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
     return json({ ok: true, id });
   }
   if (p === "/api/issue/status" && m === "POST") {
-    if (!isAdmin) return json({ error: "forbidden" }, 403);
+    if (!isIssueMgr) return json({ error: "forbidden" }, 403);
     const b = (await request.json().catch(() => ({}))) as { id?: string; status?: string };
     if (!b.id) return json({ error: "id_required" }, 400);
     const status = ISSUE_STATUS.includes(String(b.status)) ? String(b.status) : "접수";
@@ -200,7 +203,7 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
     const issue = await env.DB.prepare("SELECT author_sub FROM class_issue WHERE id=?").bind(b.id).first<{ author_sub: string }>();
     if (!issue) return json({ error: "not_found" }, 404);
     const isAuthor = String(issue.author_sub) === me.sub;
-    if (!isAdmin && !isAuthor) return json({ error: "forbidden" }, 403); // 원장·작성자만 답글
+    if (!isIssueMgr && !isAuthor) return json({ error: "forbidden" }, 403); // 원장·개발자·작성자만 답글
     const text = String(b.reply || "").trim().slice(0, 2000);
     if (!text) return json({ error: "text_required" }, 400);
     const now = Date.now();
@@ -219,13 +222,13 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
     if (!b.id) return json({ error: "id_required" }, 400);
     const row = await env.DB.prepare("SELECT author_sub FROM class_issue_reply WHERE id=?").bind(b.id).first<{ author_sub: string }>();
     if (!row) return json({ ok: true });
-    if (!isAdmin && String(row.author_sub) !== me.sub) return json({ error: "forbidden" }, 403);
+    if (!isIssueMgr && String(row.author_sub) !== me.sub) return json({ error: "forbidden" }, 403);
     await env.DB.prepare("DELETE FROM class_issue_reply WHERE id=?").bind(b.id).run();
     return json({ ok: true });
   }
   // 알림 개수(종 배지) — 원장: 새 접수 건수 / 그 외: 내 글에 새 답변·해결(seen=0) 건수.
   if (p === "/api/issue/unseen" && m === "GET") {
-    if (isAdmin) {
+    if (isIssueMgr) {
       const r = await env.DB.prepare("SELECT COUNT(*) n FROM class_issue WHERE status='접수'").first<{ n: number }>();
       return json({ count: Number(r?.n) || 0, kind: "new" });
     }
@@ -240,10 +243,10 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
   if (p === "/api/issue/delete" && m === "POST") {
     const b = (await request.json().catch(() => ({}))) as { id?: string };
     if (!b.id) return json({ error: "id_required" }, 400);
-    // 원장이거나 본인 글만 삭제.
+    // 원장·개발자이거나 본인 글만 삭제.
     const row = await env.DB.prepare("SELECT author_sub FROM class_issue WHERE id=?").bind(b.id).first<{ author_sub: string }>();
     if (!row) return json({ ok: true });
-    if (!isAdmin && String(row.author_sub) !== me.sub) return json({ error: "forbidden" }, 403);
+    if (!isIssueMgr && String(row.author_sub) !== me.sub) return json({ error: "forbidden" }, 403);
     await env.DB.prepare("DELETE FROM class_issue WHERE id=?").bind(b.id).run();
     return json({ ok: true });
   }

@@ -1,0 +1,13 @@
+{
+  "name": "쏘이지 · 바꿈영수학원",
+  "short_name": "쏘이지",
+  "description": "바꿈영수학원 수업 관리 — 쏘이지",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FDF6E8",
+  "theme_color": "#F4A93C",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
