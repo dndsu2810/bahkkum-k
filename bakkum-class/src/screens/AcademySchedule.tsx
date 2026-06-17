@@ -54,20 +54,6 @@ export function AcademySchedule() {
     for (const e of monthEvents) (m[e.date] ||= []).push(e);
     return m;
   }, [monthEvents]);
-  // 달력용 — 기간 일정은 시작~종료 모든 날짜 칸에 표시(이번 달 칸만).
-  const byDateSpan = useMemo(() => {
-    const m: Record<string, EventItem[]> = {};
-    for (const e of events) {
-      const end = e.endDate && e.endDate >= e.date ? e.endDate : e.date;
-      let cur = e.date;
-      for (let guard = 0; cur <= end && guard < 400; guard++) {
-        if (cur.slice(0, 7) === ym) (m[cur] ||= []).push(e);
-        cur = addDay(cur);
-      }
-    }
-    for (const k of Object.keys(m)) m[k].sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title));
-    return m;
-  }, [events, ym]);
 
   function shiftMonth(delta: number) {
     const [y, mo] = ym.split("-").map(Number);
@@ -169,7 +155,7 @@ export function AcademySchedule() {
       ) : view === "cal" ? (
         <CalendarGrid
           ym={ym}
-          byDate={byDateSpan}
+          events={events}
           today={today}
           canEdit={canEdit}
           onPickDate={(d) => canEdit && setEdit({ date: d, endDate: "", title: "", category: "학원", memo: "" })}
@@ -265,10 +251,6 @@ function fmtShort(s: string): string {
   const d = parseD(s);
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
-/** YYYY-MM-DD 다음 날 문자열. */
-function addDay(s: string): string {
-  return shiftDate(s, 1);
-}
 /** YYYY-MM-DD 에서 n일 이동한 날짜 문자열. */
 function shiftDate(s: string, n: number): string {
   const d = parseD(s);
@@ -278,10 +260,42 @@ function shiftDate(s: string, n: number): string {
 
 const catCls = (c: string) => "cg-ev cg-ev-" + (CATS.includes(c) ? c : "학원");
 
-/** 월 달력(그리드) — 일~토 7열. 칸 클릭=그날 추가, 일정 클릭=수정, 일정 드래그=날짜 이동. */
+type Seg = { e: EventItem; startCol: number; endCol: number; lane: number; contL: boolean; contR: boolean };
+
+/** 한 주(7칸)에서 일정 막대 구간 계산 — 기간 일정은 시작~종료를 가로 막대 하나로, 겹치면 레인(줄)을 나눔. */
+function weekSegments(weekDates: (string | null)[], events: EventItem[], mFirst: string, mLast: string): Seg[] {
+  const segs: Omit<Seg, "lane">[] = [];
+  for (const e of events) {
+    const es = e.date;
+    const ee = e.endDate && e.endDate >= e.date ? e.endDate : e.date;
+    const cs = es < mFirst ? mFirst : es; // 이번 달로 클램프
+    const ce = ee > mLast ? mLast : ee;
+    if (ce < cs) continue;
+    let startCol = -1, endCol = -1;
+    for (let i = 0; i < 7; i++) {
+      const d = weekDates[i];
+      if (d && d >= cs && d <= ce) { if (startCol < 0) startCol = i; endCol = i; }
+    }
+    if (startCol < 0) continue;
+    segs.push({ e, startCol, endCol, contL: cs < (weekDates[startCol] as string), contR: ce > (weekDates[endCol] as string) });
+  }
+  // 시작 칸 → 긴 것 우선으로 정렬 후 레인 그리디 배정.
+  segs.sort((a, b) => a.startCol - b.startCol || (b.endCol - b.startCol) - (a.endCol - a.startCol) || a.e.date.localeCompare(b.e.date));
+  const laneEnd: number[] = []; // 레인별 마지막 점유 칸
+  const out: Seg[] = [];
+  for (const s of segs) {
+    let lane = 0;
+    while (lane < laneEnd.length && laneEnd[lane] >= s.startCol) lane++;
+    laneEnd[lane] = s.endCol;
+    out.push({ ...s, lane });
+  }
+  return out;
+}
+
+/** 월 달력(그리드) — 일~토 7열, 주 단위 막대. 칸 클릭=그날 추가, 막대 클릭=수정, 막대 드래그=날짜 이동. */
 function CalendarGrid({
   ym,
-  byDate,
+  events,
   today,
   canEdit,
   onPickDate,
@@ -289,7 +303,7 @@ function CalendarGrid({
   onMove,
 }: {
   ym: string;
-  byDate: Record<string, EventItem[]>;
+  events: EventItem[];
   today: string;
   canEdit: boolean;
   onPickDate: (d: string) => void;
@@ -304,54 +318,66 @@ function CalendarGrid({
   for (let i = 0; i < startDow; i++) cells.push(null);
   for (let d = 1; d <= daysIn; d++) cells.push(`${ym}-${pad(d)}`);
   while (cells.length % 7 !== 0) cells.push(null);
+  const weeks: (string | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  const mFirst = `${ym}-01`;
+  const mLast = `${ym}-${pad(daysIn)}`;
 
-  // 드래그 중인 일정(id|잡은날) · 드롭 대상 칸 하이라이트.
+  // 드래그 중인 일정(id|시작일) · 드롭 대상 칸 하이라이트.
   const [drag, setDrag] = useState<{ id: string; src: string } | null>(null);
   const [over, setOver] = useState<string | null>(null);
 
   return (
     <div className="cg">
-      {canEdit && <div className="cg-hint">일정을 끌어다 다른 날짜로 옮길 수 있어요. 클릭하면 수정·삭제.</div>}
+      {canEdit && <div className="cg-hint">막대를 끌어다 다른 날짜로 옮길 수 있어요. 클릭하면 수정·삭제.</div>}
       <div className="cg-head">
         {DOW.map((w, i) => (
           <div key={w} className={"cg-hd" + (i === 0 ? " sun" : i === 6 ? " sat" : "")}>{w}</div>
         ))}
       </div>
-      <div className="cg-grid">
-        {cells.map((d, i) => {
-          if (!d) return <div className="cg-cell empty" key={i} />;
-          const evs = byDate[d] || [];
-          const dom = i % 7;
+      <div className="cg-weeks">
+        {weeks.map((week, wi) => {
+          const segs = weekSegments(week, events, mFirst, mLast);
+          const lanes = segs.reduce((mx, s) => Math.max(mx, s.lane + 1), 0);
           return (
-            <div
-              className={"cg-cell" + (d === today ? " today" : "") + (over === d && drag && drag.src !== d ? " drop-over" : "")}
-              key={i}
-              onClick={() => onPickDate(d)}
-              onDragOver={(ev) => { if (drag) { ev.preventDefault(); if (over !== d) setOver(d); } }}
-              onDragLeave={() => setOver((o) => (o === d ? null : o))}
-              onDrop={(ev) => {
-                ev.preventDefault();
-                if (drag) onMove(drag.id, drag.src, d);
-                setDrag(null);
-                setOver(null);
-              }}
-            >
-              <div className={"cg-dnum" + (dom === 0 ? " sun" : dom === 6 ? " sat" : "")}>{Number(d.slice(8, 10))}</div>
-              <div className="cg-evs">
-                {evs.slice(0, 4).map((e) => (
+            <div className="cgw" key={wi} style={{ ["--lanes" as string]: lanes }}>
+              <div className="cgw-bg">
+                {week.map((d, i) => {
+                  if (!d) return <div className="cg-cell empty" key={i} />;
+                  return (
+                    <div
+                      className={"cg-cell" + (d === today ? " today" : "") + (over === d && drag ? " drop-over" : "")}
+                      key={i}
+                      onClick={() => onPickDate(d)}
+                      onDragOver={(ev) => { if (drag) { ev.preventDefault(); if (over !== d) setOver(d); } }}
+                      onDragLeave={() => setOver((o) => (o === d ? null : o))}
+                      onDrop={(ev) => {
+                        ev.preventDefault();
+                        if (drag) onMove(drag.id, drag.src, d);
+                        setDrag(null);
+                        setOver(null);
+                      }}
+                    >
+                      <div className={"cg-dnum" + (i === 0 ? " sun" : i === 6 ? " sat" : "")}>{Number(d.slice(8, 10))}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="cgw-bars">
+                {segs.map((s) => (
                   <button
-                    key={e.id}
-                    className={catCls(e.category) + (drag?.id === e.id ? " dragging" : "")}
-                    title={`${e.title}${e.memo ? " · " + e.memo : ""}`}
+                    key={s.e.id}
+                    className={catCls(s.e.category) + (s.contL ? " contL" : "") + (s.contR ? " contR" : "") + (drag?.id === s.e.id ? " dragging" : "")}
+                    style={{ gridColumn: `${s.startCol + 1} / ${s.endCol + 2}`, gridRow: s.lane + 1 }}
+                    title={`${s.e.title}${s.e.memo ? " · " + s.e.memo : ""}`}
                     draggable={canEdit}
-                    onClick={(ev) => { ev.stopPropagation(); onPickEvent(e); }}
-                    onDragStart={(ev) => { setDrag({ id: e.id, src: d }); ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", e.id); }}
+                    onClick={(ev) => { ev.stopPropagation(); onPickEvent(s.e); }}
+                    onDragStart={(ev) => { setDrag({ id: s.e.id, src: s.e.date }); ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", s.e.id); }}
                     onDragEnd={() => { setDrag(null); setOver(null); }}
                   >
-                    {e.title}
+                    {s.contL ? "◂ " : ""}{s.e.title}
                   </button>
                 ))}
-                {evs.length > 4 && <div className="cg-more">+{evs.length - 4}</div>}
               </div>
             </div>
           );

@@ -1369,7 +1369,18 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .cg-ev-휴원{color:var(--bad);background:#fdeaea}
 .cg-ev-할일{color:#ca8a04;background:#fdf6e3}
 .cg-more{font-size:10px;color:var(--ink3);font-weight:600;padding-left:4px}
-@media(max-width:680px){.cg-cell{min-height:72px}.cg-ev{font-size:10px;padding:1px 4px}}
+/* 주 단위 막대 달력 — 기간 일정을 가로 막대 하나로(노션식). */
+.cg-weeks{display:flex;flex-direction:column}
+.cgw{position:relative}
+.cgw-bg{display:grid;grid-template-columns:repeat(7,1fr)}
+.cgw .cg-cell{min-height:calc(30px + var(--lanes,0) * 23px)}
+.cgw-bars{position:absolute;left:0;right:0;top:26px;display:grid;grid-template-columns:repeat(7,1fr);
+  grid-auto-rows:21px;row-gap:2px;padding:0 4px;pointer-events:none}
+.cgw-bars > .cg-ev{pointer-events:auto;align-self:stretch;display:flex;align-items:center;height:20px;margin:0}
+.cg-ev.contL{border-top-left-radius:0;border-bottom-left-radius:0}
+.cg-ev.contR{border-top-right-radius:0;border-bottom-right-radius:0}
+@media(max-width:680px){.cgw .cg-cell{min-height:calc(24px + var(--lanes,0) * 20px)}.cgw-bars{top:22px;grid-auto-rows:18px}
+  .cgw-bars > .cg-ev{height:17px;font-size:10px;padding:1px 4px}}
 /* 영어 시간표·보강 */
 .eng-tt-dur{font-size:var(--t-cap);color:var(--ink3);margin-left:6px}
 /* 영어 시간표 — 넉넉한 행 높이 + 이름 한 줄씩(콤마 없이) 모두 보이게. */
