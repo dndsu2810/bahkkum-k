@@ -4,6 +4,7 @@ import { tasksApi, type BoardTask, type TaskStatus } from "../lib/hubApi";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { listUsers, type UserRow } from "../lib/authApi";
 import { DateField } from "../components/DateControls";
+import { EmptyHive } from "../soez";
 import { pad, todayStr } from "../lib/dates";
 
 const ACTIVE_COLS: { key: TaskStatus; label: string }[] = [
@@ -223,7 +224,7 @@ export function BoardShared() {
               </div>
               <div className="board2-list">
                 {items.map(card)}
-                {items.length === 0 && <div className="board2-empty">아직 없어요</div>}
+                {items.length === 0 && <EmptyHive compact caption="아직 없어요" />}
               </div>
             </div>
           );
@@ -243,7 +244,7 @@ export function BoardShared() {
               </div>
               <div className="board2-list">
                 {items.map(card)}
-                {items.length === 0 && <div className="board2-empty">이 달 완료한 일이 없어요</div>}
+                {items.length === 0 && <EmptyHive compact caption="이 달 완료한 일이 없어요" />}
               </div>
             </div>
           );

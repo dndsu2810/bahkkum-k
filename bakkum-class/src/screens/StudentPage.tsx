@@ -9,7 +9,7 @@ import { getCachedLogo } from "../lib/configApi";
 import { IssueBoard } from "./IssueBoard";
 import { Guide } from "./Guide";
 import { Icon } from "../icons";
-import { HexAvatar } from "../soez";
+import { HexAvatar, CombGauge } from "../soez";
 
 /** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
  *  - 학생 본인: studentId 생략(본인). 일지 입력 가능, 커리큘럼 조회.
@@ -50,6 +50,11 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
   const canEditCur = data.canEditCurriculum;
   const s = data.student;
 
+  // 이번 달 출석 — 벌집 게이지(출석/조퇴/지각을 출석으로). 기록이 있을 때만.
+  const ym = todayStr().slice(0, 7);
+  const monthRecs = data.daily.filter((r) => r.date.slice(0, 7) === ym && r.attStatus);
+  const presentDays = monthRecs.filter((r) => ["출석", "지각", "조퇴"].includes(r.attStatus)).length;
+
   return (
     <div className={"sp" + (embedded ? " is-embed" : "")}>
       {/* 헤더 — 학생 프로필 */}
@@ -62,6 +67,14 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
           </div>
         </div>
       </div>
+
+      {monthRecs.length > 0 && (
+        <div className="sp-att-gauge">
+          <span className="sp-att-label">이번 달 출석</span>
+          <CombGauge value={presentDays} total={monthRecs.length} size={16} />
+          <b className="sp-att-num">{presentDays}<span>/{monthRecs.length}일</span></b>
+        </div>
+      )}
 
       <div className="sp-grid">
         {/* 시간표 */}

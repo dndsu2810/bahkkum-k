@@ -148,8 +148,17 @@ export function CombGauge({ value, total, size = 18, gap = 3 }: { value: number;
   );
 }
 
-/** 빈 화면 — 빈 벌집 + 꿀벌, "아직 모인 꿀이 없어요". */
-export function EmptyHive({ caption = "아직 모인 꿀이 없어요", sub }: { caption?: string; sub?: string }) {
+/** 빈 화면 — 빈 벌집 + 꿀벌, "아직 모인 꿀이 없어요". compact=좁은 칸용(작은 마스코트만). */
+export function EmptyHive({ caption = "아직 모인 꿀이 없어요", sub, compact }: { caption?: string; sub?: string; compact?: boolean }) {
+  if (compact) {
+    return (
+      <div className="soez-empty compact">
+        <SoezMascot size={34} expr="think" />
+        <div className="soez-empty-cap">{caption}</div>
+        {sub && <div className="soez-empty-sub">{sub}</div>}
+      </div>
+    );
+  }
   // 빈 벌집 셀 몇 개(아웃라인) 위에 꿀벌 한 마리.
   const cell = (cx: number, cy: number, key: string, fill = false) => {
     const r = 13;

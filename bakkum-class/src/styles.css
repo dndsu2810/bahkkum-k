@@ -938,9 +938,10 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
   --hover:rgba(255,255,255,.045);
   /* 글자 — 순백 대신 톤다운, 본문·보조는 한 단계 밝게(배경에 묻히지 않게) */
   --ink:#e8ecf4; --ink2:#c7d0dd; --ink3:#9aa6b8; --ink4:#8b97ad;
-  /* 포인트(파랑) — 텍스트형은 밝게, 채움형은 blue-500 */
-  --brand:#3b82f6; --brand-d:#6aa0ff; --brand-soft:rgba(106,160,255,.14); --brand-line:#2e4368;
-  --on-brand:#fff;   /* 다크모드 브랜드(파랑) 위 글자는 흰색 유지 */
+  /* 포인트(쏘이지 꿀색) — 채움형 꿀, 텍스트형은 밝은 꿀로(다크 배경 대비) */
+  --honey-500:#F4A93C; --honey-300:#FAC775; --honey-100:rgba(244,169,60,.16);
+  --brand:#F4A93C; --brand-d:#FAC775; --brand-soft:rgba(244,169,60,.16); --brand-line:#5a4626;
+  --on-brand:#2A2926;   /* 꿀색 위 글자는 차콜(밝은 라이트/다크 동일) */
   --info:#86b3c9; --info-bg:rgba(78,134,166,.18);   /* 보강·정보(다크) */
   /* 상태색 — 400단계 + 반투명 배경(형광 방지, 어떤 표면에도 자연스럽게) */
   --ok:#4ade80; --ok-soft:rgba(34,197,94,.16);
@@ -1577,7 +1578,17 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 /* 빈 화면(빈 벌집 + 꿀벌) */
 .soez-empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:30px 16px;text-align:center}
 .soez-empty-art{position:relative;width:132px;height:70px}
-.soez-empty-bee{position:absolute;top:-16px;right:6px;transform:rotate(8deg);filter:drop-shadow(0 3px 5px rgba(138,90,43,.18))}
+.soez-empty-bee{position:absolute;top:-16px;right:6px;filter:drop-shadow(0 3px 5px rgba(138,90,43,.18));animation:soez-bob 2.6s ease-in-out infinite}
+@keyframes soez-bob{0%,100%{transform:rotate(7deg) translateY(0)}50%{transform:rotate(7deg) translateY(-5px)}}
+@media(prefers-reduced-motion:reduce){.soez-empty-bee{animation:none}}
+/* 컴팩트 빈 상태(좁은 칸반 칸용) */
+.soez-empty.compact{padding:16px 10px;gap:5px}
+.soez-empty.compact .soez-empty-cap{font-size:var(--t-sm);font-weight:600;color:var(--ink3)}
+/* 학생 페이지 — 이번 달 출석 벌집 게이지 */
+.sp-att-gauge{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:10px 14px;background:var(--honey-100);border:1px solid var(--honey-300);border-radius:var(--r-md)}
+.sp-att-label{font-size:var(--t-sm);font-weight:700;color:var(--comb-700)}
+.sp-att-num{font-size:var(--t-md);font-weight:800;color:var(--comb-700);margin-left:auto}
+.sp-att-num span{font-size:var(--t-cap);font-weight:600;color:var(--ink3)}
 .soez-empty-cap{font-size:var(--t-md);font-weight:700;color:var(--ink2);margin-top:6px}
 .soez-empty-sub{font-size:var(--t-sm);color:var(--ink3)}
 /* 프로필 사진 */
@@ -2635,7 +2646,8 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 /* ============ 등하원 — 학생 키오스크 ============ */
 .kiosk{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,#0f2747,#1b3a63)}
 .kiosk-card{width:100%;max-width:520px;background:var(--card);border-radius:24px;padding:32px 28px 28px;box-shadow:0 24px 60px rgba(0,0,0,.28);text-align:center}
-.kiosk-brand{font-size:14px;font-weight:700;color:var(--brand-d);letter-spacing:.02em}
+.kiosk-brand{display:inline-flex;align-items:center;gap:7px;font-size:14px;font-weight:700;color:var(--ink3);letter-spacing:.02em}
+.kiosk-wordmark{font-family:var(--font-logo);font-size:19px;font-weight:400;color:var(--comb-700)}
 .kiosk-title{font-size:30px;font-weight:800;color:var(--ink);margin:4px 0 18px}
 .kiosk-sub{font-size:18px;font-weight:600;color:var(--ink2);margin-bottom:14px}
 .kiosk-code{font-size:40px;font-weight:800;letter-spacing:.18em;color:var(--ink);min-height:52px;margin-bottom:8px}

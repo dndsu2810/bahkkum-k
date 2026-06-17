@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { checkinApi, type CheckinStudent } from "../lib/checkinApi";
+import { Bee } from "../soez";
 
 /**
  * 학생용 등하원 찍기(태블릿 키오스크) — 로그인 없이 동작.
@@ -67,7 +68,7 @@ export function CheckinKiosk() {
   return (
     <div className="kiosk">
       <div className="kiosk-card">
-        <div className="kiosk-brand">바꿈영수학원</div>
+        <div className="kiosk-brand"><Bee size={28} /><span className="kiosk-wordmark">쏘이지</span> · 바꿈영수학원</div>
         <h1 className="kiosk-title">등하원 체크</h1>
 
         {stage === "code" && (
