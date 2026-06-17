@@ -53,6 +53,22 @@ export async function ensureFeedbackTables(env: Env): Promise<void> {
         "SELECT 'irpL_'||id, id, '', '', 'admin', reply, CASE WHEN reply_at>0 THEN reply_at ELSE updated_at END FROM class_issue " +
         "WHERE reply<>'' AND NOT EXISTS (SELECT 1 FROM class_issue_reply x WHERE x.issue_id = class_issue.id)"
     ).run();
+    // 예전 단일 답변엔 여러 사람 말이 줄바꿈으로 합쳐져 있던 것 → 줄 단위로 분리해 각각 댓글로.
+    // (작성자는 기록이 없어 비움 — 화면에선 '이전 답변'으로 표시. 분리 후엔 줄바꿈이 없어 재실행돼도 무시.)
+    const lumps = await env.DB
+      .prepare("SELECT id, issue_id, author_role, created_at, text FROM class_issue_reply WHERE id LIKE 'irpL_%' AND text LIKE '%' || char(10) || '%'")
+      .all<{ id: string; issue_id: string; author_role: string; created_at: number; text: string }>();
+    for (const row of lumps.results || []) {
+      const lines = String(row.text).split("\n").map((s) => s.trim()).filter(Boolean);
+      if (lines.length < 2) continue;
+      await env.DB.prepare("DELETE FROM class_issue_reply WHERE id=?").bind(row.id).run();
+      for (let i = 0; i < lines.length; i++) {
+        await env.DB
+          .prepare("INSERT INTO class_issue_reply(id, issue_id, author_sub, author_name, author_role, text, created_at) VALUES(?,?,?,?,?,?,?)")
+          .bind(`${row.id}_${i}`, row.issue_id, "", "", String(row.author_role || "admin"), lines[i], Number(row.created_at || 0) + i * 1000)
+          .run();
+      }
+    }
   } catch { /* ignore */ }
 }
 

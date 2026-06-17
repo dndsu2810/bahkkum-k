@@ -238,12 +238,13 @@ function ReplyThread({
   const replies = issue.replies || [];
   return (
     <div className="issue-thread">
+      {replies.length > 0 && <div className="issue-thread-h">답변 {replies.length}</div>}
       {replies.map((r) => {
         const mine = !!r.authorSub && r.authorSub === mySub;
         return (
           <div className={"issue-msg" + (mine ? " mine" : "")} key={r.id}>
             <div className="issue-msg-h">
-              <span className="issue-msg-who">{mine ? "나" : r.authorName || "답변"}{r.authorRole ? ` · ${ROLE_LABEL[r.authorRole] || r.authorRole}` : ""}</span>
+              <span className="issue-msg-who">{mine ? "나" : r.authorName || "이전 답변"}{r.authorName && r.authorRole ? ` · ${ROLE_LABEL[r.authorRole] || r.authorRole}` : ""}</span>
               <span className="issue-msg-t">{fmtWhen(r.createdAt)}</span>
               {(mine || isAdmin) && <button className="issue-msg-del" title="삭제" onClick={() => onDelete(r.id)}>×</button>}
             </div>

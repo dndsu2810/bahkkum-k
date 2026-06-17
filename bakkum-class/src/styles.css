@@ -2578,6 +2578,7 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .issue-reply-edit{align-self:flex-start;margin-top:8px}
 /* 답변 스레드 — 작성자·시간 표시, 내 답글은 색으로 구분 */
 .issue-thread{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.issue-thread-h{font-size:var(--t-cap);font-weight:800;color:var(--ink3)}
 .issue-msg{border-left:3px solid var(--line2);background:var(--card2,#f6f8fb);border-radius:0 var(--r-md) var(--r-md) 0;padding:8px 11px}
 .issue-msg.mine{border-left-color:var(--brand);background:var(--brand-soft)}
 .issue-msg-h{display:flex;align-items:center;gap:8px;margin-bottom:3px}
