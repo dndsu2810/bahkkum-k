@@ -1,0 +1,54 @@
+/* ============================================
+   쏘이지(Soez) Design Tokens
+   학원 수업 관리 앱 · 꿀벌/꿀 컨셉
+   ============================================ */
+
+/* Fonts
+   - 로고 워드마크만 Jua, 그 외 전부 Pretendard
+   Pretendard: https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css
+   Jua:        https://fonts.googleapis.com/css2?family=Jua&display=swap
+*/
+
+:root {
+  /* ---- Brand (Golden Honey + Comb Brown) ---- */
+  --honey-100: #FDEFD3;  /* 꿀색 틴트·배경 강조 */
+  --honey-300: #FAC775;  /* 밝은 꿀색·배지 */
+  --honey-500: #F4A93C;  /* 메인 꿀색·버튼·강조 */
+  --honey-700: #C5851E;  /* 진한 머스타드·링크 */
+  --comb-700:  #8A5A2B;  /* 벌집 브라운·포인트 */
+
+  /* ---- Neutral ---- */
+  --ink-900:   #2A2926;  /* 본문 진한 글자·차콜 */
+  --ink-600:   #5C574E;  /* 본문 */
+  --ink-400:   #8A867B;  /* 보조 텍스트 */
+  --line-200:  #E6E2D6;  /* 보더 */
+  --surface:   #FFFFFF;  /* 카드 표면 */
+  --surface-2: #FBF6EA;  /* 보조 표면 */
+  --bg:        #FDF6E8;  /* 화면 전체 크림 배경 */
+
+  /* ---- Status ---- */
+  --success:    #4F9A5E;  --success-bg: #E4F0E2;  /* 출석 */
+  --warning:    #E8804D;  --warning-bg: #FBE7DA;  /* 지각 */
+  --danger:     #CE5246;  --danger-bg:  #F9E1DE;  /* 결석 */
+  --info:       #4E86A6;  --info-bg:    #E1ECF1;  /* 정보·보충 */
+
+  /* ---- Radius ---- */
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  /* ---- Elevation ---- */
+  --shadow-card: 0 2px 18px rgba(138,90,43,0.06);
+  --shadow-btn:  0 3px 0 #2A2926;   /* 버튼 입체 그림자 */
+
+  /* ---- Spacing scale ---- */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px; --space-6: 24px; --space-8: 32px; --space-12: 48px;
+
+  /* ---- Typography ---- */
+  --font-sans: "Pretendard", -apple-system, sans-serif;  /* UI·본문 전체 */
+  --font-logo: "Jua", "Pretendard", sans-serif;          /* 로고 워드마크 전용 */
+}
+
+::selection { background: var(--honey-300); color: var(--ink-900); }

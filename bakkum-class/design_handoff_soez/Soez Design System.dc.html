@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.gstatic.com">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:#FDF6E8;font-family:"Pretendard",-apple-system,sans-serif;-webkit-font-smoothing:antialiased;}
+  @keyframes soez-float{0%,100%{transform:translateY(0) rotate(-2deg);}50%{transform:translateY(-9px) rotate(2deg);}}
+  @keyframes soez-flutter{0%,100%{transform:scaleY(1);}50%{transform:scaleY(0.78);}}
+  ::selection{background:#FAC775;color:#2A2926;}
+</style>
+</helmet>
+
+<div style="min-width:100%;min-height:100vh;background:#FDF6E8;background-image:radial-gradient(circle at 14% 8%, rgba(244,169,60,0.10), transparent 42%),radial-gradient(circle at 88% 4%, rgba(250,199,117,0.16), transparent 38%);padding:0 0 96px 0;">
+
+  <!-- ===== HERO / COVER ===== -->
+  <div data-screen-label="Cover" style="position:relative;overflow:hidden;background:linear-gradient(180deg,#FBE9C2 0%,#FDF6E8 100%);border-bottom:1px solid #EDE2C9;">
+    <svg viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;opacity:0.5;pointer-events:none;">
+      <defs>
+        <pattern id="comb" width="56" height="64" patternUnits="userSpaceOnUse" patternTransform="scale(1.4)">
+          <path d="M14 0 L42 0 L56 24 L42 48 L14 48 L0 24 Z" fill="none" stroke="#E7C682" strokeWidth="1.4"></path>
+          <path d="M42 48 L70 48 L84 72 L70 96 L42 96 L28 72 Z" fill="none" stroke="#E7C682" strokeWidth="1.4"></path>
+        </pattern>
+      </defs>
+      <rect width="1200" height="360" fill="url(#comb)"></rect>
+    </svg>
+    <div style="position:relative;max-width:1080px;margin:0 auto;padding:64px 40px 56px 40px;">
+      <div style="display:flex;align-items:center;gap:22px;margin-bottom:34px;">
+        <div style="animation:soez-float 4.5s ease-in-out infinite;filter:drop-shadow(0 10px 18px rgba(138,90,43,0.22));">
+          <svg width="92" height="100" viewBox="-34 -42 68 76">
+            <g style="transform-origin:center;animation:soez-flutter 0.32s ease-in-out infinite;transform-box:fill-box;">
+              <ellipse cx="-2" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(-22 -2 -13)"></ellipse>
+              <ellipse cx="6" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(22 6 -13)"></ellipse>
+            </g>
+            <path d="M -4 -10 Q -8 -17 -9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path>
+            <circle cx="-9" cy="-21" r="1.9" fill="#2A2926"></circle>
+            <path d="M 4 -10 Q 8 -17 9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path>
+            <circle cx="9" cy="-21" r="1.9" fill="#2A2926"></circle>
+            <ellipse cx="0" cy="1" rx="16.5" ry="14" fill="#F4A93C" stroke="#2A2926" strokeWidth="1.7"></ellipse>
+            <path d="M -8.5 3.5 Q 0 9.5 8.5 3.5" fill="none" stroke="#2A2926" strokeWidth="2" strokeLinecap="round"></path>
+            <circle cx="-9.6" cy="2.5" r="2.4" fill="#F2873A" opacity="0.5"></circle>
+            <circle cx="9.6" cy="2.5" r="2.4" fill="#F2873A" opacity="0.5"></circle>
+            <path d="M -7.6 -3 Q -5.4 -6 -3.2 -3" fill="none" stroke="#2A2926" strokeWidth="1.9" strokeLinecap="round"></path>
+            <path d="M 3.2 -3 Q 5.4 -6 7.6 -3" fill="none" stroke="#2A2926" strokeWidth="1.9" strokeLinecap="round"></path>
+            <path d="M -7 10.5 Q 0 12.5 7 10.5" fill="none" stroke="#2A2926" strokeWidth="2.6" strokeLinecap="round"></path>
+          </svg>
+        </div>
+        <div>
+          <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">
+            <span style="font-family:'Jua';font-size:54px;color:#2A2926;letter-spacing:-0.01em;line-height:1;white-space:nowrap;">쏘이지</span>
+            <span style="font-size:17px;font-weight:600;color:#C5851E;letter-spacing:0.22em;">SOEZ · so easy</span>
+          </div>
+          <div style="margin-top:10px;font-size:16px;color:#5C574E;font-weight:500;">바꿈영수학원 수업 관리 · 브랜드 &amp; 디자인 시스템</div>
+        </div>
+      </div>
+      <h1 style="margin:0;max-width:680px;font-size:38px;line-height:1.28;font-weight:800;color:#2A2926;letter-spacing:-0.02em;text-wrap:balance;">부지런한 벌처럼, 꿀처럼 달콤한 보상.<br>쓰기 정말 쉬운 수업 관리.</h1>
+      <p style="margin:18px 0 0;max-width:560px;font-size:16px;line-height:1.7;color:#5C574E;">꿀벌과 꿀을 한 컨셉으로, 로고·색·글꼴·캐릭터부터 화면 구석 디테일까지 한 규칙으로 정리한 시스템 문서입니다.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:26px;">
+        <span style="display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #EAD9AF;border-radius:999px;padding:8px 15px;font-size:13.5px;font-weight:600;color:#8A5A2B;">🐝 부지런한 학생 = 벌</span>
+        <span style="display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #EAD9AF;border-radius:999px;padding:8px 15px;font-size:13.5px;font-weight:600;color:#8A5A2B;">🍯 보상 포인트 = 꿀</span>
+        <span style="display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #EAD9AF;border-radius:999px;padding:8px 15px;font-size:13.5px;font-weight:600;color:#8A5A2B;">⬡ 반·명단 = 벌집</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="max-width:1080px;margin:0 auto;padding:56px 40px 0 40px;display:flex;flex-direction:column;gap:32px;">
+
+    <!-- ===== 01 이름의 의미 ===== -->
+    <section data-screen-label="Brand story" style="background:#fff;border:1px solid #E6E2D6;border-radius:24px;padding:44px;box-shadow:0 2px 18px rgba(138,90,43,0.06);">
+      <div style="font-size:13px;font-weight:700;letter-spacing:0.14em;color:#C5851E;text-transform:uppercase;margin-bottom:12px;">01 — Brand Story</div>
+      <h2 style="margin:0 0 8px;font-size:30px;font-weight:800;color:#2A2926;letter-spacing:-0.02em;">한 단어에 세 가지 뜻</h2>
+      <p style="margin:0 0 28px;font-size:16px;line-height:1.65;color:#5C574E;max-width:560px;">"쏘이지"라는 이름 하나에 브랜드의 가치·사람·컨셉이 모두 담겨 있습니다.</p>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
+        <div style="background:#FDF6E8;border:1px solid #EDE2C9;border-radius:16px;padding:24px;">
+          <div style="font-size:22px;font-weight:800;color:#F4A93C;margin-bottom:8px;">So Easy</div>
+          <div style="font-size:14.5px;line-height:1.6;color:#5C574E;">"쓰기 정말 쉽다" — 앱의 핵심 가치</div>
+        </div>
+        <div style="background:#FDF6E8;border:1px solid #EDE2C9;border-radius:16px;padding:24px;">
+          <div style="font-size:22px;font-weight:800;color:#C5851E;margin-bottom:8px;">이지(현)</div>
+          <div style="font-size:14.5px;line-height:1.6;color:#5C574E;">제작자 이지현 원장의 이름</div>
+        </div>
+        <div style="background:#FDF6E8;border:1px solid #EDE2C9;border-radius:16px;padding:24px;">
+          <div style="font-size:22px;font-weight:800;color:#8A5A2B;margin-bottom:8px;">쏘이지 🐝</div>
+          <div style="font-size:14.5px;line-height:1.6;color:#5C574E;">"벌에 쏘이지" — 꿀벌 연상에서 컨셉 탄생</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 02 로고 ===== -->
+    <section data-screen-label="Logo" style="background:#fff;border:1px solid #E6E2D6;border-radius:24px;padding:44px;box-shadow:0 2px 18px rgba(138,90,43,0.06);">
+      <div style="font-size:13px;font-weight:700;letter-spacing:0.14em;color:#C5851E;text-transform:uppercase;margin-bottom:12px;">02 — Logo Set</div>
+      <h2 style="margin:0 0 8px;font-size:30px;font-weight:800;color:#2A2926;letter-spacing:-0.02em;">한 마리의 벌, 세 가지 쓰임</h2>
+      <p style="margin:0 0 28px;font-size:16px;line-height:1.65;color:#5C574E;max-width:560px;">같은 벌 심볼을 기준으로 자리 크기에 따라 세 형태를 씁니다. 로고의 글자는 <b style="color:#2A2926;">Jua(주아)</b>, 나머지 모든 텍스트는 Pretendard를 씁니다.</p>
+      <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:16px;">
+        <!-- main logo -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:22px;display:flex;flex-direction:column;">
+          <div style="font-size:12px;font-weight:600;color:#9A968B;margin-bottom:18px;">메인 로고 · 큰 자리</div>
+          <div style="flex:1;display:flex;align-items:center;gap:14px;">
+            <svg width="58" height="64" viewBox="-34 -42 68 76">
+              <ellipse cx="-2" cy="-13" rx="8.5" ry="5.5" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(-22 -2 -13)"></ellipse>
+              <ellipse cx="6" cy="-13" rx="8.5" ry="5.5" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(22 6 -13)"></ellipse>
+              <path d="M -4 -10 Q -8 -17 -9 -21" fill="none" stroke="#2A2926" strokeWidth="1.4" strokeLinecap="round"></path>
+              <circle cx="-9" cy="-21" r="1.7" fill="#2A2926"></circle>
+              <path d="M 4 -10 Q 8 -17 9 -21" fill="none" stroke="#2A2926" strokeWidth="1.4" strokeLinecap="round"></path>
+              <circle cx="9" cy="-21" r="1.7" fill="#2A2926"></circle>
+              <ellipse cx="0" cy="1" rx="16" ry="13.5" fill="#F4A93C" stroke="#2A2926" strokeWidth="1.6"></ellipse>
+              <path d="M -12.5 -5 Q 0 -3 12.5 -5" fill="none" stroke="#2A2926" strokeWidth="3.4" strokeLinecap="round"></path>
+              <path d="M -13 4 Q 0 6 13 4" fill="none" stroke="#2A2926" strokeWidth="3.4" strokeLinecap="round"></path>
+              <path d="M -8 12 Q 0 13.5 8 12" fill="none" stroke="#2A2926" strokeWidth="3" strokeLinecap="round"></path>
+            </svg>
+            <div>
+              <div style="font-family:'Jua';font-size:36px;color:#2A2926;letter-spacing:-0.01em;line-height:1;">쏘이지</div>
+              <div style="font-size:11px;font-weight:600;color:#C5851E;letter-spacing:0.18em;margin-top:6px;">SOEZ · so easy</div>
+            </div>
+          </div>
+        </div>
+        <!-- english variant -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:22px;display:flex;flex-direction:column;">
+          <div style="font-size:12px;font-weight:600;color:#9A968B;margin-bottom:18px;">영문 변형 · 굿즈</div>
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <div style="display:flex;align-items:center;">
+              <span style="font-family:'Jua';font-size:54px;color:#2A2926;line-height:1;">S</span>
+              <svg width="44" height="48" viewBox="-26 -32 52 60" style="margin:0 -1px;">
+                <ellipse cx="-7" cy="-12" rx="6.5" ry="4.2" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.2" opacity="0.92" transform="rotate(-24 -7 -12)"></ellipse>
+                <ellipse cx="7" cy="-12" rx="6.5" ry="4.2" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.2" opacity="0.92" transform="rotate(24 7 -12)"></ellipse>
+                <path d="M -5 -10 Q -8 -16 -9 -19" fill="none" stroke="#2A2926" strokeWidth="1.3" strokeLinecap="round"></path>
+                <circle cx="-9" cy="-19" r="1.5" fill="#2A2926"></circle>
+                <path d="M 5 -10 Q 8 -16 9 -19" fill="none" stroke="#2A2926" strokeWidth="1.3" strokeLinecap="round"></path>
+                <circle cx="9" cy="-19" r="1.5" fill="#2A2926"></circle>
+                <circle cx="0" cy="2" r="14.5" fill="#F4A93C" stroke="#2A2926" strokeWidth="1.6"></circle>
+                <path d="M -12 -3 Q 0 -1 12 -3" fill="none" stroke="#2A2926" strokeWidth="3" strokeLinecap="round"></path>
+                <path d="M -12.5 6 Q 0 8 12.5 6" fill="none" stroke="#2A2926" strokeWidth="3" strokeLinecap="round"></path>
+              </svg>
+              <span style="font-family:'Jua';font-size:46px;color:#2A2926;line-height:1;">ez</span>
+            </div>
+            <div style="font-size:13px;font-weight:500;color:#8A867B;margin-top:6px;">영문 · "o" = 벌</div>
+          </div>
+        </div>
+        <!-- app icon -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:22px;display:flex;flex-direction:column;">
+          <div style="font-size:12px;font-weight:600;color:#9A968B;margin-bottom:18px;">앱 아이콘 · 작은 자리</div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+            <div style="width:96px;height:96px;border-radius:26px;background:linear-gradient(160deg,#FAC775,#F4A93C);border:1.5px solid #2A2926;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(138,90,43,0.24);">
+              <svg width="58" height="62" viewBox="-34 -42 68 76">
+                <ellipse cx="-2" cy="-13" rx="8.5" ry="5.5" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(-22 -2 -13)"></ellipse>
+                <ellipse cx="6" cy="-13" rx="8.5" ry="5.5" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(22 6 -13)"></ellipse>
+                <path d="M -4 -10 Q -8 -17 -9 -21" fill="none" stroke="#2A2926" strokeWidth="1.4" strokeLinecap="round"></path>
+                <circle cx="-9" cy="-21" r="1.7" fill="#2A2926"></circle>
+                <path d="M 4 -10 Q 8 -17 9 -21" fill="none" stroke="#2A2926" strokeWidth="1.4" strokeLinecap="round"></path>
+                <circle cx="9" cy="-21" r="1.7" fill="#2A2926"></circle>
+                <ellipse cx="0" cy="1" rx="16" ry="13.5" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.6"></ellipse>
+                <path d="M -12.5 -5 Q 0 -3 12.5 -5" fill="none" stroke="#2A2926" strokeWidth="3.4" strokeLinecap="round"></path>
+                <path d="M -13 4 Q 0 6 13 4" fill="none" stroke="#2A2926" strokeWidth="3.4" strokeLinecap="round"></path>
+                <path d="M -8 12 Q 0 13.5 8 12" fill="none" stroke="#2A2926" strokeWidth="3" strokeLinecap="round"></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:24px;margin-top:24px;padding-top:22px;border-top:1px dashed #E6E2D6;">
+        <div style="display:flex;align-items:center;gap:9px;font-size:13.5px;color:#5C574E;"><span style="width:18px;height:18px;border-radius:50%;background:#4F9A5E;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;">✓</span>여백은 벌 몸통 높이의 1배 이상 확보</div>
+        <div style="display:flex;align-items:center;gap:9px;font-size:13.5px;color:#5C574E;"><span style="width:18px;height:18px;border-radius:50%;background:#CE5246;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;">✕</span>벌 줄무늬 색·기울기 변형 금지</div>
+        <div style="display:flex;align-items:center;gap:9px;font-size:13.5px;color:#5C574E;"><span style="width:18px;height:18px;border-radius:50%;background:#CE5246;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;">✕</span>크림·꿀색 외 배경 위 직접 배치 금지</div>
+      </div>
+    </section>
+
+    <!-- ===== 03 색 ===== -->
+    <section data-screen-label="Colors" style="background:#fff;border:1px solid #E6E2D6;border-radius:24px;padding:44px;box-shadow:0 2px 18px rgba(138,90,43,0.06);">
+      <div style="font-size:13px;font-weight:700;letter-spacing:0.14em;color:#C5851E;text-transform:uppercase;margin-bottom:12px;">03 — Color Tokens</div>
+      <h2 style="margin:0 0 8px;font-size:30px;font-weight:800;color:#2A2926;letter-spacing:-0.02em;">골든 허니 + 벌집 브라운</h2>
+      <p style="margin:0 0 28px;font-size:16px;line-height:1.65;color:#5C574E;max-width:600px;">밝은 꿀색을 기본으로 깔고, 강조가 필요한 자리에 벌집 브라운을 한 방울. 상태색은 꿀 톤과 부딪히지 않게 따로 맞췄습니다.</p>
+
+      <div style="font-size:13px;font-weight:700;color:#8A867B;margin-bottom:12px;">브랜드 · Brand</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:28px;">
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;">
+          <div style="height:78px;background:#F4A93C;"></div>
+          <div style="padding:12px;"><div style="font-size:13.5px;font-weight:700;color:#2A2926;">메인 꿀색</div><div style="font-size:11.5px;color:#8A867B;margin-top:3px;font-family:monospace;">honey-500</div><div style="font-size:12px;color:#5C574E;margin-top:2px;font-family:monospace;">#F4A93C</div></div>
+        </div>
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;">
+          <div style="height:78px;background:#FAC775;"></div>
+          <div style="padding:12px;"><div style="font-size:13.5px;font-weight:700;color:#2A2926;">밝은 꿀색</div><div style="font-size:11.5px;color:#8A867B;margin-top:3px;font-family:monospace;">honey-300</div><div style="font-size:12px;color:#5C574E;margin-top:2px;font-family:monospace;">#FAC775</div></div>
+        </div>
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;">
+          <div style="height:78px;background:#C5851E;"></div>
+          <div style="padding:12px;"><div style="font-size:13.5px;font-weight:700;color:#2A2926;">진한 머스타드</div><div style="font-size:11.5px;color:#8A867B;margin-top:3px;font-family:monospace;">honey-700</div><div style="font-size:12px;color:#5C574E;margin-top:2px;font-family:monospace;">#C5851E</div></div>
+        </div>
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;">
+          <div style="height:78px;background:#8A5A2B;"></div>
+          <div style="padding:12px;"><div style="font-size:13.5px;font-weight:700;color:#2A2926;">벌집 브라운</div><div style="font-size:11.5px;color:#8A867B;margin-top:3px;font-family:monospace;">comb-700</div><div style="font-size:12px;color:#5C574E;margin-top:2px;font-family:monospace;">#8A5A2B</div></div>
+        </div>
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;">
+          <div style="height:78px;background:#FDEFD3;"></div>
+          <div style="padding:12px;"><div style="font-size:13.5px;font-weight:700;color:#2A2926;">꿀색 틴트</div><div style="font-size:11.5px;color:#8A867B;margin-top:3px;font-family:monospace;">honey-100</div><div style="font-size:12px;color:#5C574E;margin-top:2px;font-family:monospace;">#FDEFD3</div></div>
+        </div>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:#8A867B;margin-bottom:12px;">중립 · Neutral</div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:28px;">
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;"><div style="height:62px;background:#2A2926;"></div><div style="padding:10px;"><div style="font-size:12px;font-weight:700;color:#2A2926;">차콜</div><div style="font-size:11px;color:#5C574E;font-family:monospace;margin-top:2px;">#2A2926</div></div></div>
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;"><div style="height:62px;background:#5C574E;"></div><div style="padding:10px;"><div style="font-size:12px;font-weight:700;color:#2A2926;">본문</div><div style="font-size:11px;color:#5C574E;font-family:monospace;margin-top:2px;">#5C574E</div></div></div>
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;"><div style="height:62px;background:#8A867B;"></div><div style="padding:10px;"><div style="font-size:12px;font-weight:700;color:#2A2926;">보조</div><div style="font-size:11px;color:#5C574E;font-family:monospace;margin-top:2px;">#8A867B</div></div></div>
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;"><div style="height:62px;background:#E6E2D6;"></div><div style="padding:10px;"><div style="font-size:12px;font-weight:700;color:#2A2926;">라인</div><div style="font-size:11px;color:#5C574E;font-family:monospace;margin-top:2px;">#E6E2D6</div></div></div>
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;"><div style="height:62px;background:#FBF6EA;"></div><div style="padding:10px;"><div style="font-size:12px;font-weight:700;color:#2A2926;">서피스2</div><div style="font-size:11px;color:#5C574E;font-family:monospace;margin-top:2px;">#FBF6EA</div></div></div>
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;"><div style="height:62px;background:#FDF6E8;"></div><div style="padding:10px;"><div style="font-size:12px;font-weight:700;color:#2A2926;">크림 배경</div><div style="font-size:11px;color:#5C574E;font-family:monospace;margin-top:2px;">#FDF6E8</div></div></div>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:#8A867B;margin-bottom:12px;">상태 · Status (출석/지각/결석/정보)</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;"><div style="height:62px;background:#4F9A5E;"></div><div style="padding:12px;"><div style="font-size:13px;font-weight:700;color:#2A2926;">출석 · success</div><div style="font-size:11.5px;color:#5C574E;font-family:monospace;margin-top:2px;">#4F9A5E</div><div style="font-size:11px;color:#8A867B;font-family:monospace;">bg #E4F0E2</div></div></div>
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;"><div style="height:62px;background:#E8804D;"></div><div style="padding:12px;"><div style="font-size:13px;font-weight:700;color:#2A2926;">지각 · warning</div><div style="font-size:11.5px;color:#5C574E;font-family:monospace;margin-top:2px;">#E8804D</div><div style="font-size:11px;color:#8A867B;font-family:monospace;">bg #FBE7DA</div></div></div>
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;"><div style="height:62px;background:#CE5246;"></div><div style="padding:12px;"><div style="font-size:13px;font-weight:700;color:#2A2926;">결석 · danger</div><div style="font-size:11.5px;color:#5C574E;font-family:monospace;margin-top:2px;">#CE5246</div><div style="font-size:11px;color:#8A867B;font-family:monospace;">bg #F9E1DE</div></div></div>
+        <div style="border:1px solid #E6E2D6;border-radius:14px;overflow:hidden;"><div style="height:62px;background:#4E86A6;"></div><div style="padding:12px;"><div style="font-size:13px;font-weight:700;color:#2A2926;">정보 · info</div><div style="font-size:11.5px;color:#5C574E;font-family:monospace;margin-top:2px;">#4E86A6</div><div style="font-size:11px;color:#8A867B;font-family:monospace;">bg #E1ECF1</div></div></div>
+      </div>
+    </section>
+
+    <!-- ===== 04 타이포 ===== -->
+    <section data-screen-label="Typography" style="background:#fff;border:1px solid #E6E2D6;border-radius:24px;padding:44px;box-shadow:0 2px 18px rgba(138,90,43,0.06);">
+      <div style="font-size:13px;font-weight:700;letter-spacing:0.14em;color:#C5851E;text-transform:uppercase;margin-bottom:12px;">04 — Typography</div>
+      <h2 style="margin:0 0 8px;font-size:30px;font-weight:800;color:#2A2926;letter-spacing:-0.02em;">Pretendard — 둥글둥글 친근, 야무진 가독</h2>
+      <p style="margin:0 0 28px;font-size:16px;line-height:1.65;color:#5C574E;max-width:560px;">학생도 학부모도 한 번에 읽히도록. 제목은 Bold/ExtraBold, 본문은 Regular/Medium으로 운용합니다. <b style="color:#2A2926;">로고 워드마크만 Jua</b>, 나머지 UI·본문은 전부 Pretendard로 가독성을 우선합니다.</p>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <div style="display:grid;grid-template-columns:130px 1fr;gap:20px;align-items:baseline;padding:16px 0;border-bottom:1px solid #F0EBDD;"><div style="font-size:12px;font-family:monospace;color:#8A867B;">Display · 800<br>38/1.2</div><div style="font-size:38px;font-weight:800;color:#2A2926;letter-spacing:-0.02em;">오늘도 부지런히, 쏘이지</div></div>
+        <div style="display:grid;grid-template-columns:130px 1fr;gap:20px;align-items:baseline;padding:16px 0;border-bottom:1px solid #F0EBDD;"><div style="font-size:12px;font-family:monospace;color:#8A867B;">H1 · 800<br>30/1.25</div><div style="font-size:30px;font-weight:800;color:#2A2926;letter-spacing:-0.02em;">이번 주 모은 꿀 240</div></div>
+        <div style="display:grid;grid-template-columns:130px 1fr;gap:20px;align-items:baseline;padding:16px 0;border-bottom:1px solid #F0EBDD;"><div style="font-size:12px;font-family:monospace;color:#8A867B;">H2 · 700<br>22/1.35</div><div style="font-size:22px;font-weight:700;color:#2A2926;">3-A반 출석부</div></div>
+        <div style="display:grid;grid-template-columns:130px 1fr;gap:20px;align-items:baseline;padding:16px 0;border-bottom:1px solid #F0EBDD;"><div style="font-size:12px;font-family:monospace;color:#8A867B;">Body · 400<br>16/1.65</div><div style="font-size:16px;font-weight:400;line-height:1.65;color:#5C574E;">출석을 누르면 꿀이 한 칸씩 차올라요. 부지런할수록 벌집이 가득 찹니다.</div></div>
+        <div style="display:grid;grid-template-columns:130px 1fr;gap:20px;align-items:baseline;padding:16px 0;border-bottom:1px solid #F0EBDD;"><div style="font-size:12px;font-family:monospace;color:#8A867B;">Label · 600<br>14/1.4</div><div style="font-size:14px;font-weight:600;color:#2A2926;">학생 이름 · 보호자 연락처</div></div>
+        <div style="display:grid;grid-template-columns:130px 1fr;gap:20px;align-items:baseline;padding:16px 0;"><div style="font-size:12px;font-family:monospace;color:#8A867B;">Caption · 500<br>12.5/1.4</div><div style="font-size:12.5px;font-weight:500;color:#8A867B;">마지막 출석 · 2일 전</div></div>
+      </div>
+    </section>
+
+    <!-- ===== 05 캐릭터 ===== -->
+    <section data-screen-label="Mascot" style="background:#fff;border:1px solid #E6E2D6;border-radius:24px;padding:44px;box-shadow:0 2px 18px rgba(138,90,43,0.06);">
+      <div style="font-size:13px;font-weight:700;letter-spacing:0.14em;color:#C5851E;text-transform:uppercase;margin-bottom:12px;">05 — Mascot</div>
+      <h2 style="margin:0 0 8px;font-size:30px;font-weight:800;color:#2A2926;letter-spacing:-0.02em;">마스코트 "쏘이"</h2>
+      <p style="margin:0 0 28px;font-size:16px;line-height:1.65;color:#5C574E;max-width:600px;">통통이의 둥근 비례 + 방긋이의 표정을 합친 통합 마스코트. 둥근 몸통·또렷한 줄무늬는 고정, 표정만 상황에 맞게 바꿔 씁니다.</p>
+
+      <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:stretch;margin-bottom:32px;">
+        <div style="flex:1;min-width:260px;background:linear-gradient(160deg,#FDF6E8,#FBE9C2);border:1px solid #EDE2C9;border-radius:20px;padding:30px;display:flex;align-items:center;justify-content:center;">
+          <div style="animation:soez-float 4s ease-in-out infinite;filter:drop-shadow(0 12px 20px rgba(138,90,43,0.2));">
+            <svg width="150" height="164" viewBox="-34 -42 68 76">
+              <ellipse cx="-2" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(-22 -2 -13)"></ellipse>
+              <ellipse cx="6" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(22 6 -13)"></ellipse>
+              <path d="M -4 -10 Q -8 -17 -9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path>
+              <circle cx="-9" cy="-21" r="1.9" fill="#2A2926"></circle>
+              <path d="M 4 -10 Q 8 -17 9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path>
+              <circle cx="9" cy="-21" r="1.9" fill="#2A2926"></circle>
+              <ellipse cx="0" cy="1" rx="16.5" ry="14" fill="#F4A93C" stroke="#2A2926" strokeWidth="1.7"></ellipse>
+              <path d="M -7.6 -3 Q -5.4 -6 -3.2 -3" fill="none" stroke="#2A2926" strokeWidth="1.9" strokeLinecap="round"></path>
+              <path d="M 3.2 -3 Q 5.4 -6 7.6 -3" fill="none" stroke="#2A2926" strokeWidth="1.9" strokeLinecap="round"></path>
+              <circle cx="-9.6" cy="2.5" r="2.4" fill="#F2873A" opacity="0.5"></circle>
+              <circle cx="9.6" cy="2.5" r="2.4" fill="#F2873A" opacity="0.5"></circle>
+              <path d="M -8.5 3.5 Q 0 9.5 8.5 3.5" fill="none" stroke="#2A2926" strokeWidth="2" strokeLinecap="round"></path>
+              <path d="M -7 10.5 Q 0 12.5 7 10.5" fill="none" stroke="#2A2926" strokeWidth="2.6" strokeLinecap="round"></path>
+            </svg>
+          </div>
+        </div>
+        <div style="flex:1.3;min-width:280px;display:flex;flex-direction:column;justify-content:center;gap:14px;">
+          <div style="display:flex;gap:12px;"><div style="width:7px;border-radius:4px;background:#F4A93C;flex:none;"></div><div><div style="font-size:15px;font-weight:700;color:#2A2926;">둥근 몸통 + 또렷한 줄무늬</div><div style="font-size:14px;color:#5C574E;line-height:1.55;margin-top:2px;">몸통 가로:세로 ≈ 16:14. 줄무늬는 차콜, 곡선 3선이 기본.</div></div></div>
+          <div style="display:flex;gap:12px;"><div style="width:7px;border-radius:4px;background:#FAC775;flex:none;"></div><div><div style="font-size:15px;font-weight:700;color:#2A2926;">표정만 교체</div><div style="font-size:14px;color:#5C574E;line-height:1.55;margin-top:2px;">눈·입·볼터치만 바꿔 상황별 감정 표현. 몸통은 고정.</div></div></div>
+          <div style="display:flex;gap:12px;"><div style="width:7px;border-radius:4px;background:#8A5A2B;flex:none;"></div><div><div style="font-size:15px;font-weight:700;color:#2A2926;">선 두께 위계</div><div style="font-size:14px;color:#5C574E;line-height:1.55;margin-top:2px;">외곽선 1.7 · 줄무늬 2.6 · 얼굴선 1.9. 작은 자리에선 날개·더듬이 생략 가능.</div></div></div>
+        </div>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:#8A867B;margin-bottom:14px;">표정 세트 · 6종</div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:32px;">
+        <!-- 기본 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:14px 8px;text-align:center;background:#FBF6EA;">
+          <svg width="72" height="80" viewBox="-34 -42 68 76">
+            <ellipse cx="-2" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(-22 -2 -13)"></ellipse><ellipse cx="6" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(22 6 -13)"></ellipse>
+            <path d="M -4 -10 Q -8 -17 -9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="-9" cy="-21" r="1.9" fill="#2A2926"></circle><path d="M 4 -10 Q 8 -17 9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="9" cy="-21" r="1.9" fill="#2A2926"></circle>
+            <ellipse cx="0" cy="1" rx="16.5" ry="14" fill="#F4A93C" stroke="#2A2926" strokeWidth="1.7"></ellipse>
+            <circle cx="-5.5" cy="-3" r="2.4" fill="#2A2926"></circle><circle cx="5.5" cy="-3" r="2.4" fill="#2A2926"></circle><circle cx="-4.7" cy="-3.8" r="0.7" fill="#fff"></circle><circle cx="6.3" cy="-3.8" r="0.7" fill="#fff"></circle>
+            <path d="M -4.5 4 Q 0 7 4.5 4" fill="none" stroke="#2A2926" strokeWidth="1.8" strokeLinecap="round"></path>
+            <path d="M -7 10.5 Q 0 12.5 7 10.5" fill="none" stroke="#2A2926" strokeWidth="2.6" strokeLinecap="round"></path>
+          </svg>
+          <div style="font-size:12.5px;font-weight:700;color:#2A2926;margin-top:4px;">기본</div>
+        </div>
+        <!-- 방긋 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:14px 8px;text-align:center;background:#FBF6EA;">
+          <svg width="72" height="80" viewBox="-34 -42 68 76">
+            <ellipse cx="-2" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(-22 -2 -13)"></ellipse><ellipse cx="6" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(22 6 -13)"></ellipse>
+            <path d="M -4 -10 Q -8 -17 -9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="-9" cy="-21" r="1.9" fill="#2A2926"></circle><path d="M 4 -10 Q 8 -17 9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="9" cy="-21" r="1.9" fill="#2A2926"></circle>
+            <ellipse cx="0" cy="1" rx="16.5" ry="14" fill="#F4A93C" stroke="#2A2926" strokeWidth="1.7"></ellipse>
+            <path d="M -7.6 -3 Q -5.4 -6 -3.2 -3" fill="none" stroke="#2A2926" strokeWidth="1.9" strokeLinecap="round"></path><path d="M 3.2 -3 Q 5.4 -6 7.6 -3" fill="none" stroke="#2A2926" strokeWidth="1.9" strokeLinecap="round"></path>
+            <circle cx="-9.6" cy="2.5" r="2.4" fill="#F2873A" opacity="0.5"></circle><circle cx="9.6" cy="2.5" r="2.4" fill="#F2873A" opacity="0.5"></circle>
+            <path d="M -5.5 3 Q 0 9.5 5.5 3" fill="none" stroke="#2A2926" strokeWidth="2" strokeLinecap="round"></path>
+            <path d="M -7 10.5 Q 0 12.5 7 10.5" fill="none" stroke="#2A2926" strokeWidth="2.6" strokeLinecap="round"></path>
+          </svg>
+          <div style="font-size:12.5px;font-weight:700;color:#2A2926;margin-top:4px;">방긋</div>
+        </div>
+        <!-- 윙크 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:14px 8px;text-align:center;background:#FBF6EA;">
+          <svg width="72" height="80" viewBox="-34 -42 68 76">
+            <ellipse cx="-2" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(-22 -2 -13)"></ellipse><ellipse cx="6" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(22 6 -13)"></ellipse>
+            <path d="M -4 -10 Q -8 -17 -9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="-9" cy="-21" r="1.9" fill="#2A2926"></circle><path d="M 4 -10 Q 8 -17 9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="9" cy="-21" r="1.9" fill="#2A2926"></circle>
+            <ellipse cx="0" cy="1" rx="16.5" ry="14" fill="#F4A93C" stroke="#2A2926" strokeWidth="1.7"></ellipse>
+            <circle cx="-5.5" cy="-3" r="2.4" fill="#2A2926"></circle><circle cx="-4.7" cy="-3.8" r="0.7" fill="#fff"></circle>
+            <path d="M 3.2 -3.2 Q 5.4 -6 7.6 -3.2" fill="none" stroke="#2A2926" strokeWidth="1.9" strokeLinecap="round"></path>
+            <path d="M -4.5 4 Q 0.5 8 5 3.5" fill="none" stroke="#2A2926" strokeWidth="1.9" strokeLinecap="round"></path>
+            <path d="M 11 -9 l 1.1 2.4 l 2.4 1.1 l -2.4 1.1 l -1.1 2.4 l -1.1 -2.4 l -2.4 -1.1 l 2.4 -1.1 Z" fill="#FAC775" stroke="#C5851E" strokeWidth="0.5"></path>
+            <path d="M -7 10.5 Q 0 12.5 7 10.5" fill="none" stroke="#2A2926" strokeWidth="2.6" strokeLinecap="round"></path>
+          </svg>
+          <div style="font-size:12.5px;font-weight:700;color:#2A2926;margin-top:4px;">윙크</div>
+        </div>
+        <!-- 신남 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:14px 8px;text-align:center;background:#FBF6EA;">
+          <svg width="72" height="80" viewBox="-34 -42 68 76">
+            <ellipse cx="-2" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(-22 -2 -13)"></ellipse><ellipse cx="6" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(22 6 -13)"></ellipse>
+            <path d="M -4 -10 Q -8 -17 -9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="-9" cy="-21" r="1.9" fill="#2A2926"></circle><path d="M 4 -10 Q 8 -17 9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="9" cy="-21" r="1.9" fill="#2A2926"></circle>
+            <ellipse cx="0" cy="1" rx="16.5" ry="14" fill="#F4A93C" stroke="#2A2926" strokeWidth="1.7"></ellipse>
+            <circle cx="-5.5" cy="-3.5" r="2.6" fill="#2A2926"></circle><circle cx="5.5" cy="-3.5" r="2.6" fill="#2A2926"></circle><circle cx="-4.6" cy="-4.4" r="0.8" fill="#fff"></circle><circle cx="6.4" cy="-4.4" r="0.8" fill="#fff"></circle>
+            <ellipse cx="0" cy="5.5" rx="2.8" ry="3.4" fill="#2A2926"></ellipse>
+            <circle cx="-10" cy="2" r="2.5" fill="#F2873A" opacity="0.5"></circle><circle cx="10" cy="2" r="2.5" fill="#F2873A" opacity="0.5"></circle>
+            <path d="M -16 -12 l 0.8 1.8 l 1.8 0.8 l -1.8 0.8 l -0.8 1.8 l -0.8 -1.8 l -1.8 -0.8 l 1.8 -0.8 Z" fill="#FAC775" stroke="#C5851E" strokeWidth="0.4"></path>
+            <path d="M 15 -13 l 0.8 1.8 l 1.8 0.8 l -1.8 0.8 l -0.8 1.8 l -0.8 -1.8 l -1.8 -0.8 l 1.8 -0.8 Z" fill="#FAC775" stroke="#C5851E" strokeWidth="0.4"></path>
+          </svg>
+          <div style="font-size:12.5px;font-weight:700;color:#2A2926;margin-top:4px;">신남</div>
+        </div>
+        <!-- 생각 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:14px 8px;text-align:center;background:#FBF6EA;">
+          <svg width="72" height="80" viewBox="-34 -42 68 76">
+            <ellipse cx="-2" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(-22 -2 -13)"></ellipse><ellipse cx="6" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(22 6 -13)"></ellipse>
+            <path d="M -4 -10 Q -8 -17 -9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="-9" cy="-21" r="1.9" fill="#2A2926"></circle><path d="M 4 -10 Q 8 -17 9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="9" cy="-21" r="1.9" fill="#2A2926"></circle>
+            <ellipse cx="0" cy="1" rx="16.5" ry="14" fill="#F4A93C" stroke="#2A2926" strokeWidth="1.7"></ellipse>
+            <circle cx="-5" cy="-4.4" r="2.2" fill="#2A2926"></circle><circle cx="6" cy="-4.4" r="2.2" fill="#2A2926"></circle><circle cx="-4.3" cy="-5.1" r="0.6" fill="#fff"></circle><circle cx="6.7" cy="-5.1" r="0.6" fill="#fff"></circle>
+            <path d="M -3 5.5 Q 0 4.6 3 5.5" fill="none" stroke="#2A2926" strokeWidth="1.7" strokeLinecap="round"></path>
+            <circle cx="13" cy="-11" r="1.5" fill="#8A5A2B" opacity="0.55"></circle><circle cx="17" cy="-14" r="2.1" fill="#8A5A2B" opacity="0.4"></circle>
+            <path d="M -7 10.5 Q 0 12.5 7 10.5" fill="none" stroke="#2A2926" strokeWidth="2.6" strokeLinecap="round"></path>
+          </svg>
+          <div style="font-size:12.5px;font-weight:700;color:#2A2926;margin-top:4px;">생각</div>
+        </div>
+        <!-- 축하 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:14px 8px;text-align:center;background:#FBF6EA;">
+          <svg width="72" height="80" viewBox="-34 -42 68 76">
+            <path d="M -20 -16 l 0.7 1.6 l 1.6 0.7 l -1.6 0.7 l -0.7 1.6 l -0.7 -1.6 l -1.6 -0.7 l 1.6 -0.7 Z" fill="#4F9A5E"></path>
+            <circle cx="19" cy="-18" r="1.7" fill="#E8804D"></circle><circle cx="-16" cy="14" r="1.6" fill="#4E86A6"></circle><circle cx="18" cy="10" r="1.6" fill="#FAC775"></circle>
+            <ellipse cx="-2" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(-22 -2 -13)"></ellipse><ellipse cx="6" cy="-13" rx="9" ry="5.8" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" opacity="0.92" transform="rotate(22 6 -13)"></ellipse>
+            <path d="M -4 -10 Q -8 -17 -9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="-9" cy="-21" r="1.9" fill="#2A2926"></circle><path d="M 4 -10 Q 8 -17 9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="9" cy="-21" r="1.9" fill="#2A2926"></circle>
+            <ellipse cx="0" cy="1" rx="16.5" ry="14" fill="#F4A93C" stroke="#2A2926" strokeWidth="1.7"></ellipse>
+            <path d="M -7.6 -3 Q -5.4 -6 -3.2 -3" fill="none" stroke="#2A2926" strokeWidth="1.9" strokeLinecap="round"></path><path d="M 3.2 -3 Q 5.4 -6 7.6 -3" fill="none" stroke="#2A2926" strokeWidth="1.9" strokeLinecap="round"></path>
+            <path d="M -6 2.5 Q 0 10.5 6 2.5 Z" fill="#7A2E22" stroke="#2A2926" strokeWidth="1.4" strokeLinejoin="round"></path>
+            <circle cx="-9.6" cy="2.5" r="2.4" fill="#F2873A" opacity="0.5"></circle><circle cx="9.6" cy="2.5" r="2.4" fill="#F2873A" opacity="0.5"></circle>
+          </svg>
+          <div style="font-size:12.5px;font-weight:700;color:#2A2926;margin-top:4px;">축하</div>
+        </div>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:#8A867B;margin-bottom:14px;">자리별 변형 · Variants</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">
+        <!-- 동글이 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:20px 14px;text-align:center;">
+          <div style="display:inline-flex;width:74px;height:74px;border-radius:50%;background:#FAC775;border:1.5px solid #2A2926;align-items:center;justify-content:center;">
+            <svg width="50" height="50" viewBox="-26 -28 52 56">
+              <ellipse cx="-8" cy="-9" rx="6" ry="4" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.2" transform="rotate(-25 -8 -9)"></ellipse><ellipse cx="8" cy="-9" rx="6" ry="4" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.2" transform="rotate(25 8 -9)"></ellipse>
+              <circle cx="0" cy="2" r="15" fill="#F4A93C" stroke="#2A2926" strokeWidth="1.7"></circle>
+              <path d="M -11 -3 Q 0 -1 11 -3" fill="none" stroke="#2A2926" strokeWidth="3" strokeLinecap="round"></path>
+              <circle cx="-5" cy="2" r="2.1" fill="#2A2926"></circle><circle cx="5" cy="2" r="2.1" fill="#2A2926"></circle>
+              <path d="M -4 7 Q 0 9.5 4 7" fill="none" stroke="#2A2926" strokeWidth="1.7" strokeLinecap="round"></path>
+            </svg>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:#2A2926;margin-top:10px;">동글이</div>
+          <div style="font-size:12px;color:#8A867B;margin-top:2px;">작은 아이콘·뱃지</div>
+        </div>
+        <!-- 라인이 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:20px 14px;text-align:center;">
+          <svg width="74" height="74" viewBox="-34 -38 68 72">
+            <ellipse cx="-2" cy="-13" rx="9" ry="5.8" fill="none" stroke="#2A2926" strokeWidth="1.5" transform="rotate(-22 -2 -13)"></ellipse><ellipse cx="6" cy="-13" rx="9" ry="5.8" fill="none" stroke="#2A2926" strokeWidth="1.5" transform="rotate(22 6 -13)"></ellipse>
+            <path d="M -4 -10 Q -8 -17 -9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="-9" cy="-21" r="1.7" fill="#2A2926"></circle><path d="M 4 -10 Q 8 -17 9 -21" fill="none" stroke="#2A2926" strokeWidth="1.5" strokeLinecap="round"></path><circle cx="9" cy="-21" r="1.7" fill="#2A2926"></circle>
+            <ellipse cx="0" cy="1" rx="16.5" ry="14" fill="none" stroke="#2A2926" strokeWidth="1.8"></ellipse>
+            <circle cx="-5.5" cy="-3" r="1.9" fill="#2A2926"></circle><circle cx="5.5" cy="-3" r="1.9" fill="#2A2926"></circle>
+            <path d="M -4.5 4 Q 0 7 4.5 4" fill="none" stroke="#2A2926" strokeWidth="1.7" strokeLinecap="round"></path>
+            <path d="M -7 10.5 Q 0 12.5 7 10.5" fill="none" stroke="#2A2926" strokeWidth="2" strokeLinecap="round"></path>
+          </svg>
+          <div style="font-size:13px;font-weight:700;color:#2A2926;margin-top:10px;">라인이</div>
+          <div style="font-size:12px;color:#8A867B;margin-top:2px;">미니멀 화면</div>
+        </div>
+        <!-- 꿀단지 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:20px 14px;text-align:center;">
+          <svg width="84" height="74" viewBox="-44 -38 88 72">
+            <ellipse cx="-22" cy="-13" rx="7" ry="4.6" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.2" transform="rotate(-22 -22 -13)"></ellipse><ellipse cx="-15" cy="-13" rx="7" ry="4.6" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.2" transform="rotate(22 -15 -13)"></ellipse>
+            <path d="M -23 -11 Q -27 -17 -28 -20" fill="none" stroke="#2A2926" strokeWidth="1.3" strokeLinecap="round"></path><circle cx="-28" cy="-20" r="1.5" fill="#2A2926"></circle><path d="M -16 -11 Q -12 -17 -11 -20" fill="none" stroke="#2A2926" strokeWidth="1.3" strokeLinecap="round"></path><circle cx="-11" cy="-20" r="1.5" fill="#2A2926"></circle>
+            <ellipse cx="-19" cy="-1" rx="13" ry="11" fill="#F4A93C" stroke="#2A2926" strokeWidth="1.6"></ellipse>
+            <path d="M -25 -5 Q -19 -3 -13 -5" fill="none" stroke="#2A2926" strokeWidth="2.6" strokeLinecap="round"></path>
+            <circle cx="-23" cy="0" r="1.8" fill="#2A2926"></circle><circle cx="-15" cy="0" r="1.8" fill="#2A2926"></circle>
+            <path d="M -22 5 Q -19 7 -16 5" fill="none" stroke="#2A2926" strokeWidth="1.6" strokeLinecap="round"></path>
+            <!-- honey pot -->
+            <path d="M 6 -6 h 26 v 4 h -3 l -1.5 22 a 4 4 0 0 1 -4 3.6 h -8 a 4 4 0 0 1 -4 -3.6 l -1.5 -22 h -3 Z" fill="#8A5A2B" stroke="#2A2926" strokeWidth="1.5" strokeLinejoin="round"></path>
+            <rect x="9" y="3" width="20" height="11" rx="2" fill="#FAC775"></rect>
+            <text x="19" y="12" textAnchor="middle" fontSize="9" fontWeight="800" fill="#8A5A2B" fontFamily="Pretendard">꿀</text>
+            <path d="M 19 -6 q -2 5 0 8 q 2 -3 0 -8 Z" fill="#FAC775"></path>
+          </svg>
+          <div style="font-size:13px;font-weight:700;color:#2A2926;margin-top:10px;">꿀단지</div>
+          <div style="font-size:12px;color:#8A867B;margin-top:2px;">포인트·보상 화면</div>
+        </div>
+        <!-- 부지런이 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:20px 14px;text-align:center;">
+          <svg width="84" height="74" viewBox="-44 -38 88 72">
+            <path d="M -34 18 Q -22 14 -14 6" fill="none" stroke="#FAC775" strokeWidth="3" strokeLinecap="round" strokeDasharray="1 6"></path>
+            <g transform="rotate(-18 4 -2)">
+              <ellipse cx="-2" cy="-13" rx="8.5" ry="5.5" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" transform="rotate(-22 -2 -13)"></ellipse><ellipse cx="6" cy="-13" rx="8.5" ry="5.5" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.3" transform="rotate(22 6 -13)"></ellipse>
+              <path d="M -4 -10 Q -8 -17 -9 -21" fill="none" stroke="#2A2926" strokeWidth="1.4" strokeLinecap="round"></path><circle cx="-9" cy="-21" r="1.7" fill="#2A2926"></circle><path d="M 4 -10 Q 8 -17 9 -21" fill="none" stroke="#2A2926" strokeWidth="1.4" strokeLinecap="round"></path><circle cx="9" cy="-21" r="1.7" fill="#2A2926"></circle>
+              <ellipse cx="0" cy="1" rx="15" ry="12.5" fill="#F4A93C" stroke="#2A2926" strokeWidth="1.6"></ellipse>
+              <circle cx="-5" cy="-2.5" r="2.1" fill="#2A2926"></circle><circle cx="5" cy="-2.5" r="2.1" fill="#2A2926"></circle>
+              <path d="M -4 4 Q 0 7 4 4" fill="none" stroke="#2A2926" strokeWidth="1.7" strokeLinecap="round"></path>
+              <path d="M -7 10 Q 0 12 7 10" fill="none" stroke="#2A2926" strokeWidth="2.4" strokeLinecap="round"></path>
+            </g>
+          </svg>
+          <div style="font-size:13px;font-weight:700;color:#2A2926;margin-top:10px;">부지런이</div>
+          <div style="font-size:12px;color:#8A867B;margin-top:2px;">로딩·동적 강조</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 06 과몰입 디테일 ===== -->
+    <section data-screen-label="Honey details" style="background:#fff;border:1px solid #E6E2D6;border-radius:24px;padding:44px;box-shadow:0 2px 18px rgba(138,90,43,0.06);">
+      <div style="font-size:13px;font-weight:700;letter-spacing:0.14em;color:#C5851E;text-transform:uppercase;margin-bottom:12px;">06 — Honey Details</div>
+      <h2 style="margin:0 0 8px;font-size:30px;font-weight:800;color:#2A2926;letter-spacing:-0.02em;">꿀벌·꿀, 화면 구석까지</h2>
+      <p style="margin:0 0 28px;font-size:16px;line-height:1.65;color:#5C574E;max-width:600px;">테마를 디테일까지 밀어붙이되 과하지 않게. 포인트=꿀, 명단=벌집으로 일관되게 적용합니다.</p>
+
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;">
+        <!-- 벌집 아바타 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:24px;">
+          <div style="font-size:14px;font-weight:700;color:#2A2926;margin-bottom:4px;">벌집 아바타</div>
+          <div style="font-size:13px;color:#8A867B;margin-bottom:18px;">사진 없을 때 — 육각형 칸 + 이름 초성, 또는 벌 실루엣</div>
+          <div style="display:flex;gap:14px;align-items:center;">
+            <svg width="58" height="64" viewBox="0 0 100 110"><path d="M25 2 L75 2 L98 55 L75 108 L25 108 L2 55 Z" fill="#FDEFD3" stroke="#8A5A2B" strokeWidth="3"></path><text x="50" y="50" textAnchor="middle" dominantBaseline="central" fontSize="40" fontWeight="800" fill="#8A5A2B" fontFamily="Pretendard">김</text></svg>
+            <svg width="58" height="64" viewBox="0 0 100 110"><path d="M25 2 L75 2 L98 55 L75 108 L25 108 L2 55 Z" fill="#FAC775" stroke="#8A5A2B" strokeWidth="3"></path><text x="50" y="50" textAnchor="middle" dominantBaseline="central" fontSize="34" fontWeight="800" fill="#8A5A2B" fontFamily="Pretendard">ㅈㅎ</text></svg>
+            <svg width="58" height="64" viewBox="0 0 100 110"><path d="M25 2 L75 2 L98 55 L75 108 L25 108 L2 55 Z" fill="#F4A93C" stroke="#8A5A2B" strokeWidth="3"></path>
+              <g transform="translate(50,54) scale(1.3)">
+                <ellipse cx="0" cy="1" rx="14" ry="11.5" fill="#FFFFFF" stroke="#2A2926" strokeWidth="1.6"></ellipse>
+                <path d="M -11 -4 Q 0 -2 11 -4" fill="none" stroke="#2A2926" strokeWidth="2.6" strokeLinecap="round"></path><path d="M -11 4 Q 0 6 11 4" fill="none" stroke="#2A2926" strokeWidth="2.6" strokeLinecap="round"></path>
+              </g>
+            </svg>
+          </div>
+        </div>
+        <!-- 꿀방울 포인트 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:24px;">
+          <div style="font-size:14px;font-weight:700;color:#2A2926;margin-bottom:4px;">꿀방울 포인트</div>
+          <div style="font-size:13px;color:#8A867B;margin-bottom:18px;">포인트 단위 = 꿀. 숫자 옆 꿀방울 아이콘</div>
+          <div style="display:flex;align-items:center;gap:18px;">
+            <div style="display:inline-flex;align-items:center;gap:8px;background:#FDEFD3;border:1px solid #EAD9AF;border-radius:999px;padding:9px 16px;">
+              <svg width="20" height="24" viewBox="0 0 24 28"><path d="M12 1 C12 1 3 13 3 19 a9 9 0 0 0 18 0 C21 13 12 1 12 1 Z" fill="#F4A93C" stroke="#C5851E" strokeWidth="1.4"></path><ellipse cx="8.5" cy="17" rx="2.2" ry="3" fill="#FFFFFF" opacity="0.6"></ellipse></svg>
+              <span style="font-size:20px;font-weight:800;color:#8A5A2B;">1,240</span>
+              <span style="font-size:13px;font-weight:600;color:#C5851E;">꿀</span>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:5px;">
+              <svg width="14" height="17" viewBox="0 0 24 28"><path d="M12 1 C12 1 3 13 3 19 a9 9 0 0 0 18 0 C21 13 12 1 12 1 Z" fill="#FAC775" stroke="#C5851E" strokeWidth="1.4"></path></svg>
+              <span style="font-size:15px;font-weight:700;color:#4F9A5E;">+15</span>
+            </div>
+          </div>
+        </div>
+        <!-- 벌집 게이지 (interactive) -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:24px;grid-column:span 2;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:16px;">
+            <div>
+              <div style="font-size:14px;font-weight:700;color:#2A2926;margin-bottom:4px;">벌집 게이지</div>
+              <div style="font-size:13px;color:#8A867B;">막대 대신 벌집 칸이 하나씩 차오릅니다 · <span style="font-weight:700;color:#8A5A2B;">{{ filled }}/12 칸</span></div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button onClick="{{ removeHoney }}" style="width:34px;height:34px;border-radius:10px;border:1px solid #E6E2D6;background:#fff;font-size:18px;font-weight:700;color:#8A5A2B;cursor:pointer;">−</button>
+              <button onClick="{{ addHoney }}" style="width:34px;height:34px;border-radius:10px;border:1px solid #2A2926;background:#F4A93C;font-size:18px;font-weight:700;color:#2A2926;cursor:pointer;">+</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <sc-for list="{{ cells }}" as="cell" hint-placeholder-count="12">
+              <svg width="40" height="46" viewBox="0 0 100 110"><path d="M25 2 L75 2 L98 55 L75 108 L25 108 L2 55 Z" fill="{{ cell.fill }}" stroke="#C5851E" strokeWidth="3"></path></svg>
+            </sc-for>
+          </div>
+        </div>
+        <!-- 여왕벌 랭킹 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:24px;">
+          <div style="font-size:14px;font-weight:700;color:#2A2926;margin-bottom:4px;">여왕벌 랭킹</div>
+          <div style="font-size:13px;color:#8A867B;margin-bottom:18px;">포인트 1등에게 여왕벌 왕관</div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="position:relative;">
+              <svg width="20" height="14" viewBox="0 0 40 26" style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);"><path d="M2 24 L6 6 L13 16 L20 3 L27 16 L34 6 L38 24 Z" fill="#F4A93C" stroke="#8A5A2B" strokeWidth="2" strokeLinejoin="round"></path><circle cx="20" cy="3" r="2.4" fill="#CE5246"></circle></svg>
+              <div style="width:48px;height:54px;display:flex;align-items:center;justify-content:center;">
+                <svg width="48" height="54" viewBox="0 0 100 110"><path d="M25 2 L75 2 L98 55 L75 108 L25 108 L2 55 Z" fill="#FAC775" stroke="#8A5A2B" strokeWidth="3"></path><text x="50" y="52" textAnchor="middle" dominantBaseline="central" fontSize="32" fontWeight="800" fill="#8A5A2B" fontFamily="Pretendard">박</text></svg>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:15px;font-weight:800;color:#2A2926;">박서윤 <span style="font-size:12px;font-weight:700;color:#C5851E;">1등</span></div>
+              <div style="font-size:13px;color:#8A5A2B;font-weight:600;">🍯 2,310 꿀</div>
+            </div>
+          </div>
+        </div>
+        <!-- 빈 화면 -->
+        <div style="border:1px solid #E6E2D6;border-radius:16px;padding:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:#FBF6EA;">
+          <svg width="120" height="60" viewBox="0 0 200 100">
+            <path d="M30 18 L58 18 L72 42 L58 66 L30 66 L16 42 Z" fill="none" stroke="#D9C9A0" strokeWidth="2.4"></path>
+            <path d="M72 42 L100 42 L114 66 L100 90 L72 90 L58 66 Z" fill="none" stroke="#D9C9A0" strokeWidth="2.4"></path>
+            <path d="M72 -6 L100 -6 L114 18 L100 42 L72 42 L58 18 Z" fill="none" stroke="#D9C9A0" strokeWidth="2.4"></path>
+            <path d="M114 18 L142 18 L156 42 L142 66 L114 66 L100 42 Z" fill="none" stroke="#D9C9A0" strokeWidth="2.4"></path>
+            <g transform="translate(143,60) scale(0.8)">
+              <ellipse cx="0" cy="1" rx="13" ry="11" fill="#FAC775" stroke="#8A5A2B" strokeWidth="1.6"></ellipse>
+              <circle cx="-4" cy="-1" r="1.6" fill="#8A5A2B"></circle><circle cx="4" cy="-1" r="1.6" fill="#8A5A2B"></circle>
+              <path d="M -3 5 Q 0 3.5 3 5" fill="none" stroke="#8A5A2B" strokeWidth="1.4" strokeLinecap="round"></path>
+            </g>
+          </svg>
+          <div style="font-size:15px;font-weight:700;color:#2A2926;margin-top:8px;">아직 모인 꿀이 없어요</div>
+          <div style="font-size:13px;color:#8A867B;margin-top:4px;">출석부터 차근차근 채워볼까요?</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 07 UI 컴포넌트 ===== -->
+    <section data-screen-label="Components" style="background:#fff;border:1px solid #E6E2D6;border-radius:24px;padding:44px;box-shadow:0 2px 18px rgba(138,90,43,0.06);">
+      <div style="font-size:13px;font-weight:700;letter-spacing:0.14em;color:#C5851E;text-transform:uppercase;margin-bottom:12px;">07 — UI Components</div>
+      <h2 style="margin:0 0 28px;font-size:30px;font-weight:800;color:#2A2926;letter-spacing:-0.02em;">버튼 · 입력 · 카드 · 뱃지</h2>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px;">
+        <!-- buttons -->
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#8A867B;margin-bottom:14px;">버튼 · Buttons</div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+            <button style="background:#F4A93C;color:#2A2926;border:1.5px solid #2A2926;border-radius:12px;padding:11px 20px;font-size:15px;font-weight:700;font-family:Pretendard;cursor:pointer;box-shadow:0 3px 0 #2A2926;">출석 체크</button>
+            <button style="background:#fff;color:#8A5A2B;border:1.5px solid #C5851E;border-radius:12px;padding:11px 20px;font-size:15px;font-weight:700;font-family:Pretendard;cursor:pointer;">명단 보기</button>
+            <button style="background:transparent;color:#C5851E;border:none;border-radius:12px;padding:11px 14px;font-size:15px;font-weight:700;font-family:Pretendard;cursor:pointer;text-decoration:underline;text-underline-offset:3px;">더보기</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px;">
+            <button style="background:#F4A93C;color:#2A2926;border:1.5px solid #2A2926;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:700;font-family:Pretendard;cursor:pointer;">Small</button>
+            <button style="background:#F4A93C;color:#2A2926;border:1.5px solid #2A2926;border-radius:14px;padding:14px 26px;font-size:17px;font-weight:800;font-family:Pretendard;cursor:pointer;box-shadow:0 3px 0 #2A2926;">Large</button>
+            <button disabled style="background:#EDE7DA;color:#A8A296;border:1.5px solid #DDD6C6;border-radius:12px;padding:11px 20px;font-size:15px;font-weight:700;font-family:Pretendard;">비활성</button>
+          </div>
+        </div>
+        <!-- inputs -->
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#8A867B;margin-bottom:14px;">입력 · Inputs</div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;color:#2A2926;margin-bottom:6px;">학생 이름</label>
+              <input type="text" value="김도윤" style="width:100%;border:1.5px solid #E6E2D6;border-radius:12px;padding:11px 14px;font-size:15px;font-family:Pretendard;color:#2A2926;background:#fff;outline:none;" />
+            </div>
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;color:#2A2926;margin-bottom:6px;">보호자 연락처 <span style="color:#C5851E;">· 포커스</span></label>
+              <input type="text" value="010-" style="width:100%;border:2px solid #F4A93C;border-radius:12px;padding:10px 13px;font-size:15px;font-family:Pretendard;color:#2A2926;background:#FFFCF5;outline:none;box-shadow:0 0 0 4px rgba(244,169,60,0.18);" />
+            </div>
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;color:#CE5246;margin-bottom:6px;">반 이름 · 오류</label>
+              <input type="text" value="" placeholder="반 이름을 입력하세요" style="width:100%;border:2px solid #CE5246;border-radius:12px;padding:10px 13px;font-size:15px;font-family:Pretendard;color:#2A2926;background:#FCF0EF;outline:none;" />
+              <div style="font-size:12px;color:#CE5246;margin-top:5px;">반 이름은 비워둘 수 없어요.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:#8A867B;margin:28px 0 14px;">상태 뱃지 · Status Pills</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#E4F0E2;color:#3C7A47;border-radius:999px;padding:6px 13px;font-size:13.5px;font-weight:700;"><span style="width:7px;height:7px;border-radius:50%;background:#4F9A5E;"></span>출석</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#FBE7DA;color:#C25E2E;border-radius:999px;padding:6px 13px;font-size:13.5px;font-weight:700;"><span style="width:7px;height:7px;border-radius:50%;background:#E8804D;"></span>지각</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#F9E1DE;color:#B23E33;border-radius:999px;padding:6px 13px;font-size:13.5px;font-weight:700;"><span style="width:7px;height:7px;border-radius:50%;background:#CE5246;"></span>결석</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#E1ECF1;color:#3A6883;border-radius:999px;padding:6px 13px;font-size:13.5px;font-weight:700;"><span style="width:7px;height:7px;border-radius:50%;background:#4E86A6;"></span>보충 예정</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#FDEFD3;color:#8A5A2B;border-radius:999px;padding:6px 13px;font-size:13.5px;font-weight:700;">🍯 꿀 +20</span>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:#8A867B;margin:28px 0 14px;">학생 카드 · Card</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;">
+        <div style="background:#fff;border:1px solid #E6E2D6;border-radius:18px;padding:18px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 10px rgba(138,90,43,0.05);">
+          <svg width="48" height="54" viewBox="0 0 100 110"><path d="M25 2 L75 2 L98 55 L75 108 L25 108 L2 55 Z" fill="#FDEFD3" stroke="#8A5A2B" strokeWidth="3"></path><text x="50" y="52" textAnchor="middle" dominantBaseline="central" fontSize="34" fontWeight="800" fill="#8A5A2B" fontFamily="Pretendard">이</text></svg>
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:16px;font-weight:800;color:#2A2926;">이서아</span><span style="display:inline-flex;align-items:center;gap:5px;background:#E4F0E2;color:#3C7A47;border-radius:999px;padding:3px 9px;font-size:12px;font-weight:700;"><span style="width:6px;height:6px;border-radius:50%;background:#4F9A5E;"></span>출석</span></div>
+            <div style="font-size:13px;color:#8A867B;margin-top:4px;">3-A반 · 🍯 980 꿀</div>
+          </div>
+          <button style="background:#F4A93C;color:#2A2926;border:1.5px solid #2A2926;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;font-family:Pretendard;cursor:pointer;">+꿀</button>
+        </div>
+        <div style="background:#fff;border:1px solid #E6E2D6;border-radius:18px;padding:18px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 10px rgba(138,90,43,0.05);">
+          <svg width="48" height="54" viewBox="0 0 100 110"><path d="M25 2 L75 2 L98 55 L75 108 L25 108 L2 55 Z" fill="#FBE7DA" stroke="#8A5A2B" strokeWidth="3"></path><text x="50" y="52" textAnchor="middle" dominantBaseline="central" fontSize="34" fontWeight="800" fill="#8A5A2B" fontFamily="Pretendard">정</text></svg>
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:16px;font-weight:800;color:#2A2926;">정하준</span><span style="display:inline-flex;align-items:center;gap:5px;background:#FBE7DA;color:#C25E2E;border-radius:999px;padding:3px 9px;font-size:12px;font-weight:700;"><span style="width:6px;height:6px;border-radius:50%;background:#E8804D;"></span>지각</span></div>
+            <div style="font-size:13px;color:#8A867B;margin-top:4px;">3-A반 · 🍯 640 꿀</div>
+          </div>
+          <button style="background:#fff;color:#8A5A2B;border:1.5px solid #C5851E;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;font-family:Pretendard;cursor:pointer;">메모</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 08 보이스 ===== -->
+    <section data-screen-label="Voice" style="background:#2A2926;border-radius:24px;padding:44px;box-shadow:0 2px 18px rgba(138,90,43,0.12);">
+      <div style="font-size:13px;font-weight:700;letter-spacing:0.14em;color:#FAC775;text-transform:uppercase;margin-bottom:12px;">08 — Voice &amp; Tone</div>
+      <h2 style="margin:0 0 28px;font-size:30px;font-weight:800;color:#FDF6E8;letter-spacing:-0.02em;">쉽게, 다정하지만 야무지게</h2>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;">
+        <div style="background:#39362F;border-radius:14px;padding:20px;"><div style="font-size:16px;font-weight:800;color:#FAC775;margin-bottom:6px;">쉽게</div><div style="font-size:13.5px;line-height:1.55;color:#CFC8BA;">어려운 말 대신 누구나 아는 말로</div></div>
+        <div style="background:#39362F;border-radius:14px;padding:20px;"><div style="font-size:16px;font-weight:800;color:#FAC775;margin-bottom:6px;">다정+야무</div><div style="font-size:13.5px;line-height:1.55;color:#CFC8BA;">따뜻하되, 학원답게 미덥게</div></div>
+        <div style="background:#39362F;border-radius:14px;padding:20px;"><div style="font-size:16px;font-weight:800;color:#FAC775;margin-bottom:6px;">짧고 분명</div><div style="font-size:13.5px;line-height:1.55;color:#CFC8BA;">학생도 학부모도 한 번에</div></div>
+        <div style="background:#39362F;border-radius:14px;padding:20px;"><div style="font-size:16px;font-weight:800;color:#FAC775;margin-bottom:6px;">응원하는</div><div style="font-size:13.5px;line-height:1.55;color:#CFC8BA;">부지런함을 칭찬하고 꿀로 보답</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div style="background:#33302A;border:1px solid #4A463E;border-radius:14px;padding:20px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#7FBE8C;margin-bottom:12px;"><span style="width:18px;height:18px;border-radius:50%;background:#4F9A5E;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;">✓</span>이렇게</div>
+          <div style="font-size:14.5px;line-height:1.7;color:#FDF6E8;">"오늘도 출석 완료! 꿀 20 모았어요 🍯"<br>"이번 주 3일 연속 출석, 부지런해요!"</div>
+        </div>
+        <div style="background:#33302A;border:1px solid #4A463E;border-radius:14px;padding:20px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#E89A8C;margin-bottom:12px;"><span style="width:18px;height:18px;border-radius:50%;background:#CE5246;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;">✕</span>이렇게는 말고</div>
+          <div style="font-size:14.5px;line-height:1.7;color:#B8B2A6;">"출석 데이터가 정상 처리되었습니다."<br>"포인트 적립 트랜잭션 완료."</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 09 핸드오프 토큰 ===== -->
+    <section data-screen-label="Handoff tokens" style="background:#fff;border:1px solid #E6E2D6;border-radius:24px;padding:44px;box-shadow:0 2px 18px rgba(138,90,43,0.06);">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:700;letter-spacing:0.14em;color:#C5851E;text-transform:uppercase;">09 — Handoff Tokens</div>
+        <button onClick="{{ toggleCode }}" style="background:#FDEFD3;color:#8A5A2B;border:1px solid #EAD9AF;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:700;font-family:Pretendard;cursor:pointer;">{{ codeBtnLabel }}</button>
+      </div>
+      <h2 style="margin:0 0 8px;font-size:30px;font-weight:800;color:#2A2926;letter-spacing:-0.02em;">코드로 바로 쓰는 토큰</h2>
+      <p style="margin:0 0 24px;font-size:16px;line-height:1.65;color:#5C574E;max-width:600px;">Claude Code에 그대로 붙여넣을 수 있는 CSS 변수 세트입니다. Pretendard는 CDN으로 로드합니다.</p>
+      <sc-if value="{{ showCode }}" hint-placeholder-val="{{ true }}">
+      <div style="background:#23211D;border-radius:16px;padding:24px;overflow-x:auto;">
+        <pre style="margin:0;font-family:'SF Mono',Menlo,monospace;font-size:13px;line-height:1.7;color:#E8DFC9;white-space:pre;"><span style="color:#8A867B;">/* Soez Design Tokens */</span>
+:root {
+  <span style="color:#FAC775;">--honey-100</span>: #FDEFD3;  <span style="color:#8A867B;">/* 꿀색 틴트·배경강조 */</span>
+  <span style="color:#FAC775;">--honey-300</span>: #FAC775;  <span style="color:#8A867B;">/* 밝은 꿀색·배지 */</span>
+  <span style="color:#FAC775;">--honey-500</span>: #F4A93C;  <span style="color:#8A867B;">/* 메인 꿀색·버튼·강조 */</span>
+  <span style="color:#FAC775;">--honey-700</span>: #C5851E;  <span style="color:#8A867B;">/* 머스타드·링크 */</span>
+  <span style="color:#FAC775;">--comb-700</span> : #8A5A2B;  <span style="color:#8A867B;">/* 벌집 브라운·포인트 */</span>
+
+  <span style="color:#9FD3AC;">--ink-900</span>  : #2A2926;  <span style="color:#8A867B;">/* 본문 진한 글자 */</span>
+  <span style="color:#9FD3AC;">--ink-600</span>  : #5C574E;
+  <span style="color:#9FD3AC;">--ink-400</span>  : #8A867B;
+  <span style="color:#9FD3AC;">--line-200</span> : #E6E2D6;  <span style="color:#8A867B;">/* 보더 */</span>
+  <span style="color:#9FD3AC;">--surface</span>  : #FFFFFF;
+  <span style="color:#9FD3AC;">--surface-2</span>: #FBF6EA;
+  <span style="color:#9FD3AC;">--bg</span>       : #FDF6E8;  <span style="color:#8A867B;">/* 화면 전체 크림 배경 */</span>
+
+  <span style="color:#A9C7DB;">--success</span>  : #4F9A5E;  <span style="color:#8A867B;">/* 출석 */</span>
+  <span style="color:#A9C7DB;">--warning</span>  : #E8804D;  <span style="color:#8A867B;">/* 지각 */</span>
+  <span style="color:#A9C7DB;">--danger</span>   : #CE5246;  <span style="color:#8A867B;">/* 결석 */</span>
+  <span style="color:#A9C7DB;">--info</span>     : #4E86A6;  <span style="color:#8A867B;">/* 정보·보충 */</span>
+
+  <span style="color:#E0A8C8;">--radius-sm</span>: 10px;  <span style="color:#E0A8C8;">--radius-md</span>: 12px;
+  <span style="color:#E0A8C8;">--radius-lg</span>: 18px;  <span style="color:#E0A8C8;">--radius-xl</span>: 24px;
+  <span style="color:#E0A8C8;">--shadow-card</span>: 0 2px 18px rgba(138,90,43,0.06);
+  <span style="color:#E0A8C8;">--font-sans</span> : "Pretendard", -apple-system, sans-serif;  <span style="color:#8A867B;">/* UI·본문 전체 */</span>
+  <span style="color:#E0A8C8;">--font-logo</span> : "Jua", "Pretendard", sans-serif;  <span style="color:#8A867B;">/* 로고 워드마크 전용 */</span>
+}</pre>
+      </div>
+      </sc-if>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;">
+        <div style="font-size:13px;color:#5C574E;background:#FBF6EA;border:1px solid #EDE2C9;border-radius:10px;padding:10px 14px;">간격 스케일 · <b style="color:#2A2926;">4 · 8 · 12 · 16 · 24 · 32 · 48</b></div>
+        <div style="font-size:13px;color:#5C574E;background:#FBF6EA;border:1px solid #EDE2C9;border-radius:10px;padding:10px 14px;">제목 <b style="color:#2A2926;">800</b> · 본문 <b style="color:#2A2926;">400/500</b></div>
+        <div style="font-size:13px;color:#5C574E;background:#FBF6EA;border:1px solid #EDE2C9;border-radius:10px;padding:10px 14px;">버튼 입체 그림자 <b style="color:#2A2926;">0 3px 0 #2A2926</b></div>
+      </div>
+    </section>
+
+    <div style="text-align:center;padding:24px 0 0;font-size:13px;color:#A8A296;">쏘이지 · SOEZ — 부지런한 벌처럼, 꿀처럼 달콤하게 🐝</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1080},&quot;showTokenCode&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { filled: 7, showCode: null };
+  renderVals() {
+    const total = 12;
+    const showCode = this.state.showCode === null ? (this.props.showTokenCode ?? true) : this.state.showCode;
+    const filled = this.state.filled;
+    const cells = Array.from({ length: total }, (_, i) => ({ fill: i < filled ? '#F4A93C' : '#FBF6EA' }));
+    return {
+      filled,
+      cells,
+      showCode,
+      codeBtnLabel: showCode ? '코드 숨기기' : '코드 보기',
+      toggleCode: () => this.setState(s => ({ showCode: !(s.showCode === null ? (this.props.showTokenCode ?? true) : s.showCode) })),
+      addHoney: () => this.setState(s => ({ filled: Math.min(total, s.filled + 1) })),
+      removeHoney: () => this.setState(s => ({ filled: Math.max(0, s.filled - 1) })),
+    };
+  }
+}
+</script>
+</body>
+</html>

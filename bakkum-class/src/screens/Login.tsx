@@ -46,10 +46,10 @@ export function Login() {
     <div className="auth-wrap">
       <form className="auth-card" onSubmit={submit}>
         <div className="auth-brand">
-          {logo.url ? <img className="auth-logo auth-logo-img" src={logo.url} alt="바꿈영수학원" /> : <div className="auth-logo">바</div>}
+          {logo.url ? <img className="auth-logo auth-logo-img" src={logo.url} alt="쏘이지" /> : <div className="auth-logo soez-mark">쏘</div>}
           <div>
-            <b>Hi! 바꿈영수학원</b>
-            <span>선생님·학생 로그인</span>
+            <b className="auth-wordmark">쏘이지</b>
+            <span>바꿈영수학원 · 선생님·학생 로그인</span>
           </div>
         </div>
 
