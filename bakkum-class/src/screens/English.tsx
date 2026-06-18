@@ -70,9 +70,21 @@ const blankDaily = (studentId: string, date: string): EngDaily => ({
   updatedAt: 0,
 });
 
+/** fromDate 다음의 첫 영어 수업 날짜(요일이 슬롯에 있는 날). 없으면 "". '다음 시간' 목표 이월용. */
+function nextEngDate(slots: { day: string }[], fromDate: string): string {
+  if (!slots.length) return "";
+  for (let i = 1; i <= 14; i++) {
+    const d = parseD(fromDate);
+    d.setDate(d.getDate() + i);
+    if (slots.some((sl) => sl.day === DOW[d.getDay()])) return ymd(d);
+  }
+  return "";
+}
+
 /** 영어 영역 — 초등(elem)/중고등(mid) band별. 학습일지 중심. */
 export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   const { user } = useAuth();
+  const { toast } = useStore();
   const tab: Tab = initialTab || "today"; // 탭은 사이드바에서 선택(화면 내 탭바 없음)
   const [roster, setRoster] = useState<RosterStudent[]>([]);
   const reloadRoster = () => getRoster().then(setRoster).catch(() => {});
@@ -154,6 +166,23 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
       setErr("");
     } catch {
       setErr("저장에 실패했어요.");
+    }
+  }
+  // '다음 시간' 학습 목표 — 그 학생의 다음 수업 날짜 기록에 미리 넣어둔다(그날 '오늘 목표'로 보임).
+  // 기존 기록을 읽어 합쳐 저장(다른 필드 덮어쓰기 방지).
+  async function addNextGoal(sid: string, text: string) {
+    const stu = students.find((s) => s.id === sid);
+    const t = text.trim();
+    if (!stu || !t) return;
+    const nd = nextEngDate(stu.engSlots, date);
+    if (!nd) { setErr("다음 수업 날짜를 찾지 못했어요. (시간표 확인)"); return; }
+    try {
+      const list = await engApi.dailyByStudent(sid);
+      const rec = list.find((r) => r.date === nd) || blankDaily(sid, nd);
+      await engApi.saveDaily({ ...rec, studentId: sid, date: nd, goals: [...(rec.goals || []), { text: t, done: false }] });
+      toast(`${stu.name} · 다음 수업(${fmtMDDow(nd)})에 목표를 미리 넣었어요.`);
+    } catch {
+      setErr("다음 시간 목표 저장에 실패했어요.");
     }
   }
   // 출결 상태 지정 — 수학과 통일. 출석·지각·조퇴는 등원, 결석·무단결석은 미등원.
@@ -296,6 +325,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
           doneOptions={doneOptions}
           reasonsAll={reasonsAll}
           onAddDoneItem={addDoneItemForStudent}
+          onAddNextGoal={addNextGoal}
           examModeOf={(sid) => band === "mid" && naesinActiveOn(naesinMap[sid], date)}
         />
       ) : tab === "naesin" ? (
@@ -358,7 +388,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                       : "왼쪽에서 학생을 선택하면 테스트 점수를 기록할 수 있어요."}
               </div>
             ) : tab === "today" ? (
-              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={addDoneItemForStudent} examMode={band === "mid" && naesinActiveOn(naesinMap[sel], date)} />
+              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={addDoneItemForStudent} onAddNextGoal={addNextGoal} examMode={band === "mid" && naesinActiveOn(naesinMap[sel], date)} />
             ) : tab === "progress" ? (
               <ProgressPanel studentId={sel} name={nameOf[sel] || ""} />
             ) : tab === "cur" ? (
@@ -657,7 +687,7 @@ const ENG_STATUS6: { v: AttStatus; on: string; att: boolean }[] = [
 ];
 
 /* ---------------- 일일 학습일지 편집 ---------------- */
-function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, onAddDoneItem, examMode, compact, autoSave }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void; doneItemsAll: string[]; reasonsAll: { name: string; value: number }[]; onAddDoneItem: (s: string) => void; examMode?: boolean; compact?: boolean; autoSave?: boolean }) {
+function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, onAddDoneItem, onAddNextGoal, examMode, compact, autoSave }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void; doneItemsAll: string[]; reasonsAll: { name: string; value: number }[]; onAddDoneItem: (s: string) => void; onAddNextGoal?: (sid: string, text: string) => void; examMode?: boolean; compact?: boolean; autoSave?: boolean }) {
   const showHw = band !== "elem"; // 초등영어는 숙제 없음
   const [d, setD] = useState<EngDaily>(value);
   const dirty = JSON.stringify(d) !== JSON.stringify(value);
@@ -730,6 +760,16 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
   function setGoals(goals: Goal[]) {
     setD({ ...d, goals });
   }
+  // 학습 목표 추가 — 적용시점 [오늘 / 다음시간]. 다음시간은 다음 수업 날짜 기록에 미리 넣는다.
+  const [goalText, setGoalText] = useState("");
+  const [goalWhen, setGoalWhen] = useState<"today" | "next">("today");
+  function addGoal() {
+    const t = goalText.trim();
+    if (!t) return;
+    if (goalWhen === "next" && onAddNextGoal) onAddNextGoal(d.studentId, t);
+    else setGoals([...d.goals, { text: t, done: false }]);
+    setGoalText("");
+  }
 
   return (
     <div className={"eng-daily" + (compact ? " compact" : "")}>
@@ -773,7 +813,16 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
             <button className="eng-goal-x" onClick={() => setGoals(d.goals.filter((_, j) => j !== i))}>×</button>
           </div>
         ))}
-        <button className="btn ghost sm" onClick={() => setGoals([...d.goals, { text: "", done: false }])}>+ 목표 추가</button>
+        <div className="eng-goal-add">
+          <input className="sm-input" value={goalText} onChange={(e) => setGoalText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addGoal(); }} placeholder="학습 내용" />
+          {onAddNextGoal && (
+            <div className="eng-goal-when">
+              <button type="button" className={goalWhen === "today" ? "on" : ""} onClick={() => setGoalWhen("today")}>오늘</button>
+              <button type="button" className={goalWhen === "next" ? "on" : ""} onClick={() => setGoalWhen("next")}>다음시간</button>
+            </div>
+          )}
+          <button type="button" className="btn ghost sm" onClick={addGoal} disabled={!goalText.trim()}>추가</button>
+        </div>
       </div>
 
       {!compact && (
@@ -1705,7 +1754,7 @@ function attTone(st: string): string {
   return st === "출석" ? "b-green" : st === "지각" || st === "조퇴" ? "b-orange" : st === "보강" ? "b-blue" : "b-gray";
 }
 function DashCard({
-  s, daily, band, getDaily, saveDaily, doneOptions, reasonsAll, onAddDoneItem, examMode,
+  s, daily, band, getDaily, saveDaily, doneOptions, reasonsAll, onAddDoneItem, onAddNextGoal, examMode,
 }: {
   s: RosterStudent;
   daily: Record<string, EngDaily>;
@@ -1715,6 +1764,7 @@ function DashCard({
   doneOptions: string[];
   reasonsAll: { name: string; value: number }[];
   onAddDoneItem: (s: string) => void;
+  onAddNextGoal?: (sid: string, text: string) => void;
   examMode: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -1738,7 +1788,7 @@ function DashCard({
       </div>
       {/* 아래 — 접혀 있을 땐 블러로 살짝 보이고, 펼치면 입력(자동 저장) */}
       <div className={"eng-dash-peek" + (open ? " open" : "")}>
-        <DailyEditor student={s.name} band={band} value={getDaily(s.id)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} examMode={examMode} compact autoSave />
+        <DailyEditor student={s.name} band={band} value={getDaily(s.id)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examMode} compact autoSave key={s.id} />
       </div>
       <button className="eng-dash-more" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         {open ? "접기" : "자세히 보기 / 입력하기"}
@@ -1754,12 +1804,12 @@ function hasInput(d?: EngDaily): boolean {
 }
 
 /* 중고등 — '오늘 등원' 선택 + 등원한 학생만 카드로 입력. */
-function EngInputDash({ students, daily, band, scheduledIds, setStatus, getDaily, saveDaily, doneOptions, reasonsAll, onAddDoneItem, examModeOf }: {
+function EngInputDash({ students, daily, band, scheduledIds, setStatus, getDaily, saveDaily, doneOptions, reasonsAll, onAddDoneItem, onAddNextGoal, examModeOf }: {
   students: RosterStudent[]; daily: Record<string, EngDaily>; band: Band;
   scheduledIds: Set<string>; setStatus: (sid: string, status: AttStatus) => void;
   getDaily: (sid: string) => EngDaily; saveDaily: (d: EngDaily) => void;
   doneOptions: string[]; reasonsAll: { name: string; value: number }[];
-  onAddDoneItem: (s: string) => void; examModeOf?: (sid: string) => boolean;
+  onAddDoneItem: (s: string) => void; onAddNextGoal?: (sid: string, text: string) => void; examModeOf?: (sid: string) => boolean;
 }) {
   const [q, setQ] = useState("");
   const attended = students.filter((s) => daily[s.id]?.attended);
@@ -1797,7 +1847,7 @@ function EngInputDash({ students, daily, band, scheduledIds, setStatus, getDaily
       {attended.length > 0 && (
         <div className="eng-dash-cards">
           {attended.map((s) => (
-            <DashCard key={s.id} s={s} daily={daily} band={band} getDaily={getDaily} saveDaily={saveDaily} doneOptions={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} examMode={examModeOf ? examModeOf(s.id) : false} />
+            <DashCard key={s.id} s={s} daily={daily} band={band} getDaily={getDaily} saveDaily={saveDaily} doneOptions={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examModeOf ? examModeOf(s.id) : false} />
           ))}
         </div>
       )}
@@ -1818,6 +1868,7 @@ function EngDashboard({
   doneOptions,
   reasonsAll,
   onAddDoneItem,
+  onAddNextGoal,
   examModeOf,
 }: {
   students: RosterStudent[];
@@ -1831,6 +1882,7 @@ function EngDashboard({
   doneOptions?: string[];
   reasonsAll?: { name: string; value: number }[];
   onAddDoneItem?: (s: string) => void;
+  onAddNextGoal?: (sid: string, text: string) => void;
   examModeOf?: (sid: string) => boolean;
 }) {
   const { openModal } = useStore();
@@ -1851,6 +1903,7 @@ function EngDashboard({
         doneOptions={doneOptions || []}
         reasonsAll={reasonsAll || []}
         onAddDoneItem={onAddDoneItem || (() => {})}
+        onAddNextGoal={onAddNextGoal}
         examModeOf={examModeOf}
       />
     );

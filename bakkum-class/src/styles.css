@@ -2091,6 +2091,12 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .eng-daily.compact .eng-grid2{grid-template-columns:1fr;gap:6px}
 .eng-daily.compact .test-add{flex-wrap:wrap;gap:6px}
 .eng-daily.compact .test-add-nm{max-width:none;flex:1 1 100%}
+/* 학습목표 추가 — 내용 + 적용시점(오늘/다음시간) + 추가 */
+.eng-goal-add{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px}
+.eng-goal-add .sm-input{flex:1;min-width:120px}
+.eng-goal-when{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;flex-shrink:0}
+.eng-goal-when button{border:none;background:var(--card);color:var(--ink3);font-size:var(--t-cap);font-weight:600;padding:5px 9px;cursor:pointer}
+.eng-goal-when button.on{background:var(--brand);color:#fff}
 /* 컴팩트 편집기 — 섹션 간격·라벨 축소 */
 .eng-daily.compact{display:flex;flex-direction:column;gap:9px}
 .eng-daily.compact .eng-field{margin:0}
