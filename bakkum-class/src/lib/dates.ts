@@ -69,6 +69,20 @@ export function uid(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
+/**
+ * 출결 키(`날짜|학생|시간`)의 시간 조각을 사람이 읽는 시각으로 바꾼다.
+ * 노션/레거시에서 가져온 기록은 시간 자리에 내부 ID(n…)가 들어 있다 —
+ * 'xHHMM' 접미사가 있으면 그 시각을 쓰고, 없으면 빈 문자열(시간 정보 없음)을 돌려준다.
+ * (키 자체는 절대 바꾸지 않는다. 화면 표시 전용.)
+ */
+export function attSlotLabel(timePart: string): string {
+  if (!timePart) return "";
+  if (/^\d{1,2}:\d{2}$/.test(timePart)) return timePart;
+  const m = timePart.match(/x(\d{2})(\d{2})$/);
+  if (m) return `${m[1]}:${m[2]}`;
+  return "";
+}
+
 /** epoch(ms) → 사람이 읽는 시각. 오늘이면 'HH:MM', 올해면 'M/D HH:MM', 그 외 'YYYY.M.D'. */
 export function fmtWhen(ts: number): string {
   if (!ts) return "";

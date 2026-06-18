@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import type { AttStatus, Attitude, Student } from "../types";
-import { DOW, fmtDayBand, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
+import { DOW, attSlotLabel, fmtDayBand, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import {
   activeStudents,
   attendsOn,
@@ -317,7 +317,7 @@ export function Attendance() {
                     ref={(el) => { rowRefs.current[idx] = el; }}
                     onKeyDown={(e) => onRowKey(e, it, key, idx)}
                   >
-                    <div className="att-time">{it.time}</div>
+                    <div className="att-time">{attSlotLabel(it.time) || <span className="muted" style={{ fontWeight: 600 }}>노션</span>}</div>
                     <div className="att-stu">
                       <div>
                         <div style={{ fontWeight: 700 }}>

@@ -87,12 +87,15 @@ export interface Env {
   // 통합 허브 인증
   AUTH_SECRET?: string; // 세션 쿠키 서명 키 (없으면 BOT_SECRET/기본값)
   ADMIN_PIN?: string; // 원장(이지현) 부트스트랩 기본 PIN (없으면 기본값)
+  // 학습키오스크(bakuum-kiosk) 포인트 미러링 — 수학 학생 적립/감점을 키오스크로 단방향 전송
+  KIOSK_URL?: string; // 예: https://bakuum-kiosk.pages.dev
+  KIOSK_POINTS_KEY?: string; // 키오스크 EXTERNAL_POINTS_KEY와 동일 값 (Secret)
 }
 
 const TEACHER = "이지현";
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const p = url.pathname;
 
@@ -349,11 +352,23 @@ export default {
           if (res) return res;
         }
 
-        // ---- 영어(신규) — 원장·영어 강사만 ----
+        // ---- 영어(신규) — 원장·영어 강사 전용 ----
+        // 단, 통합 포인트 랭킹·포인트 항목은 수학/공통에서도 쓰는 공용 데이터라 권한을 완화한다.
+        //  · /api/eng/ranking      : 수학+영어 합산 랭킹 → 로그인한 모든 사용자 열람
+        //  · /api/eng/point-reasons: 적립·차감 사유 카탈로그 → 강사(수학 포함)·원장 공용(저장은 강사 이상)
         if (p.startsWith("/api/eng/")) {
           const me = await readSession(env, request);
-          if (!me || (me.role !== "admin" && me.role !== "english_mid" && me.role !== "english_elem"))
+          const isEngStaff = !!me && (me.role === "admin" || me.role === "english_mid" || me.role === "english_elem");
+          const isTeacher = isEngStaff || (!!me && me.role === "math");
+          const isCommonEng = p === "/api/eng/ranking" || p === "/api/eng/point-reasons";
+          if (isCommonEng) {
+            if (!me) return json({ error: "forbidden" }, 403);
+            // 포인트 항목 저장(POST)은 강사 이상만.
+            if (p === "/api/eng/point-reasons" && request.method === "POST" && !isTeacher)
+              return json({ error: "forbidden" }, 403);
+          } else if (!isEngStaff) {
             return json({ error: "forbidden" }, 403);
+          }
           const res = await handleEng(env, request, p, me);
           if (res) return res;
         }
@@ -372,7 +387,7 @@ export default {
           if (b.id && /^\d+$/.test(b.id)) await env.DB.prepare("UPDATE students SET hidden=1 WHERE id=?").bind(Number(b.id)).run();
           return json({ ok: true });
         }
-        if (p === "/api/points" && request.method === "POST") return await postPoints(env, request);
+        if (p === "/api/points" && request.method === "POST") return await postPoints(env, request, ctx);
         // 포인트 항목 카탈로그(읽기) — 수학·영어 공통 적립 점수. 저장된 게 없으면 빈 목록(클라가 기본값 사용).
         if (p === "/api/points/catalog" && request.method === "GET") {
           await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_config (k TEXT PRIMARY KEY, v TEXT NOT NULL DEFAULT '')").run();
@@ -424,6 +439,12 @@ export default {
       await runBriefing(env, slot, true);
     } catch (e) {
       console.error("scheduled briefing failed", String(e));
+    }
+    // 키오스크 미러링 미전송 건 재전송(유실 방지)
+    try {
+      await flushKioskOutbox(env);
+    } catch (e) {
+      console.error("flushKioskOutbox failed", String(e));
     }
   },
 };
@@ -2294,21 +2315,102 @@ async function postStudents(env: Env, request: Request): Promise<Response> {
 /* ---------------- points (출석 적립/회수, by roster id) ---------------- */
 // Logs a point_history row AND keeps the denormalized students.points total in
 // sync (mogakgong invariant: students.points == SUM(point_history.delta)).
-async function postPoints(env: Env, request: Request): Promise<Response> {
+async function postPoints(env: Env, request: Request, ctx: ExecutionContext): Promise<Response> {
   const body = (await request.json()) as { studentId?: string; delta?: number; reason?: string };
   const sid = Number(body.studentId);
   const delta = Number(body.delta) || 0;
   const reason = (body.reason || "출석").slice(0, 40);
   if (!sid || !delta) return json({ matched: false });
 
-  const row = await env.DB.prepare("SELECT id FROM students WHERE id = ?").bind(sid).first<{ id: number }>();
+  // 학생 이름 + 수학 수강 여부(checkin.ts와 동일 판정) — 키오스크 미러링 필터용.
+  const row = await env.DB
+    .prepare(
+      "SELECT s.name name, m.subjects subjects, m.english_band band, " +
+        "(SELECT COUNT(*) FROM class_lessons WHERE student_id=CAST(s.id AS TEXT)) math_n, " +
+        "(SELECT COUNT(*) FROM class_eng_lessons WHERE student_id=CAST(s.id AS TEXT)) eng_n " +
+        "FROM students s LEFT JOIN class_student_meta m ON m.student_id = CAST(s.id AS TEXT) " +
+        "WHERE s.id = ?"
+    )
+    .bind(sid)
+    .first<{ name: string; subjects: string; band: string; math_n: number; eng_n: number }>();
   if (!row) return json({ matched: false });
 
   await env.DB.batch([
     env.DB.prepare("INSERT INTO point_history(student_id,delta,reason,category) VALUES(?,?,?,'learn')").bind(sid, delta, reason),
     env.DB.prepare("UPDATE students SET points = points + ? WHERE id = ?").bind(delta, sid),
   ]);
+
+  // 수학 학생이면 같은 금액(+/-)을 학습키오스크로 미러링(베스트에포트, 응답 차단 안 함).
+  if (env.KIOSK_URL && env.KIOSK_POINTS_KEY) {
+    const metaSubj = String(row.subjects ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+    const hasMath = metaSubj.includes("math") || Number(row.math_n) > 0;
+    const hasEng = metaSubj.includes("english") || !!String(row.band ?? "") || Number(row.eng_n) > 0;
+    // 과목 정보가 전혀 없으면 일단 시도 — 키오스크 로스터(수학 학생) 이름 매칭이 최종 필터.
+    const isMath = hasMath || (!hasMath && !hasEng);
+    if (isMath) ctx.waitUntil(enqueueKioskPoint(env, String(row.name ?? ""), delta, reason));
+  }
+
   return json({ matched: true });
+}
+
+// ── 학습키오스크 포인트 미러링(아웃박스 + 크론 재전송으로 유실 방지) ──────────────
+// 키오스크가 일시적으로 꺼져 있어도, 미전송 건을 크론이 다시 보낸다. 키오스크 측은
+// eventId(아웃박스 id)로 멱등 처리하므로 재전송돼도 중복 적립되지 않는다.
+
+async function ensureKioskOutbox(env: Env): Promise<void> {
+  await env.DB
+    .prepare(
+      "CREATE TABLE IF NOT EXISTS class_kiosk_outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, delta INTEGER NOT NULL, reason TEXT, sent INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0, created_at INTEGER NOT NULL DEFAULT 0)"
+    )
+    .run();
+}
+
+// 적립/감점 1건을 아웃박스에 적재하고 즉시 전송 시도(실패해도 크론이 재전송).
+async function enqueueKioskPoint(env: Env, name: string, delta: number, reason: string): Promise<void> {
+  if (!name || !delta || !env.KIOSK_URL || !env.KIOSK_POINTS_KEY) return;
+  await ensureKioskOutbox(env);
+  const res = await env.DB
+    .prepare("INSERT INTO class_kiosk_outbox(name,delta,reason,sent,attempts,created_at) VALUES(?,?,?,0,0,?)")
+    .bind(name, delta, reason, Date.now())
+    .run();
+  const id = Number(res.meta?.last_row_id || 0);
+  if (id) await sendKioskOutboxRow(env, { id, name, delta, reason });
+}
+
+// 단건 전송. 성공 시 sent=1, 실패 시 attempts++만(크론이 재전송).
+async function sendKioskOutboxRow(env: Env, row: { id: number; name: string; delta: number; reason: string }): Promise<void> {
+  if (!env.KIOSK_URL || !env.KIOSK_POINTS_KEY) return;
+  let ok = false;
+  try {
+    const r = await fetch(env.KIOSK_URL.replace(/\/$/, "") + "/api/points/external", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Service-Key": env.KIOSK_POINTS_KEY },
+      body: JSON.stringify({ eventId: String(row.id), name: row.name, delta: row.delta, reason: row.reason }),
+    });
+    ok = r.ok;
+  } catch (_) {
+    ok = false;
+  }
+  try {
+    await env.DB
+      .prepare("UPDATE class_kiosk_outbox SET sent=?, attempts=attempts+1 WHERE id=?")
+      .bind(ok ? 1 : 0, row.id)
+      .run();
+  } catch (_) {}
+}
+
+// 크론에서 호출: 미전송 건 재전송(최근 7일, 20회 미만 시도).
+export async function flushKioskOutbox(env: Env): Promise<void> {
+  if (!env.KIOSK_URL || !env.KIOSK_POINTS_KEY) return;
+  await ensureKioskOutbox(env);
+  const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+  const rows = await env.DB
+    .prepare("SELECT id,name,delta,reason FROM class_kiosk_outbox WHERE sent=0 AND attempts<20 AND created_at>=? ORDER BY id LIMIT 200")
+    .bind(cutoff)
+    .all<{ id: number; name: string; delta: number; reason: string }>();
+  for (const row of rows.results || []) {
+    await sendKioskOutboxRow(env, { id: Number(row.id), name: String(row.name), delta: Number(row.delta), reason: String(row.reason ?? "") });
+  }
 }
 
 /* ---------------- monthly report aggregation ---------------- */

@@ -3,6 +3,11 @@ main = "worker/index.ts"
 compatibility_date = "2024-09-23"
 account_id = "027f80eb39da9f27ed17a443a4b9093a"
 
+# 학습키오스크(bakuum-kiosk) 포인트 미러링 대상 URL.
+# 서비스키(KIOSK_POINTS_KEY)는 비밀값이라 `wrangler secret put`으로 따로 주입.
+[vars]
+KIOSK_URL = "https://bakuum-kiosk.pages.dev"
+
 # 카카오워크 일일 브리핑 크론 — 13:00 KST(=04:00 UTC) 낮 · 21:00 KST(=12:00 UTC) 밤
 [triggers]
 crons = ["0 4 * * *", "0 12 * * *"]
