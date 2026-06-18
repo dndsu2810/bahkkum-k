@@ -16,6 +16,7 @@ export function ImageGrid({ images }: { images: string[] }) {
       {open && (
         <div className="imglb" onClick={() => setOpen(null)} role="dialog" aria-label="이미지 확대">
           <img src={open} alt="" onClick={(e) => e.stopPropagation()} />
+          <a className="imglb-save" href={open} download onClick={(e) => e.stopPropagation()} aria-label="이미지 저장">저장</a>
           <button className="imglb-x" onClick={() => setOpen(null)} aria-label="닫기">×</button>
         </div>
       )}

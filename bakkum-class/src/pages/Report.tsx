@@ -50,7 +50,15 @@ export function Report() {
   );
 
   function defaultExtras(studentId: string): ReportExtras {
-    return loadExtras(studentId, ym) || { ...emptyExtras(), notes: deriveNotes(data, studentId, year, month) };
+    const saved = loadExtras(studentId, ym);
+    if (!saved) return { ...emptyExtras(), notes: deriveNotes(data, studentId, year, month) };
+    // 저장본은 있는데 '출결 특이사항'만 비어 있으면(기록이 없던 시절에 저장됨) 출결에서 자동으로 다시 만든다.
+    // 손으로 적은 특이사항이 있으면 그대로 보존(이미 notes가 있으면 건드리지 않음).
+    if (!saved.notes?.length) {
+      const derived = deriveNotes(data, studentId, year, month);
+      if (derived.length) return { ...saved, notes: derived };
+    }
+    return saved;
   }
   function getExtras(studentId: string): ReportExtras {
     return extrasMap[studentId] || defaultExtras(studentId);

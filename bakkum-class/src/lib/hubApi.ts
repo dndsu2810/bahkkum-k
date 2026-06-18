@@ -16,15 +16,21 @@ async function jpost(url: string, body: unknown): Promise<{ ok?: boolean; id?: s
   return j;
 }
 
-/** 이미지 업로드 → 저장된 URL 반환. */
+const EXT_CT: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+  gif: "image/gif", webp: "image/webp", heic: "image/heic", svg: "image/svg+xml",
+};
+/** 이미지 업로드 → 저장된 URL 반환. 파일 MIME이 비어도 확장자로 타입을 보강한다. */
 export async function uploadImage(file: File): Promise<string> {
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  const ct = file.type || EXT_CT[ext] || "application/octet-stream";
   const r = await fetch("/api/upload", {
     method: "POST",
-    headers: { "content-type": file.type || "application/octet-stream" },
+    headers: { "content-type": ct },
     body: file,
   });
   const j = (await r.json().catch(() => ({}))) as { url?: string; error?: string };
-  if (!r.ok || !j.url) throw new Error(j.error || "upload_failed");
+  if (!r.ok || !j.url) throw new Error(j.error || "HTTP " + r.status);
   return j.url;
 }
 

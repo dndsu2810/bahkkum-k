@@ -86,12 +86,13 @@ export function Sns() {
     try {
       const urls: string[] = [];
       for (const f of Array.from(files)) {
-        if (!f.type.startsWith("image/")) continue;
+        if (f.type && !f.type.startsWith("image/")) continue; // 빈 타입은 허용
         urls.push(await uploadImage(f));
       }
+      if (!urls.length) { setErr("이미지 파일을 찾지 못했어요. 다시 골라 주세요."); return; }
       setDraft((d) => (d ? { ...d, images: [...d.images, ...urls] } : d));
-    } catch {
-      setErr("이미지 업로드에 실패했어요.");
+    } catch (e) {
+      setErr("이미지 업로드에 실패했어요. (" + (e instanceof Error ? e.message : "오류") + ")");
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";

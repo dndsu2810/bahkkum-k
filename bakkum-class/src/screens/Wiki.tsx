@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth";
-import { wikiApi, type WikiPage, type WikiStatus } from "../lib/hubApi";
+import { wikiApi, uploadImage, type WikiPage, type WikiStatus } from "../lib/hubApi";
 import { fmtWhen } from "../lib/dates";
 import { ImageGrid } from "../components/ImageGrid";
 import { copyText } from "../lib/report";
@@ -290,7 +290,32 @@ export function Wiki() {
   const [sortBy, setSortBy] = useState<"updated" | "importance">("updated");
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const mainRef = useRef<HTMLDivElement>(null);
+
+  async function onPickFiles(files: FileList | null) {
+    if (!edit || !files || !files.length) return;
+    setUploading(true);
+    try {
+      const urls: string[] = [];
+      for (const f of Array.from(files)) {
+        if (f.type && !f.type.startsWith("image/")) continue; // 명백히 이미지가 아닌 것만 제외(빈 타입은 허용)
+        urls.push(await uploadImage(f));
+      }
+      if (!urls.length) { setErr("이미지 파일을 찾지 못했어요. 다시 골라 주세요."); return; }
+      setEdit((d) => (d ? { ...d, images: [...d.images, ...urls] } : d));
+      setErr("");
+    } catch (e) {
+      setErr("이미지 업로드에 실패했어요. (" + (e instanceof Error ? e.message : "오류") + ")");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+  function removeEditImage(url: string) {
+    setEdit((d) => (d ? { ...d, images: d.images.filter((x) => x !== url) } : d));
+  }
 
   // 목록에서 글을 고르면 본문 영역을 화면 위로 끌어와, 스크롤을 직접 올릴 필요 없게.
   useEffect(() => {
@@ -332,8 +357,8 @@ export function Wiki() {
       setEdit(null);
       await reload();
       if (r.id) setSel(r.id);
-    } catch {
-      setErr("저장에 실패했어요.");
+    } catch (e) {
+      setErr("저장에 실패했어요. (" + (e instanceof Error ? e.message : "오류") + ")");
     }
   }
   async function remove(p: WikiPage) {
@@ -414,6 +439,23 @@ export function Wiki() {
               </label>
             </div>
             <BodyEditor value={edit.body} onChange={(v) => setEdit({ ...edit, body: v })} />
+            <div>
+              <div className="acct-form-sub">이미지</div>
+              {edit.images.length > 0 && (
+                <div className="imgrid" style={{ marginTop: 4 }}>
+                  {edit.images.map((src) => (
+                    <div className="sns-draft-img" key={src}>
+                      <img src={src} alt="" />
+                      <button className="sns-draft-x" onClick={() => removeEditImage(src)} title="제거">×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => onPickFiles(e.target.files)} />
+              <button type="button" className="btn ghost sm" style={{ marginTop: 6 }} onClick={() => fileRef.current?.click()} disabled={uploading}>
+                {uploading ? "업로드 중…" : "+ 이미지 추가"}
+              </button>
+            </div>
             <div className="wiki-edit-act">
               <button className="btn primary" onClick={save} disabled={!edit.title.trim()}>저장</button>
               <button className="btn ghost" onClick={() => setEdit(null)}>취소</button>

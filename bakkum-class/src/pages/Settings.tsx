@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { TONES, type Category, type Tone } from "../lib/categories";
-import { useStore } from "../store";
-import { importRecords } from "../api";
 import { getConfig, setConfig, getSecretSet, uploadImage } from "../lib/configApi";
 import { feedbackApi, type Notice } from "../lib/feedbackApi";
-import { syncAllFromNotion, SYNC_STEPS, type SyncStep } from "../lib/syncAll";
 import { Icon } from "../icons";
 
 /** 학원 로고 업로드 — 사이드바 "바" 자리에 쓰임(원장). 없으면 기본 박스 유지. */
@@ -66,114 +63,9 @@ function LogoSetting() {
   );
 }
 
-/** 노션에서 가져오기 — 흩어져 있던 모든 '노션 가져오기'를 이 버튼 하나로 통합.
- *  학생 명단·생일·학원 일정·출결·숙제·진도·테스트·영어 기록을 한 번에 끌어온다.
- *  이미 있는 건 건너뛰고 추가된 것만 들어온다(앱이 기록의 원본). */
-function NotionImport() {
-  const { reload, toast } = useStore();
-  const [importing, setImporting] = useState(false);
-  const [steps, setSteps] = useState<SyncStep[]>([]);
-  const [sel, setSel] = useState<Record<string, boolean>>({}); // 선택한 항목만 가져옴(기본 전부 해제)
-
-  const chosen = SYNC_STEPS.filter((s) => sel[s.key]);
-  const toggle = (k: string) => setSel((v) => ({ ...v, [k]: !v[k] }));
-
-  async function onImport() {
-    if (importing || !chosen.length) return;
-    const mirrorNames = chosen.filter((s) => s.mirror).map((s) => s.label);
-    const warn = mirrorNames.length
-      ? `\n\n⚠️ ${mirrorNames.join(", ")}은(는) 노션 내용으로 통째로 바뀌어요. 앱에서 직접 고친 내용이 있으면 노션 기준으로 덮어써요.`
-      : "";
-    if (!window.confirm(`선택한 항목만 노션에서 가져옵니다:\n· ${chosen.map((s) => s.label).join("\n· ")}${warn}\n\n진행할까요?`)) return;
-    setImporting(true);
-    try {
-      const result = await syncAllFromNotion(setSteps, chosen.map((s) => s.key));
-      await reload();
-      const total = result.reduce((a, s) => a + s.count, 0);
-      const failed = result.filter((s) => s.status === "error").length;
-      toast(failed ? `가져오기 완료 · 총 ${total}건 (실패 ${failed}개 항목)` : `노션 가져오기 완료 · 총 ${total}건`);
-    } finally {
-      setImporting(false);
-    }
-  }
-
-  return (
-    <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
-      <div className="card-title" style={{ marginBottom: 6 }}>노션에서 가져오기 (선택 항목만)</div>
-      <div className="page-desc" style={{ marginBottom: 12 }}>
-        <b>이 앱이 원본입니다.</b> 평소엔 노션에서 가져올 일이 없어요. 꼭 필요한 항목만 골라서 가져오세요.
-        체크한 항목만 들어오고, 고르지 않은 데이터는 그대로 둡니다.
-      </div>
-      <div className="sync-pick">
-        {SYNC_STEPS.map((s) => (
-          <label key={s.key} className={"sync-pick-item" + (sel[s.key] ? " on" : "")}>
-            <input type="checkbox" checked={!!sel[s.key]} onChange={() => toggle(s.key)} disabled={importing} />
-            <span className="sync-pick-label">{s.label}</span>
-            {s.mirror && <span className="sync-pick-tag" title="노션 내용으로 통째로 바뀌어요">전체 교체</span>}
-          </label>
-        ))}
-      </div>
-      <button className="btn" onClick={onImport} disabled={importing || !chosen.length} style={{ marginTop: 10 }}>
-        <span className={importing ? "spin" : undefined}>
-          <Icon name="refresh" />
-        </span>
-        {importing ? "가져오는 중…" : chosen.length ? `선택한 ${chosen.length}개 가져오기` : "가져올 항목을 선택하세요"}
-      </button>
-      {steps.length > 0 && (
-        <ul className="sync-steps">
-          {steps.map((s) => (
-            <li key={s.key} className={"sync-step is-" + s.status}>
-              <span className="sync-step-ic">
-                {s.status === "done" ? <Icon name="check" /> : s.status === "error" ? <Icon name="x" /> : s.status === "running" ? <span className="spin"><Icon name="refresh" /></span> : <Icon name="clock" />}
-              </span>
-              <span className="sync-step-label">{s.label}</span>
-              <span className="sync-step-count">
-                {s.status === "done" ? `${s.count}건` : s.status === "error" ? "실패" : s.status === "running" ? "가져오는 중…" : "대기"}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-/** 수학 기록(출결·숙제·진도·테스트) 최초 1회 가져오기 — 위 '노션에서 가져오기'와 분리.
- *  ⚠️ 재실행하면 노션 기준으로 덮어써서 보강 예약이 풀리고 진도가 중복될 수 있어 평소엔 쓰지 않음. */
-function MathRecordsImport() {
-  const { reload, toast } = useStore();
-  const [importing, setImporting] = useState(false);
-
-  async function onImport() {
-    if (importing) return;
-    if (!window.confirm("수학 출결·숙제·진도·테스트를 노션에서 가져옵니다.\n\n⚠️ 평소엔 쓰지 마세요. 이 앱이 이미 원본이라, 다시 가져오면 직접 잡아둔 보강 예약이 풀리거나 진도가 중복될 수 있어요. 정말 진행할까요?")) return;
-    setImporting(true);
-    try {
-      const r = await importRecords();
-      if (r.error) toast("가져오기 실패: " + r.error);
-      else {
-        await reload();
-        toast(`수학 기록 가져오기 완료 · 출결 ${r.attendance} · 숙제 ${r.homework} · 진도 ${r.progress} · 테스트 ${r.test}건`);
-      }
-    } finally {
-      setImporting(false);
-    }
-  }
-
-  return (
-    <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
-      <div className="card-title" style={{ marginBottom: 6 }}>수학 기록 가져오기 (최초 1회용)</div>
-      <div className="page-desc" style={{ marginBottom: 12 }}>
-        예전에 노션에 쌓아둔 <b>수학</b> 출결·숙제·진도·테스트를 처음 한 번만 옮길 때 쓰세요.
-        지금은 이 앱이 원본이라 평소엔 필요 없어요. <b style={{ color: "var(--bad)" }}>다시 누르면 직접 잡아둔 보강 예약이 풀리고 진도가 중복될 수 있어</b> 주의가 필요합니다.
-      </div>
-      <button className="btn ghost" onClick={onImport} disabled={importing}>
-        <span className={importing ? "spin" : undefined}><Icon name="refresh" /></span>
-        {importing ? "가져오는 중…" : "수학 기록 1회 가져오기"}
-      </button>
-    </div>
-  );
-}
+/* 노션에서 가져오기 UI는 제거됨(2026-06-18) — 실수 클릭으로 데이터가 노션 기준으로
+ * 덮어써지는 사고를 막기 위해. 가져오기 기능(api.ts importRecords, lib/syncAll)은
+ * 남겨둬 필요 시 수동으로만 사용. 관련 백엔드: worker/index.ts importRecords. */
 
 /** 공지 배너 — 원장이 강사에게 띄우는 상단 띠. 있을 때만 노출. */
 function NoticeSetting() {
@@ -373,8 +265,6 @@ export function Settings({
       <NoticeSetting />
       <KakaoWebhookSetting />
       <LogoSetting />
-      <NotionImport />
-      <MathRecordsImport />
     </section>
   );
 }
