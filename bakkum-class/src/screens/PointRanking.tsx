@@ -44,7 +44,7 @@ export function PointRanking() {
       <div className="sm-head">
         <div>
           <h1 className="sm-title">포인트 랭킹</h1>
-          <p className="sm-desc">출석·숙제·칭찬으로 모은 꿀(포인트) 순위예요. 지각·차감은 빼서 합산해요.</p>
+          <p className="sm-desc">출석·숙제·칭찬으로 모은 꿀(포인트) 순위예요.</p>
         </div>
         <div className="sm-count">{ranked.length}명</div>
       </div>

@@ -74,7 +74,7 @@ interface StoreCtx {
   /** Like mutate, but persists immediately and resolves true/false on save success. */
   mutateAsync: (fn: (draft: DataSnapshot) => void) => Promise<boolean>;
   /** Re-fetch the snapshot from the backend (e.g. after a Notion sync). */
-  reload: () => Promise<void>;
+  reload: (opts?: { silent?: boolean }) => Promise<void>;
   /** 토스트. undo를 주면 '되돌리기' 버튼이 잠깐(5초) 뜬다. */
   toast: (msg: string, undo?: () => void) => void;
   dismissToast: (id: number) => void;
@@ -176,7 +176,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return next ? await saveDataNow({ ...(next as DataSnapshot), deletions: serializeDel(pendingDel.current) }) : false;
   }, []);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (opts?: { silent?: boolean }) => {
     try {
       const snap = await loadData();
       setData(snap);
@@ -184,8 +184,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setLoadError(null);
       pendingDel.current = emptyDel(); // 최신 데이터 반영 — 삭제표시 비움
     } catch (e) {
-      // 실패해도 기존 데이터는 유지(덮어쓰지 않음)
-      setToasts((t) => [...t, { id: ++toastId.current, msg: "최신 데이터를 불러오지 못했어요." }]);
+      // 실패해도 기존 데이터는 유지(덮어쓰지 않음).
+      // 백그라운드 동기화(포커스·45초 주기)는 저장이 몰려 순간 끊겨도 매번 경고를 띄우지 않는다
+      // — 다음 주기에 자동으로 다시 시도한다. 사용자가 직접 누른 새로고침만 안내 토스트.
+      if (!opts?.silent) {
+        setToasts((t) => [...t, { id: ++toastId.current, msg: "최신 데이터를 불러오지 못했어요." }]);
+      }
       void e;
     }
   }, []);
@@ -198,7 +202,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       if (blockSave.current) return;
       if (Date.now() - lastMutate.current < 3000) return;
-      void reload();
+      void reload({ silent: true }); // 백그라운드 동기화 — 실패해도 조용히(다음 주기 재시도)
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
