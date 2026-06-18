@@ -86,6 +86,8 @@ export function BoardShared() {
   const isMine = (t: BoardTask) => t.assignee.split(",").map((s) => s.trim()).includes(myName);
   const scoped = useMemo(() => (mine ? visible.filter(isMine) : visible), [visible, mine, myName]); // eslint-disable-line react-hooks/exhaustive-deps
   const myCount = useMemo(() => visible.filter(isMine).length, [visible, myName]); // eslint-disable-line react-hooks/exhaustive-deps
+  // '나우' — 상단 핀(진행중, 최대 3). 완료가 아닌 now 카드만.
+  const nowTasks = useMemo(() => sortTasks(scoped.filter((t) => t.now && t.status !== "done")), [scoped]);
   // 완료가 있는 달 목록(최신순) — 월 이동 버튼 활성화 판단용.
   const doneMonths = useMemo(() => {
     const set = new Set<string>();
@@ -121,13 +123,13 @@ export function BoardShared() {
     if (!to) return;
     await moveTo(t.id, to);
   }
-  // 카드를 지정한 칸으로 이동(드래그 드롭·버튼 공용). 같은 칸이면 무시.
+  // 카드를 지정한 칸으로 이동(드래그 드롭·버튼 공용). 칸으로 옮기면 '나우' 핀은 해제.
   async function moveTo(id: string, to: TaskStatus) {
     const t = tasks.find((x) => x.id === id);
-    if (!t || t.status === to) return;
-    setTasks((cur) => cur.map((x) => (x.id === id ? { ...x, status: to } : x)));
+    if (!t || (t.status === to && !t.now)) return;
+    setTasks((cur) => cur.map((x) => (x.id === id ? { ...x, status: to, now: false } : x)));
     try {
-      await tasksApi.save({ ...t, status: to });
+      await tasksApi.save({ ...t, status: to, now: false });
       await load();
     } catch {
       setErr("이동에 실패했어요.");
@@ -138,6 +140,24 @@ export function BoardShared() {
     onDragOver: (e: DragEvent) => { if (dragId.current) { e.preventDefault(); setDropCol(status); } },
     onDrop: (e: DragEvent) => { e.preventDefault(); const id = dragId.current; dragId.current = null; setDropCol(null); if (id) void moveTo(id, status); },
   });
+  // '나우'(상단 진행중 핀) — 드래그해서 올림. 최대 3개. 완료 카드는 진행중으로 올라옴.
+  const [dropNow, setDropNow] = useState(false);
+  async function pinToNow(id: string) {
+    const t = tasks.find((x) => x.id === id);
+    if (!t || t.now) return;
+    const status = t.status === "done" ? "doing" : t.status;
+    setTasks((cur) => cur.map((x) => (x.id === id ? { ...x, now: true, status } : x)));
+    try {
+      await tasksApi.save({ ...t, now: true, status });
+      await load();
+    } catch {
+      setErr("나우로 옮기지 못했어요.");
+    }
+  }
+  const nowDrop = {
+    onDragOver: (e: DragEvent) => { if (dragId.current) { e.preventDefault(); setDropNow(true); } },
+    onDrop: (e: DragEvent) => { e.preventDefault(); const id = dragId.current; dragId.current = null; setDropNow(false); if (id) void pinToNow(id); },
+  };
   async function saveEdit(next: BoardTask) {
     setTasks((cur) => cur.map((x) => (x.id === next.id ? next : x)));
     setEdit(null);
@@ -179,6 +199,13 @@ export function BoardShared() {
         {t.studentId && nameOf[t.studentId] && <span className="board2-stu">{nameOf[t.studentId]}</span>}
         {t.source && <span className="board2-auto">자동</span>}
       </div>
+      {t.stages && t.stages.length > 0 && (
+        <div className="board2-stages">
+          {t.stages.map((s, i) => (
+            <span className="board2-stage" key={i}>{s.label}{s.who ? <b> {s.who}</b> : <i> 미정</i>}</span>
+          ))}
+        </div>
+      )}
       <div className="board2-card-act" onClick={(e) => e.stopPropagation()}>
         {PREV[t.status] && <button className="board2-mv" onClick={() => move(t, "prev")} title="왼쪽으로">‹</button>}
         {NEXT[t.status] && <button className="board2-mv" onClick={() => move(t, "next")} title="오른쪽으로">›</button>}
@@ -214,9 +241,21 @@ export function BoardShared() {
       </div>
       {err && <div className="auth-err" style={{ margin: "8px 0" }}>{err}</div>}
 
+      {/* 나우(Now) — 지금 하고 있는 일. 상단 가로, 붉은색, 최대 3개. 카드를 끌어다 놓으면 핀. */}
+      <div className={"board2-now" + (dropNow ? " drop-over" : "")} {...nowDrop}>
+        <div className="board2-now-h">NOW</div>
+        <div className="board2-now-row">
+          {nowTasks.length === 0 ? (
+            <div className="board2-now-empty">여기에 ‘지금 하는 일’ 카드를 끌어다 놓으세요.</div>
+          ) : (
+            nowTasks.map(card)
+          )}
+        </div>
+      </div>
+
       <div className="board2-cols">
         {ACTIVE_COLS.map((c) => {
-          const items = sortTasks(scoped.filter((t) => t.status === c.key));
+          const items = sortTasks(scoped.filter((t) => t.status === c.key && !t.now));
           return (
             <div className={"board2-col" + (dropCol === c.key ? " drop-over" : "")} key={c.key} {...colDrop(c.key)}>
               <div className="board2-col-h">
@@ -283,6 +322,12 @@ function TaskModal({
     const next = assigned.includes(name) ? assigned.filter((n) => n !== name) : [...assigned, name];
     set("assignee", next.join(", "));
   };
+  // 단계별 담당자 — 1차 제작 · 2차 검수 …(라벨 + 담당). '+ 단계 추가'로 N차까지.
+  const stages = f.stages || [];
+  const STAGE_DEFAULTS = ["1차 제작", "2차 검수"];
+  const setStages = (st: typeof stages) => set("stages", st);
+  const addStage = () => setStages([...stages, { label: STAGE_DEFAULTS[stages.length] || `${stages.length + 1}차`, who: "" }]);
+  const patchStage = (i: number, k: "label" | "who", v: string) => setStages(stages.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
 
   return (
     <div className="prof-overlay" onClick={onClose}>
@@ -314,6 +359,22 @@ function TaskModal({
                 </button>
               ))}
               {users.length === 0 && <span className="hub-muted">등록된 강사가 없어요.</span>}
+            </div>
+          </label>
+          <label className="prof-field">
+            <span className="prof-field-l">단계별 담당자 (1차 제작 · 2차 검수 …)</span>
+            <div className="task-stages">
+              {stages.map((s, i) => (
+                <div className="task-stage-row" key={i}>
+                  <input className="inline-input task-stage-label" value={s.label} onChange={(e) => patchStage(i, "label", e.target.value)} placeholder="단계 (예: 1차 제작)" />
+                  <select className="inline-input task-stage-who" value={s.who} onChange={(e) => patchStage(i, "who", e.target.value)}>
+                    <option value="">담당 미정</option>
+                    {users.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+                  </select>
+                  <button type="button" className="task-stage-x" onClick={() => setStages(stages.filter((_, j) => j !== i))} aria-label="단계 삭제">×</button>
+                </div>
+              ))}
+              <button type="button" className="btn ghost sm" onClick={addStage}>+ 단계 추가</button>
             </div>
           </label>
           <label className="prof-field">

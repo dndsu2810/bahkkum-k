@@ -97,6 +97,8 @@ export const snsApi = {
 /* ---------------- 공유 업무 보드 ---------------- */
 export type TaskStatus = "todo" | "doing" | "done";
 export type TaskPriority = "urgent" | "normal";
+/** 단계별 담당자 — 예: {label:"1차 제작", who:"수민"}, {label:"2차 검수", who:"지연"} */
+export interface TaskStage { label: string; who: string }
 export interface BoardTask {
   id: string;
   title: string;
@@ -113,6 +115,8 @@ export interface BoardTask {
   archived: boolean;
   adminOnly: boolean; // 원장 전용(강사 비공개) — 노션 '미나' 단계
   assignDate: string; // 업무 배정일(YYYY-MM-DD)
+  stages: TaskStage[]; // 단계별 담당자(1차 제작·2차 검수 …)
+  now: boolean; // '나우' — 상단 진행중 핀(최대 3)
 }
 export const tasksApi = {
   list: () => jget<{ tasks: BoardTask[] }>("/api/tasks").then((j) => j.tasks),

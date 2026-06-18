@@ -54,7 +54,7 @@ function engEntries(band: "mid" | "elem"): WsEntry[] {
   if (band === "mid") list.push({ key: "eng_naesin" + sfx, label: "내신모드", icon: "cap", kind: "hub" });
   // 초등영어는 학생 화면에 커리큘럼이 보이므로, 그걸 수정하는 메뉴를 둔다.
   if (band === "elem") list.push(
-    { key: "eng_cur" + sfx, label: "커리큘럼", icon: "clipboard", kind: "hub" },
+    { key: "eng_cur" + sfx, label: "오늘 뭐해요?", icon: "clipboard", kind: "hub" },
     { key: "eng_items" + sfx, label: "오늘 한 것 수정", icon: "check", kind: "hub" }
   );
   list.push(

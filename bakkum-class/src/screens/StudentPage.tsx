@@ -83,9 +83,9 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
           <Timetable slots={data.engSlots} />
         </section>
 
-        {/* 커리큘럼 */}
+        {/* 오늘 뭐해요? (구 '커리큘럼') */}
         <section className="sp-card">
-          <h3 className="sp-card-h">커리큘럼</h3>
+          <h3 className="sp-card-h">오늘 뭐해요?</h3>
           {canEditCur ? (
             <CurriculumEditor studentId={s.id} cur={data.curriculum} onSaved={reloadSilent} />
           ) : (
@@ -140,7 +140,7 @@ function Timetable({ slots }: { slots: { day: string; time: string; duration: nu
 
 /* ---------------- 커리큘럼(조회) ---------------- */
 function CurriculumView({ cur }: { cur: Curriculum }) {
-  if (!cur.sections.length) return <div className="sp-muted">아직 커리큘럼이 등록되지 않았어요.</div>;
+  if (!cur.sections.length) return <div className="sp-muted">아직 등록된 학습이 없어요.</div>;
   return (
     <div className="sp-cur">
       {cur.note && <div className="sp-cur-note"><Icon name="info" /> {cur.note}</div>}
@@ -262,7 +262,7 @@ export function CurriculumEditor({ studentId, cur, onSaved }: { studentId: strin
       <div className="sp-cur-actions">
         <button className="btn ghost sm" onClick={() => setDraft({ ...draft, sections: [...draft.sections, { title: "", rows: [{ name: "", amount: "" }] }] })}>+ 섹션</button>
         {!draft.sections.length && <button className="btn ghost sm" onClick={loadTemplate}>기본 양식 불러오기</button>}
-        <button className="btn primary sm" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : dirty ? "커리큘럼 저장" : "저장됨"}</button>
+        <button className="btn primary sm" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : dirty ? "저장" : "저장됨"}</button>
       </div>
     </div>
   );
