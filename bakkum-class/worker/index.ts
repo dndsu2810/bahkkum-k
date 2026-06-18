@@ -375,10 +375,12 @@ export default {
 
         // 수학 앱 핵심 데이터(로스터·기록·포인트) — 스태프(학생 제외) 로그인 필요.
         // (이전엔 무인증이라 PII 노출·무단 덮어쓰기 위험이 있었음)
-        if (p === "/api/data" || p === "/api/students" || p === "/api/students/hide" || p === "/api/points") {
+        if (p === "/api/data" || p === "/api/students" || p === "/api/students/hide" || p === "/api/points" || p === "/api/points/redeem") {
           const me = await readSession(env, request);
           if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
         }
+        // 포인트 랭킹 '적립완료(시상)' — 그 학생의 누적 꿀을 0으로 초기화하고 새로 쌓게 한다.
+        if (p === "/api/points/redeem" && request.method === "POST") return await redeemRanking(env, request);
         if (p === "/api/data" && request.method === "GET") return json(await readSnapshot(env));
         if (p === "/api/data" && request.method === "PUT") return await putData(env, request);
         if (p === "/api/students" && request.method === "POST") return await postStudents(env, request);
@@ -2351,6 +2353,30 @@ async function postPoints(env: Env, request: Request, ctx: ExecutionContext): Pr
   }
 
   return json({ matched: true });
+}
+
+// 포인트 랭킹 '적립완료(시상)' — 학생의 현재 누적 꿀(영어 일일 + math 포인트이력) 합계만큼
+// 음수 보정행을 point_history에 넣어 랭킹 합을 0으로 만든다. 이후 점수는 다시 0부터 쌓인다.
+// (행 삭제 한 줄이면 되돌릴 수 있어 안전. 키오스크 연동은 v1에선 건드리지 않음.)
+async function redeemRanking(env: Env, request: Request): Promise<Response> {
+  const b = (await request.json().catch(() => ({}))) as { studentId?: string };
+  const sid = Number(b.studentId);
+  if (!sid) return json({ error: "bad_input" }, 400);
+  const row = await env.DB
+    .prepare(
+      "SELECT (SELECT COALESCE(SUM(points),0) FROM class_eng_daily WHERE CAST(student_id AS INTEGER)=?) " +
+        "+ (SELECT COALESCE(SUM(delta),0) FROM point_history WHERE student_id=? AND category='learn') AS total"
+    )
+    .bind(sid, sid)
+    .first<{ total: number }>();
+  const total = Math.round(Number(row?.total) || 0);
+  if (total !== 0) {
+    await env.DB
+      .prepare("INSERT INTO point_history(student_id,delta,reason,category) VALUES(?,?,?,'learn')")
+      .bind(sid, -total, "적립완료(시상)")
+      .run();
+  }
+  return json({ ok: true, reset: total });
 }
 
 // ── 학습키오스크 포인트 미러링(아웃박스 + 크론 재전송으로 유실 방지) ──────────────

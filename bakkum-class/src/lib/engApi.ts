@@ -194,6 +194,8 @@ export const engApi = {
   syncElemLog: () => jpost<{ ok: boolean; total: number; imported: number; unmatched: string[] }>("/api/sync/eng-elem-log", {}),
   /** 학생 포인트 랭킹(누적 합). */
   ranking: () => jget<{ ranking: EngRanking[] }>("/api/eng/ranking").then((j) => j.ranking),
+  /** 시상 '적립완료' — 그 학생의 누적 꿀을 0으로 초기화(이후 다시 쌓임). */
+  redeemRanking: (studentId: string) => jpost<{ ok: boolean; reset: number }>("/api/points/redeem", { studentId }),
   /** 강사가 추가한 '오늘 한 것'·포인트 사유 목록(기본 목록에 더해 쓰임). */
   getCatalog: () => jget<{ doneItems: string[]; pointReasons: { name: string; value: number }[] }>("/api/eng/catalog"),
   saveCatalog: (patch: { doneItems?: string[]; pointReasons?: { name: string; value: number }[] }) => jpost("/api/eng/catalog", patch),

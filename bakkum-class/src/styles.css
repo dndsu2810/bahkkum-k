@@ -1578,6 +1578,7 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .rank-pts span{font-size:var(--t-cap);font-weight:600;color:var(--ink3);margin-left:1px}
 .rank-pts.minus{color:var(--bad)}
 .rank-pts.minus .rank-drop{display:none}
+.rank-award{flex-shrink:0;margin-left:2px;white-space:nowrap}
 /* 벌집 아바타 공통 */
 .hexav{display:inline-block;vertical-align:middle}
 .sm-row-av-hex{margin-right:8px}
