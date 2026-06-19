@@ -163,6 +163,15 @@ const paths: Record<string, ReactNode> = {
       <path d="M12 7v5l3 2" />
     </>
   ),
+  // 회의록 — 문서 + 마이크 조합.
+  minutes: (
+    <>
+      <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7" />
+      <path d="M8 8h6M8 12h3" />
+      <rect x="15" y="11" width="4" height="7" rx="2" />
+      <path d="M13.5 15.5a3.5 3.5 0 0 0 7 0M17 20v2" />
+    </>
+  ),
   gear: (
     <>
       <circle cx="12" cy="12" r="3" />

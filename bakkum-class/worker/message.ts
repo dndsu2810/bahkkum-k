@@ -98,7 +98,7 @@ export async function handleMessages(env: Env, request: Request, p: string, me: 
   if (p === "/api/messages/students" && m === "GET") {
     if (!canSend(me)) return json({ error: "forbidden" }, 403);
     const r = await env.DB.prepare(
-      "SELECT id, name, grade FROM students WHERE (hidden IS NULL OR hidden=0) AND birth_date IS NOT NULL AND TRIM(birth_date) <> '' ORDER BY name"
+      "SELECT id, name, grade FROM students WHERE (hidden IS NULL OR hidden=0) AND birth_date IS NOT NULL AND TRIM(birth_date) <> '' AND (status='재원' OR status IS NULL OR status='') ORDER BY name"
     ).all<{ id: number; name: string; grade: string | null }>();
     return json({ students: (r.results || []).map((x) => ({ id: String(x.id), name: String(x.name ?? ""), grade: String(x.grade ?? "") })) });
   }

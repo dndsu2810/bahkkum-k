@@ -21,7 +21,10 @@ export function applyMakeup(d: DataSnapshot, key: string, studentId: string, dur
   const date = parts[0];
   const time = parts[2];
   const existing = d.makeups.find((m) => m.attKey === key);
+  // (구) 결석 후속으로 강사 업무보드에 '보강 일정 잡기' 카드를 자동 생성하던 기능은 제거됨.
+  // 기존에 자동 생성된 카드가 남아 있으면 정리(중복·잔재 제거).
   const taskSrc = "absence:" + key;
+  if (d.tasks?.length) d.tasks = d.tasks.filter((t) => t.source !== taskSrc);
   if (NEEDS_MAKEUP.includes(status)) {
     // 사용자가 이 결석의 보강을 직접 삭제(tombstone)했으면 자동 재등록하지 않는다.
     if (d.dismissedMakeups?.includes(key)) return;
@@ -42,26 +45,9 @@ export function applyMakeup(d: DataSnapshot, key: string, studentId: string, dur
         createdAt: Date.now(),
       });
     }
-    // 강사 업무 보드에 '보강 일정 잡기' 카드 자동 생성 (source로 중복 방지)
-    d.tasks ||= [];
-    if (!d.tasks.some((t) => t.source === taskSrc)) {
-      const nm = d.students.find((s) => s.id === studentId)?.name || "";
-      d.tasks.push({
-        id: uid(),
-        title: (nm ? nm + " " : "") + "보강 일정 잡기",
-        status: "todo",
-        tag: "보강",
-        studentId,
-        memo: "결석 후속",
-        source: taskSrc,
-        createdAt: Date.now(),
-      });
-    }
   } else {
     // 결석이 아니게 되면 자동 보강 제거 + 삭제표시도 해제(이후 다시 결석 시 정상 등록).
     if (existing && existing.status === "pending") d.makeups = d.makeups.filter((m) => m.attKey !== key);
     if (d.dismissedMakeups?.length) d.dismissedMakeups = d.dismissedMakeups.filter((k) => k !== key);
-    // 자동 생성한 보강 카드 회수 (정정 시)
-    if (d.tasks?.length) d.tasks = d.tasks.filter((t) => t.source !== taskSrc);
   }
 }

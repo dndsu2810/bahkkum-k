@@ -117,6 +117,7 @@ export interface BoardTask {
   assignDate: string; // 업무 배정일(YYYY-MM-DD)
   stages: TaskStage[]; // 단계별 담당자(1차 제작·2차 검수 …)
   now: boolean; // '나우' — 상단 진행중 핀(최대 3)
+  requester: string; // 요청자(누가 시킨 일인지) — 만들면 만든 사람 이름 자동, 수정 가능
 }
 export const tasksApi = {
   list: () => jget<{ tasks: BoardTask[] }>("/api/tasks").then((j) => j.tasks),
@@ -160,6 +161,8 @@ export interface Material {
   assignee: string; // 인쇄 담당자
   school: string; // 대상 학교(선택)
   grade: string; // 대상 학년(선택)
+  printBy: string; // 인쇄 마감일(YYYY-MM-DD, 선택)
+  giveDate: string; // 배부 예정일(YYYY-MM-DD, 선택)
   createdAt: number;
   stat: MaterialStat; // 배부 요약(수업/숙제/완료/전체)
 }
@@ -167,7 +170,7 @@ export interface MaterialAssign {
   id: string;
   materialId: string;
   studentId: string;
-  kind: string; // lesson(수업) | hw(숙제)
+  kind: string; // lesson(수업) | hw_check(검사할 숙제·지난) | hw_assign(내줄 숙제·다음)
   date: string;
   done: boolean;
   createdAt: number;
@@ -175,14 +178,14 @@ export interface MaterialAssign {
 export const materialsApi = {
   list: (subject?: string) =>
     jget<{ materials: Material[] }>("/api/materials" + (subject ? "?subject=" + subject : "")).then((j) => j.materials),
-  save: (mt: { id?: string; name: string; subject?: string; memo?: string; filePath?: string; copies?: number; assignee?: string; school?: string; grade?: string }) => jpost("/api/materials", mt),
+  save: (mt: { id?: string; name: string; subject?: string; memo?: string; filePath?: string; copies?: number; assignee?: string; school?: string; grade?: string; printBy?: string; giveDate?: string }) => jpost("/api/materials", mt),
   setPrinted: (id: string, printed: boolean) => jpost("/api/materials/print", { id, printed }),
   remove: (id: string) => jpost("/api/materials/delete", { id }),
   assigns: (q: { materialId?: string; studentId?: string }) =>
     jget<{ assigns: MaterialAssign[] }>(
       "/api/materials/assign" + (q.materialId ? "?material_id=" + q.materialId : q.studentId ? "?student_id=" + q.studentId : "")
     ).then((j) => j.assigns),
-  assign: (b: { materialId: string; studentIds: string[]; kind: "lesson" | "hw"; date?: string }) => jpost("/api/materials/assign", b),
+  assign: (b: { materialId: string; studentIds: string[]; kind: "lesson" | "hw_check" | "hw_assign"; date?: string }) => jpost("/api/materials/assign", b),
   setDone: (id: string, done: boolean) => jpost("/api/materials/assign/done", { id, done }),
   unassign: (id: string) => jpost("/api/materials/assign/delete", { id }),
 };

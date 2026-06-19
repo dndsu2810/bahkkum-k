@@ -70,6 +70,8 @@ import { handleFeedback } from "./feedback";
 import { handleMessages } from "./message";
 import { handleCheckin } from "./checkin";
 import { handleOrders } from "./orders";
+import { handleMeeting } from "./meeting";
+import { handlePost } from "./post";
 
 const DEFAULT_APP_URL = "https://bakkum-class.dndsu2810.workers.dev";
 
@@ -90,6 +92,9 @@ export interface Env {
   // 학습키오스크(bakuum-kiosk) 포인트 미러링 — 수학 학생 적립/감점을 키오스크로 단방향 전송
   KIOSK_URL?: string; // 예: https://bakuum-kiosk.pages.dev
   KIOSK_POINTS_KEY?: string; // 키오스크 EXTERNAL_POINTS_KEY와 동일 값 (Secret)
+  // 회의록 — 음성→텍스트(Whisper)·텍스트→요약(Claude) (Worker Secret로 주입)
+  OPENAI_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
 }
 
 const TEACHER = "이지현";
@@ -127,7 +132,8 @@ export default {
         }
         if (p === "/api/upload" && request.method === "POST") {
           const me = await readSession(env, request);
-          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
+          // 로그인한 사용자면 업로드 허용(학생 포함) — 학생도 오류 신고에 스크린샷을 첨부할 수 있어야 이미지가 보인다.
+          if (!me) return json({ error: "forbidden" }, 403);
           if (!env.MEDIA) return json({ error: "no_media" }, 500);
           const ct = request.headers.get("content-type") || "application/octet-stream";
           const ext = ct.includes("png") ? "png" : ct.includes("webp") ? "webp" : ct.includes("gif") ? "gif" : ct.includes("jpeg") || ct.includes("jpg") ? "jpg" : "bin";
@@ -137,6 +143,34 @@ export default {
           const key = `up/${crypto.randomUUID()}.${ext}`;
           await env.MEDIA.put(key, body, { httpMetadata: { contentType: ct } });
           return json({ url: `/api/media/${key}` });
+        }
+        // 일반 파일(첨부) 서빙(공개 다운로드) — 원래 파일명으로 내려준다.
+        if (p.startsWith("/api/files/") && request.method === "GET") {
+          if (!env.MEDIA) return new Response("no media", { status: 404 });
+          const key = decodeURIComponent(p.slice("/api/files/".length));
+          const obj = await env.MEDIA.get(key);
+          if (!obj) return new Response("not found", { status: 404 });
+          const name = key.split("/").pop() || "file";
+          const h = new Headers();
+          obj.writeHttpMetadata(h);
+          h.set("content-disposition", `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+          h.set("cache-control", "public, max-age=31536000, immutable");
+          return new Response(obj.body, { headers: h });
+        }
+        // 일반 파일 업로드(스태프) — 원본 파일명 보존. x-filename 헤더에 파일명.
+        if (p === "/api/files" && request.method === "POST") {
+          const me = await readSession(env, request);
+          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
+          if (!env.MEDIA) return json({ error: "no_media" }, 500);
+          const ct = request.headers.get("content-type") || "application/octet-stream";
+          const rawName = decodeURIComponent(request.headers.get("x-filename") || "file");
+          const name = rawName.replace(/[/\\]/g, "_").slice(0, 160) || "file";
+          const body = await request.arrayBuffer();
+          if (body.byteLength === 0) return json({ error: "empty" }, 400);
+          if (body.byteLength > 25_000_000) return json({ error: "too_large" }, 413);
+          const key = `file/${crypto.randomUUID()}/${name}`;
+          await env.MEDIA.put(key, body, { httpMetadata: { contentType: ct } });
+          return json({ url: `/api/files/${key.split("/").map(encodeURIComponent).join("/")}`, name, size: body.byteLength });
         }
         // 전역 설정(학원 로고 등). GET: 로그인 스태프 누구나, POST: 원장.
         if (p === "/api/config" && request.method === "GET") {
@@ -336,6 +370,22 @@ export default {
           if (res) return res;
         }
 
+        // ---- 회의록 — 스태프 전용(학생 제외). 음성→텍스트·AI 요약·저장 ----
+        if (p.startsWith("/api/meetings")) {
+          const me = await readSession(env, request);
+          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
+          const res = await handleMeeting(env, request, p, me);
+          if (res) return res;
+        }
+
+        // ---- 공지사항 게시판 — 로그인 누구나(학생은 전체공개분만, 작성은 스태프. 권한은 핸들러에서) ----
+        if (p.startsWith("/api/posts")) {
+          const me = await readSession(env, request);
+          if (!me) return json({ error: "forbidden" }, 403);
+          const res = await handlePost(env, request, p, me);
+          if (res) return res;
+        }
+
         // ---- 학생 메시지 — 로그인 누구나(발송=원장·수학, 수신=학생 본인. 권한은 핸들러에서) ----
         if (p.startsWith("/api/messages")) {
           const me = await readSession(env, request);
@@ -361,12 +411,14 @@ export default {
           const isEngStaff = !!me && (me.role === "admin" || me.role === "english_mid" || me.role === "english_elem");
           const isTeacher = isEngStaff || (!!me && me.role === "math");
           const isCommonEng = p === "/api/eng/ranking" || p === "/api/eng/point-reasons";
+          // 시험(테스트)은 학생 화면에서도 입력·조회 — 학생은 본인 것만(handleEng에서 본인 강제).
+          const isStudentTest = !!me && me.role === "student" && p.startsWith("/api/eng/test");
           if (isCommonEng) {
             if (!me) return json({ error: "forbidden" }, 403);
             // 포인트 항목 저장(POST)은 강사 이상만.
             if (p === "/api/eng/point-reasons" && request.method === "POST" && !isTeacher)
               return json({ error: "forbidden" }, 403);
-          } else if (!isEngStaff) {
+          } else if (!isEngStaff && !isStudentTest) {
             return json({ error: "forbidden" }, 403);
           }
           const res = await handleEng(env, request, p, me);
@@ -483,7 +535,10 @@ async function authLogin(env: Env, request: Request): Promise<Response> {
   if (!name) return json({ error: "name_required" }, 400);
   let user: SessionUser | null = null;
   if (b.kind === "student") {
-    user = await loginStudent(env, name, b.birth || "");
+    const res = await loginStudent(env, name, b.birth || "");
+    // 휴원·퇴원생은 로그인 차단 — 상태를 안내(팝업).
+    if (res && "blockedStatus" in res) return json({ error: "student_blocked", status: res.blockedStatus }, 403);
+    user = res;
   } else {
     user = await loginTeacher(env, name, b.pin || "");
   }
@@ -983,19 +1038,43 @@ async function adminOverview(env: Env, url: URL): Promise<Response> {
     .map((sid) => ({ id: sid, name: nameOf[sid], math: per[sid].math, elem: per[sid].elem, mid: per[sid].mid }))
     .sort((a, b) => tot(per[b.id]) - tot(per[a.id]));
 
-  let notes: unknown[] = [];
+  // 특이사항 — 수학·허브(class_notes)와 영어 수업기록(class_eng_daily.note)을 한데 모아 과목 라벨과 함께.
+  type NoteItem = { studentId: string; studentName: string; author: string; body: string; createdAt: number; subject: string };
+  let notes: NoteItem[] = [];
   try {
-    const nRes = await env.DB.prepare("SELECT * FROM class_notes ORDER BY created_at DESC LIMIT 15").all<Record<string, unknown>>();
-    notes = (nRes.results || []).map((r) => ({
-      studentId: String(r.student_id),
-      studentName: nameOf[String(r.student_id)] || "",
-      author: String(r.author_name || ""),
-      body: String(r.body || ""),
-      createdAt: Number(r.created_at || 0),
-    }));
+    const nRes = await env.DB.prepare("SELECT * FROM class_notes ORDER BY created_at DESC LIMIT 30").all<Record<string, unknown>>();
+    for (const r of nRes.results || []) {
+      notes.push({
+        studentId: String(r.student_id),
+        studentName: nameOf[String(r.student_id)] || "",
+        author: String(r.author_name || ""),
+        body: String(r.body || ""),
+        createdAt: Number(r.created_at || 0),
+        subject: "수학",
+      });
+    }
   } catch {
     /* ignore */
   }
+  try {
+    const eRes = await env.DB.prepare("SELECT student_id, date, note, updated_at FROM class_eng_daily WHERE note <> '' ORDER BY date DESC LIMIT 30").all<Record<string, unknown>>();
+    for (const r of eRes.results || []) {
+      const sid = String(r.student_id);
+      const band = bandOf[sid] === "elem" ? "초등영어" : "영어";
+      notes.push({
+        studentId: sid,
+        studentName: nameOf[sid] || "",
+        author: "",
+        body: String(r.note || ""),
+        createdAt: Number(r.updated_at || 0) || Date.parse(String(r.date) + "T00:00:00+09:00") || 0,
+        subject: band,
+      });
+    }
+  } catch {
+    /* ignore */
+  }
+  notes.sort((a, b) => b.createdAt - a.createdAt);
+  notes = notes.slice(0, 20);
 
   return json({
     month,
@@ -1065,7 +1144,10 @@ async function adminStudentReport(env: Env, url: URL): Promise<Response> {
   }
   const engTests = await rowsRecent(env, "SELECT * FROM class_eng_test WHERE student_id=? ORDER BY date DESC LIMIT 5", id, (r) => ({ date: String(r.date ?? ""), name: String(r.name ?? ""), score: Number(r.score ?? 0), total: Number(r.total ?? 100) }));
   const engProg = await rowsRecent(env, "SELECT * FROM class_eng_progress WHERE student_id=? ORDER BY updated_at DESC LIMIT 5", id, (r) => ({ book: String(r.book ?? ""), level: String(r.level ?? ""), status: String(r.status ?? "") }));
-  const notes = await rowsRecent(env, "SELECT * FROM class_notes WHERE student_id=? ORDER BY created_at DESC LIMIT 10", id, (r) => ({ author: String(r.author_name ?? ""), body: String(r.body ?? ""), createdAt: Number(r.created_at ?? 0) }));
+  const mathNotes = await rowsRecent(env, "SELECT * FROM class_notes WHERE student_id=? ORDER BY created_at DESC LIMIT 10", id, (r) => ({ author: String(r.author_name ?? ""), body: String(r.body ?? ""), createdAt: Number(r.created_at ?? 0), subject: "수학" }));
+  const engBand = stu?.englishBand === "elem" ? "초등영어" : "영어";
+  const engNotes = await rowsRecent(env, "SELECT date, note, updated_at FROM class_eng_daily WHERE student_id=? AND note <> '' ORDER BY date DESC LIMIT 10", id, (r) => ({ author: "", body: String(r.note ?? ""), createdAt: Number(r.updated_at ?? 0) || Date.parse(String(r.date) + "T00:00:00+09:00") || 0, subject: engBand }));
+  const notes = [...mathNotes, ...engNotes].sort((a, b) => b.createdAt - a.createdAt).slice(0, 15);
 
   return json({
     id,
@@ -1235,7 +1317,8 @@ interface TtLesson {
 }
 async function readTimetable(env: Env): Promise<TtLesson[]> {
   await ensureEngLessons(env);
-  const nameRows = await env.DB.prepare("SELECT id, name FROM students WHERE hidden IS NULL OR hidden = 0").all<{ id: number; name: string }>();
+  // 재원생만 — 휴원·퇴원생은 시간표에서 제외(상태를 재원으로 되돌리면 다시 보임).
+  const nameRows = await env.DB.prepare("SELECT id, name FROM students WHERE (hidden IS NULL OR hidden = 0) AND (status='재원' OR status IS NULL OR status='')").all<{ id: number; name: string }>();
   const nameOf: Record<string, string> = {};
   for (const r of nameRows.results || []) nameOf[String(r.id)] = String(r.name);
   const out: TtLesson[] = [];

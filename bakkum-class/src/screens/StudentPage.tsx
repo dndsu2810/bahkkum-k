@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth";
-import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type Curriculum, type CurriculumSection, type CurriculumRow, type StudentLogRow } from "../lib/studentApi";
+import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type Curriculum, type CurriculumSection, type CurriculumRow, type StudentLogRow, type StudentGoal } from "../lib/studentApi";
 import { messageApi, type Message } from "../lib/messageApi";
 import { DOW, DOW_ORDER, fmtFull, fmtMDDow, fmtWhen, parseD, timeToMin, todayStr } from "../lib/dates";
 import { NoticeBanner } from "../components/NoticeBanner";
@@ -8,6 +8,9 @@ import { DateField } from "../components/DateControls";
 import { getCachedLogo } from "../lib/configApi";
 import { IssueBoard } from "./IssueBoard";
 import { Guide } from "./Guide";
+import { Notices } from "./Notices";
+import { postApi } from "../lib/postApi";
+import { DailyTests } from "./English";
 import { Icon } from "../icons";
 import { HexAvatar, CombGauge, Bee, SoezLogo } from "../soez";
 
@@ -32,8 +35,9 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
     }
   }
   // 조용히 새로고침(로딩표시 없이) — 선생님이 체크한 게 학생 화면에 바로 반영되게.
+  // 내용이 그대로면 상태를 바꾸지 않아 리렌더를 막는다(입력 중 화면이 튀지 않게).
   async function reloadSilent() {
-    try { setData(await studentApi.page(studentId)); } catch { /* 폴링 실패는 무시 */ }
+    try { const d = await studentApi.page(studentId); setData((cur) => (JSON.stringify(cur) === JSON.stringify(d) ? cur : d)); } catch { /* 폴링 실패는 무시 */ }
   }
   useEffect(() => {
     load();
@@ -49,6 +53,7 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
 
   const canEditCur = data.canEditCurriculum;
   const s = data.student;
+  const isMidBand = s.band === "mid" || s.band === "bridge"; // 중고등 — '오늘 뭐해요?'(초등 커리큘럼)·자율학습 카드 숨김
 
   // 이번 달 출석 — 벌집 게이지(출석/조퇴/지각을 출석으로). 기록이 있을 때만.
   const ym = todayStr().slice(0, 7);
@@ -83,23 +88,31 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
           <Timetable slots={data.engSlots} />
         </section>
 
-        {/* 오늘 뭐해요? (구 '커리큘럼') */}
-        <section className="sp-card">
-          <h3 className="sp-card-h">오늘 뭐해요?</h3>
-          {canEditCur ? (
-            <CurriculumEditor studentId={s.id} cur={data.curriculum} onSaved={reloadSilent} />
-          ) : (
-            <CurriculumView cur={data.curriculum} />
-          )}
-          {/* 학생이 스스로 반복할 학습을 추가(강사 커리큘럼과 별개). */}
-          <SelfLearning items={data.selfCurriculum} studentId={canEditCur ? s.id : undefined} onSaved={reloadSilent} />
-        </section>
+        {/* 오늘 뭐해요? (구 '커리큘럼') — 초등영어 전용. 중고등은 숨김. */}
+        {!isMidBand && (
+          <section className="sp-card">
+            <h3 className="sp-card-h">오늘 뭐해요?</h3>
+            {canEditCur ? (
+              <CurriculumEditor studentId={s.id} cur={data.curriculum} onSaved={reloadSilent} />
+            ) : (
+              <CurriculumView cur={data.curriculum} />
+            )}
+            {/* 학생이 스스로 반복할 학습을 추가(강사 커리큘럼과 별개). */}
+            <SelfLearning items={data.selfCurriculum} studentId={canEditCur ? s.id : undefined} onSaved={reloadSilent} />
+          </section>
+        )}
       </div>
 
       {/* 일지 입력 */}
       <section className="sp-card">
         <h3 className="sp-card-h">{canEditCur ? "수업 일지 입력" : "오늘 수업 일지"}</h3>
-        <LogEditor studentId={canEditCur ? s.id : undefined} existing={data.daily} slots={data.engSlots} options={data.doneItemOptions} band={s.band} onSaved={reloadSilent} />
+        {data.progressBooks && data.progressBooks.length > 0 && (
+          <div className="sp-progbooks">
+            <span className="sp-progbooks-l">현재 교재</span>
+            {data.progressBooks.map((b) => <span className="sp-hw-chip" key={b}>{b}</span>)}
+          </div>
+        )}
+        <LogEditor studentId={canEditCur ? s.id : undefined} tid={s.id} existing={data.daily} slots={data.engSlots} options={data.doneItemOptions} band={s.band} onSaved={reloadSilent} />
       </section>
 
       {/* 일지 이력 */}
@@ -283,38 +296,28 @@ function addMin(hm: string, min: number): string {
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
 
-/* 중고등 숙제(단어/리딩/문법) 상태 — 강사가 '오늘'에서 확인한 결과를 조회용으로 표시. */
-const hwCls = (v: string) => (v === "완료" ? "ok" : v === "미흡" ? "warn" : v === "안함" ? "bad" : "");
+/* 지난 일지 이력의 숙제 3분류 태그 색상. */
 const hwTagCls = (v: string) => (v === "완료" ? "sp-tag-done" : v === "미흡" ? "sp-tag-warn" : v === "안함" ? "sp-tag-bad" : "");
-function HwView({ row }: { row?: StudentLogRow }) {
-  const cats: [string, string][] = [["단어", row?.hwWord || ""], ["리딩", row?.hwReading || ""], ["문법", row?.hwGrammar || ""]];
-  const shown = cats.filter(([, v]) => v && v !== "없음");
-  const any = shown.length > 0 || !!row?.wrongCheck;
-  return (
-    <div className="sp-f">
-      <span>숙제 (선생님 확인)</span>
-      {any ? (
-        <div className="sp-hw">
-          {shown.map(([k, v]) => <span key={k} className={"sp-hw-chip " + hwCls(v)}>{k} · {v}</span>)}
-          {row?.wrongCheck && <span className="sp-hw-chip ok">틀단 확인</span>}
-        </div>
-      ) : (
-        <div className="sp-muted">아직 선생님이 숙제를 등록하지 않았어요.</div>
-      )}
-    </div>
-  );
-}
 
-function LogEditor({ studentId, existing, slots, options, band, onSaved }: { studentId?: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; options?: string[]; band: string; onSaved: () => void }) {
+function LogEditor({ studentId, tid, existing, slots, options, band, onSaved }: { studentId?: string; tid: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; options?: string[]; band: string; onSaved: () => void }) {
   const items = options && options.length ? options : STUDENT_LOG_ITEMS;
   const isMid = band === "mid" || band === "bridge"; // 중고등(Bridge 포함) — 숙제 3분류·교재 진도
   const [date, setDate] = useState(todayStr());
+  const [goals, setGoals] = useState<StudentGoal[]>([]);
+  const [goalText, setGoalText] = useState("");
   const [bookNo, setBookNo] = useState("");
-  const [wordTest, setWordTest] = useState("");
+  // 숙제 검사(지난 수업 숙제) — 강사가 낸 지난 숙제. 학생이 '했다' 체크하면 줄긋기(강사와 양방향).
+  const [hwCheck, setHwCheck] = useState<{ text: string; status: string }[]>([]);
+  // 오늘의 숙제 — 선생님이 낸 숙제·배부 자료 + 학생도 직접 추가(강사와 양방향).
+  const [hwAssign, setHwAssign] = useState<string[]>([]);
+  const [hwText, setHwText] = useState("");
   const [doneItems, setDoneItems] = useState<string[]>([]);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [comment, setComment] = useState("");
+  const [studentNote, setStudentNote] = useState("");
+  // 선생님 코멘트(수업·숙제) — 강사가 작성, 학생은 읽기 전용.
+  const teacherComment = existing.find((r) => r.date === date)?.comment || "";
+  const teacherHwComment = existing.find((r) => r.date === date)?.hwComment || "";
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
   const dirtyRef = useRef(false); // 학생이 입력 중인지 — 폴링이 입력을 덮어쓰지 않게
@@ -328,12 +331,14 @@ function LogEditor({ studentId, existing, slots, options, band, onSaved }: { stu
     dateRef.current = date;
     if (!dateChanged && dirtyRef.current) return;
     const row = existing.find((r) => r.date === date);
+    setGoals(row?.goals || []);
+    setHwCheck(row?.hwCheck || []);
+    setHwAssign(row?.hwAssign || []);
     setBookNo(row?.bookNo || "");
-    setWordTest(row?.wordTest || "");
     setDoneItems(row?.doneItems || []);
     setStartTime(row?.startTime || "");
     setEndTime(row?.endTime || "");
-    setComment(row?.comment || "");
+    setStudentNote(row?.studentNote || "");
     dirtyRef.current = false;
   }, [date, existing]);
 
@@ -344,7 +349,7 @@ function LogEditor({ studentId, existing, slots, options, band, onSaved }: { stu
     autoTimer.current = setTimeout(() => { void save(); }, 1200);
     return () => { if (autoTimer.current) clearTimeout(autoTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookNo, wordTest, doneItems, startTime, endTime, comment]);
+  }, [goals, hwCheck, hwAssign, bookNo, doneItems, startTime, endTime, studentNote]);
 
   // 선택한 날짜의 요일에 잡힌 수업시간(자동입력용).
   const dow = DOW[parseD(date).getDay()];
@@ -357,12 +362,33 @@ function LogEditor({ studentId, existing, slots, options, band, onSaved }: { stu
     if (scheduled.duration) setEndTime(addMin(scheduled.time, scheduled.duration));
   }
 
+  // 학생이 직접 학습 목표 추가 — 강사와 같은 목표 목록 공유(양방향).
+  function addGoal() {
+    const t = goalText.trim();
+    if (!t) return;
+    dirtyRef.current = true;
+    setGoals([...goals, { text: t, done: false }]);
+    setGoalText("");
+  }
+  // 받은 숙제 추가/삭제 — 강사 '내줄 숙제'와 같은 칸을 공유(양방향).
+  function addHw() {
+    const t = hwText.trim();
+    if (!t || hwAssign.includes(t)) return;
+    dirtyRef.current = true;
+    setHwAssign([...hwAssign, t]);
+    setHwText("");
+  }
+  function removeHw(idx: number) {
+    dirtyRef.current = true;
+    setHwAssign(hwAssign.filter((_, i) => i !== idx));
+  }
+
   async function save() {
     dirtyRef.current = false; // 저장 시작 시점 — 저장 도중 새로 입력하면 다시 dirty가 되어 보존됨
     setSaving(true);
     setSavedMsg("");
     try {
-      await studentApi.saveLog({ studentId, date, bookNo, wordTest, doneItems, startTime, endTime, comment });
+      await studentApi.saveLog({ studentId, date, goals, hwCheck, hwAssign, bookNo, doneItems, startTime, endTime, studentNote });
       setSavedMsg("저장됐어요 ✓");
       onSaved();
     } catch (e) {
@@ -402,14 +428,56 @@ function LogEditor({ studentId, existing, slots, options, band, onSaved }: { stu
         )}
       </div>
 
+      {/* 학습 목표 — 선생님·학생이 함께. 직접 추가하고, 한 것에 체크하면 선생님 화면에도 똑같이 반영돼요. */}
+      <div className="sp-f">
+        <span>학습 목표 (직접 추가하고, 한 것에 체크!)</span>
+        {goals.length > 0 && (
+          <div className="sp-goals">
+            {goals.map((g, i) => {
+              const on = g.done;
+              return (
+                <label key={i} className={"sp-check" + (on ? " on" : "")}>
+                  <input type="checkbox" checked={on} onChange={() => { dirtyRef.current = true; setGoals(goals.map((x, j) => (j === i ? { ...x, done: !x.done } : x))); }} />
+                  <span className="sp-check-box" aria-hidden="true" />
+                  <span className="sp-check-label">{g.text}</span>
+                  <button type="button" className="sp-hw-x" onClick={(e) => { e.preventDefault(); dirtyRef.current = true; setGoals(goals.filter((_, j) => j !== i)); }} aria-label="삭제">×</button>
+                </label>
+              );
+            })}
+          </div>
+        )}
+        <div className="sp-self-row" style={{ marginTop: 6 }}>
+          <input className="input" value={goalText} onChange={(e) => setGoalText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) addGoal(); }} placeholder="학습 목표 추가 (예: 단어 50개 외우기)" />
+          <button type="button" className="btn ghost sm" onClick={addGoal} disabled={!goalText.trim()}><Icon name="plus" /> 추가</button>
+        </div>
+      </div>
+
       <div className="sp-f">
         <span>{isMid ? "교재 · 진도" : "원서 진도번호"}</span>
         <input className="input" value={bookNo} onChange={(e) => setBookNo(e.target.value)} placeholder={isMid ? "예: 그래머인유즈 3과 p.40~45" : "예: 145"} />
       </div>
 
       {isMid ? (
-        /* 숙제 — 강사가 '오늘'에서 확인한 결과(조회용). */
-        <HwView row={existing.find((r) => r.date === date)} />
+        /* 숙제 검사 (지난 수업 숙제) — 강사가 낸 지난 숙제. 학생이 한 것에 체크하면 줄긋기(강사와 공유). */
+        <div className="sp-f">
+          <span>숙제 검사 (지난 수업 숙제)</span>
+          {hwCheck.length === 0 ? (
+            <div className="sp-muted">아직 검사할 숙제가 없어요.</div>
+          ) : (
+            <div className="sp-checks">
+              {hwCheck.map((c, i) => {
+                const on = c.status === "완료";
+                return (
+                  <label key={i} className={"sp-check" + (on ? " on" : "")}>
+                    <input type="checkbox" checked={on} onChange={() => { dirtyRef.current = true; setHwCheck(hwCheck.map((x, j) => (j === i ? { ...x, status: on ? "" : "완료" } : x))); }} />
+                    <span className="sp-check-box" aria-hidden="true" />
+                    <span className="sp-check-label">{c.text}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
       ) : (
         /* 오늘 한 것 — 체크박스, 체크하면 줄이 그어져 '완료' 표시 */
         <div className="sp-f">
@@ -433,15 +501,47 @@ function LogEditor({ studentId, existing, slots, options, band, onSaved }: { stu
         </div>
       )}
 
-      <div className="sp-f">
-        <span>단어시험</span>
-        <input className="input" value={wordTest} onChange={(e) => setWordTest(e.target.value)} placeholder="예: 18/20" />
-      </div>
+      {/* 오늘의 숙제 입력 — 선생님이 낸 숙제·배부 자료 + 내가 받은 숙제를 직접 추가. 선생님 화면과 공유돼요. */}
+      {isMid && (
+        <div className="sp-f">
+          <span>오늘의 숙제 입력</span>
+          {hwAssign.length > 0 && (
+            <div className="sp-hw">
+              {hwAssign.map((t, i) => (
+                <span className="sp-hw-chip" key={i}>{t}<button type="button" className="sp-hw-x" onClick={() => removeHw(i)} aria-label="삭제">×</button></span>
+              ))}
+            </div>
+          )}
+          <div className="sp-self-row" style={{ marginTop: 6 }}>
+            <input className="input" value={hwText} onChange={(e) => setHwText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) addHw(); }} placeholder="오늘 받은 숙제 추가 (예: 단어 3과 외우기)" />
+            <button type="button" className="btn ghost sm" onClick={addHw} disabled={!hwText.trim()}><Icon name="plus" /> 추가</button>
+          </div>
+        </div>
+      )}
+
+      {/* 숙제 코멘트 — 선생님이 숙제에 대해 남긴 글(읽기 전용). */}
+      {isMid && teacherHwComment.trim() && (
+        <div className="sp-f">
+          <span>숙제 코멘트</span>
+          <div className="sp-teacher-comment">{teacherHwComment}</div>
+        </div>
+      )}
+
+      {/* 시험 — 강사 화면과 동일한 UI(class_eng_test 공유). 학생이 입력한 시험이 강사 화면에도 똑같이 보여요. */}
+      <DailyTests studentId={tid} date={date} />
 
       <div className="sp-f">
-        <span>학습 내용 · 메모</span>
-        <textarea className="input" rows={3} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="오늘 배운 내용, 느낀 점을 적어요." />
+        <span>선생님께 (학습 내용 · 메모)</span>
+        <textarea className="input" rows={3} value={studentNote} onChange={(e) => setStudentNote(e.target.value)} placeholder="오늘 배운 내용, 느낀 점, 선생님께 남길 말을 적어요." />
       </div>
+
+      {/* 수업 코멘트 — 선생님이 수업에 대해 남긴 글(읽기 전용). */}
+      {teacherComment.trim() && (
+        <div className="sp-f">
+          <span>수업 코멘트</span>
+          <div className="sp-teacher-comment">{teacherComment}</div>
+        </div>
+      )}
 
       <div className="sp-log-save">
         <button className="btn primary" onClick={save} disabled={saving}>{saving ? "저장 중…" : "지금 저장"}</button>
@@ -520,7 +620,17 @@ export function StudentHome() {
   const { user, logout } = useAuth();
   const [showIssue, setShowIssue] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [showNotice, setShowNotice] = useState(false);
+  const [noticeUnseen, setNoticeUnseen] = useState(0);
   const logo = getCachedLogo();
+  useEffect(() => {
+    let alive = true;
+    const load = () => postApi.unseen().then((n) => { if (alive) setNoticeUnseen(n); }).catch(() => {});
+    void load();
+    const onSeen = () => void load();
+    window.addEventListener("posts-seen", onSeen);
+    return () => { alive = false; window.removeEventListener("posts-seen", onSeen); };
+  }, []);
   return (
     <div className="sp-shell">
       <header className="sp-shell-top">
@@ -534,6 +644,10 @@ export function StudentHome() {
         <div className="sp-shell-actions">
           <StudentMessages />
           <button className="btn ghost sm" onClick={() => setShowGuide(true)}><Icon name="book" /> 사용 안내</button>
+          <button className="btn ghost sm sp-notice-btn" onClick={() => setShowNotice(true)}>
+            <Icon name="megaphone" /> 공지사항
+            {noticeUnseen > 0 && <span className="nav-badge new" style={{ minWidth: "auto", marginLeft: 4 }}>new {noticeUnseen}</span>}
+          </button>
           <button className="btn ghost sm" onClick={() => setShowIssue(true)}><Icon name="alert" /> 오류 신고</button>
           <button className="btn ghost" onClick={() => logout()}>로그아웃</button>
         </div>
@@ -559,6 +673,15 @@ export function StudentHome() {
           <div className="sp-modal" onClick={(e) => e.stopPropagation()}>
             <button className="modal-x sp-modal-x" onClick={() => setShowGuide(false)} aria-label="닫기">✕</button>
             <Guide forceRole="student" embedded />
+          </div>
+        </div>
+      )}
+
+      {showNotice && (
+        <div className="prof-overlay sp-overlay" onClick={() => setShowNotice(false)}>
+          <div className="sp-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-x sp-modal-x" onClick={() => setShowNotice(false)} aria-label="닫기">✕</button>
+            <Notices readOnly />
           </div>
         </div>
       )}

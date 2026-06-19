@@ -39,8 +39,12 @@ async function doLogin(body: Record<string, string>): Promise<AuthUser> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  const j = (await r.json().catch(() => ({}))) as { user?: AuthUser; error?: string };
-  if (!r.ok || !j.user) throw new Error(j.error || "login_failed");
+  const j = (await r.json().catch(() => ({}))) as { user?: AuthUser; error?: string; status?: string };
+  if (!r.ok || !j.user) {
+    // 휴원·퇴원 차단은 상태를 함께 전달(안내 팝업용): "student_blocked:휴원".
+    if (j.error === "student_blocked" && j.status) throw new Error("student_blocked:" + j.status);
+    throw new Error(j.error || "login_failed");
+  }
   return j.user;
 }
 

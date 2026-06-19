@@ -30,6 +30,7 @@ export interface IssueReply {
   authorName: string;
   authorRole: string;
   text: string;
+  shot?: string; // 답변 첨부 이미지(개선 결과 스크린샷 등)
   createdAt: number;
 }
 export interface Issue {
@@ -74,7 +75,7 @@ export const feedbackApi = {
   issues: () => jget<{ issues: Issue[]; isAdmin: boolean }>("/api/issue"),
   createIssue: (i: { page: string; body: string; shot?: string; link?: string }) => jpost("/api/issue", i),
   setIssueStatus: (id: string, status: string) => jpost("/api/issue/status", { id, status }),
-  replyIssue: (id: string, reply: string) => jpost("/api/issue/reply", { id, reply }),
+  replyIssue: (id: string, reply: string, shot?: string) => jpost("/api/issue/reply", { id, reply, shot }),
   removeReply: (id: string) => jpost("/api/issue/reply/delete", { id }),
   removeIssue: (id: string) => jpost("/api/issue/delete", { id }),
   /** 알림 개수(종) — 원장: 새 접수 / 그 외: 내 글 새 답변·해결. */

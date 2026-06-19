@@ -119,8 +119,16 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "ALTER TABLE class_eng_daily ADD COLUMN makeup INTEGER NOT NULL DEFAULT 0",
     // 테스트 결과 — 통과/재시(NP). 단어·문장 시험 미통과 표시.
     "ALTER TABLE class_eng_test ADD COLUMN result TEXT NOT NULL DEFAULT ''",
+    // 재시험 연결 — 이 시험이 어떤 시험(id)의 '재시'로 자동 생성됐는지. 빈값이면 일반 시험.
+    "ALTER TABLE class_eng_test ADD COLUMN retake_of TEXT NOT NULL DEFAULT ''",
     // 내신모드용 자유 숙제 — {assign:[내줄숙제], check:[{text,status}]} JSON. 지난 '내줄 숙제'가 이번 '숙제 검사'로 이어진다.
     "ALTER TABLE class_eng_daily ADD COLUMN hw_items TEXT NOT NULL DEFAULT '{}'",
+    // 공유 숙제 목록 — 강사·학생이 함께 보고 체크(줄긋기). 숙제 자료 배부 시 자동 편입. [{text,done}]
+    "ALTER TABLE class_eng_daily ADD COLUMN hw_list TEXT NOT NULL DEFAULT '[]'",
+    // 학생이 '선생님께' 남기는 메모 — 강사 코멘트(comment)와 분리. 학생만 작성, 강사는 읽기.
+    "ALTER TABLE class_eng_daily ADD COLUMN student_note TEXT NOT NULL DEFAULT ''",
+    // 중고등영어 숙제 코멘트 — '수업 코멘트'(comment)와 별도로 숙제에 대한 코멘트.
+    "ALTER TABLE class_eng_daily ADD COLUMN hw_comment TEXT NOT NULL DEFAULT ''",
     // 내신모드 학년 — 학생 명단에서 자동 매칭(학교와 함께).
     "ALTER TABLE class_eng_naesin ADD COLUMN grade TEXT NOT NULL DEFAULT ''",
   ]) {
@@ -154,7 +162,7 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
           "SELECT CAST(student_id AS INTEGER) sid, SUM(points) pts, COUNT(*) cnt FROM class_eng_daily GROUP BY student_id" +
           " UNION ALL " +
           "SELECT student_id sid, SUM(delta) pts, COUNT(DISTINCT date(created_at)) cnt FROM point_history WHERE category='learn' GROUP BY student_id" +
-          ") t JOIN students s ON s.id = t.sid WHERE (s.hidden IS NULL OR s.hidden=0) GROUP BY t.sid ORDER BY pts DESC, s.name"
+          ") t JOIN students s ON s.id = t.sid WHERE (s.hidden IS NULL OR s.hidden=0) AND (s.status='재원' OR s.status IS NULL OR s.status='') GROUP BY t.sid ORDER BY pts DESC, s.name"
       )
       .all<Record<string, unknown>>();
     return json({
@@ -290,12 +298,12 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
           .filter((x) => x.text)
           .slice(0, 60)
       : [];
-    const hwItems = JSON.stringify({ assign: hwAssign, check: hwCheck });
+    const hwItems = JSON.stringify({ assign: hwAssign, check: hwCheck, hwNone: !!b.hwNone, testNone: !!b.testNone });
     await env.DB
       .prepare(
-        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,makeup,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,book_no,word_test,done_items,comment,materials,hw_items,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, makeup=excluded.makeup, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, book_no=excluded.book_no, word_test=excluded.word_test, done_items=excluded.done_items, comment=excluded.comment, materials=excluded.materials, hw_items=excluded.hw_items, updated_at=excluded.updated_at"
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,makeup,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,book_no,word_test,done_items,comment,hw_comment,materials,hw_items,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, makeup=excluded.makeup, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, book_no=excluded.book_no, word_test=excluded.word_test, done_items=excluded.done_items, comment=excluded.comment, hw_comment=excluded.hw_comment, materials=excluded.materials, hw_items=excluded.hw_items, updated_at=excluded.updated_at"
       )
-      .bind(sid, date, attended, status, lateMin, reason, makeup, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwW, hwR, hwG, b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(autoReasons), points, String(b.note || ""), String(b.bookNo || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.comment || ""), String(b.materials || ""), hwItems, Date.now())
+      .bind(sid, date, attended, status, lateMin, reason, makeup, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwW, hwR, hwG, b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(autoReasons), points, String(b.note || ""), String(b.bookNo || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.comment || ""), String(b.hwComment || ""), String(b.materials || ""), hwItems, Date.now())
       .run();
     // 결석 → 보강 관리로 연결: 같은 학생·결석일의 보강이 없으면 '예정'으로 자동 생성.
     if (status === "결석") {
@@ -371,7 +379,7 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
 
   /* ---------------- 테스트 ---------------- */
   if (p === "/api/eng/test" && m === "GET") {
-    const sid = url.searchParams.get("student_id") || "";
+    const sid = me.role === "student" ? me.sub : (url.searchParams.get("student_id") || "");
     const date = url.searchParams.get("date") || "";
     let q;
     if (sid && date) q = env.DB.prepare("SELECT * FROM class_eng_test WHERE student_id=? AND date=? ORDER BY created_at DESC").bind(sid, date);
@@ -383,23 +391,44 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
   }
   if (p === "/api/eng/test" && m === "POST") {
     const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    const sid = String(b.studentId || "");
+    const sid = me.role === "student" ? me.sub : String(b.studentId || "");
     if (!sid) return json({ error: "studentId_required" }, 400);
     const id = String(b.id || "") || newId("et");
     const result = ["통과", "재시"].includes(String(b.result)) ? String(b.result) : "";
+    const retakeOf = String(b.retakeOf || "");
+    const name = String(b.name || "");
+    const total = Number(b.total) || 100;
     const exists = await env.DB.prepare("SELECT id FROM class_eng_test WHERE id=?").bind(id).first();
     if (exists) {
       await env.DB
-        .prepare("UPDATE class_eng_test SET date=?,name=?,score=?,total=?,memo=?,result=? WHERE id=?")
-        .bind(String(b.date || ""), String(b.name || ""), Number(b.score) || 0, Number(b.total) || 100, String(b.memo || ""), result, id)
+        .prepare("UPDATE class_eng_test SET date=?,name=?,score=?,total=?,memo=?,result=?,retake_of=? WHERE id=?")
+        .bind(String(b.date || ""), name, Number(b.score) || 0, total, String(b.memo || ""), result, retakeOf, id)
         .run();
     } else {
       await env.DB
-        .prepare("INSERT INTO class_eng_test(id,student_id,date,name,score,total,memo,result,created_at) VALUES(?,?,?,?,?,?,?,?,?)")
-        .bind(id, sid, String(b.date || ""), String(b.name || ""), Number(b.score) || 0, Number(b.total) || 100, String(b.memo || ""), result, Date.now())
+        .prepare("INSERT INTO class_eng_test(id,student_id,date,name,score,total,memo,result,retake_of,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)")
+        .bind(id, sid, String(b.date || ""), name, Number(b.score) || 0, total, String(b.memo || ""), result, retakeOf, Date.now())
         .run();
     }
-    return json({ ok: true, id });
+    // 재시(NP)면 같은 이름의 재시험을 자동 생성(중복 방지). 기본 날짜는 원 시험과 같은 날(오늘) — 화면에서 다음 시간으로 옮길 수 있음.
+    // 재시를 해제하면, 아직 안 본(점수 0·결과 없음) 자동 재시험은 정리한다.
+    let retakeId = "";
+    if (result === "재시") {
+      const child = await env.DB.prepare("SELECT id FROM class_eng_test WHERE retake_of=?").bind(id).first<{ id: string }>();
+      if (child) {
+        retakeId = String(child.id);
+      } else {
+        retakeId = newId("et");
+        await env.DB
+          .prepare("INSERT INTO class_eng_test(id,student_id,date,name,score,total,memo,result,retake_of,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)")
+          .bind(retakeId, sid, String(b.date || ""), name, 0, total, "", "", id, Date.now())
+          .run();
+      }
+    } else if (!retakeOf) {
+      // 원 시험이 더는 재시가 아니면 미응시 자동 재시험 제거.
+      await env.DB.prepare("DELETE FROM class_eng_test WHERE retake_of=? AND result='' AND score=0").bind(id).run();
+    }
+    return json({ ok: true, id, retakeId });
   }
   if (p === "/api/eng/test/delete" && m === "POST") {
     const b = (await request.json().catch(() => ({}))) as { id?: string };
@@ -600,6 +629,35 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
     const dRes = await env.DB.prepare("SELECT * FROM class_eng_daily WHERE student_id=? ORDER BY date DESC LIMIT 120").bind(sid).all<Record<string, unknown>>();
     const daily = (dRes.results || []).map(dailyRow);
 
+    // 배부된 자료(수업/숙제) — 해제(배부취소) 전까지 계속 보임. 학생·강사 동일하게 일지에 표시.
+    let materials: { kind: string; name: string }[] = [];
+    try {
+      const matRes = await env.DB
+        .prepare("SELECT a.kind kind, m.name name FROM class_material_assign a JOIN class_materials m ON a.material_id=m.id WHERE a.student_id=? AND (m.archived IS NULL OR m.archived=0) ORDER BY a.created_at DESC")
+        .bind(String(sid))
+        .all<{ kind: string; name: string }>();
+      const seen = new Set<string>();
+      materials = (matRes.results || [])
+        .map((r) => ({ kind: String(r.kind || "lesson"), name: String(r.name || "") }))
+        .filter((r) => {
+          const key = r.kind + "|" + r.name;
+          if (!r.name || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+    } catch {
+      /* 자료 테이블 없거나 조회 실패는 무시 */
+    }
+
+    // 진행중 교재 — 진도·교재관리(class_eng_progress, status='진행')에서 가져와 학생 화면에 보여줌.
+    let progressBooks: string[] = [];
+    try {
+      const pr = await env.DB.prepare("SELECT book FROM class_eng_progress WHERE student_id=? AND status='진행' AND book!='' ORDER BY updated_at DESC").bind(String(sid)).all<{ book: string }>();
+      progressBooks = [...new Set((pr.results || []).map((r) => String(r.book)).filter(Boolean))];
+    } catch {
+      /* 진도 테이블 없거나 조회 실패는 무시 */
+    }
+
     return json({
       role: me.role,
       canEditCurriculum: canEditCurriculum(me),
@@ -608,6 +666,8 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
       curriculum,
       selfCurriculum,
       daily,
+      materials,
+      progressBooks,
       doneItemOptions: await doneItemsFor(env, sid),
     });
   }
@@ -622,12 +682,34 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
     // 학생이 일지를 적으면 그 날 '출석'으로 간주(기존 출결값이 없을 때만 채움 — 강사 출결 보존).
     await env.DB
       .prepare(
-        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,book_no,word_test,done_items,start_time,end_time,comment,updated_at) VALUES(?,?,1,'출석',?,?,?,?,?,?,?) " +
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,book_no,done_items,start_time,end_time,student_note,updated_at) VALUES(?,?,1,'출석',?,?,?,?,?,?) " +
           "ON CONFLICT(student_id,date) DO UPDATE SET attended=1, att_status=CASE WHEN class_eng_daily.att_status='' THEN '출석' ELSE class_eng_daily.att_status END, " +
-          "book_no=excluded.book_no, word_test=excluded.word_test, done_items=excluded.done_items, start_time=excluded.start_time, end_time=excluded.end_time, comment=excluded.comment, updated_at=excluded.updated_at"
+          "book_no=excluded.book_no, done_items=excluded.done_items, start_time=excluded.start_time, end_time=excluded.end_time, student_note=excluded.student_note, updated_at=excluded.updated_at"
       )
-      .bind(sid, date, String(b.bookNo || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.startTime || ""), String(b.endTime || ""), String(b.comment || ""), Date.now())
+      .bind(sid, date, String(b.bookNo || ""), JSON.stringify(doneItems), String(b.startTime || ""), String(b.endTime || ""), String(b.studentNote || ""), Date.now())
       .run();
+    // 학습 목표 체크 — 학생/강사가 같은 목표를 공유(양방향). goals를 보낼 때만 갱신해 강사 목표를 덮어쓰지 않음.
+    if (Array.isArray(b.goals)) {
+      const goals = JSON.stringify((b.goals as unknown[]).map((g) => ({ text: String((g as Record<string, unknown>)?.text ?? ""), done: !!(g as Record<string, unknown>)?.done })));
+      await env.DB.prepare("UPDATE class_eng_daily SET goals=?, updated_at=? WHERE student_id=? AND date=?").bind(goals, Date.now(), sid, date).run();
+    }
+    // 숙제 — 오늘의 숙제(assign)·숙제 검사(check)를 학생도 편집(강사와 양방향). 보낸 항목만 갱신, 안 보낸 건 보존.
+    if (Array.isArray(b.hwAssign) || Array.isArray(b.hwCheck)) {
+      const row = await env.DB.prepare("SELECT hw_items FROM class_eng_daily WHERE student_id=? AND date=?").bind(sid, date).first<{ hw_items: string }>();
+      let curAssign: string[] = [];
+      let curCheck: { text: string; status: string }[] = [];
+      try {
+        const o = JSON.parse(String(row?.hw_items ?? "{}")) as Record<string, unknown>;
+        if (Array.isArray(o?.assign)) curAssign = (o.assign as unknown[]).map((x) => String(x));
+        if (Array.isArray(o?.check)) curCheck = (o.check as Record<string, unknown>[]).map((x) => ({ text: String(x?.text ?? ""), status: String(x?.status ?? "") })).filter((x) => x.text);
+      } catch { /* ignore */ }
+      const hwSt = (v: unknown) => (["완료", "미흡", "안함", "없음"].includes(String(v)) ? String(v) : "");
+      const assign = Array.isArray(b.hwAssign) ? (b.hwAssign as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 60) : curAssign;
+      const check = Array.isArray(b.hwCheck)
+        ? (b.hwCheck as { text?: unknown; status?: unknown }[]).map((x) => ({ text: String(x?.text ?? "").trim(), status: hwSt(x?.status) })).filter((x) => x.text).slice(0, 60)
+        : curCheck;
+      await env.DB.prepare("UPDATE class_eng_daily SET hw_items=?, updated_at=? WHERE student_id=? AND date=?").bind(JSON.stringify({ assign, check }), Date.now(), sid, date).run();
+    }
     return json({ ok: true });
   }
 
@@ -714,11 +796,15 @@ function dailyRow(r: Record<string, unknown>) {
   }
   let hwAssign: string[] = [];
   let hwCheck: { text: string; status: string }[] = [];
+  let hwNone = false;
+  let testNone = false;
   try {
     const hi = JSON.parse(String(r.hw_items ?? "{}"));
     if (hi && typeof hi === "object") {
       if (Array.isArray(hi.assign)) hwAssign = hi.assign.map((x: unknown) => String(x));
       if (Array.isArray(hi.check)) hwCheck = hi.check.map((x: Record<string, unknown>) => ({ text: String(x?.text ?? ""), status: String(x?.status ?? "") })).filter((x: { text: string }) => x.text);
+      hwNone = !!hi.hwNone;
+      testNone = !!hi.testNone;
     }
   } catch {
     /* ignore */
@@ -748,9 +834,13 @@ function dailyRow(r: Record<string, unknown>) {
     startTime: String(r.start_time ?? ""),
     endTime: String(r.end_time ?? ""),
     comment: String(r.comment ?? ""),
+    hwComment: String(r.hw_comment ?? ""),
+    studentNote: String(r.student_note ?? ""),
     materials: String(r.materials ?? ""),
     hwAssign,
     hwCheck,
+    hwNone,
+    testNone,
     updatedAt: Number(r.updated_at ?? 0),
   };
 }
@@ -789,5 +879,6 @@ function testRow(r: Record<string, unknown>) {
     total: Number(r.total ?? 100),
     memo: String(r.memo ?? ""),
     result: String(r.result ?? ""),
+    retakeOf: String(r.retake_of ?? ""),
   };
 }

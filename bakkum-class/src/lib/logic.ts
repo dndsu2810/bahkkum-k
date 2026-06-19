@@ -104,6 +104,11 @@ export function monthScheduled(makeups: Makeup[], ym: string): Makeup[] {
     .filter((k) => k.status === "scheduled" && inMonth(k.makeupDate, ym))
     .sort((a, b) => (a.makeupDate < b.makeupDate ? -1 : 1));
 }
+export function monthDone(makeups: Makeup[], ym: string): Makeup[] {
+  return makeups
+    .filter((k) => k.status === "done" && inMonth(k.makeupDate, ym))
+    .sort((a, b) => (a.makeupDate < b.makeupDate ? -1 : 1));
+}
 export function monthPending(makeups: Makeup[], ym: string): Makeup[] {
   return makeups
     .filter((k) => k.status === "pending" && inMonth(k.absentDate, ym))

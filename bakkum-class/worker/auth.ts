@@ -303,22 +303,28 @@ export async function loginTeacher(env: Env, name: string, pin: string): Promise
   return null;
 }
 
-/** 학생 로그인: 이름 + 생년월일 6자리(YYMMDD). 8자리(YYYYMMDD)도 호환. 기존 students 테이블 조회. */
-export async function loginStudent(env: Env, name: string, birth: string): Promise<SessionUser | null> {
+/** 학생 로그인 결과 — 성공(user) / 차단(휴원·퇴원) / 실패(null). */
+export type StudentLoginResult = SessionUser | { blockedStatus: "휴원" | "퇴원" } | null;
+
+/** 학생 로그인: 이름 + 생년월일 6자리(YYMMDD). 8자리(YYYYMMDD)도 호환. 기존 students 테이블 조회.
+ *  휴원·퇴원생은 자격이 맞아도 로그인 차단(상태를 알려 안내 팝업에 쓰게 함). */
+export async function loginStudent(env: Env, name: string, birth: string): Promise<StudentLoginResult> {
   const norm = (s: string) => s.replace(/[^0-9]/g, ""); // 숫자만
   const want = norm(birth);
   if (want.length !== 6 && want.length !== 8) return null;
   const r = await env.DB.prepare(
-    "SELECT id,name,birth_date FROM students WHERE name=? AND (hidden IS NULL OR hidden=0)"
+    "SELECT id,name,birth_date,status FROM students WHERE name=? AND (hidden IS NULL OR hidden=0)"
   )
     .bind(name.trim())
-    .all<{ id: number; name: string; birth_date: string | null }>();
+    .all<{ id: number; name: string; birth_date: string | null; status: string | null }>();
   for (const row of r.results || []) {
     const got = norm(String(row.birth_date ?? "")); // 보통 8자리(YYYYMMDD)
     if (!got) continue;
     // 6자리는 끝 6자리(YYMMDD)로 비교, 8자리는 전체 비교.
     const match = want.length === 6 ? got.slice(-6) === want : got === want;
     if (match) {
+      const status = String(row.status ?? "재원");
+      if (status === "휴원" || status === "퇴원") return { blockedStatus: status };
       return { sub: String(row.id), role: "student", name: String(row.name) };
     }
   }

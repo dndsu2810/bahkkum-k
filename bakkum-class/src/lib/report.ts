@@ -5,6 +5,7 @@ import {
   enrolledStudents,
   freqLabel,
   monthLabel,
+  monthDone,
   monthPending,
   monthScheduled,
   monthSkip,
@@ -18,7 +19,8 @@ export function buildReport(data: DataSnapshot, ym: string): string {
     .slice()
     .sort((a, b) => catIndex(a.grade) - catIndex(b.grade));
   const fresh = newThisMonth(data.students, ym);
-  const sched = monthScheduled(data.makeups, ym);
+  // 보강 내역 — 예정(scheduled) + 완료(done) 모두 그 달 '보강일' 기준으로(완료가 빠지던 누락 해결).
+  const sched = [...monthScheduled(data.makeups, ym), ...monthDone(data.makeups, ym)].sort((a, b) => (a.makeupDate < b.makeupDate ? -1 : 1));
   const pend = monthPending(data.makeups, ym);
   const skip = monthSkip(data.makeups, ym);
   const nm = (sid: string) => {
@@ -43,7 +45,7 @@ export function buildReport(data: DataSnapshot, ym: string): string {
   if (sched.length) {
     sched.forEach((k) => {
       let line =
-        "  " + nm(k.studentId) + " · 보강 " + fmtMDDow(k.makeupDate) + " " + k.makeupTime + " (" + k.makeupDuration + "분)";
+        "  " + nm(k.studentId) + " · 보강 " + fmtMDDow(k.makeupDate) + " " + k.makeupTime + " (" + k.makeupDuration + "분)" + (k.status === "done" ? " (완료)" : "");
       if (k.absentDate) line += " · 결석 " + fmtMDDow(k.absentDate);
       L.push(line);
     });

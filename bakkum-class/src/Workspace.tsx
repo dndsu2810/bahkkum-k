@@ -16,6 +16,7 @@ import { MessageSend } from "./screens/MessageSend";
 import { Notes } from "./screens/Notes";
 import { BoardShared } from "./screens/BoardShared";
 import { Desk } from "./screens/Desk";
+import { TimetableAll } from "./screens/TimetableAll";
 import { Wiki } from "./screens/Wiki";
 import { Sns } from "./screens/Sns";
 import { English } from "./screens/English";
@@ -35,6 +36,9 @@ import { ordersApi } from "./lib/ordersApi";
 import { NotificationBell } from "./components/NotificationBell";
 import { Materials } from "./screens/Materials";
 import { Guide } from "./screens/Guide";
+import { Meetings } from "./screens/Meetings";
+import { Notices } from "./screens/Notices";
+import { postApi } from "./lib/postApi";
 import { NoticeBanner } from "./components/NoticeBanner";
 import { reqsApi } from "./lib/hubApi";
 import { feedbackApi } from "./lib/feedbackApi";
@@ -244,6 +248,21 @@ export function Workspace() {
     return () => { alive = false; clearInterval(iv); window.removeEventListener("focus", onFocus); window.removeEventListener("orders-changed", onChanged); };
   }, [noBackend, user]);
 
+  // 공지사항 — 안 읽은 글 수(사이드바 'new N' 배지). 글을 열면 'posts-seen' 이벤트로 즉시 갱신.
+  const [postsUnseen, setPostsUnseen] = useState(0);
+  useEffect(() => {
+    if (noBackend || !user) return;
+    let alive = true;
+    const load = () => postApi.unseen().then((n) => { if (alive) setPostsUnseen(n); }).catch(() => {});
+    void load();
+    const iv = setInterval(load, 30000);
+    const onFocus = () => void load();
+    const onSeen = () => void load();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("posts-seen", onSeen);
+    return () => { alive = false; clearInterval(iv); window.removeEventListener("focus", onFocus); window.removeEventListener("posts-seen", onSeen); };
+  }, [noBackend, user]);
+
   // 시간표 변경 요청 — 나에게 온 대기 건수(사이드바 알림 배지)
   const [reqPending, setReqPending] = useState(0);
   useEffect(() => {
@@ -316,6 +335,23 @@ export function Workspace() {
   const favSet = new Set(favorites.filter((k) => byKey.has(k)));
   const favEntries = entries.filter((e) => favSet.has(e.key));
 
+  // 사이드바 메뉴 검색 + 범위(전체/카테고리) 필터.
+  const [navQ, setNavQ] = useState("");
+  const [navScope, setNavScope] = useState("전체");
+  const navScopes = useMemo(() => ["전체", ...orderedGroups.map((g) => g.label).filter((l): l is string => !!l)], [orderedGroups]);
+  const searching = navQ.trim() !== "" || navScope !== "전체";
+  const searchResults = useMemo(() => {
+    const kw = navQ.trim().toLowerCase();
+    const out: { e: WsEntry; group: string }[] = [];
+    for (const g of orderedGroups) {
+      if (navScope !== "전체" && (g.label || "") !== navScope) continue;
+      for (const e of g.entries) {
+        if (!kw || e.label.toLowerCase().includes(kw)) out.push({ e, group: g.label || "" });
+      }
+    }
+    return out;
+  }, [orderedGroups, navQ, navScope]);
+
   // 홈 바로가기 타일 — 역할별 자주 쓰는 4곳(접근 가능한 것만).
   const homeTiles = useMemo(() => {
     const keysByRole: Record<string, string[]> = {
@@ -323,7 +359,7 @@ export function Workspace() {
       math: ["today", "master", "board", "timetable"],
       english_mid: ["eng_today_mid", "eng_tt_mid", "master", "board"],
       english_elem: ["eng_today_elem", "eng_tt_elem", "master", "board"],
-      desk: ["desk_today", "desk_tt", "desk_students", "board"],
+      desk: ["desk_today", "all_timetable", "desk_students", "board"],
     };
     const keys = keysByRole[user?.role || ""] || [];
     return keys.map((k) => byKey.get(k)).filter((e): e is WsEntry => !!e);
@@ -409,6 +445,7 @@ export function Workspace() {
     if (e.key === "eng_makeup_elem") return engWait.elem > 0 ? <span className="nav-badge warn">{engWait.elem}</span> : null;
     if (e.key === "messages_send") return replyUnseen > 0 ? <span className="nav-badge bad">{replyUnseen}</span> : null;
     if (e.key === "issues") return issueUnseen > 0 ? <span className="nav-badge bad">{issueUnseen}</span> : null;
+    if (e.key === "notices") return postsUnseen > 0 ? <span className="nav-badge new">new {postsUnseen}</span> : null;
     if (e.key === "orders") return ordersPending > 0 ? <span className="nav-badge orange">{ordersPending}</span> : null;
     return null;
   }
@@ -466,6 +503,23 @@ export function Workspace() {
         </div>
 
         <nav>
+          <div className="nav-search">
+            <input className="nav-search-in" value={navQ} onChange={(e) => setNavQ(e.target.value)} placeholder="메뉴 검색" aria-label="메뉴 검색" />
+            <select className="nav-search-scope" value={navScope} onChange={(e) => setNavScope(e.target.value)} aria-label="검색 범위">
+              {navScopes.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          {searching ? (
+            <div className="nav-group">
+              <div className="nav-label">검색 결과{navScope !== "전체" ? ` · ${navScope}` : ""}</div>
+              {searchResults.length === 0 ? (
+                <div className="nav-search-empty">일치하는 메뉴가 없어요.</div>
+              ) : (
+                searchResults.map(({ e, group }) => row(e, group))
+              )}
+            </div>
+          ) : (
+          <>
           {favEntries.length > 0 && (
             <div className="nav-group">
               <div className="nav-label">즐겨찾기</div>
@@ -504,6 +558,8 @@ export function Workspace() {
               </div>
             );
           })}
+          </>
+          )}
         </nav>
 
         <div className="side-foot">
@@ -603,6 +659,8 @@ function Body({ view, cats, jumpStudent, reqPrefill, homeTiles, homeSummary, cta
   if (view === "orders") return <Orders />;
   if (view === "materials") return <Materials />;
   if (view === "guide") return <Guide />;
+  if (view === "meetings") return <Meetings />;
+  if (view === "notices") return <Notices />;
   if (view === "board") return <BoardShared />;
   if (view === "notes") return <Notes />;
   if (view === "wiki") return <Wiki />;
@@ -637,6 +695,7 @@ function Body({ view, cats, jumpStudent, reqPrefill, homeTiles, homeSummary, cta
                         : "today";
     return <English key={view} band={band} tab={tab} />;
   }
+  if (view === "all_timetable") return <TimetableAll />;
   if (view.startsWith("desk_")) {
     const tab = view === "desk_students" ? "students" : view === "desk_accounts" ? "accounts" : view === "desk_today" ? "today" : "timetable";
     return <Desk key={view} tab={tab} />;

@@ -21,7 +21,7 @@ export interface AdminOverview {
     elem: { late: number; absent: number };
     mid: { late: number; absent: number };
   }[];
-  notes: { studentId: string; studentName: string; author: string; body: string; createdAt: number }[];
+  notes: { studentId: string; studentName: string; author: string; body: string; createdAt: number; subject?: string }[];
   students: { id: string; name: string; grade: string; status: string; subjects: string[]; englishBand: string }[];
 }
 
@@ -47,7 +47,7 @@ export interface StudentReport {
     tests: { date: string; name: string; score: number; total: number }[];
     progress: { book: string; level: string; status: string }[];
   };
-  notes: { author: string; body: string; createdAt: number }[];
+  notes: { author: string; body: string; createdAt: number; subject?: string }[];
 }
 
 export interface TodayRecord {

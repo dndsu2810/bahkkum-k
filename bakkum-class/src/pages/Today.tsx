@@ -655,6 +655,7 @@ export function Today() {
                       {!!s.birthdate && s.birthdate.slice(5) === day.slice(5) && (
                         <span className="badge b-pink" title="오늘 생일">🎂 생일</span>
                       )}
+                      {(() => { const bks = ingBooksOf(s.id); return bks.length ? <span className="badge b-gray" title="진도·교재관리 진행중 교재">교재 {bks.join(", ")}</span> : null; })()}
                     </h2>
                   </div>
 

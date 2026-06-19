@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { adminApi, type AdminOverview, type StudentReport } from "../lib/adminApi";
 import { tasksApi, type BoardTask } from "../lib/hubApi";
+import { TaskModal } from "../components/TaskModal";
 import { listUsers, type UserRow } from "../lib/authApi";
 import { todayStr, pad, fmtWhen } from "../lib/dates";
 import { DateField } from "../components/DateControls";
@@ -135,7 +136,8 @@ export function AdminDashboard() {
                     <div className="dash-note" key={i}>
                       <div className="dash-note-h">
                         <b>{n.studentName || "—"}</b>
-                        <span className="hub-muted">{n.author} · {fmtWhen(n.createdAt)}</span>
+                        {n.subject && <span className={"note-subj " + (n.subject.includes("영어") ? "eng" : "math")}>{n.subject}</span>}
+                        <span className="hub-muted">{[n.author, fmtWhen(n.createdAt)].filter(Boolean).join(" · ")}</span>
                       </div>
                       <div className="dash-note-b">{n.body}</div>
                     </div>
@@ -226,9 +228,10 @@ function AdminTasks() {
     if (!window.confirm("이 할일을 삭제할까요?")) return;
     try { await tasksApi.remove(t.id); await load(); } catch { /* ignore */ }
   }
-  async function doAssign(t: BoardTask, assignee: string, assignDate: string, due: string) {
+  // 업무 배정하기 — 자세히 팝업(TaskModal)에서 담당·단계·마감·지시까지 한 번에 입력해 강사 보드로 보냄.
+  async function assignSave(next: BoardTask) {
     try {
-      await tasksApi.save({ ...t, adminOnly: false, status: "todo", assignee, assignDate, due });
+      await tasksApi.save({ ...next, adminOnly: false, status: next.status === "done" ? "done" : "todo", assignDate: next.assignDate || todayStr() });
       setAssignTask(null);
       await load();
     } catch { /* ignore */ }
@@ -299,7 +302,7 @@ function AdminTasks() {
           ))}
         </div>
       )}
-      {assignTask && <AssignModal task={assignTask} users={users} onClose={() => setAssignTask(null)} onAssign={doAssign} />}
+      {assignTask && <TaskModal task={assignTask} users={users} isAdmin={false} heading="업무 배정 (자세히)" saveLabel="배정해서 강사 보드로 보내기" onClose={() => setAssignTask(null)} onSave={assignSave} />}
       {editTask && <AdminTaskEditModal task={editTask} onClose={() => setEditTask(null)} onSave={saveEdit} onDelete={(t) => { setEditTask(null); void remove(t); }} />}
     </section>
   );
@@ -352,59 +355,6 @@ function AdminTaskEditModal({
           <button className="btn ghost" style={{ marginRight: "auto", color: "var(--bad)" }} onClick={() => onDelete(f)}>삭제</button>
           <button className="btn ghost" onClick={onClose}>취소</button>
           <button className="btn primary" onClick={() => onSave(f)} disabled={!f.title.trim()}>저장</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AssignModal({
-  task,
-  users,
-  onClose,
-  onAssign,
-}: {
-  task: BoardTask;
-  users: UserRow[];
-  onClose: () => void;
-  onAssign: (t: BoardTask, assignee: string, assignDate: string, due: string) => void;
-}) {
-  const [names, setNames] = useState<string[]>(task.assignee ? task.assignee.split(",").map((s) => s.trim()).filter(Boolean) : []);
-  const [assignDate, setAssignDate] = useState(task.assignDate || todayStr());
-  const [due, setDue] = useState(task.due || "");
-  const toggle = (n: string) => setNames((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n]));
-
-  return (
-    <div className="prof-overlay" onClick={onClose}>
-      <div className="prof" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
-        <div className="prof-top">
-          <div className="prof-top-main"><div className="prof-name">업무 배정</div><div className="hub-muted">{task.title}</div></div>
-          <button className="modal-x" onClick={onClose} aria-label="닫기">✕</button>
-        </div>
-        <div className="prof-body">
-          <label className="prof-field">
-            <span className="prof-field-l">담당자 (여러 명 선택 가능)</span>
-            <div className="sm-subj">
-              {users.map((u) => (
-                <button type="button" key={u.id} className={"sm-subj-chip" + (names.includes(u.name) ? " on" : "")} onClick={() => toggle(u.name)}>{u.name}</button>
-              ))}
-              {users.length === 0 && <span className="hub-muted">등록된 강사가 없어요.</span>}
-            </div>
-          </label>
-          <div className="prof-grid">
-            <label className="prof-field">
-              <span className="prof-field-l">배정일</span>
-              <DateField value={assignDate} onChange={setAssignDate} />
-            </label>
-            <label className="prof-field">
-              <span className="prof-field-l">마감일</span>
-              <DateField value={due} onChange={setDue} placeholder="마감일 없음" />
-            </label>
-          </div>
-        </div>
-        <div className="prof-foot">
-          <button className="btn ghost" onClick={onClose}>취소</button>
-          <button className="btn primary" onClick={() => onAssign(task, names.join(", "), assignDate, due)} disabled={names.length === 0}>배정</button>
         </div>
       </div>
     </div>
@@ -489,7 +439,7 @@ function StudentReportModal({ id, month, onClose }: { id: string; month: string;
                   <div className="hub-muted">없음</div>
                 ) : (
                   <div className="rep-list">
-                    {rep.notes.map((n, i) => <div className="rep-li col" key={i}><span className="hub-muted">{n.author} · {fmtWhen(n.createdAt)}</span>{n.body}</div>)}
+                    {rep.notes.map((n, i) => <div className="rep-li col" key={i}><span className="hub-muted">{n.subject && <span className={"note-subj " + (n.subject.includes("영어") ? "eng" : "math")}>{n.subject}</span>} {[n.author, fmtWhen(n.createdAt)].filter(Boolean).join(" · ")}</span>{n.body}</div>)}
                   </div>
                 )}
               </section>

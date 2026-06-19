@@ -277,7 +277,7 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
 }
 
 /* ---------------- 이력서형 프로필 모달 ---------------- */
-function ProfileModal({
+export function ProfileModal({
   student,
   canEdit,
   onClose,
@@ -331,6 +331,11 @@ function ProfileModal({
 
   async function save() {
     if (busy) return;
+    // 중복 등록 방지 — 한 학생이 같은 요일·시간에 수학·영어 둘 다 등록되면 막는다.
+    if (f.subjects.includes("math") && f.subjects.includes("english")) {
+      const clash = f.mathSlots.find((m) => f.engSlots.some((e) => e.day === m.day && e.time === m.time));
+      if (clash) { setErr(`${clash.day} ${clash.time}에 수학·영어 수업이 겹쳐요. 한 학생은 같은 시간에 한 과목만 등록할 수 있어요.`); return; }
+    }
     setBusy(true);
     setErr("");
     try {

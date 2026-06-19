@@ -3,7 +3,7 @@ import { useAuth } from "../auth";
 import { tasksApi, type BoardTask, type TaskStatus } from "../lib/hubApi";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { listUsers, type UserRow } from "../lib/authApi";
-import { DateField } from "../components/DateControls";
+import { TaskModal, blankTask } from "../components/TaskModal";
 import { EmptyHive } from "../soez";
 import { pad, todayStr } from "../lib/dates";
 
@@ -193,6 +193,7 @@ export function BoardShared() {
       <div className="board2-card-title">{t.title}</div>
       {t.memo && <div className="board2-card-memo">{t.memo}</div>}
       <div className="board2-card-meta">
+        {t.requester && <span className="board2-req">요청 {t.requester}</span>}
         {t.assignee && <span className="board2-asg">{t.assignee}</span>}
         {t.assignDate && <span className="board2-assigned">배정 {t.assignDate.slice(5)}</span>}
         {t.due && <span className="board2-due">~{t.due}</span>}
@@ -234,10 +235,11 @@ export function BoardShared() {
           onChange={(e) => setTitle(e.target.value)}
           onFocus={() => (editing.current = true)}
           onBlur={() => (editing.current = false)}
-          onKeyDown={(e) => { if (e.key === "Enter") void add(); }}
-          placeholder="할 일을 입력하고 Enter (자세한 내용은 추가 후 카드를 눌러 편집)"
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) void add(); }}
+          placeholder="할 일 제목을 입력하고 Enter (빠른 추가) — 또는 '자세히 입력'으로 한 번에"
         />
         <button className="btn primary" onClick={add} disabled={!title.trim()}>추가</button>
+        <button className="btn ghost" onClick={() => { setEdit(blankTask(title.trim())); setTitle(""); }} title="제목·담당자·마감·요청자를 한 번에 입력">자세히 입력</button>
       </div>
       {err && <div className="auth-err" style={{ margin: "8px 0" }}>{err}</div>}
 
@@ -297,113 +299,3 @@ export function BoardShared() {
   );
 }
 
-/* ---------------- 카드 상세·수정 ---------------- */
-function TaskModal({
-  task,
-  users,
-  isAdmin,
-  onClose,
-  onSave,
-  onDelete,
-}: {
-  task: BoardTask;
-  users: UserRow[];
-  isAdmin: boolean;
-  onClose: () => void;
-  onSave: (t: BoardTask) => void;
-  onDelete: (t: BoardTask) => void;
-}) {
-  const [f, setF] = useState<BoardTask>(task);
-  const set = <K extends keyof BoardTask>(k: K, v: BoardTask[K]) => setF((c) => ({ ...c, [k]: v }));
-
-  // 담당자는 쉼표로 구분된 여러 명. 칩 토글로 추가/제거.
-  const assigned = f.assignee.split(",").map((s) => s.trim()).filter(Boolean);
-  const toggleAssignee = (name: string) => {
-    const next = assigned.includes(name) ? assigned.filter((n) => n !== name) : [...assigned, name];
-    set("assignee", next.join(", "));
-  };
-  // 단계별 담당자 — 1차 제작 · 2차 검수 …(라벨 + 담당). '+ 단계 추가'로 N차까지.
-  const stages = f.stages || [];
-  const STAGE_DEFAULTS = ["1차 제작", "2차 검수"];
-  const setStages = (st: typeof stages) => set("stages", st);
-  const addStage = () => setStages([...stages, { label: STAGE_DEFAULTS[stages.length] || `${stages.length + 1}차`, who: "" }]);
-  const patchStage = (i: number, k: "label" | "who", v: string) => setStages(stages.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
-
-  return (
-    <div className="prof-overlay" onClick={onClose}>
-      <div className="prof" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
-        <div className="prof-top">
-          <div className="prof-top-main"><div className="prof-name">업무 카드</div></div>
-          <button className="modal-x" onClick={onClose} aria-label="닫기">✕</button>
-        </div>
-        <div className="prof-body">
-          <label className="prof-field">
-            <span className="prof-field-l">제목</span>
-            <input className="inline-input" value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="제목" />
-          </label>
-          <label className="prof-field">
-            <span className="prof-field-l">세부 지시 내용</span>
-            <textarea className="input prof-memo" rows={4} value={f.memo} onChange={(e) => set("memo", e.target.value)} placeholder="자세한 지시·메모(여러 줄)" />
-          </label>
-          <label className="prof-field">
-            <span className="prof-field-l">담당자 (여러 명 선택 가능)</span>
-            <div className="sm-subj">
-              {users.map((u) => (
-                <button
-                  type="button"
-                  key={u.id}
-                  className={"sm-subj-chip" + (assigned.includes(u.name) ? " on" : "")}
-                  onClick={() => toggleAssignee(u.name)}
-                >
-                  {u.name}
-                </button>
-              ))}
-              {users.length === 0 && <span className="hub-muted">등록된 강사가 없어요.</span>}
-            </div>
-          </label>
-          <label className="prof-field">
-            <span className="prof-field-l">단계별 담당자 (1차 제작 · 2차 검수 …)</span>
-            <div className="task-stages">
-              {stages.map((s, i) => (
-                <div className="task-stage-row" key={i}>
-                  <input className="inline-input task-stage-label" value={s.label} onChange={(e) => patchStage(i, "label", e.target.value)} placeholder="단계 (예: 1차 제작)" />
-                  <select className="inline-input task-stage-who" value={s.who} onChange={(e) => patchStage(i, "who", e.target.value)}>
-                    <option value="">담당 미정</option>
-                    {users.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
-                  </select>
-                  <button type="button" className="task-stage-x" onClick={() => setStages(stages.filter((_, j) => j !== i))} aria-label="단계 삭제">×</button>
-                </div>
-              ))}
-              <button type="button" className="btn ghost sm" onClick={addStage}>+ 단계 추가</button>
-            </div>
-          </label>
-          <label className="prof-field">
-            <span className="prof-field-l">마감일</span>
-            <DateField value={f.due} onChange={(v) => set("due", v)} placeholder="마감일 없음" />
-          </label>
-          <label className="prof-field">
-            <span className="prof-field-l">우선순위</span>
-            <div className="sm-subj">
-              <button className={"sm-subj-chip" + (f.priority === "urgent" ? " on urgent" : "")} onClick={() => set("priority", "urgent")}>급한 일</button>
-              <button className={"sm-subj-chip" + (f.priority === "normal" ? " on" : "")} onClick={() => set("priority", "normal")}>일반</button>
-            </div>
-          </label>
-          {isAdmin && (
-            <label className="prof-field">
-              <span className="prof-field-l">공개 범위</span>
-              <div className="sm-subj">
-                <button className={"sm-subj-chip" + (f.adminOnly ? " on" : "")} onClick={() => set("adminOnly", true)}>원장 전용</button>
-                <button className={"sm-subj-chip" + (!f.adminOnly ? " on" : "")} onClick={() => set("adminOnly", false)}>강사에게 공개</button>
-              </div>
-            </label>
-          )}
-        </div>
-        <div className="prof-foot">
-          <button className="btn ghost" style={{ marginRight: "auto", color: "var(--bad)" }} onClick={() => onDelete(f)}>삭제</button>
-          <button className="btn ghost" onClick={onClose}>취소</button>
-          <button className="btn primary" onClick={() => onSave(f)} disabled={!f.title.trim()}>저장</button>
-        </div>
-      </div>
-    </div>
-  );
-}

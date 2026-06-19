@@ -20,6 +20,7 @@ export function Login() {
   const [birth, setBirth] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [blocked, setBlocked] = useState(""); // "휴원" | "퇴원" — 로그인 차단 안내 팝업
   const logo = getCachedLogo();
 
   async function submit(e: React.FormEvent) {
@@ -37,7 +38,12 @@ export function Login() {
       setUser(user);
     } catch (e2) {
       const code = String((e2 as Error).message || "");
-      setErr(ERR_MSG[code] || (tab === "student" ? "이름 또는 생년월일이 맞지 않아요." : "이름 또는 비밀번호가 맞지 않아요."));
+      // 휴원·퇴원생 차단 — 안내 팝업으로(상태별 문구).
+      if (code.startsWith("student_blocked")) {
+        setBlocked(code.split(":")[1] || "휴원");
+      } else {
+        setErr(ERR_MSG[code] || (tab === "student" ? "이름 또는 생년월일이 맞지 않아요." : "이름 또는 비밀번호가 맞지 않아요."));
+      }
     } finally {
       setBusy(false);
     }
@@ -131,6 +137,21 @@ export function Login() {
         </button>
       </form>
       <footer className="maker-credit">제작자 EZ</footer>
+
+      {blocked && (
+        <div className="prof-overlay" onClick={() => setBlocked("")}>
+          <div className="auth-blocked" onClick={(e) => e.stopPropagation()}>
+            <div className="auth-blocked-ic"><Bee size={40} /></div>
+            <h3>{blocked}생입니다</h3>
+            <p>
+              {blocked === "휴원"
+                ? "휴원 중에는 로그인할 수 없어요. 다시 다닐 때 선생님이 재원으로 바꿔 드리면 로그인할 수 있어요."
+                : "퇴원 처리된 계정이라 로그인할 수 없어요. 문의는 학원으로 연락해 주세요."}
+            </p>
+            <button className="btn primary" onClick={() => setBlocked("")}>확인</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

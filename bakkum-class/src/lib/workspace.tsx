@@ -71,6 +71,7 @@ const HOME: WsEntry = { key: "home", label: "홈", icon: "today", kind: "hub" };
 const SCHEDULE: WsEntry = { key: "schedule_hub", label: "학원 일정", icon: "calplus", kind: "hub" };
 const REQS: WsEntry = { key: "reqs", label: "시간표 변경", icon: "refresh", kind: "hub" };
 const BOARD: WsEntry = { key: "board", label: "강사 업무 보드", icon: "board", kind: "hub" };
+const NOTICES: WsEntry = { key: "notices", label: "공지사항", icon: "megaphone", kind: "hub" };
 const WIKI: WsEntry = { key: "wiki", label: "바꿈 매뉴얼", icon: "book", kind: "hub" };
 const SNS: WsEntry = { key: "sns", label: "SNS 관리", icon: "copy", kind: "hub" };
 const MASTER: WsEntry = { key: "master", label: "학생 명단", icon: "students", kind: "hub" };
@@ -83,13 +84,15 @@ const CHECKIN: WsEntry = { key: "checkin", label: "등하원", icon: "today", ki
 const ORDERS: WsEntry = { key: "orders", label: "주문 관리", icon: "copy", kind: "hub" };
 const CHECKIN_REPORT: WsEntry = { key: "checkin_report", label: "수업시간 리포트", icon: "chart", kind: "hub" };
 const GUIDE: WsEntry = { key: "guide", label: "사용 가이드", icon: "book", kind: "hub" };
+const MEETINGS: WsEntry = { key: "meetings", label: "회의록", icon: "minutes", kind: "hub" };
 const ACCOUNTS: WsEntry = { key: "accounts", label: "강사 관리", icon: "users", kind: "hub" };
 const ADMIN_DASH: WsEntry = { key: "admin_dash", label: "원장 대시보드", icon: "dashboard", kind: "hub" };
 const SETTINGS: WsEntry = { key: "settings", label: "설정", icon: "gear", kind: "hub" };
 
+// 전체 시간표(공통) — 수학·영어 통합. 데스크 전용이던 화면을 모든 스태프 공통으로.
+const ALL_TT: WsEntry = { key: "all_timetable", label: "전체 시간표", icon: "cal", kind: "hub" };
 // 데스크 전용
 const DESK_TODAY: WsEntry = { key: "desk_today", label: "오늘", icon: "today", kind: "hub" };
-const DESK_TT: WsEntry = { key: "desk_tt", label: "전체 시간표", icon: "cal", kind: "hub" };
 const DESK_STU: WsEntry = { key: "desk_students", label: "학생 정보", icon: "students", kind: "hub" };
 const DESK_ACC: WsEntry = { key: "desk_accounts", label: "강사 계정 리스트", icon: "users", kind: "hub" };
 
@@ -102,6 +105,7 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   // 상단(무제목): 홈 + 학원 일정(공용) + 업무 보드
   const top: WsEntry[] = [HOME, SCHEDULE];
   if (areas.has("board")) top.push(BOARD);
+  top.push(NOTICES); // 공지사항 — 강사 업무 보드 밑(모든 스태프).
   groups.push({ entries: top });
 
   // 수학 수업관리
@@ -112,12 +116,13 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   // 월말리포트(초등 전용)는 초등 영어 그룹 안에.
   if (role === "english_elem" || role === "admin") groups.push({ label: "영어 수업관리 (초등)", entries: [...engEntries("elem"), ENGREPORT] });
 
-  // 데스크
-  if (role === "desk") groups.push({ label: "데스크", entries: [DESK_TODAY, DESK_TT, DESK_STU, DESK_ACC] });
+  // 데스크 (전체 시간표는 공통으로 이동)
+  if (role === "desk") groups.push({ label: "데스크", entries: [DESK_TODAY, DESK_STU, DESK_ACC] });
 
   // 공통 — 학생 명단(전과목 공통)·변경요청·특이사항·매뉴얼·SNS
   const common: WsEntry[] = [];
   if (areas.has("students")) common.push(MASTER);
+  common.push(ALL_TT); // 전체 시간표(수학·영어 통합) — 모든 스태프 공통.
   common.push(RANKING);
   // 포인트 항목·자료 배부 — 강사·원장 공용(수학·영어 모두 같은 화면).
   const isTeacher = role === "admin" || areas.has("math") || role === "english_mid" || role === "english_elem";
@@ -127,6 +132,7 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   common.push(REQS);
   if (areas.has("wiki")) common.push(WIKI);
   if (areas.has("sns")) common.push(SNS);
+  common.push(MEETINGS); // 회의록 — 음성/텍스트 AI 요약(모든 스태프).
   common.push(ISSUES); // 오류·개선 요청 — 모두 접근.
   common.push(GUIDE); // 사용 가이드 — 역할별 안내(모두 접근).
   if (common.length) groups.push({ label: "공통", entries: common });

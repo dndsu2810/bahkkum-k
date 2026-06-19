@@ -47,6 +47,8 @@ export async function ensureFeedbackTables(env: Env): Promise<void> {
   try {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_issue_reply (id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, author_sub TEXT NOT NULL DEFAULT '', author_name TEXT NOT NULL DEFAULT '', author_role TEXT NOT NULL DEFAULT '', text TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)").run();
     await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_class_issue_reply ON class_issue_reply(issue_id)").run();
+    // 답변에도 이미지(개선 결과 스크린샷 등) 첨부 — shot 컬럼(R2 URL).
+    try { await env.DB.prepare("ALTER TABLE class_issue_reply ADD COLUMN shot TEXT NOT NULL DEFAULT ''").run(); } catch { /* 이미 있으면 무시 */ }
     // 기존 단일 reply 칸 → 스레드 첫 메시지로 1회 이관(이미 옮겼으면 건너뜀).
     await env.DB.prepare(
       "INSERT INTO class_issue_reply(id, issue_id, author_sub, author_name, author_role, text, created_at) " +
@@ -199,19 +201,20 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
   }
   // 답변(댓글 스레드) — 원장 또는 글 작성자가 작성. 누가 썼는지·시간 함께 남김.
   if (p === "/api/issue/reply" && m === "POST") {
-    const b = (await request.json().catch(() => ({}))) as { id?: string; reply?: string };
+    const b = (await request.json().catch(() => ({}))) as { id?: string; reply?: string; shot?: string };
     if (!b.id) return json({ error: "id_required" }, 400);
     const issue = await env.DB.prepare("SELECT author_sub FROM class_issue WHERE id=?").bind(b.id).first<{ author_sub: string }>();
     if (!issue) return json({ error: "not_found" }, 404);
     const isAuthor = String(issue.author_sub) === me.sub;
     if (!isIssueMgr && !isAuthor) return json({ error: "forbidden" }, 403); // 원장·개발자·작성자만 답글
     const text = String(b.reply || "").trim().slice(0, 2000);
-    if (!text) return json({ error: "text_required" }, 400);
+    const shot = String(b.shot || "").slice(0, 600); // 첨부 이미지(R2 URL)
+    if (!text && !shot) return json({ error: "text_required" }, 400);
     const now = Date.now();
     const authorRole = me.displayRole || me.role;
     await env.DB
-      .prepare("INSERT INTO class_issue_reply(id, issue_id, author_sub, author_name, author_role, text, created_at) VALUES(?,?,?,?,?,?,?)")
-      .bind(newId("irp"), b.id, me.sub, me.name, authorRole, text, now)
+      .prepare("INSERT INTO class_issue_reply(id, issue_id, author_sub, author_name, author_role, text, shot, created_at) VALUES(?,?,?,?,?,?,?,?)")
+      .bind(newId("irp"), b.id, me.sub, me.name, authorRole, text, shot, now)
       .run();
     // 작성자 본인 답글이면 자기 알림은 끄고(seen=1), 남(원장 등)이 달면 작성자에게 알림(seen=0).
     await env.DB.prepare("UPDATE class_issue SET seen=?, updated_at=? WHERE id=?").bind(isAuthor ? 1 : 0, now, b.id).run();
@@ -300,6 +303,7 @@ function replyRow(r: Record<string, unknown>) {
     authorName: String(r.author_name ?? ""),
     authorRole: String(r.author_role ?? ""),
     text: String(r.text ?? ""),
+    shot: String(r.shot ?? ""),
     createdAt: Number(r.created_at ?? 0),
   };
 }

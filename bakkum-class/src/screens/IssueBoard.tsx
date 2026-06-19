@@ -81,9 +81,9 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
       setErr("상태 변경에 실패했어요.");
     }
   }
-  async function sendReply(i: Issue, reply: string) {
+  async function sendReply(i: Issue, reply: string, shot?: string) {
     try {
-      await feedbackApi.replyIssue(i.id, reply.trim());
+      await feedbackApi.replyIssue(i.id, reply.trim(), shot);
       await reload();
     } catch {
       setErr("답변 저장에 실패했어요.");
@@ -231,12 +231,19 @@ function ReplyThread({
   mySub: string;
   isAdmin: boolean;
   canReply: boolean;
-  onSend: (i: Issue, text: string) => void;
+  onSend: (i: Issue, text: string, shot?: string) => void;
   onDelete: (replyId: string) => void;
 }) {
   const [v, setV] = useState("");
+  const [shot, setShot] = useState("");
+  const [upBusy, setUpBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const replies = issue.replies || [];
+  async function onReplyShot(file?: File) {
+    if (!file) return;
+    setUpBusy(true);
+    try { setShot(await uploadImage(file)); } catch { /* 업로드 실패 무시 */ } finally { setUpBusy(false); }
+  }
   return (
     <div className="issue-thread">
       {replies.length > 0 && <div className="issue-thread-h">답변 {replies.length}</div>}
@@ -249,17 +256,32 @@ function ReplyThread({
               <span className="issue-msg-t">{fmtWhen(r.createdAt)}</span>
               {(mine || isAdmin) && <button className="issue-msg-del" title="삭제" onClick={() => onDelete(r.id)}>×</button>}
             </div>
-            <div className="issue-msg-b">{r.text}</div>
+            {r.text && <div className="issue-msg-b">{r.text}</div>}
+            {r.shot && (
+              <a className="issue-shot-link" href={r.shot} target="_blank" rel="noopener noreferrer">
+                <img src={r.shot} alt="첨부 이미지" />
+              </a>
+            )}
           </div>
         );
       })}
       {canReply &&
         (open ? (
           <div className="issue-reply-form">
-            <textarea className="input" rows={2} value={v} onChange={(e) => setV(e.target.value)} placeholder={replies.length ? "답글 달기… (누가 썼는지 함께 표시돼요)" : "답변 쓰기…"} />
+            <textarea className="input" rows={2} value={v} onChange={(e) => setV(e.target.value)} placeholder={replies.length ? "답글 달기… (개선 결과는 이미지도 첨부할 수 있어요)" : "답변 쓰기… (이미지 첨부 가능)"} />
+            {shot && (
+              <div className="issue-shot-prev">
+                <img src={shot} alt="첨부 미리보기" />
+                <button className="issue-shot-x" onClick={() => setShot("")}>×</button>
+              </div>
+            )}
             <div className="issue-reply-act">
-              <button className="btn primary sm" onClick={() => { onSend(issue, v); setV(""); setOpen(false); }} disabled={!v.trim()}>보내기</button>
-              <button className="btn ghost sm" onClick={() => { setV(""); setOpen(false); }}>취소</button>
+              <label className="issue-shot-btn">
+                <Icon name="camera" /> {upBusy ? "올리는 중…" : shot ? "사진 변경" : "이미지"}
+                <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => onReplyShot(e.target.files?.[0])} />
+              </label>
+              <button className="btn primary sm" onClick={() => { onSend(issue, v, shot); setV(""); setShot(""); setOpen(false); }} disabled={(!v.trim() && !shot) || upBusy}>보내기</button>
+              <button className="btn ghost sm" onClick={() => { setV(""); setShot(""); setOpen(false); }}>취소</button>
             </div>
           </div>
         ) : (

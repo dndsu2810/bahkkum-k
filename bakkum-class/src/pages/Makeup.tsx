@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { Makeup } from "../types";
 import { useStore } from "../store";
-import { byAbsentDesc, mkStatus } from "../lib/logic";
+import { byAbsentDesc, isActive, mkStatus, studentById } from "../lib/logic";
 
 /** 오늘에서 n일 전 날짜(YYYY-MM-DD). 보강 완료 자동 보관 기준선. */
 function daysAgoStr(n: number): string {
@@ -45,8 +45,10 @@ export function MakeupPage() {
   const { data, mutate, toast, openModal } = useStore();
   const [showArchive, setShowArchive] = useState(false);
 
-  const pending = data.makeups.filter((k) => mkStatus(k) === "pending").sort(byAbsentDesc);
-  const arranged = data.makeups
+  // 재원생 보강만 — 휴원·퇴원생 보강은 숨김(재원으로 되돌리면 다시 보임). 명단엔 그대로 남음.
+  const activeMakeups = data.makeups.filter((k) => { const s = studentById(data.students, k.studentId); return s ? isActive(s) : true; });
+  const pending = activeMakeups.filter((k) => mkStatus(k) === "pending").sort(byAbsentDesc);
+  const arranged = activeMakeups
     .filter((k) => {
       const s = mkStatus(k);
       return s === "scheduled" || s === "done";
@@ -57,7 +59,7 @@ export function MakeupPage() {
   const isArchived = (k: Makeup) => mkStatus(k) === "done" && !!k.makeupDate && k.makeupDate < archiveCutoff;
   const arrangedActive = arranged.filter((k) => !isArchived(k));
   const archived = arranged.filter(isArchived);
-  const skipped = data.makeups.filter((k) => mkStatus(k) === "skip").sort(byAbsentDesc);
+  const skipped = activeMakeups.filter((k) => mkStatus(k) === "skip").sort(byAbsentDesc);
 
   const actions: MakeupActions = {
     onSchedule: (id) => openModal(<ScheduleModal id={id} />),

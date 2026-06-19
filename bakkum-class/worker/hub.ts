@@ -62,6 +62,8 @@ export async function ensureHubTables(env: Env): Promise<void> {
     // 단계별 담당자(1차 제작·2차 검수 …) — [{label, who}] JSON. '나우(Now)' — 상단 진행중 핀(최대 3).
     "ALTER TABLE class_tasks ADD COLUMN stages TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE class_tasks ADD COLUMN now_flag INTEGER NOT NULL DEFAULT 0",
+    // 요청자(누가 시킨 일인지) — 새 업무 만들면 만든 사람 이름이 자동으로 들어가고, 필요하면 수정.
+    "ALTER TABLE class_tasks ADD COLUMN requester TEXT NOT NULL DEFAULT ''",
     // 시간표 변경요청 — 1회성 수업 이동(원래 날짜 → 변경 날짜). 기존 change_date=변경 날짜.
     "ALTER TABLE class_change_reqs ADD COLUMN from_date TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_change_reqs ADD COLUMN to_date TEXT NOT NULL DEFAULT ''",
@@ -71,6 +73,9 @@ export async function ensureHubTables(env: Env): Promise<void> {
     "ALTER TABLE class_materials ADD COLUMN assignee TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_materials ADD COLUMN school TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_materials ADD COLUMN grade TEXT NOT NULL DEFAULT ''",
+    // 인쇄 마감일(언제까지 인쇄) · 배부 예정일(언제 학생에게 줄지) — 인쇄대기 카드 요약에 표시.
+    "ALTER TABLE class_materials ADD COLUMN print_by TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_materials ADD COLUMN give_date TEXT NOT NULL DEFAULT ''",
   ]) {
     try {
       await env.DB.prepare(a).run();
@@ -186,22 +191,25 @@ export async function handleHub(
   }
   // 자료 등록/수정.
   if (p === "/api/materials" && m === "POST") {
-    const b = (await request.json().catch(() => ({}))) as { id?: string; name?: string; subject?: string; memo?: string; filePath?: string; copies?: unknown; assignee?: string; school?: string; grade?: string };
+    const b = (await request.json().catch(() => ({}))) as { id?: string; name?: string; subject?: string; memo?: string; filePath?: string; copies?: unknown; assignee?: string; school?: string; grade?: string; printBy?: string; giveDate?: string };
     const name = (b.name || "").trim();
     if (!name) return json({ error: "name_required" }, 400);
-    const subject = b.subject === "math" || b.subject === "english" ? b.subject : "";
+    // 분류 — 수학 / 중고등영어 / 초등영어 / 공통. 'english'는 구버전 호환.
+    const subject = ["math", "eng_mid", "eng_elem", "english"].includes(String(b.subject)) ? String(b.subject) : "";
     const memo = (b.memo || "").slice(0, 1000);
     const filePath = (b.filePath || "").slice(0, 500);
     const copies = Math.max(0, Math.min(9999, Math.round(Number(b.copies) || 0)));
     const assignee = (b.assignee || "").slice(0, 100);
     const school = (b.school || "").slice(0, 100);
     const grade = (b.grade || "").slice(0, 50);
+    const printBy = (b.printBy || "").slice(0, 10);
+    const giveDate = (b.giveDate || "").slice(0, 10);
     if (b.id) {
-      await env.DB.prepare("UPDATE class_materials SET name=?,subject=?,memo=?,file_path=?,copies=?,assignee=?,school=?,grade=? WHERE id=?").bind(name.slice(0, 200), subject, memo, filePath, copies, assignee, school, grade, b.id).run();
+      await env.DB.prepare("UPDATE class_materials SET name=?,subject=?,memo=?,file_path=?,copies=?,assignee=?,school=?,grade=?,print_by=?,give_date=? WHERE id=?").bind(name.slice(0, 200), subject, memo, filePath, copies, assignee, school, grade, printBy, giveDate, b.id).run();
       return json({ ok: true, id: b.id });
     }
     const id = newId("mat");
-    await env.DB.prepare("INSERT INTO class_materials(id,name,subject,memo,printed,author_id,author_name,file_path,copies,assignee,school,grade,created_at) VALUES(?,?,?,?,0,?,?,?,?,?,?,?,?)").bind(id, name.slice(0, 200), subject, memo, me.sub, me.name, filePath, copies, assignee, school, grade, Date.now()).run();
+    await env.DB.prepare("INSERT INTO class_materials(id,name,subject,memo,printed,author_id,author_name,file_path,copies,assignee,school,grade,print_by,give_date,created_at) VALUES(?,?,?,?,0,?,?,?,?,?,?,?,?,?,?)").bind(id, name.slice(0, 200), subject, memo, me.sub, me.name, filePath, copies, assignee, school, grade, printBy, giveDate, Date.now()).run();
     return json({ ok: true, id });
   }
   // 인쇄 완료/대기 토글.
@@ -237,15 +245,43 @@ export async function handleHub(
     const mid = String(b.materialId || "");
     const ids = Array.isArray(b.studentIds) ? b.studentIds.map((x) => String(x)).filter(Boolean) : [];
     if (!mid || !ids.length) return json({ error: "bad_input" }, 400);
-    const kind = b.kind === "hw" ? "hw" : "lesson";
+    const kind = b.kind === "hw_check" ? "hw_check" : b.kind === "hw_assign" ? "hw_assign" : "lesson";
     const date = String(b.date || "");
     const now = Date.now();
     let added = 0;
+    const newlyAdded: string[] = [];
     for (const sid of ids) {
       const ex = await env.DB.prepare("SELECT id FROM class_material_assign WHERE material_id=? AND student_id=? AND kind=?").bind(mid, sid, kind).first();
       if (ex) continue;
       await env.DB.prepare("INSERT INTO class_material_assign(id,material_id,student_id,kind,date,done,created_by,created_at) VALUES(?,?,?,?,?,0,?,?)").bind(newId("ma"), mid, sid, kind, date, me.sub, now).run();
       added++;
+      newlyAdded.push(sid);
+    }
+    // 그날 일지에 자동 편입 — 분류(과목)에 따라 영어 일지 / 수학 일지(진도·숙제)로.
+    //  · 영어(eng_mid/eng_elem/구버전 english): 수업→학습목표, 검사숙제→'숙제 검사', 내줄숙제→'내줄 숙제'(class_eng_daily).
+    //  · 수학(math): 수업→진도(class_progress), 숙제(검사/내줄)→숙제(class_homework).
+    //  · 공통(''): 양쪽 모두 편입(영어·수학 학생 어느 쪽이든 보이게).
+    if (date && newlyAdded.length) {
+      const mat = await env.DB.prepare("SELECT name, subject FROM class_materials WHERE id=?").bind(mid).first<{ name: string; subject: string }>();
+      const name = String(mat?.name || "").trim();
+      const subj = String(mat?.subject || "");
+      const toEng = subj === "eng_mid" || subj === "eng_elem" || subj === "english" || subj === "";
+      const toMath = subj === "math" || subj === "";
+      if (name) {
+        try {
+          for (const sid of newlyAdded) {
+            if (toEng) {
+              if (kind === "lesson") await addDailyGoal(env, sid, date, name);
+              else if (kind === "hw_check") await addDailyHwCheck(env, sid, date, name);
+              else await addDailyHwAssign(env, sid, date, name);
+            }
+            if (toMath) {
+              if (kind === "lesson") await addMathProgress(env, sid, date, name);
+              else await addMathHomework(env, sid, date, name);
+            }
+          }
+        } catch { /* 일지 편입 실패해도 배부 자체는 성공 처리 */ }
+      }
     }
     return json({ ok: true, added });
   }
@@ -256,11 +292,21 @@ export async function handleHub(
     await env.DB.prepare("UPDATE class_material_assign SET done=? WHERE id=?").bind(b.done ? 1 : 0, b.id).run();
     return json({ ok: true });
   }
-  // 배부 취소(개별).
+  // 배부 취소(개별) — 수업 자료였으면 그날 학습목표 항목도 함께 제거.
   if (p === "/api/materials/assign/delete" && m === "POST") {
     const b = (await request.json().catch(() => ({}))) as { id?: string };
     if (!b.id) return json({ error: "id_required" }, 400);
+    const row = await env.DB.prepare("SELECT material_id, student_id, kind, date FROM class_material_assign WHERE id=?").bind(b.id).first<{ material_id: string; student_id: string; kind: string; date: string }>();
     await env.DB.prepare("DELETE FROM class_material_assign WHERE id=?").bind(b.id).run();
+    if (row && row.date) {
+      const mat = await env.DB.prepare("SELECT name FROM class_materials WHERE id=?").bind(row.material_id).first<{ name: string }>();
+      const name = String(mat?.name || "").trim();
+      if (name) {
+        if (row.kind === "lesson") await removeDailyGoal(env, String(row.student_id), String(row.date), name);
+        else if (row.kind === "hw_check") await removeDailyHwCheck(env, String(row.student_id), String(row.date), name);
+        else await removeDailyHwAssign(env, String(row.student_id), String(row.date), name);
+      }
+    }
     return json({ ok: true });
   }
 
@@ -420,9 +466,11 @@ export async function handleHub(
         : []
     );
     const nowFlag = b.now ? 1 : 0;
+    // 요청자 — 수정 시엔 보낸 값 유지, 새 업무는 비어 있으면 만든 사람(로그인) 이름 자동.
+    const requester = exists ? String(b.requester ?? "") : String(b.requester || me.name || "");
     if (exists) {
       await env.DB
-        .prepare("UPDATE class_tasks SET title=?,status=?,tag=?,due=?,student_id=?,memo=?,assignee=?,priority=?,admin_only=?,assign_date=?,stages=?,now_flag=?,done_at=?,archived=? WHERE id=?")
+        .prepare("UPDATE class_tasks SET title=?,status=?,tag=?,due=?,student_id=?,memo=?,assignee=?,priority=?,admin_only=?,assign_date=?,stages=?,now_flag=?,requester=?,done_at=?,archived=? WHERE id=?")
         .bind(
           String(b.title || ""),
           status,
@@ -436,6 +484,7 @@ export async function handleHub(
           assignDate,
           stages,
           nowFlag,
+          requester,
           doneAt,
           b.archived ? 1 : 0,
           id
@@ -444,7 +493,7 @@ export async function handleHub(
     } else {
       await env.DB
         .prepare(
-          "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,admin_only,assign_date,stages,now_flag,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+          "INSERT INTO class_tasks(id,title,status,tag,due,student_id,memo,assignee,priority,admin_only,assign_date,stages,now_flag,requester,source,created_at,done_at,archived) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         )
         .bind(
           id,
@@ -460,6 +509,7 @@ export async function handleHub(
           assignDate,
           stages,
           nowFlag,
+          requester,
           String(b.source || ""),
           Date.now(),
           doneAt,
@@ -538,6 +588,8 @@ function materialRow(r: Record<string, unknown>) {
     assignee: String(r.assignee ?? ""),
     school: String(r.school ?? ""),
     grade: String(r.grade ?? ""),
+    printBy: String(r.print_by ?? ""),
+    giveDate: String(r.give_date ?? ""),
     createdAt: Number(r.created_at ?? 0),
   };
 }
@@ -605,6 +657,7 @@ function taskRow(r: Record<string, unknown>) {
     assignDate: String(r.assign_date ?? ""),
     stages: parseStages(r.stages),
     now: Number(r.now_flag ?? 0) === 1,
+    requester: String(r.requester ?? ""),
   };
 }
 /** 단계별 담당자 JSON → [{label, who}]. 깨진 값은 빈 배열. */
@@ -615,4 +668,111 @@ function parseStages(v: unknown): { label: string; who: string }[] {
   } catch {
     return [];
   }
+}
+
+/* ── 자료 배부 ↔ 수학 일지 연동 ──
+ * 숙제 자료를 배부하면 그날 수학 숙제(class_homework)로, 수업 자료는 진도(class_progress)로 자동 편입.
+ * 수학 데이터는 스냅샷 병합 저장(upsert)이라 서버가 직접 넣어도 다음 저장 때 지워지지 않는다. */
+async function addMathHomework(env: Env, studentId: string, date: string, book: string): Promise<void> {
+  const ex = await env.DB.prepare("SELECT id FROM class_homework WHERE student_id=? AND date=? AND book=?").bind(studentId, date, book).first();
+  if (ex) return; // 중복 방지
+  await env.DB
+    .prepare("INSERT INTO class_homework(id,student_id,date,book,tags,completion,status,memo,recheck_date,delay_count,carried_from,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(newId("hw"), studentId, date, book, "", 0, "pending", "", "", 0, "", Date.now())
+    .run();
+}
+async function addMathProgress(env: Env, studentId: string, date: string, unit: string): Promise<void> {
+  const ex = await env.DB.prepare("SELECT id FROM class_progress WHERE student_id=? AND unit=? AND pct<100").bind(studentId, unit).first();
+  if (ex) return; // 이미 진행중인 같은 교재면 중복 추가 안 함
+  await env.DB
+    .prepare("INSERT INTO class_progress(id,student_id,date,unit,area,pct,start_date,end_date,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)")
+    .bind(newId("pg"), studentId, date, unit, "", 0, date, "", "", Date.now())
+    .run();
+}
+
+/* ── 자료 배부 ↔ 영어 학습목표 연동 ──
+ * 수업 자료를 배부하면 그날 영어 일지(class_eng_daily)의 goals 항목으로 자동 편입한다.
+ * 학생·강사가 같은 항목을 체크(줄긋기)로 공유한다. 배부 취소 시 같은 이름의 항목을 제거. */
+interface DGoal { text: string; done: boolean }
+function parseGoals(v: unknown): DGoal[] {
+  try {
+    const a = JSON.parse(String(v ?? "[]"));
+    return Array.isArray(a) ? a.map((x) => ({ text: String(x?.text ?? ""), done: !!x?.done })) : [];
+  } catch {
+    return [];
+  }
+}
+async function addDailyGoal(env: Env, studentId: string, date: string, text: string): Promise<void> {
+  const row = await env.DB.prepare("SELECT goals FROM class_eng_daily WHERE student_id=? AND date=?").bind(studentId, date).first<{ goals: string }>();
+  const goals = parseGoals(row?.goals);
+  if (goals.some((g) => g.text === text)) return; // 중복 방지
+  goals.push({ text, done: false });
+  const js = JSON.stringify(goals);
+  if (row) {
+    await env.DB.prepare("UPDATE class_eng_daily SET goals=?, updated_at=? WHERE student_id=? AND date=?").bind(js, Date.now(), studentId, date).run();
+  } else {
+    await env.DB.prepare("INSERT INTO class_eng_daily(student_id,date,goals,updated_at) VALUES(?,?,?,?)").bind(studentId, date, js, Date.now()).run();
+  }
+}
+async function removeDailyGoal(env: Env, studentId: string, date: string, text: string): Promise<void> {
+  const row = await env.DB.prepare("SELECT goals FROM class_eng_daily WHERE student_id=? AND date=?").bind(studentId, date).first<{ goals: string }>();
+  if (!row) return;
+  const goals = parseGoals(row.goals);
+  const next = goals.filter((g) => g.text !== text);
+  if (next.length === goals.length) return;
+  await env.DB.prepare("UPDATE class_eng_daily SET goals=?, updated_at=? WHERE student_id=? AND date=?").bind(JSON.stringify(next), Date.now(), studentId, date).run();
+}
+// 내신모드 자유 숙제 JSON — {assign:[내줄 숙제], check:[{text,status} 검사할 숙제]}
+interface HwItems { assign: string[]; check: { text: string; status: string }[] }
+function parseHwItems(v: unknown): HwItems {
+  try {
+    const o = JSON.parse(String(v ?? "{}")) as Record<string, unknown>;
+    const assign = Array.isArray(o?.assign) ? (o.assign as unknown[]).map((x) => String(x)) : [];
+    const check = Array.isArray(o?.check)
+      ? (o.check as Record<string, unknown>[]).map((x) => ({ text: String(x?.text ?? ""), status: String(x?.status ?? "") })).filter((x) => x.text)
+      : [];
+    return { assign, check };
+  } catch {
+    return { assign: [], check: [] };
+  }
+}
+async function writeHwItems(env: Env, studentId: string, date: string, hi: HwItems, hadRow: boolean): Promise<void> {
+  const js = JSON.stringify(hi);
+  if (hadRow) {
+    await env.DB.prepare("UPDATE class_eng_daily SET hw_items=?, updated_at=? WHERE student_id=? AND date=?").bind(js, Date.now(), studentId, date).run();
+  } else {
+    await env.DB.prepare("INSERT INTO class_eng_daily(student_id,date,hw_items,updated_at) VALUES(?,?,?,?)").bind(studentId, date, js, Date.now()).run();
+  }
+}
+async function addDailyHwAssign(env: Env, studentId: string, date: string, text: string): Promise<void> {
+  const row = await env.DB.prepare("SELECT hw_items FROM class_eng_daily WHERE student_id=? AND date=?").bind(studentId, date).first<{ hw_items: string }>();
+  const hi = parseHwItems(row?.hw_items);
+  if (hi.assign.includes(text)) return; // 중복 방지
+  hi.assign.push(text);
+  await writeHwItems(env, studentId, date, hi, !!row);
+}
+async function removeDailyHwAssign(env: Env, studentId: string, date: string, text: string): Promise<void> {
+  const row = await env.DB.prepare("SELECT hw_items FROM class_eng_daily WHERE student_id=? AND date=?").bind(studentId, date).first<{ hw_items: string }>();
+  if (!row) return;
+  const hi = parseHwItems(row.hw_items);
+  const next = hi.assign.filter((x) => x !== text);
+  if (next.length === hi.assign.length) return;
+  hi.assign = next;
+  await writeHwItems(env, studentId, date, hi, true);
+}
+async function addDailyHwCheck(env: Env, studentId: string, date: string, text: string): Promise<void> {
+  const row = await env.DB.prepare("SELECT hw_items FROM class_eng_daily WHERE student_id=? AND date=?").bind(studentId, date).first<{ hw_items: string }>();
+  const hi = parseHwItems(row?.hw_items);
+  if (hi.check.some((c) => c.text === text)) return; // 중복 방지
+  hi.check.push({ text, status: "" });
+  await writeHwItems(env, studentId, date, hi, !!row);
+}
+async function removeDailyHwCheck(env: Env, studentId: string, date: string, text: string): Promise<void> {
+  const row = await env.DB.prepare("SELECT hw_items FROM class_eng_daily WHERE student_id=? AND date=?").bind(studentId, date).first<{ hw_items: string }>();
+  if (!row) return;
+  const hi = parseHwItems(row.hw_items);
+  const next = hi.check.filter((c) => c.text !== text);
+  if (next.length === hi.check.length) return;
+  hi.check = next;
+  await writeHwItems(env, studentId, date, hi, true);
 }

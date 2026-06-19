@@ -36,15 +36,25 @@ export interface Curriculum {
   note: string;
   sections: CurriculumSection[];
 }
+/** 학습 목표 — 강사가 만들고 학생도 'done' 체크 가능(양방향, 같은 일지 row 공유). */
+export interface StudentGoal {
+  text: string;
+  done: boolean;
+}
 export interface StudentLogRow {
   date: string;
   attStatus: string;
+  goals: StudentGoal[];
+  hwAssign: string[];
+  hwCheck: { text: string; status: string }[];
   bookNo: string;
   wordTest: string;
   doneItems: string[];
   startTime: string;
   endTime: string;
-  comment: string;
+  comment: string; // 수업 코멘트(학생은 읽기 전용)
+  hwComment: string; // 숙제 코멘트(중고등영어, 학생 읽기)
+  studentNote: string; // 학생이 '선생님께' 남긴 메모
   // 중고등 숙제(강사가 '오늘'에서 체크 — 학생 페이지는 조회).
   hwWord: string;
   hwReading: string;
@@ -60,6 +70,8 @@ export interface StudentPageData {
   curriculum: Curriculum;
   selfCurriculum: CurriculumRow[]; // 학생이 직접 추가한 '내가 추가한 학습'
   daily: StudentLogRow[];
+  materials?: { kind: string; name: string }[]; // 배부된 자료(kind: lesson 수업 / hw 숙제). 해제 전까지 계속 표시.
+  progressBooks?: string[]; // 진도·교재관리에서 진행중인 교재명
   doneItemOptions?: string[]; // 그 학생의 '오늘 한 것' 선택지(기본+전체공통+학생별)
 }
 
@@ -70,7 +82,7 @@ export const studentApi = {
   /** 페이지 데이터. 강사는 sid 지정, 학생은 생략(본인). */
   page: (sid?: string) => jget<StudentPageData>("/api/student/page" + (sid ? "?student_id=" + encodeURIComponent(sid) : "")),
   /** 일지 입력. 학생은 본인(studentId 무시), 강사는 studentId 지정. */
-  saveLog: (d: { studentId?: string; date: string; bookNo?: string; wordTest?: string; doneItems?: string[]; startTime?: string; endTime?: string; comment?: string }) =>
+  saveLog: (d: { studentId?: string; date: string; bookNo?: string; wordTest?: string; doneItems?: string[]; startTime?: string; endTime?: string; studentNote?: string; goals?: StudentGoal[]; hwAssign?: string[]; hwCheck?: { text: string; status: string }[] }) =>
     jpost("/api/student/log", d),
   /** 커리큘럼 저장(초등영어 권한자·원장). */
   saveCurriculum: (studentId: string, cur: Curriculum) => jpost("/api/student/curriculum", { studentId, note: cur.note, sections: cur.sections }),

@@ -58,11 +58,16 @@ export interface EngDaily {
   bookNo: string;
   wordTest: string;
   doneItems: string[];
-  comment: string;
+  comment: string; // 수업 코멘트(학생은 읽기 전용)
+  hwComment: string; // 숙제 코멘트(중고등영어 — 숙제에 대한 코멘트, 학생 읽기)
+  studentNote: string; // 학생이 '선생님께' 남기는 메모(강사는 읽기)
   materials: string;
-  // 내신모드 자유 숙제 — 내줄 숙제(다음 시간) + 숙제 검사(지난 것: 항목+상태).
+  // 내신모드 자유 숙제 — 내줄 숙제(다음 시간) + 숙제 검사(지난 것: 항목+상태). 숙제 자료 배부 시 자동 편입.
   hwAssign: string[];
   hwCheck: { text: string; status: HwStatus }[];
+  // 내신모드 빠른 '없음' — 숙제/시험이 아예 없던 회차를 한 번에 기록(텍스트 입력 없이).
+  hwNone: boolean;
+  testNone: boolean;
   updatedAt: number;
 }
 
@@ -127,6 +132,7 @@ export interface EngTest {
   total: number;
   memo: string;
   result: string; // '' | 통과 | 재시(NP)
+  retakeOf?: string; // 이 시험이 어떤 시험의 '재시'로 자동 생성됐는지(빈값=일반 시험)
 }
 
 /* 월말리포트 — 8개 항목 등급(기존 영어 성적표 사양 그대로). */
@@ -210,6 +216,8 @@ export const engApi = {
 
   progress: (studentId: string) =>
     jget<{ progress: EngProgress[] }>("/api/eng/progress?student_id=" + encodeURIComponent(studentId)).then((j) => j.progress),
+  /** 전체 학생 진도(대시보드 교재 표시용) — student_id 없이 한 번에. */
+  progressAll: () => jget<{ progress: EngProgress[] }>("/api/eng/progress").then((j) => j.progress),
   saveProgress: (p: Partial<EngProgress> & { studentId: string }) => jpost("/api/eng/progress", p),
   removeProgress: (id: string) => jpost("/api/eng/progress/delete", { id }),
 
