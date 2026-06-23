@@ -122,6 +122,7 @@ export interface EngProgress {
   level: string;
   status: string; // 진행|완료|보류
   startDate: string;
+  endDate: string; // 완료일 — status='완료'로 바뀐 날
   memo: string;
   updatedAt: number;
 }

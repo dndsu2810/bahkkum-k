@@ -112,7 +112,7 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
             {data.progressBooks.map((b) => <span className="sp-hw-chip" key={b}>{b}</span>)}
           </div>
         )}
-        <LogEditor studentId={canEditCur ? s.id : undefined} tid={s.id} existing={data.daily} slots={data.engSlots} options={data.doneItemOptions} band={s.band} progressBooks={data.progressBooks || []} onSaved={reloadSilent} />
+        <LogEditor studentId={canEditCur ? s.id : undefined} tid={s.id} existing={data.daily} slots={data.engSlots} options={data.doneItemOptions} band={s.band} progressBooks={data.progressBooks || []} examMode={data.examMode || false} onSaved={reloadSilent} />
       </section>
 
       {/* 일지 이력 */}
@@ -299,7 +299,7 @@ function addMin(hm: string, min: number): string {
 /* 지난 일지 이력의 숙제 3분류 태그 색상. */
 const hwTagCls = (v: string) => (v === "완료" ? "sp-tag-done" : v === "미흡" ? "sp-tag-warn" : v === "안함" ? "sp-tag-bad" : "");
 
-function LogEditor({ studentId, tid, existing, slots, options, band, progressBooks = [], onSaved }: { studentId?: string; tid: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; options?: string[]; band: string; progressBooks?: string[]; onSaved: () => void }) {
+function LogEditor({ studentId, tid, existing, slots, options, band, progressBooks = [], examMode = false, onSaved }: { studentId?: string; tid: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; options?: string[]; band: string; progressBooks?: string[]; examMode?: boolean; onSaved: () => void }) {
   const items = options && options.length ? options : STUDENT_LOG_ITEMS;
   const isMid = band === "mid" || band === "bridge"; // 중고등(Bridge 포함) — 숙제 3분류·교재 진도
   const [date, setDate] = useState(todayStr());
@@ -446,24 +446,28 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
             })}
           </div>
         )}
+        {/* 진행중 교재 칩 — 누르면 목표 입력칸에 채워져요. 내용을 더해 목표로 추가하면 돼요. 내신기간엔 숨겨요. */}
+        {!examMode && progressBooks.length > 0 && (
+          <div className="today-bookchips" style={{ marginTop: 6 }}>
+            <span className="today-bookchips-lbl">진행중 교재</span>
+            {progressBooks.map((b) => (
+              <button type="button" className="today-bookchip" key={b} title="이 교재로 목표 채우기" onClick={() => { dirtyRef.current = true; setGoalText(b + " "); }}>{b}</button>
+            ))}
+          </div>
+        )}
         <div className="sp-self-row" style={{ marginTop: 6 }}>
           <input className="input" value={goalText} onChange={(e) => setGoalText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) addGoal(); }} placeholder="학습 목표 추가 (예: 단어 50개 외우기)" />
           <button type="button" className="btn ghost sm" onClick={addGoal} disabled={!goalText.trim()}><Icon name="plus" /> 추가</button>
         </div>
       </div>
 
-      <div className="sp-f">
-        <span>{isMid ? "교재 · 진도" : "원서 진도번호"}</span>
-        {isMid && progressBooks.length > 0 && (
-          <div className="today-bookchips">
-            <span className="today-bookchips-lbl">교재</span>
-            {progressBooks.map((b) => (
-              <button type="button" className="today-bookchip" key={b} title="이 교재로 진도칸 채우기" onClick={() => { dirtyRef.current = true; setBookNo(b + " "); }}>{b}</button>
-            ))}
-          </div>
-        )}
-        <input className="input" value={bookNo} onChange={(e) => setBookNo(e.target.value)} placeholder={isMid ? "예: 그래머인유즈 3과 p.40~45" : "예: 145"} />
-      </div>
+      {/* 교재·진도(중고등)·원서 진도번호(초등) — 내신기간엔 진도를 안 쓰므로 숨겨요. */}
+      {!examMode && (
+        <div className="sp-f">
+          <span>{isMid ? "교재 · 진도" : "원서 진도번호"}</span>
+          <input className="input" value={bookNo} onChange={(e) => setBookNo(e.target.value)} placeholder={isMid ? "예: 그래머인유즈 3과 p.40~45" : "예: 145"} />
+        </div>
+      )}
 
       {isMid ? (
         /* 숙제 검사 (지난 수업 숙제) — 강사가 낸 지난 숙제. 학생이 한 것에 체크하면 줄긋기(강사와 공유). */

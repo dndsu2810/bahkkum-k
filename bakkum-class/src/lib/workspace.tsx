@@ -59,7 +59,7 @@ function engEntries(band: "mid" | "elem"): WsEntry[] {
     { key: "eng_items" + sfx, label: "오늘 한 것 수정", icon: "check", kind: "hub" }
   );
   list.push(
-    { key: "eng_progress" + sfx, label: "진도 기록", icon: "chart", kind: "hub" },
+    { key: "eng_progress" + sfx, label: "진도·교재관리", icon: "chart", kind: "hub" },
     { key: "eng_test" + sfx, label: "테스트 기록", icon: "cap", kind: "hub" },
     // 학생 명단은 과목별로 나누지 않고 공통 「학생 명단」 하나로 단일화(단일 출처 원칙).
     { key: "eng_makeup" + sfx, label: "보강 관리", icon: "refresh", kind: "hub" },

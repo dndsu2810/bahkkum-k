@@ -4,6 +4,7 @@
 
 import type { Env } from "./index";
 import type { SessionUser } from "./auth";
+import { kstToday } from "./briefing";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -133,6 +134,8 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "ALTER TABLE class_eng_daily ADD COLUMN hw_comment TEXT NOT NULL DEFAULT ''",
     // 내신모드 학년 — 학생 명단에서 자동 매칭(학교와 함께).
     "ALTER TABLE class_eng_naesin ADD COLUMN grade TEXT NOT NULL DEFAULT ''",
+    // 교재 완료일 — 수학 진도·교재관리와 동일. status='완료'로 바뀐 날.
+    "ALTER TABLE class_eng_progress ADD COLUMN end_date TEXT NOT NULL DEFAULT ''",
   ]) {
     try {
       await env.DB.prepare(a).run();
@@ -369,16 +372,18 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     if (!sid) return json({ error: "studentId_required" }, 400);
     const id = String(b.id || "") || newId("ep");
     const status = ["진행", "완료", "보류"].includes(String(b.status)) ? String(b.status) : "진행";
+    // 완료일 — 완료면 클라가 보낸 endDate, 진행/보류면 비움.
+    const endDate = status === "완료" ? String(b.endDate || "") : "";
     const exists = await env.DB.prepare("SELECT id FROM class_eng_progress WHERE id=?").bind(id).first();
     if (exists) {
       await env.DB
-        .prepare("UPDATE class_eng_progress SET book=?,level=?,status=?,start_date=?,memo=?,updated_at=? WHERE id=?")
-        .bind(String(b.book || ""), String(b.level || ""), status, String(b.startDate || ""), String(b.memo || ""), Date.now(), id)
+        .prepare("UPDATE class_eng_progress SET book=?,level=?,status=?,start_date=?,end_date=?,memo=?,updated_at=? WHERE id=?")
+        .bind(String(b.book || ""), String(b.level || ""), status, String(b.startDate || ""), endDate, String(b.memo || ""), Date.now(), id)
         .run();
     } else {
       await env.DB
-        .prepare("INSERT INTO class_eng_progress(id,student_id,book,level,status,start_date,memo,updated_at) VALUES(?,?,?,?,?,?,?,?)")
-        .bind(id, sid, String(b.book || ""), String(b.level || ""), status, String(b.startDate || ""), String(b.memo || ""), Date.now())
+        .prepare("INSERT INTO class_eng_progress(id,student_id,book,level,status,start_date,end_date,memo,updated_at) VALUES(?,?,?,?,?,?,?,?,?)")
+        .bind(id, sid, String(b.book || ""), String(b.level || ""), status, String(b.startDate || ""), endDate, String(b.memo || ""), Date.now())
         .run();
     }
     return json({ ok: true, id });
@@ -678,6 +683,22 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
       /* 진도 테이블 없거나 조회 실패는 무시 */
     }
 
+    // 내신모드 여부 — 중고등(mid)만. 켜져 있고 오늘이 기간 안이면 true. 내신모드면 학생 화면에서 교재·진도 칸을 숨긴다.
+    let examMode = false;
+    if (band === "mid") {
+      try {
+        const n = await env.DB.prepare("SELECT on_flag, start_date, end_date FROM class_eng_naesin WHERE student_id=?").bind(String(sid)).first<{ on_flag: number; start_date: string; end_date: string }>();
+        if (n && n.on_flag) {
+          const t = kstToday().date;
+          const start = String(n.start_date ?? "");
+          const end = String(n.end_date ?? "");
+          examMode = (!start || t >= start) && (!end || t <= end);
+        }
+      } catch {
+        /* 내신 테이블 없거나 조회 실패는 무시 */
+      }
+    }
+
     return json({
       role: me.role,
       canEditCurriculum: canEditCurriculum(me),
@@ -688,6 +709,7 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
       daily,
       materials,
       progressBooks,
+      examMode,
       doneItemOptions: await doneItemsFor(env, sid),
     });
   }
@@ -886,6 +908,7 @@ function progRow(r: Record<string, unknown>) {
     level: String(r.level ?? ""),
     status: String(r.status ?? "진행"),
     startDate: String(r.start_date ?? ""),
+    endDate: String(r.end_date ?? ""),
     memo: String(r.memo ?? ""),
     updatedAt: Number(r.updated_at ?? 0),
   };

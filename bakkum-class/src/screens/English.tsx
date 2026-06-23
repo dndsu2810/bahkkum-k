@@ -4,7 +4,7 @@ import { getRoster, inEngBand, type RosterStudent } from "../lib/rosterApi";
 import { engApi, hwProgress, naesinActiveOn, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, ELEM_LOG_ITEMS, type AttStatus, type EngDaily, type EngMakeup, type EngNaesin, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
 import { eventsApi, type EventItem } from "../lib/hubApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
-import { DOW, DOW_ORDER, TODAY, fmtMD, fmtMDDow, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
+import { DOW, DOW_ORDER, TODAY, fmtDayBand, fmtMD, fmtMDDow, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
 import { loadCheckout, saveCheckout, pruneCheckout } from "../lib/checkoutState";
 import { Select, Empty } from "../components/ui";
@@ -130,6 +130,12 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   const [naesinMap, setNaesinMap] = useState<Record<string, EngNaesin>>({});
   const loadNaesin = () => engApi.naesin().then((list) => { const m: Record<string, EngNaesin> = {}; for (const r of list) m[r.studentId] = r; setNaesinMap(m); }).catch(() => {});
   useEffect(() => { if (band === "mid") void loadNaesin(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [band]);
+
+  // 진도·교재관리 진행중 교재 — 학생명 옆 '진행 N' + 학습목표 진행중 교재 칩에 사용.
+  const [progAll, setProgAll] = useState<EngProgress[]>([]);
+  const loadProg = () => engApi.progressAll().then(setProgAll).catch(() => {});
+  useEffect(() => { void loadProg(); }, []);
+  const ingBooksOf = (sid: string) => [...new Set(progAll.filter((p) => p.studentId === sid && p.status === "진행" && p.book.trim()).map((p) => engBookLabel(p.book, p.level)))];
 
   const students = useMemo(
     // 영어 수강 + 해당 밴드 + 재원(퇴원·휴원 제외).
@@ -267,7 +273,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     tt: "주간 시간표",
     att: "출결 기록",
     hw: "숙제 기록",
-    progress: "진도 기록",
+    progress: "진도·교재관리",
     test: "테스트 기록",
     makeup: "보강 관리",
     board: "현황",
@@ -281,7 +287,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     tt: "이번 주 수업 시간표를 봐요.",
     att: "오늘 등원/지각/결석을 표시해요. 결석은 보강 관리로 이어져요.",
     hw: "지난 숙제 검사와 오늘 내줄 숙제를 기록해요.",
-    progress: "학생별 교재·진도를 기록해요.",
+    progress: "학생을 고르면 교재별 진도를 입력해요. 교재명·범위·시작일을 적고, 끝나면 ‘교재 완료’를 눌러요.",
     test: "단어시험·테스트 점수를 기록해요.",
     makeup: "결석으로 생긴 보강 일정을 잡고 관리해요.",
     board: "이 반 학생들의 출결·진도·테스트 현황을 한눈에 봐요.",
@@ -382,6 +388,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                     {tab === "today" && d?.makeup && <span className="eng-stu-mk" title="보강 수업 (포인트 미적립)">보강</span>}
                     {tab === "today" && band === "mid" && naesinActiveOn(naesinMap[s.id], date) && <span className="eng-stu-naesin" title="내신기간 모드">내신</span>}
                     {tab === "today" && d && (d.hwChecked || hwProgress(d) !== null) && <span className="eng-dot ok" title="숙제 기록됨" />}
+                    {(() => { const n = ingBooksOf(s.id).length; return n > 0 ? <span className="eng-stu-time" title="진도·교재관리 진행중 교재">진행 {n}</span> : null; })()}
                   </button>
                   {band === "mid" && (
                     <button className="eng-stu-rec" onClick={() => openModal(<StudentMonthlyModal studentId={s.id} name={s.name} naesin={naesinMap[s.id]} />)} title="누적 기록 보기 (자료·진도·시험)" aria-label="누적 기록"><Icon name="chart" /></button>
@@ -411,9 +418,9 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                       : "왼쪽에서 학생을 선택하면 테스트 점수를 기록할 수 있어요."}
               </div>
             ) : tab === "today" ? (
-              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={addDoneItemForStudent} onAddNextGoal={addNextGoal} examMode={band === "mid" && naesinActiveOn(naesinMap[sel], date)} planNextDate={nextEngDate(students.find((s) => s.id === sel)?.engSlots || [], date)} />
+              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={addDoneItemForStudent} onAddNextGoal={addNextGoal} examMode={band === "mid" && naesinActiveOn(naesinMap[sel], date)} planNextDate={nextEngDate(students.find((s) => s.id === sel)?.engSlots || [], date)} ingBooks={ingBooksOf(sel)} />
             ) : tab === "progress" ? (
-              <ProgressPanel studentId={sel} name={nameOf[sel] || ""} />
+              <ProgressPanel studentId={sel} name={nameOf[sel] || ""} onChanged={loadProg} />
             ) : tab === "cur" ? (
               <CurriculumPanel key={sel} studentId={sel} name={nameOf[sel] || ""} />
             ) : (
@@ -800,7 +807,7 @@ const ENG_STATUS6: { v: AttStatus; on: string; att: boolean }[] = [
 ];
 
 /* ---------------- 일일 학습일지 편집 ---------------- */
-function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, onAddDoneItem, onAddNextGoal, examMode, compact, autoSave, planNextDate }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void; doneItemsAll: string[]; reasonsAll: { name: string; value: number }[]; onAddDoneItem: (label: string, scope?: "all" | "student") => void; onAddNextGoal?: (sid: string, text: string) => void; examMode?: boolean; compact?: boolean; autoSave?: boolean; planNextDate?: string }) {
+function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, onAddDoneItem, onAddNextGoal, examMode, compact, autoSave, planNextDate, ingBooks = [] }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void; doneItemsAll: string[]; reasonsAll: { name: string; value: number }[]; onAddDoneItem: (label: string, scope?: "all" | "student") => void; onAddNextGoal?: (sid: string, text: string) => void; examMode?: boolean; compact?: boolean; autoSave?: boolean; planNextDate?: string; ingBooks?: string[] }) {
   const showHw = band !== "elem"; // 초등영어는 숙제 없음
   const [d, setD] = useState<EngDaily>(value);
   const dirty = JSON.stringify(d) !== JSON.stringify(value);
@@ -917,6 +924,15 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
             <button className="eng-goal-x" onClick={() => setGoals(d.goals.filter((_, j) => j !== i))}>×</button>
           </div>
         ))}
+        {/* 진행중 교재 칩 — 누르면 목표 입력칸에 채워져, 내용을 더해 목표로 추가할 수 있다. 내신모드에선 진도를 안 쓰므로 숨김. */}
+        {!examMode && ingBooks.length > 0 && (
+          <div className="today-bookchips">
+            <span className="today-bookchips-lbl">진행중 교재</span>
+            {ingBooks.map((b) => (
+              <button type="button" className="today-bookchip" key={b} title="이 교재로 목표 채우기" onClick={() => setGoalText(b + " ")}>{b}</button>
+            ))}
+          </div>
+        )}
         <div className="eng-goal-add">
           <input className="sm-input" value={goalText} onChange={(e) => setGoalText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) addGoal(); }} placeholder="학습 내용" />
           {onAddNextGoal && (
@@ -954,14 +970,6 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
               ))}
             </div>
           )}
-        </div>
-      )}
-
-      {/* 교재 · 진도 — 학생도 입력하는 칸. 내신모드(또는 이미 입력된 내용이 있으면) 선생님 화면에도 보여 학생 입력을 확인·수정한다. */}
-      {showHw && (examMode || d.bookNo) && (
-        <div className="eng-field">
-          <div className="eng-label">교재 · 진도 <span className="eng-mk-tag soft">학생도 입력해요</span></div>
-          <input className="input" value={d.bookNo} onChange={(e) => setD({ ...d, bookNo: e.target.value })} placeholder="예: 그래머인유즈 3과 p.40~45" />
         </div>
       )}
 
@@ -1276,51 +1284,95 @@ function NextTestPlan({ studentId, nextDate }: { studentId: string; nextDate: st
   );
 }
 
-/* ---------------- 진도 ---------------- */
-function ProgressPanel({ studentId, name }: { studentId: string; name: string }) {
+/* ---------------- 진도 · 교재관리 (수학 진도·교재관리와 동일한 레이아웃) ---------------- */
+function ProgressPanel({ studentId, name, onChanged }: { studentId: string; name: string; onChanged?: () => void }) {
   const [list, setList] = useState<EngProgress[]>([]);
+  // 입력 폼 — 교재명·범위단계·시작일.
   const [book, setBook] = useState("");
-  const [level, setLevel] = useState("");
-  const reload = () => engApi.progress(studentId).then(setList).catch(() => {});
-  useEffect(() => { void reload(); }, [studentId]);
+  const [range, setRange] = useState("");
+  const [start, setStart] = useState(todayStr());
+  // 행 인라인 수정.
+  const [editId, setEditId] = useState<string | null>(null);
+  const [eBook, setEBook] = useState("");
+  const [eRange, setERange] = useState("");
+  const [eStart, setEStart] = useState("");
+  const reload = () => engApi.progress(studentId).then((l) => { setList(l); onChanged?.(); }).catch(() => {});
+  useEffect(() => { void reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [studentId]);
+
+  // 진행중 먼저, 그 안에서 최근 수정순. 완료는 아래로.
+  const sorted = useMemo(() => [...list].sort((a, b) => {
+    const ai = a.status !== "완료", bi = b.status !== "완료";
+    if (ai !== bi) return ai ? -1 : 1;
+    if ((b.updatedAt || 0) !== (a.updatedAt || 0)) return (b.updatedAt || 0) - (a.updatedAt || 0);
+    return a.startDate < b.startDate ? 1 : -1;
+  }), [list]);
 
   async function add() {
     if (!book.trim()) return;
-    await engApi.saveProgress({ studentId, book: book.trim(), level: level.trim(), status: "진행", startDate: todayStr() });
-    setBook(""); setLevel("");
+    await engApi.saveProgress({ studentId, book: book.trim(), level: range.trim(), status: "진행", startDate: start || todayStr(), endDate: "" });
+    setBook(""); setRange(""); setStart(todayStr());
     void reload();
   }
-  async function setStatus(p: EngProgress, status: string) {
-    await engApi.saveProgress({ ...p, status });
+  function startEdit(p: EngProgress) { setEditId(p.id); setEBook(p.book); setERange(p.level); setEStart(p.startDate); }
+  async function saveEdit(p: EngProgress) {
+    if (!eBook.trim()) return;
+    await engApi.saveProgress({ ...p, book: eBook.trim(), level: eRange.trim(), startDate: eStart || p.startDate });
+    setEditId(null);
+    void reload();
+  }
+  async function setDone(p: EngProgress, done: boolean) {
+    await engApi.saveProgress({ ...p, status: done ? "완료" : "진행", endDate: done ? todayStr() : "" });
     void reload();
   }
   async function remove(p: EngProgress) {
-    if (!window.confirm("이 진도를 삭제할까요?")) return;
+    if (!window.confirm(`'${p.book || "이 교재"}' 진도를 삭제할까요?`)) return;
     await engApi.removeProgress(p.id);
     void reload();
   }
 
   return (
     <div className="eng-panel">
-      <h2>{name} · 진도</h2>
+      <h2>{name} · 진도 · 교재</h2>
       <div className="eng-add-row">
-        <input className="input" value={book} onChange={(e) => setBook(e.target.value)} placeholder="교재명 (예: Insight Link L1)" />
-        <input className="input" style={{ maxWidth: 140 }} value={level} onChange={(e) => setLevel(e.target.value)} placeholder="레벨/단계" />
+        <input className="input" value={book} onChange={(e) => setBook(e.target.value)} placeholder="교재명 (예: Insight Link L1)" onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && add()} />
+        <input className="input" style={{ maxWidth: 150 }} value={range} onChange={(e) => setRange(e.target.value)} placeholder="범위·단계(선택)" />
+        <input className="inline-input" style={{ maxWidth: 150 }} type="date" value={start} onChange={(e) => setStart(e.target.value)} aria-label="시작일" />
         <button className="btn primary" onClick={add} disabled={!book.trim()}>추가</button>
       </div>
       <div className="eng-rows">
-        {list.map((p) => (
-          <div className="eng-row" key={p.id}>
-            <div className="eng-row-main"><b>{p.book}</b>{p.level && <span className="eng-lv">{p.level}</span>}</div>
-            <select className="sm-input" value={p.status} onChange={(e) => setStatus(p, e.target.value)}>
-              <option value="진행">진행</option>
-              <option value="완료">완료</option>
-              <option value="보류">보류</option>
-            </select>
-            <button className="btn ghost sm" onClick={() => remove(p)}>삭제</button>
-          </div>
-        ))}
-        {list.length === 0 && <div className="hub-muted">진도 기록이 없어요.</div>}
+        {sorted.map((p) => {
+          const done = p.status === "완료";
+          return editId === p.id ? (
+            <div className="eng-row editing" key={p.id}>
+              <div className="eng-row-main eng-row-edit">
+                <input className="input" value={eBook} onChange={(e) => setEBook(e.target.value)} placeholder="교재명" onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && saveEdit(p)} />
+                <input className="input" style={{ maxWidth: 150 }} value={eRange} onChange={(e) => setERange(e.target.value)} placeholder="범위·단계(선택)" />
+                <input className="inline-input" style={{ maxWidth: 150 }} type="date" value={eStart} onChange={(e) => setEStart(e.target.value)} aria-label="시작일" />
+              </div>
+              <button className="btn primary sm" onClick={() => saveEdit(p)}>저장</button>
+              <button className="btn ghost sm" onClick={() => setEditId(null)}>취소</button>
+            </div>
+          ) : (
+            <div className={"eng-row" + (done ? " mat-arow done" : "")} key={p.id}>
+              <div className="eng-row-main">
+                <b>{p.book || "교재 미정"}</b>
+                {p.level && <span className="eng-lv">{p.level}</span>}
+                <span className={"badge " + (done ? "b-green" : "b-blue")} style={{ marginLeft: 4 }}>{done ? "교재 완료" : "진행중"}</span>
+              </div>
+              <span className="prog-dates">
+                {fmtDayBand(p.startDate) || "시작일 미정"} 시작{done && p.endDate ? ` · ${fmtDayBand(p.endDate)} 완료` : ""}
+              </span>
+              {done ? (
+                <button className="btn ghost sm" onClick={() => setDone(p, false)}>진행중으로</button>
+              ) : (
+                <button className="btn sm" onClick={() => setDone(p, true)}>교재 완료</button>
+              )}
+              <button className="btn ghost sm" onClick={() => startEdit(p)} title="수정"><Icon name="edit" /></button>
+              <button className="btn ghost sm" onClick={() => remove(p)} title="삭제"><Icon name="trash" /></button>
+            </div>
+          );
+        })}
+        {list.length === 0 && <div className="hub-muted">아직 등록된 교재가 없어요. 위에서 교재명을 입력해 추가하세요.</div>}
       </div>
     </div>
   );
@@ -2028,7 +2080,7 @@ function DashCard({
       </div>
       {/* 아래 — 접혀 있을 땐 블러로 살짝 보이고, 펼치면 입력(자동 저장) */}
       <div className={"eng-dash-peek" + (open ? " open" : "")}>
-        <DailyEditor student={s.name} band={band} value={getDaily(s.id)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examMode} compact autoSave key={s.id} planNextDate={nextEngDate(s.engSlots, date)} />
+        <DailyEditor student={s.name} band={band} value={getDaily(s.id)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examMode} compact autoSave key={s.id} planNextDate={nextEngDate(s.engSlots, date)} ingBooks={progBooks} />
       </div>
       <button className="eng-dash-more" onClick={onToggleOpen} aria-expanded={open}>
         {open ? "접기" : "자세히 보기 / 입력하기"}

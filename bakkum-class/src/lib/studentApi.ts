@@ -73,6 +73,7 @@ export interface StudentPageData {
   daily: StudentLogRow[];
   materials?: { kind: string; name: string }[]; // 배부된 자료(kind: lesson 수업 / hw 숙제). 해제 전까지 계속 표시.
   progressBooks?: string[]; // 진도·교재관리에서 진행중인 교재명
+  examMode?: boolean; // 내신모드(중고등) 활성 여부 — 켜지면 교재·진도 칸을 숨긴다
   doneItemOptions?: string[]; // 그 학생의 '오늘 한 것' 선택지(기본+전체공통+학생별)
 }
 
