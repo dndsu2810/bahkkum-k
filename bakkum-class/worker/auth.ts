@@ -312,10 +312,14 @@ export async function loginStudent(env: Env, name: string, birth: string): Promi
   const norm = (s: string) => s.replace(/[^0-9]/g, ""); // 숫자만
   const want = norm(birth);
   if (want.length !== 6 && want.length !== 8) return null;
+  // 이름 매칭: 정확히 일치하거나, 한글 이름만 입력했을 때 "한글 English"(예: "노유찬 Michael")도 허용.
+  // (LIKE 특수문자 이스케이프 후 "입력값 %"로 뒤에 영어가 붙은 이름까지 포함. 생년월일로 한 번 더 거른다.)
+  const typed = name.trim();
+  const likePrefix = typed.replace(/[\\%_]/g, "\\$&") + " %";
   const r = await env.DB.prepare(
-    "SELECT id,name,birth_date,status FROM students WHERE name=? AND (hidden IS NULL OR hidden=0)"
+    "SELECT id,name,birth_date,status FROM students WHERE (name=? OR name LIKE ? ESCAPE '\\') AND (hidden IS NULL OR hidden=0)"
   )
-    .bind(name.trim())
+    .bind(typed, likePrefix)
     .all<{ id: number; name: string; birth_date: string | null; status: string | null }>();
   for (const row of r.results || []) {
     const got = norm(String(row.birth_date ?? "")); // 보통 8자리(YYYYMMDD)

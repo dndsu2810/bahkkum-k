@@ -331,6 +331,7 @@ export function ProfileModal({
 
   async function save() {
     if (busy) return;
+    if (!f.name.trim()) { setErr("이름을 입력해 주세요."); return; }
     // 중복 등록 방지 — 한 학생이 같은 요일·시간에 수학·영어 둘 다 등록되면 막는다.
     if (f.subjects.includes("math") && f.subjects.includes("english")) {
       const clash = f.mathSlots.find((m) => f.engSlots.some((e) => e.day === m.day && e.time === m.time));
@@ -353,6 +354,7 @@ export function ProfileModal({
       });
       await saveStudentCore({
         studentId: f.id,
+        name: f.name.trim(),
         grade: f.grade,
         status: f.status,
         school: f.school,
@@ -416,6 +418,7 @@ export function ProfileModal({
 
         <div className="prof-body">
           <Section title="기본 정보">
+            <Field label="이름"><Txt ro={ro} value={f.name} onChange={(v) => set("name", v)} placeholder="학생 이름" /></Field>
             <Field label="학년">
               {ro ? <span className="prof-val">{f.grade || "—"}</span> : <GradeSelect value={f.grade} onChange={(v) => set("grade", v)} />}
             </Field>
