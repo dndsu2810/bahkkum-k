@@ -44,7 +44,7 @@ export async function runCheckinAlerts(env: Env, opts?: { atMinutes?: number; dr
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_bot_sent (k TEXT PRIMARY KEY, at INTEGER NOT NULL DEFAULT 0)").run().catch(() => {});
 
   // 휴원일이면 전체 스킵.
-  const hol = await env.DB.prepare("SELECT 1 AS x FROM class_events WHERE category='휴원' AND date<=? AND (end_date='' OR end_date>=?) LIMIT 1").bind(date, date).first().catch(() => null);
+  const hol = await env.DB.prepare("SELECT 1 AS x FROM class_events WHERE category='휴원' AND date<=? AND (CASE WHEN end_date='' THEN date ELSE end_date END)>=? LIMIT 1").bind(date, date).first().catch(() => null);
   if (hol) return out;
 
   // 학생: 재원생만. 이름·학년.

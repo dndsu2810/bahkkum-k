@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Student, StudentStatus } from "../types";
 import { useStore } from "../store";
 import { syncStudents } from "../api";
+import { saveStudentCore } from "../lib/rosterApi";
 import { catIndex } from "../lib/categories";
 import { StudentTable, type EditField } from "../components/StudentTable";
 import { StudentModal } from "../components/modals";
@@ -62,6 +63,24 @@ export function Students() {
         if (s) applyField(s, field, orig);
       });
       toast("저장하지 못했어요 · 잠시 후 다시 시도해 주세요");
+      return ok;
+    }
+    // 공통 학생 명단(students 테이블)에도 같은 값을 반영 — 두 화면을 따로 고치지 않게.
+    const base = data.students.find((x) => x.id === id);
+    if (base) {
+      const s: Student = { ...base };
+      applyField(s, field, value);
+      void saveStudentCore({
+        studentId: id,
+        ...(field === "name" ? { name: s.name } : {}),
+        grade: s.grade,
+        status: s.status,
+        school: s.school,
+        birthdate: s.birthdate,
+        parentPhone: s.parentPhone,
+        studentPhone: s.studentPhone,
+        startDate: s.startDate,
+      }).catch(() => toast("공통 명단 반영은 잠시 후 다시 시도해 주세요"));
     }
     return ok;
   }

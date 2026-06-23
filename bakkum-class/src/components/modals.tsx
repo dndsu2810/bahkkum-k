@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import type { Lesson, Makeup, ScheduleVersion, StudentStatus, TestLog } from "../types";
 import { useStore } from "../store";
 import { createStudent, hideStudent, pushTestNotion } from "../api";
+import { saveStudentCore } from "../lib/rosterApi";
 import { DOW_ORDER, fmtMDDow, todayStr, uid } from "../lib/dates";
 import { activeStudents, studentById } from "../lib/logic";
 import { GRADE_OPTIONS } from "../lib/grade";
@@ -116,6 +117,18 @@ export function StudentModal({ id }: { id: string | null }) {
         s.schedule = hist;
         s.lessons = hist.length ? hist.reduce((a, b) => (b.from > a.from ? b : a)).lessons : [];
       });
+      // 공통 학생 명단(students 테이블)에도 핵심 정보를 함께 반영 — 두 화면을 따로 고치지 않게.
+      void saveStudentCore({
+        studentId: id,
+        name: baseFields.name,
+        grade: baseFields.grade,
+        status: baseFields.status,
+        school: baseFields.school,
+        birthdate: baseFields.birthdate,
+        parentPhone: baseFields.parentPhone,
+        studentPhone: baseFields.studentPhone,
+        startDate: baseFields.startDate,
+      }).catch(() => {});
       closeModal();
       toast(scheduleChanged ? `학생 정보 저장 · 새 시간표는 ${effFrom}부터 적용돼요.` : "학생 정보를 저장했어요.");
     } else {
@@ -139,6 +152,18 @@ export function StudentModal({ id }: { id: string | null }) {
       const s = studentById(d.students, id);
       if (s) { s.status = "퇴원"; s.appEdited = [...new Set([...(s.appEdited || []), "status"])]; }
     });
+    // 공통 학생 명단에도 퇴원 상태 반영.
+    const cur = studentById(data.students, id);
+    if (cur) void saveStudentCore({
+      studentId: id,
+      grade: cur.grade,
+      status: "퇴원",
+      school: cur.school,
+      birthdate: cur.birthdate,
+      parentPhone: cur.parentPhone,
+      studentPhone: cur.studentPhone,
+      startDate: cur.startDate,
+    }).catch(() => {});
     closeModal();
     toast("퇴원 처리했어요.");
   }

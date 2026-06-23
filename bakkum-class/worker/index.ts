@@ -833,6 +833,7 @@ async function rosterMetaUpsert(env: Env, request: Request): Promise<Response> {
 async function rosterCoreUpdate(env: Env, request: Request): Promise<Response> {
   const b = (await request.json().catch(() => ({}))) as {
     studentId?: string;
+    name?: string;
     grade?: string;
     status?: string;
     school?: string;
@@ -844,6 +845,8 @@ async function rosterCoreUpdate(env: Env, request: Request): Promise<Response> {
   const sid = String(b.studentId || "");
   if (!sid || !/^\d+$/.test(sid)) return json({ error: "studentId_required" }, 400);
   const str = (v: unknown, n = 200) => (typeof v === "string" ? v.slice(0, n) : "");
+  // 이름은 수학 학생관리 인라인 수정에서만 함께 보낸다(보내지 않으면 기존 이름 유지).
+  const name = typeof b.name === "string" ? b.name.trim().slice(0, 80) : "";
   const grade = str(b.grade, 20);
   const status = str(b.status, 20) || "재원";
   const school = str(b.school);
@@ -852,12 +855,21 @@ async function rosterCoreUpdate(env: Env, request: Request): Promise<Response> {
   const sPhone = str(b.studentPhone, 40);
   const start = str(b.startDate, 20);
   try {
-    await env.DB
-      .prepare(
-        "UPDATE students SET grade=?,status=?,school=?,birth_date=?,parent_phone=?,student_phone=?,start_date=? WHERE id=?"
-      )
-      .bind(grade, status, school, birth, pPhone, sPhone, start, Number(sid))
-      .run();
+    if (name) {
+      await env.DB
+        .prepare(
+          "UPDATE students SET name=?,grade=?,status=?,school=?,birth_date=?,parent_phone=?,student_phone=?,start_date=? WHERE id=?"
+        )
+        .bind(name, grade, status, school, birth, pPhone, sPhone, start, Number(sid))
+        .run();
+    } else {
+      await env.DB
+        .prepare(
+          "UPDATE students SET grade=?,status=?,school=?,birth_date=?,parent_phone=?,student_phone=?,start_date=? WHERE id=?"
+        )
+        .bind(grade, status, school, birth, pPhone, sPhone, start, Number(sid))
+        .run();
+    }
   } catch (e) {
     return json({ error: String(e) }, 500);
   }
@@ -874,6 +886,7 @@ async function rosterCoreUpdate(env: Env, request: Request): Promise<Response> {
       /* ignore */
     }
     ["grade", "status", "school", "birthdate", "parentPhone", "studentPhone", "startDate"].forEach((f) => cur.add(f));
+    if (name) cur.add("name");
     await env.DB
       .prepare("INSERT INTO class_student_overrides(student_id,fields) VALUES(?,?) ON CONFLICT(student_id) DO UPDATE SET fields=excluded.fields")
       .bind(sid, JSON.stringify([...cur]))

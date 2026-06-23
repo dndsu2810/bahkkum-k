@@ -130,6 +130,7 @@ export async function saveStudentSlots(input: { studentId: string; math: Slot[];
 /** 공통 학생 핵심 필드 저장(원장 전용) — students에 기록 + 노션 동기화 보호(앱 소유). */
 export async function saveStudentCore(input: {
   studentId: string;
+  name?: string;
   grade?: string;
   status?: string;
   school?: string;
