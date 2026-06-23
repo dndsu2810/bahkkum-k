@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import type { AttRecord, Attitude, AttStatus, HwLog, Makeup, Student } from "../types";
 import { DOW, fmtFull, fmtMDDow, parseD, timeToMin, todayStr, uid, ymd } from "../lib/dates";
 import { activeStudents, attendsOn, effectiveLessons, nextLessonDate, studentById } from "../lib/logic";
+import { loadCheckout, saveCheckout, pruneCheckout } from "../lib/checkoutState";
 import { applyMakeup, findBoKey } from "../lib/attendanceLogic";
 import { holidayName } from "../lib/holidays";
 import { awardPoints, pushAttendanceNotion, pushHomeworkNotion, attendancePoints, loadPointCatalog } from "../api";
@@ -74,13 +75,18 @@ export function TodayDashboard() {
   // 예정에 없어도 검색해서 추가하는 등원 학생(이 화면에서만) — 영어 '오늘 등원'과 동일.
   const [extraIds, setExtraIds] = useState<Set<string>>(new Set());
   const [addQ, setAddQ] = useState("");
-  // 중고등영어 대시보드와 동일한 세로 카드형 — 카드 펼침(openKeys) + 하원(outKeys, 맨 아래로 접기, 이 화면에서만).
+  // 중고등영어 대시보드와 동일한 세로 카드형 — 카드 펼침(openKeys) + 하원(outKeys, 맨 아래로 접기).
+  // 하원은 새로고침해도 그날 분은 유지(날짜별 localStorage).
   const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
-  const [outKeys, setOutKeys] = useState<Set<string>>(new Set());
+  const [outKeys, setOutKeys] = useState<Set<string>>(() => loadCheckout("math", day));
+  useEffect(() => { setOutKeys(loadCheckout("math", day)); }, [day]); // 날짜 바꾸면 그날 하원 상태로 교체
+  useEffect(() => { pruneCheckout(todayStr()); }, []); // 오래된 날짜 키 정리
   const toggleOpen = (key: string) => setOpenKeys((p) => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; });
   const toggleOut = (key: string) => {
     const willOut = !outKeys.has(key);
-    setOutKeys((p) => { const n = new Set(p); willOut ? n.add(key) : n.delete(key); return n; });
+    const next = new Set(outKeys); willOut ? next.add(key) : next.delete(key);
+    setOutKeys(next);
+    saveCheckout("math", day, next);
     if (willOut) setOpenKeys((p) => { const n = new Set(p); n.delete(key); return n; }); // 하원하면 접기
   };
   const focusCard = (key: string) => {

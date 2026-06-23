@@ -6,6 +6,7 @@ import { eventsApi, type EventItem } from "../lib/hubApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtMD, fmtMDDow, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
+import { loadCheckout, saveCheckout, pruneCheckout } from "../lib/checkoutState";
 import { Select, Empty } from "../components/ui";
 import { CopyMsgBtn, parentMakeupMsg, studentMakeupMsg } from "../components/MakeupList";
 import { useStore } from "../store";
@@ -2045,12 +2046,17 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
   const [q, setQ] = useState("");
   // 카드 펼침(자세히 보기) 제어 — 칩을 누르면 그 학생 카드를 펼치고 그 위치로 스크롤한다.
   const [openIds, setOpenIds] = useState<Set<string>>(new Set());
-  // 하원한 학생 — 카드를 맨 아래로 내리고 접는다(이 화면에서만, 새로고침하면 초기화).
-  const [outIds, setOutIds] = useState<Set<string>>(new Set());
+  // 하원한 학생 — 카드를 맨 아래로 내리고 접는다. 새로고침해도 그날 분은 유지(날짜별 localStorage).
+  const outScope = "eng-" + band;
+  const [outIds, setOutIds] = useState<Set<string>>(() => loadCheckout(outScope, date));
+  useEffect(() => { setOutIds(loadCheckout(outScope, date)); }, [outScope, date]); // 날짜/밴드 바뀌면 그날 하원 상태로 교체
+  useEffect(() => { pruneCheckout(todayStr()); }, []); // 오래된 날짜 키 정리
   const toggleOpen = (id: string) => setOpenIds((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleOut = (id: string) => {
     const willOut = !outIds.has(id);
-    setOutIds((p) => { const n = new Set(p); willOut ? n.add(id) : n.delete(id); return n; });
+    const next = new Set(outIds); willOut ? next.add(id) : next.delete(id);
+    setOutIds(next);
+    saveCheckout(outScope, date, next);
     if (willOut) setOpenIds((p) => { const n = new Set(p); n.delete(id); return n; }); // 하원하면 접기
   };
   const focusCard = (id: string) => {
@@ -2064,7 +2070,7 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
   const candidates = students.filter((s) => scheduledIds.has(s.id) && !attSet.has(s.id));
   const hits = q.trim() ? students.filter((s) => !attSet.has(s.id) && s.name.includes(q.trim())).slice(0, 24) : [];
   const markIn = (sid: string) => { setStatus(sid, "출석"); setQ(""); };
-  const markOut = (sid: string) => { void saveDaily({ ...getDaily(sid), attStatus: "", attended: false, lateMin: 0 }); setOutIds((p) => { const n = new Set(p); n.delete(sid); return n; }); };
+  const markOut = (sid: string) => { void saveDaily({ ...getDaily(sid), attStatus: "", attended: false, lateMin: 0 }); const next = new Set(outIds); next.delete(sid); setOutIds(next); saveCheckout(outScope, date, next); };
   return (
     <div className="eng-dash">
       <div className="eng-dash-sec">
