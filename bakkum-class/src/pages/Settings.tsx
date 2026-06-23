@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { TONES, type Category, type Tone } from "../lib/categories";
 import { getConfig, setConfig, getSecretSet, uploadImage } from "../lib/configApi";
 import { feedbackApi, type Notice } from "../lib/feedbackApi";
+import { syncAllFromNotion, type SyncStep } from "../lib/syncAll";
 import { Icon } from "../icons";
 
 /** 학원 로고 업로드 — 사이드바 "바" 자리에 쓰임(원장). 없으면 기본 박스 유지. */
@@ -265,6 +266,44 @@ export function Settings({
       <NoticeSetting />
       <KakaoWebhookSetting />
       <LogoSetting />
+      <EngImportSetting />
     </section>
+  );
+}
+
+/* 영어 노션 가져오기 — 초등 수업일지·영어 출결·영어 숙제만(추가·갱신, 삭제 없음·멱등).
+ * 전체 노션 가져오기 UI는 2026-06-18 제거됨(실수 덮어쓰기 방지). 이건 안전한 영어 항목만 노출. */
+function EngImportSetting() {
+  const [steps, setSteps] = useState<SyncStep[]>([]);
+  const [busy, setBusy] = useState(false);
+  async function run() {
+    if (busy) return;
+    if (!window.confirm("노션에서 영어 기록(초등 수업일지·영어 출결·영어 숙제)을 가져올까요?\n이름·날짜로 맞춰 추가·갱신만 해요(삭제 없음). 여러 번 눌러도 안전해요.")) return;
+    setBusy(true);
+    try {
+      await syncAllFromNotion((s) => setSteps(s), ["engDaily", "engAtt", "elemLog"]);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
+      <div className="card-title" style={{ marginBottom: 6 }}>영어 노션 가져오기</div>
+      <div className="page-desc" style={{ marginBottom: 12 }}>
+        노션의 <b>초등 수업일지·영어 출결·영어 숙제</b>를 앱으로 가져와요. 이름·날짜로 맞춰 추가·갱신만 하고(삭제 없음), 여러 번 눌러도 안전해요. 원장 전용.
+      </div>
+      <button className="btn primary" onClick={run} disabled={busy}>
+        {busy ? "가져오는 중…" : "영어 기록 가져오기"}
+      </button>
+      {steps.length > 0 && (
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+          {steps.map((s) => (
+            <div key={s.key} className="page-desc">
+              {s.label}: {s.status === "running" ? "가져오는 중…" : s.status === "done" ? `${s.count}건 반영` : s.status === "error" ? `실패 (${s.error || ""})` : "대기"}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
