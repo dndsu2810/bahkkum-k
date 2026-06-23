@@ -13,6 +13,7 @@ export type PageId =
   | "homework"
   | "progress"
   | "tests"
+  | "baseball"
   | "report"
   | "plan"
   | "settings";
@@ -36,6 +37,7 @@ export const ALL_NAV: NavItem[] = [
   { id: "homework", label: "숙제 기록", icon: "book" },
   { id: "progress", label: "진도·교재관리", icon: "chart" },
   { id: "tests", label: "테스트 기록", icon: "cap" },
+  { id: "baseball", label: "수학 야구", icon: "baseball" },
   { id: "report", label: "월말리포트", icon: "fileText" },
   { id: "settings", label: "설정", icon: "gear" },
 ];
@@ -56,6 +58,7 @@ export const GROUP_OF: Record<PageId, NavGroup> = {
   homework: "수업 기록",
   progress: "수업 기록",
   tests: "수업 기록",
+  baseball: "수업 기록",
   students: "관리",
   timetable: "메인",
   makeup: "관리",

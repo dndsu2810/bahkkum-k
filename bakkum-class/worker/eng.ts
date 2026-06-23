@@ -5,6 +5,7 @@
 import type { Env } from "./index";
 import type { SessionUser } from "./auth";
 import { kstToday } from "./briefing";
+import { baseballBoardFor } from "./baseball";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -699,6 +700,9 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
       }
     }
 
+    // 수학 전광판(수학 야구) — 수학 수강생이면 점수판을, 아니면 null. 학생 화면 칩/모달용.
+    const mathBoard = await baseballBoardFor(env, String(sid)).catch(() => null);
+
     return json({
       role: me.role,
       canEditCurriculum: canEditCurriculum(me),
@@ -710,6 +714,7 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
       materials,
       progressBooks,
       examMode,
+      mathBoard,
       doneItemOptions: await doneItemsFor(env, sid),
     });
   }

@@ -101,6 +101,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   const [date, setDate] = useState(todayStr());
   const [daily, setDaily] = useState<Record<string, EngDaily>>({});
   const [sel, setSel] = useState("");
+  const [sideQ, setSideQ] = useState(""); // 사이드바 학생 검색어
   const [err, setErr] = useState("");
 
   // 포인트 항목 카탈로그(점수표) — '포인트 항목' 화면에서 관리. 여기선 읽어서 자동 적립 계산에만 사용.
@@ -267,6 +268,11 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   const conflicts = useMemo(() => findSlotConflicts(students, date), [students, date]);
   const showLive = tab === "today" || tab === "att";
 
+  // 사이드바 학생 목록 — 검색어가 있으면 이름으로 바로 필터.
+  const sideBase = tab === "today" ? todayList : students;
+  const sideKw = sideQ.trim();
+  const sideList = sideKw ? sideBase.filter((s) => s.name.includes(sideKw)) : sideBase;
+
   const bandLabel = band === "elem" ? "초등 영어" : "중고등 영어";
   const TITLE: Record<Tab, string> = {
     today: "오늘",
@@ -362,19 +368,24 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
       ) : (
         <div className="eng-split">
           <div className="eng-side">
-            {band === "mid" && tab !== "today" && (
-              <button className="eng-rec-find" onClick={() => openModal(<StudentRecordPicker students={students} onPick={(s) => openModal(<StudentMonthlyModal studentId={s.id} name={s.name} naesin={naesinMap[s.id]} />)} />)}>
-                <Icon name="chart" /> 다른 학생 기록 찾기
-              </button>
+            {tab !== "today" && students.length > 0 && (
+              <input
+                className="input eng-side-search"
+                value={sideQ}
+                onChange={(e) => setSideQ(e.target.value)}
+                placeholder="학생 이름 검색"
+              />
             )}
-            {(tab === "today" ? todayList : students).length === 0 && (
+            {sideList.length === 0 && (
               <div className="eng-side-empty">
                 {tab === "today"
                   ? "오늘 등원 예정 학생이 없어요. 아래 ‘추가 등원’으로 학생을 추가해 보세요."
-                  : "표시할 학생이 없어요."}
+                  : sideKw
+                    ? `‘${sideKw}’ 검색 결과가 없어요.`
+                    : "표시할 학생이 없어요."}
               </div>
             )}
-            {(tab === "today" ? todayList : students).map((s) => {
+            {sideList.map((s) => {
               const d = daily[s.id];
               const st = d?.attStatus || "";
               return (
@@ -1962,7 +1973,7 @@ function EngMakeupRow({ mk, name, onEdit, onStatus, onRemove }: { mk: EngMakeup;
   );
 }
 
-function EngMakeupModal({ students, initial, onSaved }: { students: RosterStudent[]; initial: EngMakeup | null; onSaved: () => void }) {
+export function EngMakeupModal({ students, initial, onSaved }: { students: RosterStudent[]; initial: EngMakeup | null; onSaved: () => void }) {
   const { closeModal } = useStore();
   const [f, setF] = useState({
     studentId: initial?.studentId || "",
@@ -2344,29 +2355,6 @@ function ElemDailyModal({ name, d, books = [] }: { name: string; d?: EngDaily; b
   );
 }
 /* 학생 월별 누적 기록 — 출결·숙제·시험·포인트·학습목표 집계 + 날짜별 표. 중고등영어 학생 클릭 시. */
-// 전체 학생 중에서 골라 누적 기록 열기(오늘 안 온 학생도).
-function StudentRecordPicker({ students, onPick }: { students: RosterStudent[]; onPick: (s: RosterStudent) => void }) {
-  const { closeModal } = useStore();
-  const [q, setQ] = useState("");
-  const list = students.filter((s) => !q.trim() || s.name.includes(q.trim()));
-  return (
-    <>
-      <div className="modal-head">
-        <div className="modal-title">학생 기록 찾기</div>
-        <button className="modal-x" onClick={closeModal} aria-label="닫기"><Icon name="x" /></button>
-      </div>
-      <div className="modal-body">
-        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="학생 이름 검색" autoFocus />
-        <div className="eng-rec-list">
-          {list.length === 0 ? <div className="hub-muted" style={{ padding: 10 }}>학생이 없어요.</div> : list.map((s) => (
-            <button key={s.id} className="eng-rec-row" onClick={() => onPick(s)}><span>{s.name}</span><Icon name="chart" /></button>
-          ))}
-        </div>
-      </div>
-      <div className="modal-foot"><button className="btn ghost" onClick={closeModal}>닫기</button></div>
-    </>
-  );
-}
 function StudentMonthlyModal({ studentId, name, naesin }: { studentId: string; name: string; naesin?: EngNaesin }) {
   const { closeModal } = useStore();
   const bodyRef = useRef<HTMLDivElement>(null);

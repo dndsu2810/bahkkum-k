@@ -12,11 +12,13 @@ async function jpost<T = { ok?: boolean; id?: string; error?: string }>(url: str
   return j;
 }
 
+import type { NoticeAudience } from "./notice";
+
 export interface PostFile { name: string; url: string; size: number }
 export interface PostListItem {
   id: string;
   title: string;
-  audience: "staff" | "all";
+  audience: NoticeAudience;
   banner: boolean;
   authorName: string;
   editorName: string;
@@ -47,7 +49,7 @@ export const postApi = {
   list: () => jget<{ posts: PostListItem[] }>("/api/posts").then((j) => j.posts),
   get: (id: string) => jget<{ post: PostDetail }>(`/api/posts/${id}`).then((j) => j.post),
   unseen: () => jget<{ count: number }>("/api/posts/unseen").then((j) => j.count),
-  save: (p: { id?: string; title: string; body: string; files: PostFile[]; audience: "staff" | "all"; banner: boolean }) =>
+  save: (p: { id?: string; title: string; body: string; files: PostFile[]; audience: NoticeAudience; banner: boolean }) =>
     jpost<{ ok?: boolean; id?: string }>("/api/posts", p),
   remove: (id: string) => jpost("/api/posts/delete", { id }),
 };

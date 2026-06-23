@@ -2,6 +2,8 @@
 // 학생: 본인 시간표·커리큘럼 조회 + 본인 일지 입력.
 // 강사/원장: 임의 학생(student_id) 페이지 + 커리큘럼 편집.
 
+import type { MathBoard } from "./baseball";
+
 async function jget<T>(url: string): Promise<T> {
   const r = await fetch(url, { cache: "no-store" });
   if (!r.ok) throw new Error("HTTP " + r.status);
@@ -74,6 +76,7 @@ export interface StudentPageData {
   materials?: { kind: string; name: string }[]; // 배부된 자료(kind: lesson 수업 / hw 숙제). 해제 전까지 계속 표시.
   progressBooks?: string[]; // 진도·교재관리에서 진행중인 교재명
   examMode?: boolean; // 내신모드(중고등) 활성 여부 — 켜지면 교재·진도 칸을 숨긴다
+  mathBoard?: MathBoard | null; // 수학 전광판(수학 수강생만). 아니면 null/없음 → 칩 숨김.
   doneItemOptions?: string[]; // 그 학생의 '오늘 한 것' 선택지(기본+전체공통+학생별)
 }
 

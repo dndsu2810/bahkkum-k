@@ -12,7 +12,10 @@ import { Notices } from "./Notices";
 import { postApi } from "../lib/postApi";
 import { DailyTests } from "./English";
 import { Icon } from "../icons";
-import { HexAvatar, CombGauge, Bee } from "../soez";
+import { HexAvatar, CombGauge, Bee, SoezLogo } from "../soez";
+import { Scoreboard } from "../components/Scoreboard";
+import { baseballApi } from "../lib/baseballApi";
+import type { MathBoard } from "../lib/baseball";
 
 /** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
  *  - 학생 본인: studentId 생략(본인). 일지 입력 가능, 커리큘럼 조회.
@@ -635,6 +638,9 @@ export function StudentHome() {
   const [showGuide, setShowGuide] = useState(false);
   const [showNotice, setShowNotice] = useState(false);
   const [noticeUnseen, setNoticeUnseen] = useState(0);
+  const [board, setBoard] = useState<MathBoard | null>(null); // 수학 전광판(수학생만)
+  const [boardPhoto, setBoardPhoto] = useState(""); // 학생 사진(모달 헤더)
+  const [boardOpen, setBoardOpen] = useState(false);
   const logo = getCachedLogo();
   useEffect(() => {
     let alive = true;
@@ -644,18 +650,41 @@ export function StudentHome() {
     window.addEventListener("posts-seen", onSeen);
     return () => { alive = false; window.removeEventListener("posts-seen", onSeen); };
   }, []);
+  // 본인 수학 전광판 — 선생님이 볼/출결 반영하면 학생 화면에 부드럽게 갱신(15초·focus).
+  useEffect(() => {
+    let alive = true;
+    const load = () => baseballApi.board().then((r) => { if (alive) { setBoard(r.board); setBoardPhoto(r.photo || ""); } }).catch(() => {});
+    void load();
+    const iv = window.setInterval(load, 15000);
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    return () => { alive = false; window.clearInterval(iv); window.removeEventListener("focus", onFocus); };
+  }, []);
+  // 모달 ESC·뒤로가기로 닫기.
+  useEffect(() => {
+    if (!boardOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setBoardOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [boardOpen]);
   return (
     <div className="sp-shell">
       <header className="sp-shell-top">
         <div className="sp-shell-brand">
           {logo.url ? <img className="hub-logo logo-img" src={logo.url} alt="바꿈영수학원" /> : <span className="hub-logo logo-bee"><Bee size={34} /></span>}
           <div>
-            <b className="sp-shell-name">쏘이지</b>
+            <b className="sp-shell-name">바꿈영수학원 <SoezLogo size={18} className="sp-shell-soez" /></b>
             <span>{fmtFull(parseD(todayStr()))}</span>
           </div>
         </div>
         <div className="sp-shell-actions">
           <StudentMessages />
+          {/* 수학 전광판 — 수학 수강생만. 공지사항 옆 상단에. */}
+          {board && (
+            <button className="bb-chip bb-chip-top" onClick={() => setBoardOpen(true)} aria-haspopup="dialog">
+              <span className="bb-chip-ic"><Icon name="baseball" /></span> 수학 전광판
+            </button>
+          )}
           <button className="btn ghost sm" onClick={() => setShowGuide(true)}><Icon name="book" /> 사용 안내</button>
           <button className="btn ghost sm sp-notice-btn" onClick={() => setShowNotice(true)}>
             <Icon name="megaphone" /> 공지사항
@@ -671,6 +700,23 @@ export function StudentHome() {
       </main>
       {user && <div className="sp-shell-foot">{user.name} 학생 · 본인 기록</div>}
       <footer className="maker-credit">제작자 EZ</footer>
+
+      {/* 수학 전광판 모달 — X·바깥 여백·ESC로 닫고, 카드 안쪽은 안 닫힘 */}
+      {boardOpen && board && (
+        <div className="prof-overlay bb-overlay" onClick={() => setBoardOpen(false)} role="dialog" aria-modal="true" aria-label="수학 전광판">
+          <div className="bb-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-x bb-modal-x" onClick={() => setBoardOpen(false)} aria-label="닫기"><Icon name="x" /></button>
+            <div className="bb-modal-head">
+              <HexAvatar name={user?.name || ""} photo={boardPhoto} size={46} />
+              <div>
+                <p className="bb-modal-name">{user?.name}</p>
+                <p className="bb-modal-sub">수학 전광판 · {board.monthLabel.replace("-", ".")}</p>
+              </div>
+            </div>
+            <Scoreboard board={board} />
+          </div>
+        </div>
+      )}
 
       {showIssue && (
         <div className="prof-overlay sp-overlay" onClick={() => setShowIssue(false)}>

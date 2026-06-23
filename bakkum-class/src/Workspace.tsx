@@ -38,6 +38,7 @@ import { NotificationBell } from "./components/NotificationBell";
 import { Materials } from "./screens/Materials";
 import { Guide } from "./screens/Guide";
 import { Meetings } from "./screens/Meetings";
+import { IntegratedMakeup } from "./screens/IntegratedMakeup";
 import { Notices } from "./screens/Notices";
 import { postApi } from "./lib/postApi";
 import { NoticeBanner } from "./components/NoticeBanner";
@@ -530,7 +531,7 @@ export function Workspace() {
             <span className="logo logo-bee" style={logoSize ? { width: logoSize, height: logoSize } : undefined}><Bee size={logoSize ? Math.round(logoSize * 0.95) : 36} title="쏘이지" /></span>
           )}
           <div>
-            <b>쏘이지</b>
+            <b className="brand-name">바꿈영수학원 <SoezLogo size={15} /></b>
             <span>
               {user.name}님{user.role === "admin" ? ` · ${ROLE_LABEL[shownRole(user)]}${user.duty?.length ? ` · ${dutyText(user.duty)}` : ""}` : `, 담당: ${dutyLabel(user)}`}
             </span>
@@ -696,6 +697,7 @@ function Body({ view, cats, jumpStudent, reqPrefill, homeTiles, homeSummary, cta
   if (view === "materials") return <Materials />;
   if (view === "guide") return <Guide />;
   if (view === "meetings") return <Meetings />;
+  if (view === "makeup_all") return <IntegratedMakeup />;
   if (view === "notices") return <Notices />;
   if (view === "board") return <BoardShared />;
   if (view === "notes") return <Notes />;

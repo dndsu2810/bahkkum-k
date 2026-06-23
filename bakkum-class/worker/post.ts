@@ -8,6 +8,16 @@
 import type { Env } from "./index";
 import type { SessionUser } from "./auth";
 import { ensureFeedbackTables } from "./feedback";
+import { noticeVisible, normalizeAudience } from "../src/lib/notice";
+
+async function bandOf(env: Env, sub: string): Promise<string> {
+  try {
+    const r = await env.DB.prepare("SELECT english_band FROM class_student_meta WHERE student_id=?").bind(sub).first<{ english_band: string }>();
+    return String(r?.english_band ?? "");
+  } catch {
+    return "";
+  }
+}
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -58,11 +68,12 @@ async function syncBanner(env: Env, id: string, on: boolean, title: string, audi
   const nid = "post_" + id;
   if (on) {
     const exists = await env.DB.prepare("SELECT id FROM class_notice WHERE id=?").bind(nid).first();
+    const aud = normalizeAudience(audience);
     if (exists) {
-      await env.DB.prepare("UPDATE class_notice SET text=?, active=1, audience=? WHERE id=?").bind(title, audience === "all" ? "all" : "staff", nid).run();
+      await env.DB.prepare("UPDATE class_notice SET text=?, active=1, audience=? WHERE id=?").bind(title, aud, nid).run();
     } else {
       await env.DB.prepare("INSERT INTO class_notice(id,text,level,active,start_date,end_date,created_at,created_by,audience) VALUES(?,?,?,?,?,?,?,?,?)")
-        .bind(nid, title, "info", 1, "", "", Date.now(), author, audience === "all" ? "all" : "staff").run();
+        .bind(nid, title, "info", 1, "", "", Date.now(), author, aud).run();
     }
   } else {
     await env.DB.prepare("DELETE FROM class_notice WHERE id=?").bind(nid).run();
@@ -74,13 +85,14 @@ export async function handlePost(env: Env, request: Request, p: string, me: Sess
   await ensurePostTables(env);
   const isStaff = me.role !== "student";
 
-  // 목록 — 학생은 audience='all'만. 읽음 여부 포함.
+  // 목록 — 학생은 본인 대상(audience)만. 읽음 여부 포함.
   if (p === "/api/posts" && m === "GET") {
-    const q = isStaff
-      ? env.DB.prepare("SELECT id,title,audience,banner,author_name,editor_name,files,created_at,updated_at FROM class_post ORDER BY updated_at DESC LIMIT 300")
-      : env.DB.prepare("SELECT id,title,audience,banner,author_name,editor_name,files,created_at,updated_at FROM class_post WHERE audience='all' ORDER BY updated_at DESC LIMIT 300");
-    const r = await q.all<Record<string, unknown>>();
-    const rows = r.results || [];
+    const r = await env.DB.prepare("SELECT id,title,audience,banner,author_name,editor_name,files,created_at,updated_at FROM class_post ORDER BY updated_at DESC LIMIT 300").all<Record<string, unknown>>();
+    let rows = r.results || [];
+    if (!isStaff) {
+      const band = await bandOf(env, me.sub);
+      rows = rows.filter((row) => noticeVisible(String(row.audience ?? "staff"), { isStudent: true, band }));
+    }
     const readSet = new Set<string>();
     try {
       const rr = await env.DB.prepare("SELECT post_id FROM class_post_read WHERE user_sub=?").bind(me.sub).all<{ post_id: string }>();
@@ -89,13 +101,21 @@ export async function handlePost(env: Env, request: Request, p: string, me: Sess
     return json({ posts: rows.map((row) => listRow(row, readSet.has(String(row.id)))) });
   }
 
-  // 미열람 개수(배지) — 학생은 전체공개분만.
+  // 미열람 개수(배지) — 학생은 본인 대상분만.
   if (p === "/api/posts/unseen" && m === "GET") {
-    const q = isStaff
-      ? env.DB.prepare("SELECT COUNT(*) n FROM class_post WHERE id NOT IN (SELECT post_id FROM class_post_read WHERE user_sub=?)").bind(me.sub)
-      : env.DB.prepare("SELECT COUNT(*) n FROM class_post WHERE audience='all' AND id NOT IN (SELECT post_id FROM class_post_read WHERE user_sub=?)").bind(me.sub);
-    const r = await q.first<{ n: number }>();
-    return json({ count: Number(r?.n) || 0 });
+    if (isStaff) {
+      const r = await env.DB.prepare("SELECT COUNT(*) n FROM class_post WHERE id NOT IN (SELECT post_id FROM class_post_read WHERE user_sub=?)").bind(me.sub).first<{ n: number }>();
+      return json({ count: Number(r?.n) || 0 });
+    }
+    const band = await bandOf(env, me.sub);
+    const all = await env.DB.prepare("SELECT id,audience FROM class_post").all<{ id: string; audience: string }>();
+    const readSet = new Set<string>();
+    try {
+      const rr = await env.DB.prepare("SELECT post_id FROM class_post_read WHERE user_sub=?").bind(me.sub).all<{ post_id: string }>();
+      for (const x of rr.results || []) readSet.add(String(x.post_id));
+    } catch { /* ignore */ }
+    const count = (all.results || []).filter((row) => noticeVisible(String(row.audience ?? "staff"), { isStudent: true, band }) && !readSet.has(String(row.id))).length;
+    return json({ count });
   }
 
   // 상세 — 읽음 처리.
@@ -103,7 +123,7 @@ export async function handlePost(env: Env, request: Request, p: string, me: Sess
     const id = p.split("/").pop()!;
     const row = await env.DB.prepare("SELECT * FROM class_post WHERE id=?").bind(id).first<Record<string, unknown>>();
     if (!row) return json({ error: "not_found" }, 404);
-    if (!isStaff && String(row.audience) !== "all") return json({ error: "forbidden" }, 403);
+    if (!isStaff && !noticeVisible(String(row.audience ?? "staff"), { isStudent: true, band: await bandOf(env, me.sub) })) return json({ error: "forbidden" }, 403);
     try { await env.DB.prepare("INSERT OR IGNORE INTO class_post_read(post_id,user_sub,read_at) VALUES(?,?,?)").bind(id, me.sub, Date.now()).run(); } catch { /* ignore */ }
     return json({ post: {
       ...listRow(row, true),
@@ -120,7 +140,7 @@ export async function handlePost(env: Env, request: Request, p: string, me: Sess
     const title = String(b.title || "").trim().slice(0, 200);
     if (!title) return json({ error: "title_required" }, 400);
     const body = String(b.body || "").slice(0, 200000);
-    const audience = String(b.audience) === "all" ? "all" : "staff";
+    const audience = normalizeAudience(b.audience);
     const banner = b.banner ? 1 : 0;
     const files = JSON.stringify(parseFiles(b.files).slice(0, 30));
     const now = Date.now();

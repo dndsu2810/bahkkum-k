@@ -5,6 +5,17 @@
 import type { Env } from "./index";
 import type { SessionUser } from "./auth";
 import { sendKakao } from "./kakao";
+import { noticeVisible, normalizeAudience } from "../src/lib/notice";
+
+/** 학생의 영어 band(elem/mid/bridge) — 공지 대상 필터용. */
+async function bandOf(env: Env, sub: string): Promise<string> {
+  try {
+    const r = await env.DB.prepare("SELECT english_band FROM class_student_meta WHERE student_id=?").bind(sub).first<{ english_band: string }>();
+    return String(r?.english_band ?? "");
+  } catch {
+    return "";
+  }
+}
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -106,7 +117,9 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
     let list = (r.results || [])
       .map(noticeRow)
       .filter((n) => (!n.startDate || n.startDate <= today) && (!n.endDate || n.endDate >= today));
-    if (me.role === "student") list = list.filter((n) => n.audience === "all");
+    const isStudent = me.role === "student";
+    const band = isStudent ? await bandOf(env, me.sub) : "";
+    list = list.filter((n) => noticeVisible(n.audience, { isStudent, band }));
     return json({ notices: list });
   }
   if (p === "/api/notice/all" && m === "GET") {
@@ -119,7 +132,7 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
     const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const id = String(b.id || "") || newId("ntc");
     const level = ["info", "warn"].includes(String(b.level)) ? String(b.level) : "info";
-    const audience = String(b.audience) === "all" ? "all" : "staff";
+    const audience = normalizeAudience(b.audience);
     const active = b.active ? 1 : 0;
     const exists = await env.DB.prepare("SELECT id FROM class_notice WHERE id=?").bind(id).first();
     if (exists) {

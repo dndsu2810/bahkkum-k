@@ -1,5 +1,7 @@
 // 공지 배너 + 오류·개선 요청 API.
 
+import type { NoticeAudience } from "./notice";
+
 async function jget<T>(url: string): Promise<T> {
   const r = await fetch(url, { cache: "no-store" });
   if (!r.ok) throw new Error("HTTP " + r.status);
@@ -21,7 +23,7 @@ export interface Notice {
   endDate: string;
   createdAt: number;
   createdBy: string;
-  audience: "all" | "staff"; // all=학생 포함 전체, staff=강사만
+  audience: NoticeAudience; // 노출 대상(전체/강사/학생/초등/중고등)
 }
 export interface IssueReply {
   id: string;
@@ -67,7 +69,7 @@ export const feedbackApi = {
   notices: () => jget<{ notices: Notice[] }>("/api/notice").then((j) => j.notices),
   /** 전체 공지(원장). */
   noticesAll: () => jget<{ notices: Notice[] }>("/api/notice/all").then((j) => j.notices),
-  saveNotice: (n: { id?: string; text: string; level: "info" | "warn"; active: boolean; audience?: "all" | "staff"; startDate?: string; endDate?: string }) =>
+  saveNotice: (n: { id?: string; text: string; level: "info" | "warn"; active: boolean; audience?: NoticeAudience; startDate?: string; endDate?: string }) =>
     jpost("/api/notice", n),
   removeNotice: (id: string) => jpost("/api/notice/delete", { id }),
 

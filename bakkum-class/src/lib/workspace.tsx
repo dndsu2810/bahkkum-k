@@ -32,6 +32,7 @@ const MATH: WsEntry[] = [
   { key: "homework", label: "숙제 기록", icon: "book", kind: "math", page: "homework" },
   { key: "progress", label: "진도·교재관리", icon: "chart", kind: "math", page: "progress" },
   { key: "tests", label: "테스트 기록", icon: "cap", kind: "math", page: "tests" },
+  { key: "baseball", label: "수학 야구", icon: "baseball", kind: "math", page: "baseball" },
   { key: "students", label: "학생 관리", icon: "students", kind: "math", page: "students" },
   { key: "makeup", label: "보강 관리", icon: "refresh", kind: "math", page: "makeup" },
   { key: "report", label: "수학 월말리포트", icon: "fileText", kind: "math", page: "report" },
@@ -86,6 +87,7 @@ const ORDERS: WsEntry = { key: "orders", label: "주문 관리", icon: "copy", k
 const CHECKIN_REPORT: WsEntry = { key: "checkin_report", label: "수업시간 리포트", icon: "chart", kind: "hub" };
 const GUIDE: WsEntry = { key: "guide", label: "사용 가이드", icon: "book", kind: "hub" };
 const MEETINGS: WsEntry = { key: "meetings", label: "회의록", icon: "minutes", kind: "hub" };
+const MAKEUP_ALL: WsEntry = { key: "makeup_all", label: "통합 보강관리", icon: "refresh", kind: "hub" };
 const ACCOUNTS: WsEntry = { key: "accounts", label: "강사 관리", icon: "users", kind: "hub" };
 const ADMIN_DASH: WsEntry = { key: "admin_dash", label: "원장 대시보드", icon: "dashboard", kind: "hub" };
 const SETTINGS: WsEntry = { key: "settings", label: "설정", icon: "gear", kind: "hub" };
@@ -130,6 +132,7 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   if (isTeacher) common.push(POINT_CATALOG);
   if (isTeacher) common.push(MATERIALS);
   common.push(ORDERS); // 교재·비품 주문 관리 — 공통(모든 스태프).
+  if (isTeacher) common.push(MAKEUP_ALL); // 통합 보강관리 — 수학·영어 보강 모아보기(강사·원장).
   common.push(REQS);
   if (areas.has("wiki")) common.push(WIKI);
   if (areas.has("sns")) common.push(SNS);

@@ -6,6 +6,7 @@ import { RichEditor } from "../components/RichEditor";
 import { fmtWhen } from "../lib/dates";
 import { Icon } from "../icons";
 import { EmptyHive } from "../soez";
+import { NOTICE_AUDIENCES, audienceLabel, type NoticeAudience } from "../lib/notice";
 
 type Mode = { kind: "list" } | { kind: "detail"; id: string } | { kind: "edit"; id?: string };
 
@@ -61,7 +62,7 @@ function NoticeList({ readOnly, onNew, onOpen }: { readOnly?: boolean; onNew: ()
                 <div className="mt-card-titrow">
                   {!n.read && <span className="po-new">N</span>}
                   {n.banner && <span className="po-banner">배너</span>}
-                  <span className={"mt-cat " + (n.audience === "all" ? "" : "po-staff")}>{n.audience === "all" ? "전체" : "강사만"}</span>
+                  <span className={"mt-cat " + (n.audience === "all" ? "" : "po-staff")}>{audienceLabel(n.audience)}</span>
                   <b className="mt-card-title">{n.title}</b>
                 </div>
                 <span className="mt-card-date">{fmtWhen(n.createdAt)}</span>
@@ -109,7 +110,7 @@ function NoticeDetail({ id, readOnly, onBack, onEdit }: { id: string; readOnly?:
           <button className="mt-back" onClick={onBack}><Icon name="chev" /> 목록으로</button>
           <div className="mt-card-titrow">
             {post.banner && <span className="po-banner">배너</span>}
-            <span className={"mt-cat " + (post.audience === "all" ? "" : "po-staff")}>{post.audience === "all" ? "전체" : "강사만"}</span>
+            <span className={"mt-cat " + (post.audience === "all" ? "" : "po-staff")}>{audienceLabel(post.audience)}</span>
             <h1 className="sm-title">{post.title}</h1>
           </div>
           <p className="sm-desc">{post.authorName} · {fmtWhen(post.createdAt)}{post.editorName && ` · 수정 ${post.editorName}`}</p>
@@ -144,7 +145,7 @@ function NoticeEditor({ id, onDone, onCancel }: { id?: string; onDone: () => voi
   const [loaded, setLoaded] = useState(!editing);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [audience, setAudience] = useState<"staff" | "all">("staff");
+  const [audience, setAudience] = useState<NoticeAudience>("staff");
   const [banner, setBanner] = useState(false);
   const [files, setFiles] = useState<PostFile[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -177,8 +178,7 @@ function NoticeEditor({ id, onDone, onCancel }: { id?: string; onDone: () => voi
 
   async function save() {
     if (!title.trim()) { setErr("제목을 입력해 주세요."); return; }
-    const scope = audience === "all" ? "학생 포함 전체" : "강사만";
-    const ok = window.confirm(`이 공지를 등록할까요?\n\n공개 범위: ${scope}\n${banner ? "상단 공지 배너로도 띄웁니다." : "배너로는 띄우지 않습니다."}`);
+    const ok = window.confirm(`이 공지를 등록할까요?\n\n공개 범위: ${audienceLabel(audience)}\n${banner ? "상단 공지 배너로도 띄웁니다." : "배너로는 띄우지 않습니다."}`);
     if (!ok) return;
     setSaving(true);
     try {
@@ -230,8 +230,9 @@ function NoticeEditor({ id, onDone, onCancel }: { id?: string; onDone: () => voi
         <div className="mt-f">
           <span>공개 범위</span>
           <div className="mt-att-chips">
-            <button type="button" className={"mt-chip" + (audience === "staff" ? " on" : "")} onClick={() => setAudience("staff")}>강사만</button>
-            <button type="button" className={"mt-chip" + (audience === "all" ? " on" : "")} onClick={() => setAudience("all")}>학생 포함 전체</button>
+            {NOTICE_AUDIENCES.map((a) => (
+              <button key={a.v} type="button" className={"mt-chip" + (audience === a.v ? " on" : "")} onClick={() => setAudience(a.v)} title={a.hint}>{a.label}</button>
+            ))}
           </div>
         </div>
 

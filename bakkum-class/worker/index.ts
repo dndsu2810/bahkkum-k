@@ -66,6 +66,7 @@ import {
 } from "./auth";
 import { handleHub, ensureHubTables } from "./hub";
 import { handleEng, handleStudent, ensureEngTables } from "./eng";
+import { handleBaseball } from "./baseball";
 import { handleFeedback } from "./feedback";
 import { handleMessages } from "./message";
 import { handleCheckin } from "./checkin";
@@ -117,6 +118,11 @@ export default {
         // 교재·비품 주문 관리 — 스태프 전용(핸들러 내부에서 세션 확인).
         if (p.startsWith("/api/orders")) {
           const res = await handleOrders(env, request, p);
+          if (res) return res;
+        }
+        // 수학 야구(전광판) — 권한은 핸들러 내부에서 확인(학생은 본인 board만).
+        if (p.startsWith("/api/baseball")) {
+          const res = await handleBaseball(env, request, p, await readSession(env, request));
           if (res) return res;
         }
 
