@@ -7,6 +7,8 @@ import { Icon } from "../icons";
 
 const HW_STATUS_LABEL: Record<string, string> = { pending: "검사 전", done: "검사완료", late: "지연" };
 const mdDate = (d: string) => (d && d.length >= 10 ? `${+d.slice(5, 7)}/${+d.slice(8, 10)}` : "—");
+// 숙제 영역 태그 — [오늘] 내주기와 동일 라벨.
+const AREA_TAGS = ["개념", "연산", "복습", "오답", "심화", "활용", "사고력", "서술형", "수학익힘"];
 
 /**
  * 수학 숙제 기록 — 중고등영어 숙제기록과 동일 레이아웃.
@@ -17,6 +19,8 @@ export function Homework() {
   const [sel, setSel] = useState("");
   const [q, setQ] = useState("");
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
+  const [bookDraft, setBookDraft] = useState<Record<string, string>>({});
+  const [pctDraft, setPctDraft] = useState<Record<string, string>>({});
 
   const students = useMemo(
     () => activeStudents(data.students).slice().sort((a, b) => a.name.localeCompare(b.name, "ko")),
@@ -46,6 +50,25 @@ export function Homework() {
   async function patch(h: HwLog, fn: (x: HwLog) => void) {
     const ok = await mutateAsync((d) => apply(d, h.id, fn));
     if (!ok) toast("저장하지 못했어요 · 잠시 후 다시 시도해 주세요");
+  }
+  // 교재명 — 입력 중엔 draft, 포커스 아웃 때 저장(키 입력마다 저장 방지).
+  function commitBook(h: HwLog) {
+    const v = bookDraft[h.id];
+    setBookDraft((m) => { const n = { ...m }; delete n[h.id]; return n; });
+    if (v === undefined || v.trim() === h.book) return;
+    patch(h, (x) => { x.book = v.trim(); });
+  }
+  // 진행(완성도 %) — 0~100으로 보정 후 저장.
+  function commitPct(h: HwLog) {
+    const raw = pctDraft[h.id];
+    setPctDraft((m) => { const n = { ...m }; delete n[h.id]; return n; });
+    if (raw === undefined) return;
+    const v = Math.max(0, Math.min(100, Math.round(+raw) || 0));
+    if (v !== h.completion) patch(h, (x) => { x.completion = v; });
+  }
+  // 영역 태그 토글.
+  function toggleTag(h: HwLog, t: string) {
+    patch(h, (x) => { x.tags = x.tags.includes(t) ? x.tags.filter((g) => g !== t) : [...x.tags, t]; });
   }
   function remove(h: HwLog) {
     if (!window.confirm(`'${h.book || "이 숙제"}' 기록을 삭제할까요?`)) return;
@@ -107,9 +130,35 @@ export function Homework() {
                               {rows.map((h) => (
                                 <tr key={h.id}>
                                   <td className="eng-hwt-date">{mdDate(h.date)}</td>
-                                  <td className="math-hwt-book">{h.book || "—"}</td>
-                                  <td className="math-hwt-tags">{h.tags.length ? h.tags.join(", ") : "—"}</td>
-                                  <td className="eng-hwt-prog">{h.completion ? h.completion + "%" : "—"}</td>
+                                  <td className="math-hwt-book">
+                                    <input
+                                      className="math-hwt-input"
+                                      value={bookDraft[h.id] ?? h.book}
+                                      placeholder="교재"
+                                      onChange={(e) => setBookDraft((m) => ({ ...m, [h.id]: e.target.value }))}
+                                      onBlur={() => commitBook(h)}
+                                      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                                    />
+                                  </td>
+                                  <td className="math-hwt-tags">
+                                    <span className="today-tagchips hwt-tagchips">
+                                      {AREA_TAGS.map((t) => (
+                                        <button key={t} className={h.tags.includes(t) ? "on" : ""} onClick={() => toggleTag(h, t)}>{t}</button>
+                                      ))}
+                                    </span>
+                                  </td>
+                                  <td className="eng-hwt-prog">
+                                    <input
+                                      className="math-hwt-pctinput"
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      value={pctDraft[h.id] ?? (h.completion || "")}
+                                      onChange={(e) => setPctDraft((m) => ({ ...m, [h.id]: e.target.value }))}
+                                      onBlur={() => commitPct(h)}
+                                      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                                    />%
+                                  </td>
                                   <td>
                                     <select className="math-hwt-sel" value={h.status} onChange={(e) => patch(h, (x) => { x.status = (e.target.value as HwLog["status"]) || "pending"; })}>
                                       {(["pending", "done", "late"] as const).map((s) => <option key={s} value={s}>{HW_STATUS_LABEL[s]}</option>)}

@@ -1670,11 +1670,18 @@ button.eng-wnm.is-link:hover{text-decoration:underline;filter:brightness(.92)}
 .eng-hwt-date{text-align:left;font-weight:600;color:var(--ink2);white-space:nowrap}
 .eng-hwt-prog{font-weight:700;color:var(--brand-d)}
 .eng-hwt-chk{color:var(--ok);font-weight:800}
-/* 수학 숙제기록 표 — 교재/태그 좌측정렬, 상태 셀렉트, 삭제 */
-.math-hwt{max-width:620px}
-.math-hwt-book{text-align:left;font-weight:600;color:var(--ink);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 수학 숙제기록 표 — 교재/태그 좌측정렬, 상태 셀렉트, 삭제. 셀은 인라인 편집 가능. */
+.math-hwt{max-width:760px}
+.math-hwt-book{text-align:left;font-weight:600;color:var(--ink);width:200px}
 .math-hwt-tags{text-align:left;color:var(--ink3);font-size:var(--t-cap)}
 .math-hwt-sel{font-size:var(--t-cap);border:1px solid var(--line2);border-radius:var(--r-sm);padding:4px 6px;background:var(--card2);color:var(--ink)}
+.math-hwt-input{width:100%;border:1px solid var(--line2);border-radius:var(--r-sm);padding:5px 7px;background:var(--card2);color:var(--ink);font-size:var(--t-cap);font-weight:600}
+.math-hwt-input:focus{border-color:var(--brand-line);outline:none}
+.math-hwt-pctinput{width:52px;border:1px solid var(--line2);border-radius:var(--r-sm);padding:5px 6px;background:var(--card2);color:var(--brand-d);font-weight:700;font-size:var(--t-cap);text-align:center}
+.math-hwt-pctinput:focus{border-color:var(--brand-line);outline:none}
+/* 표 안 영역태그 칩 — 내주기 칩보다 작게(행 높이 절약) */
+.hwt-tagchips{margin-top:0;gap:4px}
+.hwt-tagchips button{min-height:26px;padding:0 9px;font-size:11px}
 .ci-del-x{border:none;background:transparent;color:var(--ink4);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px}
 .ci-del-x:hover{background:var(--hover,#FBF6EA);color:var(--bad)}
 .eng-hwc{font-size:11px;font-weight:700;border-radius:var(--r-sm);padding:2px 8px}
