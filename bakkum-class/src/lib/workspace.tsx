@@ -101,14 +101,16 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   const role = user.role;
   const groups: WsGroup[] = [];
 
-  // 상단(무제목): 홈 + 학원 일정(공용) + 업무 보드
+  // 상단(무제목): 홈 + 학원 일정(공용)
   const top: WsEntry[] = [HOME, SCHEDULE];
-  if (areas.has("board")) top.push(BOARD);
-  top.push(NOTICES); // 공지사항 — 강사 업무 보드 밑(모든 스태프).
+  top.push(NOTICES); // 공지사항 — 모든 스태프.
   groups.push({ entries: top });
 
-  // 수학 수업관리
-  if (areas.has("math")) groups.push({ label: "수학 수업관리", entries: MATH });
+  // 수학 수업관리 — 강사 업무 보드를 이 그룹 맨 위로(수학·원장만 열람).
+  if (areas.has("math")) {
+    const mathEntries = areas.has("board") ? [BOARD, ...MATH] : MATH;
+    groups.push({ label: "수학 수업관리", entries: mathEntries });
+  }
 
   // 영어 수업관리 — 영어 강사 + 원장(전체 열람). 원장은 초등·중고등 모두 본다.
   if (role === "english_mid" || role === "admin") groups.push({ label: "영어 수업관리 (중고등)", entries: engEntries("mid") });
