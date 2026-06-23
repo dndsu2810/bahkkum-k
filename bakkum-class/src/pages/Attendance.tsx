@@ -82,9 +82,16 @@ export function Attendance() {
   // 출석 적립 점수(카탈로그) 로드 — 수학도 '포인트 항목' 점수로 적립(키오스크 반영).
   useEffect(() => { void loadPointCatalog(); }, []);
   const attSummary = (rows: { rec: { status: string } }[]) => {
-    let o = 0, l = 0, a = 0;
-    for (const r of rows) r.rec.status === "출석" ? o++ : r.rec.status === "지각" ? l++ : a++;
-    return [o && `출석 ${o}`, l && `지각 ${l}`, a && `결석 ${a}`].filter(Boolean).join(" · ");
+    let o = 0, l = 0, e = 0, a = 0, m = 0; // 출석·지각·조퇴·결석(결석+무단결석)·보강 — 보강은 결석과 분리해서 센다.
+    for (const r of rows) {
+      const st = r.rec.status;
+      if (st === "출석") o++;
+      else if (st === "지각") l++;
+      else if (st === "조퇴") e++;
+      else if (st === "보강") m++;
+      else a++; // 결석·무단결석
+    }
+    return [o && `출석 ${o}`, l && `지각 ${l}`, e && `조퇴 ${e}`, a && `결석 ${a}`, m && `보강 ${m}`].filter(Boolean).join(" · ");
   };
 
   const holiday = holidayName(attDate);
