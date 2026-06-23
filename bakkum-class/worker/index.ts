@@ -1601,6 +1601,32 @@ async function importEngTimetable(env: Env, request: Request): Promise<Response>
 }
 
 // 노션 과제기록(중고등영어 단어·리딩·문법 숙제) → class_eng_daily 가져오기(이름 매칭, 숙제 칸만 갱신).
+// 노션 이름 → 앱 students.id 매칭기.
+// 앱 이름이 "한글 English"(예: "노유찬 Michael")인데 노션 수업일지·수업기록 제목은
+// 한글만("노유찬")인 경우가 있어, 정확히 일치하지 않으면 '한글 첫 토큰'으로 보조 매칭한다.
+// 한 한글 이름에 후보가 둘 이상이면(동명이인) 모호하므로 매칭하지 않는다.
+function buildStudentResolver(rows: { id: number; name: string }[]): (notionName: string) => string | undefined {
+  const exact = new Map<string, string>();
+  const byKor = new Map<string, string>();
+  const korDup = new Set<string>();
+  for (const r of rows) {
+    const full = String(r.name).trim();
+    if (!full) continue;
+    const id = String(r.id);
+    if (!exact.has(full)) exact.set(full, id);
+    const kor = full.split(/\s+/)[0];
+    if (kor && kor !== full) {
+      if (byKor.has(kor) && byKor.get(kor) !== id) korDup.add(kor);
+      else byKor.set(kor, id);
+    }
+  }
+  return (notionName: string) => {
+    const n = (notionName || "").trim();
+    if (!n) return undefined;
+    return exact.get(n) || (korDup.has(n) ? undefined : byKor.get(n));
+  };
+}
+
 async function importEngDaily(env: Env): Promise<Response> {
   await ensureEngTables(env);
   let rows;
@@ -1610,13 +1636,12 @@ async function importEngDaily(env: Env): Promise<Response> {
     return json({ error: String(e) }, 500);
   }
   const nameRows = await env.DB.prepare("SELECT id, name FROM students WHERE hidden IS NULL OR hidden = 0").all<{ id: number; name: string }>();
-  const idByName = new Map<string, string>();
-  for (const r of nameRows.results || []) idByName.set(String(r.name).trim(), String(r.id));
+  const resolve = buildStudentResolver(nameRows.results || []);
   const stmts: D1PreparedStatement[] = [];
   let imported = 0;
   const unmatched = new Set<string>();
   for (const hw of rows) {
-    const sid = idByName.get(hw.studentName.trim());
+    const sid = resolve(hw.studentName);
     if (!sid) {
       unmatched.add(hw.studentName);
       continue;
@@ -1648,13 +1673,12 @@ async function importEngAttendance(env: Env): Promise<Response> {
     return json({ error: String(e) }, 500);
   }
   const nameRows = await env.DB.prepare("SELECT id, name FROM students WHERE hidden IS NULL OR hidden = 0").all<{ id: number; name: string }>();
-  const idByName = new Map<string, string>();
-  for (const r of nameRows.results || []) idByName.set(String(r.name).trim(), String(r.id));
+  const resolve = buildStudentResolver(nameRows.results || []);
   const stmts: D1PreparedStatement[] = [];
   let imported = 0;
   const unmatched = new Set<string>();
   for (const a of rows) {
-    const sid = idByName.get(a.studentName.trim());
+    const sid = resolve(a.studentName);
     if (!sid) {
       unmatched.add(a.studentName);
       continue;
@@ -1687,13 +1711,12 @@ async function importElemLog(env: Env): Promise<Response> {
     return json({ error: String(e) }, 500);
   }
   const nameRows = await env.DB.prepare("SELECT id, name FROM students WHERE hidden IS NULL OR hidden = 0").all<{ id: number; name: string }>();
-  const idByName = new Map<string, string>();
-  for (const r of nameRows.results || []) idByName.set(String(r.name).trim(), String(r.id));
+  const resolve = buildStudentResolver(nameRows.results || []);
   const stmts: D1PreparedStatement[] = [];
   let imported = 0;
   const unmatched = new Set<string>();
   for (const a of rows) {
-    const sid = idByName.get(a.studentName.trim());
+    const sid = resolve(a.studentName);
     if (!sid) { unmatched.add(a.studentName); continue; }
     imported++;
     const comment = [a.comment, a.time ? `시간 ${a.time}` : ""].filter(Boolean).join(" · ");
