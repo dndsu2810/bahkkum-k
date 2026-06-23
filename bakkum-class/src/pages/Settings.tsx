@@ -271,29 +271,29 @@ export function Settings({
   );
 }
 
-/* 영어 노션 가져오기 — 초등 수업일지·영어 출결·영어 숙제만(추가·갱신, 삭제 없음·멱등).
- * 전체 노션 가져오기 UI는 2026-06-18 제거됨(실수 덮어쓰기 방지). 이건 안전한 영어 항목만 노출. */
+/* 초등영어 노션 가져오기 — 초등 수업일지만(추가·갱신, 삭제 없음·멱등).
+ * 전체 노션 가져오기 UI는 2026-06-18 제거됨(실수 덮어쓰기 방지). 이건 초등 수업일지만 노출. */
 function EngImportSetting() {
   const [steps, setSteps] = useState<SyncStep[]>([]);
   const [busy, setBusy] = useState(false);
   async function run() {
     if (busy) return;
-    if (!window.confirm("노션에서 영어 기록(초등 수업일지·영어 출결·영어 숙제)을 가져올까요?\n이름·날짜로 맞춰 추가·갱신만 해요(삭제 없음). 여러 번 눌러도 안전해요.")) return;
+    if (!window.confirm("노션에서 초등영어 수업일지를 가져올까요?\n이름·날짜로 맞춰 추가·갱신만 해요(삭제 없음). 여러 번 눌러도 안전해요.")) return;
     setBusy(true);
     try {
-      await syncAllFromNotion((s) => setSteps(s), ["engDaily", "engAtt", "elemLog"]);
+      await syncAllFromNotion((s) => setSteps(s), ["elemLog"]);
     } finally {
       setBusy(false);
     }
   }
   return (
     <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
-      <div className="card-title" style={{ marginBottom: 6 }}>영어 노션 가져오기</div>
+      <div className="card-title" style={{ marginBottom: 6 }}>초등영어 노션 가져오기</div>
       <div className="page-desc" style={{ marginBottom: 12 }}>
-        노션의 <b>초등 수업일지·영어 출결·영어 숙제</b>를 앱으로 가져와요. 이름·날짜로 맞춰 추가·갱신만 하고(삭제 없음), 여러 번 눌러도 안전해요. 원장 전용.
+        노션의 <b>초등 수업일지</b>를 앱으로 가져와요(진도·단어시험·체크·출석). 이름·날짜로 맞춰 추가·갱신만 하고(삭제 없음), 여러 번 눌러도 안전해요. 중고등 영어는 건드리지 않아요. 원장 전용.
       </div>
       <button className="btn primary" onClick={run} disabled={busy}>
-        {busy ? "가져오는 중…" : "영어 기록 가져오기"}
+        {busy ? "가져오는 중…" : "초등영어 수업일지 가져오기"}
       </button>
       {steps.length > 0 && (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
