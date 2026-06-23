@@ -21,12 +21,15 @@ export function StudentTable({
   withActions,
   onEdit,
   onPatch,
+  onRowClick,
 }: {
   list: Student[];
   withActions: boolean;
   onEdit?: (id: string) => void;
   /** 인라인 저장. 성공 true / 실패 false(호출 측이 원래 값으로 되돌림). */
   onPatch?: (id: string, field: EditField, value: string, orig: string) => Promise<boolean>;
+  /** 행 클릭(비편집 모드) — 학생 상세 보기 등. editable이면 onEdit이 우선. */
+  onRowClick?: (id: string) => void;
 }) {
   const editable = withActions && !!onPatch;
   const [edit, setEdit] = useState<{ id: string; field: EditField } | null>(null);
@@ -189,7 +192,7 @@ export function StudentTable({
         {list.map((s) => {
           const chips = lessonDays(s);
           return (
-            <tr key={s.id} className={editable ? "tbl-row-click" : undefined} onClick={editable ? () => onEdit?.(s.id) : undefined}>
+            <tr key={s.id} className={(editable || onRowClick) ? "tbl-row-click" : undefined} onClick={editable ? () => onEdit?.(s.id) : onRowClick ? () => onRowClick(s.id) : undefined}>
               <td>
                 {editable ? (
                   <TextCell id={s.id} field="name"><span className="t-name">{s.name}</span></TextCell>

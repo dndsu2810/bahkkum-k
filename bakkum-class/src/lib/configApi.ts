@@ -40,6 +40,8 @@ export async function getSecretSet(): Promise<string[]> {
 
 export async function setConfig(patch: Record<string, string>): Promise<void> {
   const r = await fetch("/api/config", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) });
+  // 권한이 없으면(원장 전용 설정) 조용히 실패하지 않고 사람 말로 알려준다.
+  if (r.status === 403) throw new Error("이 설정은 원장님 계정에서 바꿀 수 있어요.");
   if (!r.ok) throw new Error("HTTP " + r.status);
   // 로고를 바꾸면 캐시도 즉시 갱신(스플래시·로그인 화면에 바로 반영).
   if ("logoUrl" in patch || "logoSize" in patch) {
@@ -54,4 +56,13 @@ export async function uploadImage(file: File): Promise<string> {
   const j = (await r.json().catch(() => ({}))) as { url?: string; error?: string };
   if (!r.ok || !j.url) throw new Error(j.error || "upload_failed");
   return j.url;
+}
+
+/** 링크 미리보기(북마크 카드)용 메타데이터. 서버가 대상 페이지의 og 태그를 읽어 돌려줌. */
+export interface LinkMeta { url: string; title: string; desc: string; image: string; site: string }
+export async function linkMeta(url: string): Promise<LinkMeta> {
+  const r = await fetch("/api/linkmeta?url=" + encodeURIComponent(url));
+  const j = (await r.json().catch(() => ({}))) as Partial<LinkMeta> & { error?: string };
+  if (!r.ok || !j.url) throw new Error(j.error || "linkmeta_failed");
+  return { url: j.url, title: j.title || j.site || url, desc: j.desc || "", image: j.image || "", site: j.site || "" };
 }

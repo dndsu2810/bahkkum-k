@@ -55,7 +55,9 @@ export interface EngDaily {
   points: number;
   note: string;
   // 초등영어 수업일지 — 원서진도번호·단어시험·활동 체크리스트.
+  // 중고등영어 진도: bookNo='오늘 한 것', bookNext='다음에 할 것'(예고).
   bookNo: string;
+  bookNext: string;
   wordTest: string;
   doneItems: string[];
   comment: string; // 수업 코멘트(학생은 읽기 전용)

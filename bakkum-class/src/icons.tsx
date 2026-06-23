@@ -21,6 +21,7 @@ const paths: Record<string, ReactNode> = {
     </>
   ),
   x: <path d="M18 6 6 18M6 6l12 12" />,
+  menu: <path d="M3 6h18M3 12h18M3 18h18" />,
   check: <path d="M20 6 9 17l-5-5" />,
   users: (
     <>

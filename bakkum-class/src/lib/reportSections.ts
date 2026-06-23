@@ -8,7 +8,7 @@ export const SECTION_LABELS: Record<SectionKey, string> = {
   attendance: "월간 출결 현황",
   evals: "평가 결과 상세",
   homework: "숙제 및 수행 기록",
-  supplements: "보충수업 현황",
+  supplements: "1:1 보충학습",
 };
 
 export const DEFAULT_ORDER: SectionKey[] = ["summary", "comment", "progress", "attendance", "evals", "homework", "supplements"];

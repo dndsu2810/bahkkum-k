@@ -7,7 +7,7 @@ import { applyMakeup, findBoKey } from "../lib/attendanceLogic";
 import { holidayName } from "../lib/holidays";
 import { awardPoints, pushAttendanceNotion, pushHomeworkNotion, attendancePoints, loadPointCatalog } from "../api";
 import { GradeBadge, Empty } from "../components/ui";
-import { TestModal, StudentModal } from "../components/modals";
+import { MathMonthlyModal } from "../components/modals";
 import { TodayTests, SupLearn } from "../components/TodayTests";
 import { Icon } from "../icons";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
@@ -27,6 +27,8 @@ interface DayEntry {
   time: string;
   lesson?: LessonOnDate;
   makeups: Makeup[];
+  /** 예정에 없던 학생을 검색해 직접 추가한 카드(이 화면에서만). */
+  extra?: boolean;
 }
 
 // 출결 선택지 — 출결 기록 페이지와 동일(출석·지각·결석 + 조퇴·무단결석). 영어 '오늘'과도 통일.
@@ -45,7 +47,11 @@ const PCT_QUICK = [0, 50, 80, 100];
 // 오늘 내주기에서 고르는 숙제 영역(노션 '영역' multi_select). 노션과 동일 라벨.
 const AREA_TAGS = ["개념", "연산", "복습", "오답", "심화", "활용", "사고력", "서술형", "수학익힘"];
 
-export function Today() {
+// 출결 상태 → 배지 색(중고등영어 대시보드 요약과 통일).
+const mathAttTone = (st?: string) =>
+  st === "출석" ? "b-green" : st === "지각" || st === "조퇴" ? "b-orange" : st === "결석" || st === "무단결석" ? "b-red" : st === "보강" ? "b-blue" : "b-gray";
+
+export function TodayDashboard() {
   const { data, mutate, toast, openModal, navigate } = useStore();
   // 보는 날짜(기본 오늘) — 화살표로 어제/내일 이동, '오늘로'로 복귀 (A-4)
   const [day, setDay] = useState(todayStr());
@@ -65,8 +71,22 @@ export function Today() {
   const [pctDraft, setPctDraft] = useState<Record<string, string>>({});
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({}); // 결석 사유 입력 임시값(blur 시 저장)
   const [gradeTab, setGradeTab] = useState<"all" | "cho" | "jung">("all");
-  // 영어식 마스터-디테일: 왼쪽에서 고른 학생을 오른쪽 상세에 표시.
-  const [sel, setSel] = useState<string>("");
+  // 예정에 없어도 검색해서 추가하는 등원 학생(이 화면에서만) — 영어 '오늘 등원'과 동일.
+  const [extraIds, setExtraIds] = useState<Set<string>>(new Set());
+  const [addQ, setAddQ] = useState("");
+  // 중고등영어 대시보드와 동일한 세로 카드형 — 카드 펼침(openKeys) + 하원(outKeys, 맨 아래로 접기, 이 화면에서만).
+  const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
+  const [outKeys, setOutKeys] = useState<Set<string>>(new Set());
+  const toggleOpen = (key: string) => setOpenKeys((p) => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const toggleOut = (key: string) => {
+    const willOut = !outKeys.has(key);
+    setOutKeys((p) => { const n = new Set(p); willOut ? n.add(key) : n.delete(key); return n; });
+    if (willOut) setOpenKeys((p) => { const n = new Set(p); n.delete(key); return n; }); // 하원하면 접기
+  };
+  const focusCard = (key: string) => {
+    setOpenKeys((p) => new Set(p).add(key)); // 그 학생 입력란을 펼치고 그 위치로 이동
+    window.setTimeout(() => document.getElementById("mathcard-" + key)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  };
   // 시간표 변경요청 — 그 날짜 승인된 변경(수학) 표시 + 수학↔영어 겹침 자동 감지.
   const [hubRoster, setHubRoster] = useState<RosterStudent[]>([]);
   useEffect(() => { getRoster().then(setHubRoster).catch(() => {}); }, []);
@@ -440,9 +460,6 @@ export function Today() {
 
   /* ---------- 진행 집계 ---------- */
   const attDone = (it: LessonOnDate) => !!data.attendance[keyOf(it)]?.status;
-  // 오늘 검사 대상 숙제 중 아직 '검사완료'가 아닌 건 수(전체)
-  const checkRemaining = lessons.reduce((n, it) => n + todayHwsOf(it.student.id).filter((h) => h.status !== "done").length, 0);
-  // 검사 처리됨 = 오늘 검사 대상 숙제가 없거나, 전부 검사완료
 
   // 오늘 예정 + 오늘 완료한 보강 (완료 여부를 바로 토글)
   const makeupsToday = data.makeups.filter((k) => (k.status === "scheduled" || k.status === "done") && k.makeupDate === day);
@@ -469,7 +486,6 @@ export function Today() {
       delete d.attendance[exist || k.makeupDate + "|" + k.studentId + "|" + (k.makeupTime || "")];
     });
   }
-  const testsToday = data.testLog.filter((t) => t.date === day);
   const unchecked = lessons.filter((it) => !attDone(it));
 
   // 오늘 등원 = 정규 수업 학생 + 보강 학생 통합 (보강만 있는 학생도 카드로 표시)
@@ -488,21 +504,32 @@ export function Today() {
     if (!s) continue;
     entries.push({ key: "mk_" + sid, student: s, time: mkBySid[sid][0].makeupTime || "", makeups: mkBySid[sid] });
   }
+  // 예정에 없어도 검색해 추가한 학생 — 출결을 위해 합성 수업(시간 빈값)으로 카드를 만든다.
+  for (const sid of extraIds) {
+    if (entries.some((e) => e.student.id === sid)) continue;
+    const s = studentById(data.students, sid);
+    if (!s) continue;
+    const synth: LessonOnDate = { student: s, time: "", duration: 60 };
+    entries.push({ key: keyOf(synth), student: s, time: "", lesson: synth, makeups: [], extra: true });
+  }
   entries.sort((a, b) => timeToMin(a.time || "99:99") - timeToMin(b.time || "99:99"));
   const entryIsCho = (e: DayEntry) => (e.student.grade || "").startsWith("초");
   const choEntries = entries.filter(entryIsCho).length;
   const shownEntries = gradeTab === "all" ? entries : entries.filter((e) => (gradeTab === "cho" ? entryIsCho(e) : !entryIsCho(e)));
-  const todayCount = new Set(entries.map((e) => e.student.id)).size;
-  // 선택된 학생(없거나 필터에서 빠지면 첫 학생). 오른쪽 상세에 표시.
-  // 학생은 직접 선택해야 상세가 뜬다(자동으로 첫 학생을 고르지 않음 — '민서준 디폴트' 방지).
-  const activeEntry = sel ? shownEntries.find((e) => e.key === sel) ?? null : null;
+  // 하원한 학생 카드는 맨 아래로(안정 정렬).
+  const cardEntries = [...shownEntries].sort((a, b) => (outKeys.has(a.key) ? 1 : 0) - (outKeys.has(b.key) ? 1 : 0));
+  // 등원 학생 추가 검색 — 이미 카드에 있는 학생은 제외.
+  const addExtra = (sid: string) => { setExtraIds((p) => new Set(p).add(sid)); setAddQ(""); };
+  const addHits = addQ.trim()
+    ? activeStudents(data.students).filter((s) => s.name.includes(addQ.trim()) && !entries.some((e) => e.student.id === s.id)).slice(0, 12)
+    : [];
 
   return (
     <section className="page active">
       <div className="page-head">
         <div>
-          <h1 className="page-title">오늘</h1>
-          <div className="page-desc">등원한 학생의 출결·숙제·진도를 한 화면에서 빠르게 입력해요</div>
+          <h1 className="page-title">대시보드</h1>
+          <div className="page-desc">등원한 학생을 카드로 펼쳐, 한 화면에서 입력해요</div>
         </div>
         <div className="date-nav">
           <button className="date-arrow" onClick={() => shiftDay(-1)} title="어제" aria-label="어제로">‹</button>
@@ -515,52 +542,10 @@ export function Today() {
       <ApprovedBanner changes={approvedChanges} subject="math" date={day} />
       <ConflictPopup conflicts={conflicts} date={day} />
 
-      {/* ✨ 오늘 한 줄 브리핑 (B-6) — 그날 할 일을 한 문장으로 (중복되던 KPI 카드는 제거) */}
-      {!holiday && entries.length > 0 && (
-        <div className="today-brief">
-          {isToday ? "오늘은 " : "이 날은 "}<b>{todayCount}명</b> 등원 <span className="brief-mut">(초등 {choEntries}·중등 {entries.length - choEntries})</span>
-          {unchecked.length > 0 && <> · 출결 <button className="brief-link" onClick={() => navigate("attendance")}>{unchecked.length}명 대기</button></>}
-          {checkRemaining > 0 && <> · 숙제 <button className="brief-link" onClick={() => navigate("homework")}>{checkRemaining}건 검사</button></>}
-          {makeupsToday.length > 0 && <> · 보강 <button className="brief-link" onClick={() => navigate("makeup")}>{makeupsToday.length}건</button></>}
-          {testsToday.length > 0 && <> · 테스트 <button className="brief-link" onClick={() => navigate("tests")}>{testsToday.length}건</button></>}
-          {unchecked.length === 0 && checkRemaining === 0 && <> · 출결·숙제 정리 끝 👏</>}
-        </div>
-      )}
-
-      {/* 오늘 테스트 예정 (있을 때만) */}
-      {testsToday.length > 0 && (
-        <div className="card sec-gap">
-          <div className="card-head"><div><div className="card-title">오늘 테스트 예정</div><div className="card-sub">{fmtFull(dDate)} 예정된 평가</div></div></div>
-          <div className="mk-list">
-            {testsToday.map((t) => {
-              const s = studentById(data.students, t.studentId);
-              return (
-                <div className="mk-item" key={t.id}>
-                  <div className="mk-main">
-                    <div className="mk-name">
-                      {s ? s.name : "?"}{" "}
-                      <span className={"badge " + (t.status === "완료" ? "b-green" : "b-orange")}>
-                        {t.type || "테스트"}{t.status === "완료" ? ` · ${t.score}점` : " · 예정"}
-                      </span>
-                    </div>
-                    <div className="mk-meta"><span>{[t.round, t.range].filter(Boolean).join(" · ") || "범위 미입력"}</span></div>
-                  </div>
-                  <div className="mk-actions">
-                    <button className="btn ghost sm" onClick={() => openModal(<TestModal id={t.id} />)}>
-                      <Icon name="edit" />기록
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* 오늘 등원 학생 — 학생별 카드 */}
       <div className="card sec-gap">
         <div className="card-head">
-          <div><div className="card-title">오늘 등원 학생</div><div className="card-sub">학생별로 출결·태도·숙제를 기록하세요</div></div>
+          <div><div className="card-title">오늘 등원 학생</div><div className="card-sub">학생마다 출결·태도·숙제를 기록해요</div></div>
           {lessons.length > 0 && (
             <button className="btn sm" onClick={markAllPresent} disabled={unchecked.length === 0} title="미체크 학생 전원 출석">
               <Icon name="check" />전체 출석
@@ -578,15 +563,48 @@ export function Today() {
 
         {holiday ? (
           <Empty>{isToday ? "오늘은" : "이 날은"} {holiday} (공휴일) — 휴원입니다.</Empty>
-        ) : entries.length === 0 ? (
-          <Empty>
-            <div>{isToday ? "오늘" : "이 날"} 등원 예정 학생이 없어요.</div>
-            <button className="btn ghost sm empty-cta" onClick={() => navigate("timetable")}><Icon name="cal" />시간표 보기</button>
-          </Empty>
         ) : (
-          <div className="today-split eng-split">
-            <div className="eng-side">
-              {shownEntries.map((e) => {
+          <>
+            {/* 등원 학생 추가 — 예정에 없어도 검색해서 넣을 수 있어요 (중고등영어 '오늘 등원'과 동일) */}
+            <div className="today-addrow">
+              <input className="input today-addsearch" value={addQ} onChange={(e) => setAddQ(e.target.value)} placeholder="등원 학생 추가 — 예정에 없어도 이름으로 검색해서 넣어요" />
+              {addQ.trim() && (
+                <div className="today-addhits">
+                  {addHits.length === 0 ? (
+                    <span className="hub-muted">검색 결과가 없어요.</span>
+                  ) : (
+                    addHits.map((s) => (
+                      <button key={s.id} type="button" className="today-pt" onClick={() => addExtra(s.id)}>{s.name} <span className="muted">{s.grade}</span> +</button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {entries.length === 0 ? (
+              <Empty>
+                <div>{isToday ? "오늘" : "이 날"} 등원 예정 학생이 없어요. 위에서 검색해 추가할 수 있어요.</div>
+                <button className="btn ghost sm empty-cta" onClick={() => navigate("timetable")}><Icon name="cal" />시간표 보기</button>
+              </Empty>
+            ) : (
+              <>
+            {/* 오늘 등원 칩 — 누르면 그 학생 입력 카드로 이동 (중고등영어와 동일) */}
+            <div className="eng-chiprow today-jumprow">
+              {cardEntries.map((e) => (
+                <button
+                  type="button"
+                  key={e.key}
+                  className={"today-jump-chip" + (outKeys.has(e.key) ? " out" : "")}
+                  onClick={() => focusCard(e.key)}
+                  title="이 학생 입력란으로 이동"
+                >
+                  {e.student.name}
+                </button>
+              ))}
+            </div>
+
+            <div className="eng-dash-cards math-dash-cards">
+              {cardEntries.map((e) => {
                 const s = e.student;
                 const lesson = e.lesson;
                 const st = lesson ? data.attendance[keyOf(lesson)]?.status : undefined;
@@ -597,53 +615,35 @@ export function Today() {
                 const attOk = lesson ? !!st : mkAllDone;
                 const done = attOk && checkHws.every((h) => h.status === "done") && (assignedHws.length > 0 || none);
                 const lateMin = lesson ? data.attendance[keyOf(lesson)]?.lateMinutes : undefined;
-                const stCls = st === "출석" ? "g" : st === "지각" || st === "조퇴" ? "w" : st === "결석" || st === "무단결석" ? "b" : "";
+                const open = openKeys.has(e.key);
+                const out = outKeys.has(e.key);
+                const bks = ingBooksOf(s.id);
+                const checkDone = checkHws.length > 0 && checkHws.every((h) => h.status === "done");
+                const testCnt = data.testLog.filter((t) => t.studentId === s.id && t.date === day).length;
                 return (
-                  <div key={e.key} className={"eng-stu today-side-row" + (activeEntry?.key === e.key ? " on" : "")}>
-                    <button className="eng-stu-name" onClick={() => setSel(e.key)}>
-                      <span className="today-side-nm">{s.name}</span>
-                      {e.time && <span className="eng-stu-time">{e.time}</span>}
-                      {(() => { const ch = arrivalOf(approvedChanges, s.id, "math", day); return ch && ch.fromDate && ch.fromDate !== day ? <span className="eng-stu-chg" title="다른 날에서 옮겨온 수업">이동</span> : null; })()}
-                      {lesson && st && <span className={"today-side-st " + stCls}>{st}{st === "지각" && lateMin ? ` ${lateMin}분` : ""}</span>}
-                      {!lesson && <span className="today-side-st blue">보강{mkAllDone ? " 완료" : ""}</span>}
-                      {done && <span className="eng-dot ok" title="출결·숙제 완료" />}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="eng-main">
-              {!activeEntry ? (
-                <div className="hub-muted" style={{ padding: 20 }}>왼쪽에서 학생을 고르면 출결·태도·숙제를 기록할 수 있어요.</div>
-              ) : ((e) => {
-                const s = e.student;
-                const lesson = e.lesson;
-                const st = lesson ? data.attendance[keyOf(lesson)]?.status : undefined;
-                const checkHws = todayHwsOf(s.id);
-                const assignedHws = assignedHwsOf(s.id);
-                const none = isNone(s.id);
-                const mkAllDone = e.makeups.length > 0 && e.makeups.every((m) => m.status === "done");
-                const attOk = lesson ? !!st : mkAllDone;
-                const done = attOk && checkHws.every((h) => h.status === "done") && (assignedHws.length > 0 || none);
-                return (
-                <div key={e.key} className={"eng-daily today-detail" + (done ? " alldone" : "")}>
-                  {/* 영어 일일기록과 동일한 라벨+필드 세로 레이아웃 (항목은 수학 그대로) */}
-                  <div className="eng-daily-h today-detail-h">
-                    <h2>
-                      <button type="button" className="stu-namelink" onClick={() => openModal(<StudentModal id={s.id} />)} title="학생 상세">{s.name}</button>
+                <div id={"mathcard-" + e.key} key={e.key} className={"eng-dash-card" + (open ? " open" : "") + (out ? " out" : "") + (done ? " alldone" : "")}>
+                  {/* 요약 줄 — 항상 보임 */}
+                  <div className="eng-dash-sum">
+                    <span className="eng-dash-sum-name">{s.name}</span>
+                    <button className="eng-dash-rec" onClick={() => openModal(<MathMonthlyModal studentId={s.id} name={s.name} />)} title="누적 기록 보기 (출결·진도·시험)" aria-label="누적 기록"><Icon name="chart" /></button>
+                    <span className="eng-dash-sum-tags">
+                      {out && <span className="badge b-gray">하원</span>}
+                      {e.extra && <span className="badge b-blue" title="예정에 없던 추가 등원">추가</span>}
                       <GradeBadge grade={s.grade} />
-                      <span className="today-detail-time">
-                        {e.time || "보강"}
-                        {lesson ? ` · ${lesson.duration}분` : e.makeups[0]?.makeupDuration ? ` · ${e.makeups[0].makeupDuration}분` : ""}
-                      </span>
-                      {done && <span className="badge b-green">완료</span>}
-                      {e.makeups.length > 0 && <span className="badge b-blue">보강</span>}
-                      {!!s.birthdate && s.birthdate.slice(5) === day.slice(5) && (
-                        <span className="badge b-pink" title="오늘 생일">🎂 생일</span>
-                      )}
-                      {(() => { const bks = ingBooksOf(s.id); return bks.length ? <span className="badge b-gray" title="진도·교재관리 진행중 교재">교재 {bks.join(", ")}</span> : null; })()}
-                    </h2>
+                      {e.time && <span className="eng-sum-chip">{e.time}{lesson ? ` · ${lesson.duration}분` : ""}</span>}
+                      {lesson && st ? <span className={"badge " + mathAttTone(st)}>{st}{st === "지각" && lateMin ? ` ${lateMin}분` : ""}</span> : null}
+                      {!lesson && e.makeups.length > 0 && <span className="badge b-blue">보강{mkAllDone ? " 완료" : ""}</span>}
+                      {(() => { const ch = arrivalOf(approvedChanges, s.id, "math", day); return ch && ch.fromDate && ch.fromDate !== day ? <span className="eng-sum-chip" title="다른 날에서 옮겨온 수업">이동</span> : null; })()}
+                      {bks.length > 0 && <span className="eng-sum-chip" title="진도·교재관리 진행중 교재">교재 {bks.join(", ")}</span>}
+                      {checkHws.length > 0 && <span className={"eng-sum-chip" + (checkDone ? " ok" : " todo")}>숙제검사 {checkDone ? "완료" : "미완"}</span>}
+                      {testCnt > 0 && <span className="eng-sum-chip">시험 {testCnt}</span>}
+                      {!!s.birthdate && s.birthdate.slice(5) === day.slice(5) && <span className="badge b-pink" title="오늘 생일">🎂</span>}
+                      {done && <span className="eng-dot ok" title="출결·숙제 완료" />}
+                    </span>
+                    <button className={"eng-dash-out" + (out ? " on" : "")} onClick={() => toggleOut(e.key)} title={out ? "다시 등원으로 (맨 위로)" : "하원 — 카드를 맨 아래로 접어요"}>{out ? "등원" : "하원"}</button>
                   </div>
+                  {/* 접혀 있을 땐 블러로 살짝 보이고, 펼치면 입력 (중고등영어 카드와 동일) */}
+                  <div className={"eng-dash-peek math-card-body" + (open ? " open" : "")}>
 
                   {/* 출결 */}
                   {lesson && (
@@ -829,19 +829,26 @@ export function Today() {
                     )}
                   </div>
 
-                  {/* 시험 — 오늘 본 시험 + 다음 시간 예약 (대시보드와 동일) */}
+                  {/* 시험 — 오늘 본 시험 + 다음 시간 예약 (영어 '오늘'과 동일 흐름, 수학 평가 기록) */}
                   <TodayTests student={s} day={day} />
 
                   {/* 1:1 보충학습 — 오늘·대시보드 공용 (월말리포트 자동 반영) */}
                   <SupLearn student={s} day={day} />
+                  </div>
+                  <button className="eng-dash-more" onClick={() => toggleOpen(e.key)} aria-expanded={open}>
+                    {open ? "접기" : "자세히 보기 / 입력하기"}
+                  </button>
                 </div>
                 );
-              })(activeEntry)}
+              })}
             </div>
-          </div>
+              </>
+            )}
+          </>
         )}
       </div>
 
     </section>
   );
 }
+

@@ -64,7 +64,7 @@ export function PointRanking() {
                 <HexAvatar name={r.name} size={40} />
               </div>
               <div className="rank-name">{r.name}{r.grade ? <span className="rank-grade">{r.grade}</span> : null}</div>
-              <div className="rank-days">{r.days}일</div>
+              <div className="rank-days" title="꿀(포인트)을 모은 날 수예요">꿀 모은 {r.days}일</div>
               <div className={"rank-pts" + (r.points < 0 ? " minus" : "")}>
                 {r.points >= 0 && <HoneyDrop size={15} className="rank-drop" />}
                 {r.points.toLocaleString()}<span>꿀</span>

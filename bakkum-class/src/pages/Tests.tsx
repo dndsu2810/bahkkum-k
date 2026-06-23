@@ -5,6 +5,8 @@ import { activeStudents } from "../lib/logic";
 import { todayStr, uid } from "../lib/dates";
 import { TodayLink } from "../components/ui";
 import { TEST_TYPES } from "../components/modals";
+import { ScoreInput, type ScoreValue } from "../components/ScoreInput";
+import { computeScore, type ScoreMode } from "../lib/score";
 import { pushTestNotion } from "../api";
 import { Icon } from "../icons";
 
@@ -41,7 +43,15 @@ export function Tests() {
   const [round, setRound] = useState("");
   const [range, setRange] = useState("");
   const [status, setStatus] = useState<TestLog["status"]>("예정");
-  const [score, setScore] = useState("");
+  const [sMode, setSMode] = useState<ScoreMode>("score");
+  const [sNum, setSNum] = useState(0);
+  const [sDen, setSDen] = useState(100);
+  // 레코드 인라인 수정 — 시험일·시험명·회차·범위를 나중에 고칠 수 있게.
+  const [editId, setEditId] = useState<string | null>(null);
+  const [eDate, setEDate] = useState("");
+  const [eType, setEType] = useState("");
+  const [eRound, setERound] = useState("");
+  const [eRange, setERange] = useState("");
 
   function add() {
     if (!sel) return;
@@ -52,13 +62,16 @@ export function Tests() {
       type: type.trim() || TEST_TYPES[0],
       round: round.trim(),
       range: range.trim(),
-      score: status === "완료" ? Math.max(0, Math.round(+score) || 0) : 0,
+      score: status === "완료" ? computeScore(sMode, sNum, sDen) : 0,
       status,
       memo: "",
+      scoreMode: sMode,
+      scoreNum: sNum,
+      scoreDen: sDen,
     };
     mutate((d) => { d.testLog.push(rec); });
     pushTestNotion(rec.studentId, { date: rec.date, type: rec.type, round: rec.round, range: rec.range, score: rec.score, status: rec.status, memo: rec.memo });
-    setRound(""); setRange(""); setScore(""); setStatus("예정"); setDate(todayStr());
+    setRound(""); setRange(""); setSNum(0); setStatus("예정"); setDate(todayStr());
     toast("테스트를 기록했어요.");
   }
 
@@ -76,6 +89,16 @@ export function Tests() {
     if (!window.confirm(`'${`${t.type} ${t.round}`.trim()}' 기록을 삭제할까요?`)) return;
     mutate((d) => { d.testLog = d.testLog.filter((x) => x.id !== t.id); });
     toast("테스트 기록을 삭제했어요.");
+  }
+  function startEdit(t: TestLog) {
+    setEditId(t.id); setEDate(t.date); setEType(t.type); setERound(t.round); setERange(t.range);
+  }
+  async function saveEdit(t: TestLog) {
+    // 수정 내용은 로컬에만 저장(노션 반영 불필요).
+    const ok = await mutateAsync((d) => { apply(d, t.id, (x) => { x.date = eDate || x.date; x.type = eType.trim() || x.type; x.round = eRound.trim(); x.range = eRange.trim(); }); });
+    if (!ok) { toast("저장하지 못했어요 · 잠시 후 다시 시도해 주세요"); return; }
+    setEditId(null);
+    toast("테스트 기록을 수정했어요.");
   }
 
   return (
@@ -146,9 +169,13 @@ export function Tests() {
                     ))}
                   </div>
                 </label>
-                <label className="test-f">
+                <label className="test-f wide">
                   <span>점수</span>
-                  <input className="input" type="number" min={0} max={100} value={score} disabled={status !== "완료"} placeholder={status === "예정" ? "완료 시 입력" : ""} onChange={(e) => setScore(e.target.value)} />
+                  {status === "완료" ? (
+                    <ScoreInput mode={sMode} num={sNum} den={sDen} onChange={(v) => { setSMode(v.scoreMode); setSNum(v.scoreNum); setSDen(v.scoreDen); }} />
+                  ) : (
+                    <span className="hub-muted">완료로 바꾸면 점수를 입력해요</span>
+                  )}
                 </label>
                 <button className="btn primary test-add" onClick={add}>추가</button>
               </div>
@@ -156,22 +183,42 @@ export function Tests() {
               <div className="test-recs">
                 {myTests.map((t) => (
                   <div className={"test-rec" + (t.status === "완료" ? " done" : "")} key={t.id}>
-                    <div className="test-rec-date">{mdDate(t.date)}</div>
-                    <div className="test-rec-info">
-                      <span className="test-rec-type">{t.type}</span>
-                      {t.round && <span className="test-rec-round">{t.round}</span>}
-                      {t.range && <span className="test-rec-range">{t.range}</span>}
-                    </div>
-                    <select className="test-rec-status" value={t.status} onChange={(e) => patch(t, (x) => { x.status = e.target.value === "완료" ? "완료" : "예정"; if (x.status === "예정") x.score = 0; })}>
-                      <option value="예정">예정</option>
-                      <option value="완료">완료</option>
-                    </select>
-                    {t.status === "완료" ? (
-                      <input className="test-rec-score" type="number" min={0} max={100} defaultValue={t.score} onBlur={(e) => { const v = Math.max(0, Math.round(+e.target.value) || 0); if (v !== t.score) patch(t, (x) => { x.score = v; }); }} aria-label="점수" />
+                    {editId === t.id ? (
+                      <div className="test-rec-editrow">
+                        <input className="input" type="date" value={eDate} onChange={(e) => setEDate(e.target.value)} aria-label="시험일" />
+                        <input className="input" value={eType} onChange={(e) => setEType(e.target.value)} placeholder="시험명" onKeyDown={(e) => { if (e.key === "Enter") saveEdit(t); }} />
+                        <input className="input" value={eRound} onChange={(e) => setERound(e.target.value)} placeholder="회차" />
+                        <input className="input" value={eRange} onChange={(e) => setERange(e.target.value)} placeholder="시험 범위" onKeyDown={(e) => { if (e.key === "Enter") saveEdit(t); }} />
+                        <button className="btn primary sm" onClick={() => saveEdit(t)}>저장</button>
+                        <button className="btn ghost sm" onClick={() => setEditId(null)}>취소</button>
+                      </div>
                     ) : (
-                      <span className="test-rec-score muted">—</span>
+                      <div className="test-rec-top">
+                        <div className="test-rec-date">{mdDate(t.date)}</div>
+                        <div className="test-rec-info">
+                          <span className="test-rec-type">{t.type}</span>
+                          {t.round && <span className="test-rec-round">{t.round}</span>}
+                          {t.range && <span className="test-rec-range">{t.range}</span>}
+                        </div>
+                        <select className="test-rec-status" value={t.status} onChange={(e) => patch(t, (x) => { x.status = e.target.value === "완료" ? "완료" : "예정"; if (x.status === "예정") x.score = 0; })}>
+                          <option value="예정">예정</option>
+                          <option value="완료">완료</option>
+                        </select>
+                        <button className="test-rec-edit" onClick={() => startEdit(t)} title="수정"><Icon name="edit" /></button>
+                        <button className="test-rec-del" onClick={() => remove(t)} title="삭제"><Icon name="trash" /></button>
+                      </div>
                     )}
-                    <button className="test-rec-del" onClick={() => remove(t)} title="삭제"><Icon name="trash" /></button>
+                    {t.status === "완료" && (
+                      <div className="test-rec-scorerow">
+                        <span className="test-rec-scorelbl">점수</span>
+                        <ScoreInput
+                          mode={(t.scoreMode || "score") as ScoreMode}
+                          num={(t.scoreMode === "max" || t.scoreMode === "ratio") ? (t.scoreNum ?? 0) : t.score}
+                          den={t.scoreDen ?? (t.scoreMode === "max" ? 100 : 0)}
+                          onChange={(v: ScoreValue) => patch(t, (x) => { x.scoreMode = v.scoreMode; x.scoreNum = v.scoreNum; x.scoreDen = v.scoreDen; x.score = v.score; })}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
                 {myTests.length === 0 && <div className="hub-muted">아직 등록된 테스트가 없어요. 위에서 입력해 추가하세요.</div>}

@@ -273,7 +273,7 @@ function NewRequest({ roster, users, prefill, logMode, onCreated }: { roster: Ro
         <div className="prof-field" style={{ marginTop: 10 }}>
           <span className="prof-field-l">옮길 수업 (기존 시간표에서 선택)</span>
           {classes.length === 0 ? (
-            <div className="hub-muted">이 학생은 등록된 수업이 없어요. 학생 명단에서 수업 시간을 먼저 등록하세요.</div>
+            <div className="hub-muted">이 학생은 등록된 수업이 없어요. 학생 명단에서 수업 시간을 먼저 등록해 주세요.</div>
           ) : (
             <div className="req-class-chips">
               {classes.map((c, i) => (

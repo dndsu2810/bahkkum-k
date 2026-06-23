@@ -14,34 +14,48 @@ function koDateTime(date: string, time?: string): string {
   return time ? `${s} ${time}` : s;
 }
 
-/** 보강 안내 문자 — 학부모용(채널톡 안내 형식 · 결석 사유 + 미등원 시 사라짐 안내 포함). */
-function parentMakeupMsg(name: string, k: Makeup, subject: string): string {
-  const mk = koDateTime(k.makeupDate, k.makeupTime);
+/** "17:40" → "오후 5시 40분" (정시면 분 생략). 문자 양식용. */
+function koAmPm(time?: string): string {
+  if (!time) return "";
+  const [hh, mm] = time.split(":");
+  const h = Number(hh), m = Number(mm || 0);
+  if (isNaN(h)) return time;
+  const ap = h < 12 ? "오전" : "오후";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${ap} ${h12}시${m ? ` ${m}분` : ""}`;
+}
+
+/** 보강 문자용 최소 정보(수학·영어 보강 공용). */
+type MakeupWhen = { makeupDate: string; makeupTime: string };
+
+/** 보강 안내 문자 — 학부모용. 보강 일시는 "6월 23일(화) 오후 5시 40분" 형식. subject=수학/영어. */
+export function parentMakeupMsg(name: string, k: MakeupWhen, subject: string): string {
+  const when = `${koDateTime(k.makeupDate)} ${koAmPm(k.makeupTime)}`.trim();
   return (
+    `[바꿈영수학원] ${subject} 보강 일정 안내\n` +
     `안녕하세요, 바꿈영수학원입니다.\n\n` +
     `${name} 학생의 ${subject} 보강 일정을 안내드립니다.\n\n` +
-    (k.absentDate ? `• 결석일 : ${koDateTime(k.absentDate)}\n` : "") +
-    `• 보강 일시 : ${mk}\n\n` +
-    `보강일에 꼭 등원할 수 있도록 부탁드립니다.\n` +
-    `미등원 시 보강은 사라지니 참고 부탁드려요.\n\n` +
+    `보강 일시 : ${when}\n\n` +
+    `보강 수업에 차질이 없도록 정해진 시간에 등원 부탁드립니다.\n` +
+    `정해진 보강일에 등원하지 않으면 보강은 자동으로 소멸되오니 유의해 주시기 바랍니다.\n\n` +
+    `일정 변경이 필요하신 경우 사전에 연락 주시기 바랍니다.\n` +
     `감사합니다.`
   );
 }
 
-/** 보강 안내 문자 — 학생용(하루 전 알림 · '미등원 시 사라짐' 문구 제외). */
-function studentMakeupMsg(name: string, k: Makeup, subject: string): string {
-  const mk = koDateTime(k.makeupDate, k.makeupTime);
+/** 보강 안내 문자 — 학생용(하루 전 알림). subject=수학/영어. */
+export function studentMakeupMsg(name: string, k: MakeupWhen, subject: string): string {
+  const when = `${koDateTime(k.makeupDate)} ${koAmPm(k.makeupTime)}`.trim();
   return (
-    `[바꿈영수학원] 보강 일정 안내\n\n` +
+    `[바꿈영수학원] ${subject} 보강 일정 안내\n` +
     `${name} 학생, 내일 ${subject} 보강 수업이 있어요!\n\n` +
-    `• 보강 일시 : ${mk}\n\n` +
-    `잊지 말고 꼭 등원해 주세요 :)\n` +
-    `감사합니다.`
+    `보강 일시 : ${when}\n` +
+    `잊지 말고 꼭 등원해 주세요. 보강일에 만나요!`
   );
 }
 
 /** 문자 양식 복사 버튼 — 누르면 클립보드에 복사하고 잠깐 '복사됨' 표시. */
-function CopyMsgBtn({ label, text }: { label: string; text: string }) {
+export function CopyMsgBtn({ label, text }: { label: string; text: string }) {
   const [done, setDone] = useState(false);
   return (
     <button

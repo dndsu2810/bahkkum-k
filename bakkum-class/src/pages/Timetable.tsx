@@ -1,20 +1,25 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "../store";
+import { useAuth } from "../auth";
+import { getRoster, type RosterStudent } from "../lib/rosterApi";
+import { ProfileModal } from "../screens/StudentMaster";
 import { DOW, DOW_ORDER, TODAY, fmtMD, mondayOf, parseD, timeToMin, ymd } from "../lib/dates";
 import { activeStudents, attendsOn, effectiveLessons, gradeColor, studentById } from "../lib/logic";
 import { holidayName } from "../lib/holidays";
 import { getCategories, type Tone } from "../lib/categories";
 import { Select } from "../components/ui";
 
+interface Person { name: string; studentId: string }
 interface RawEvt {
   name: string;
+  studentId: string;
   start: number;
   dur: number;
   type: Tone;
   time: string;
 }
 interface Grp {
-  names: string[];
+  people: Person[];
   start: number;
   dur: number;
   type: Tone;
@@ -28,12 +33,12 @@ function groupSlots(list: RawEvt[]): Grp[] {
     const key = e.start + "|" + e.dur + "|" + e.type;
     let g = map.get(key);
     if (!g) {
-      g = { names: [], start: e.start, dur: e.dur, type: e.type, time: e.time };
+      g = { people: [], start: e.start, dur: e.dur, type: e.type, time: e.time };
       map.set(key, g);
     }
-    g.names.push(e.name);
+    g.people.push({ name: e.name, studentId: e.studentId });
   }
-  for (const g of map.values()) g.names.sort();
+  for (const g of map.values()) g.people.sort((a, b) => a.name.localeCompare(b.name));
   return [...map.values()];
 }
 
@@ -46,7 +51,14 @@ const WEEK_OPTS = [
 
 export function Timetable() {
   const { data } = useStore();
+  const { user } = useAuth();
+  const canEdit = !!user && user.role !== "student";
   const [curWeek, setCurWeek] = useState(0);
+  const [roster, setRoster] = useState<RosterStudent[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  useEffect(() => { getRoster().then(setRoster).catch(() => { /* 명단 없으면 이름은 보이되 클릭만 비활성 */ }); }, []);
+  const openStudent = roster.find((r) => r.id === openId) || null;
+  const applyLocal = (next: RosterStudent) => setRoster((cur) => cur.map((r) => (r.id === next.id ? next : r)));
 
   const mon = mondayOf(TODAY, curWeek);
   const sun = new Date(mon);
@@ -71,6 +83,7 @@ export function Timetable() {
         if (l.day !== dow) return;
         evtByDay[di].push({
           name: s.name,
+          studentId: s.id,
           start: timeToMin(l.time),
           dur: +l.duration,
           type: gradeColor(s.grade),
@@ -90,6 +103,7 @@ export function Timetable() {
       const s = studentById(data.students, k.studentId);
       evtByDay[di].push({
         name: s ? s.name : "?",
+        studentId: k.studentId,
         start: timeToMin(k.makeupTime),
         dur: +k.makeupDuration,
         type: "orange",
@@ -133,16 +147,20 @@ export function Timetable() {
                       <div className="eng-wempty">—</div>
                     ) : (
                       blocks.map((e, i) => (
-                        <div className={"eng-wevt evt-" + e.type} key={i} title={`${e.time} · ${e.dur}분 (${e.names.length}명)`}>
+                        <div className={"eng-wevt evt-" + e.type} key={i} title={`${e.time} · ${e.dur}분 (${e.people.length}명)`}>
                           <div className="eng-wtime">
                             {e.time}
                             <span className="eng-wdur">{e.dur}분</span>
-                            {e.names.length > 1 && <span className="e-cnt">{e.names.length}</span>}
+                            {e.people.length > 1 && <span className="e-cnt">{e.people.length}</span>}
                           </div>
                           <div className="eng-wnames">
-                            {e.names.map((n, j) => (
-                              <span className="eng-wnm" key={j}>{n}</span>
-                            ))}
+                            {e.people.map((p, j) =>
+                              roster.some((r) => r.id === p.studentId) ? (
+                                <button type="button" className="eng-wnm is-link" key={j} onClick={() => setOpenId(p.studentId)} title="학생 정보 보기">{p.name}</button>
+                              ) : (
+                                <span className="eng-wnm" key={j}>{p.name}</span>
+                              )
+                            )}
                           </div>
                         </div>
                       ))
@@ -169,6 +187,10 @@ export function Timetable() {
           </div>
         </div>
       </div>
+
+      {openStudent && (
+        <ProfileModal key={openStudent.id} student={openStudent} canEdit={canEdit} onClose={() => setOpenId(null)} onSaved={applyLocal} />
+      )}
     </section>
   );
 }

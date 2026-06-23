@@ -110,6 +110,8 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "ALTER TABLE class_eng_daily ADD COLUMN note TEXT NOT NULL DEFAULT ''",
     // 초등영어 수업일지 — 원서진도번호·단어시험·활동 체크리스트.
     "ALTER TABLE class_eng_daily ADD COLUMN book_no TEXT NOT NULL DEFAULT ''",
+    // 중고등영어 진도 예고 — '다음에 할 것'(book_no는 '오늘 한 것').
+    "ALTER TABLE class_eng_daily ADD COLUMN book_next TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_eng_daily ADD COLUMN word_test TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_eng_daily ADD COLUMN done_items TEXT NOT NULL DEFAULT '[]'",
     // 학생이 직접 적는 수업 시작/끝 시간(초등 개별 페이지 일지).
@@ -301,9 +303,9 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     const hwItems = JSON.stringify({ assign: hwAssign, check: hwCheck, hwNone: !!b.hwNone, testNone: !!b.testNone });
     await env.DB
       .prepare(
-        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,makeup,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,book_no,word_test,done_items,comment,hw_comment,materials,hw_items,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, makeup=excluded.makeup, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, book_no=excluded.book_no, word_test=excluded.word_test, done_items=excluded.done_items, comment=excluded.comment, hw_comment=excluded.hw_comment, materials=excluded.materials, hw_items=excluded.hw_items, updated_at=excluded.updated_at"
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,makeup,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,book_no,book_next,word_test,done_items,comment,hw_comment,materials,hw_items,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, makeup=excluded.makeup, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, book_no=excluded.book_no, book_next=excluded.book_next, word_test=excluded.word_test, done_items=excluded.done_items, comment=excluded.comment, hw_comment=excluded.hw_comment, materials=excluded.materials, hw_items=excluded.hw_items, updated_at=excluded.updated_at"
       )
-      .bind(sid, date, attended, status, lateMin, reason, makeup, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwW, hwR, hwG, b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(autoReasons), points, String(b.note || ""), String(b.bookNo || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.comment || ""), String(b.hwComment || ""), String(b.materials || ""), hwItems, Date.now())
+      .bind(sid, date, attended, status, lateMin, reason, makeup, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwW, hwR, hwG, b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(autoReasons), points, String(b.note || ""), String(b.bookNo || ""), String(b.bookNext || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.comment || ""), String(b.hwComment || ""), String(b.materials || ""), hwItems, Date.now())
       .run();
     // 결석 → 보강 관리로 연결: 같은 학생·결석일의 보강이 없으면 '예정'으로 자동 생성.
     if (status === "결석") {
@@ -317,6 +319,17 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
         }
       } catch {
         /* 보강 자동생성 실패해도 출결 저장은 유지 */
+      }
+    } else if (status) {
+      // 결석을 출석/지각/조퇴 등으로 정정하면, 자동 생성됐던 '보강 대기'(미예약 예정)를 같이 지운다.
+      // 직접 날짜를 잡았거나 완료/취소된 보강은 건드리지 않는다.
+      try {
+        await env.DB
+          .prepare("DELETE FROM class_eng_makeup WHERE student_id=? AND absent_date=? AND status='예정' AND (makeup_date IS NULL OR makeup_date='')")
+          .bind(sid, date)
+          .run();
+      } catch {
+        /* 정리 실패해도 출결 저장은 유지 */
       }
     }
     return json({ ok: true });
@@ -652,8 +665,15 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
     // 진행중 교재 — 진도·교재관리(class_eng_progress, status='진행')에서 가져와 학생 화면에 보여줌.
     let progressBooks: string[] = [];
     try {
-      const pr = await env.DB.prepare("SELECT book FROM class_eng_progress WHERE student_id=? AND status='진행' AND book!='' ORDER BY updated_at DESC").bind(String(sid)).all<{ book: string }>();
-      progressBooks = [...new Set((pr.results || []).map((r) => String(r.book)).filter(Boolean))];
+      const pr = await env.DB.prepare("SELECT book, level FROM class_eng_progress WHERE student_id=? AND status='진행' AND book!='' ORDER BY updated_at DESC").bind(String(sid)).all<{ book: string; level: string }>();
+      const seenBook = new Set<string>();
+      for (const r of pr.results || []) {
+        const book = String(r.book ?? "").trim();
+        if (!book || seenBook.has(book)) continue;
+        seenBook.add(book);
+        const lv = String(r.level ?? "").trim();
+        progressBooks.push(lv ? `${book} ${lv}` : book);
+      }
     } catch {
       /* 진도 테이블 없거나 조회 실패는 무시 */
     }
@@ -829,6 +849,7 @@ function dailyRow(r: Record<string, unknown>) {
     points: Number(r.points ?? 0),
     note: String(r.note ?? ""),
     bookNo: String(r.book_no ?? ""),
+    bookNext: String(r.book_next ?? ""),
     wordTest: String(r.word_test ?? ""),
     doneItems: (() => { try { const a = JSON.parse(String(r.done_items ?? "[]")); return Array.isArray(a) ? a.map(String) : []; } catch { return []; } })(),
     startTime: String(r.start_time ?? ""),

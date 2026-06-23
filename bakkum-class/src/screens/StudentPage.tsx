@@ -12,7 +12,7 @@ import { Notices } from "./Notices";
 import { postApi } from "../lib/postApi";
 import { DailyTests } from "./English";
 import { Icon } from "../icons";
-import { HexAvatar, CombGauge, Bee, SoezLogo } from "../soez";
+import { HexAvatar, CombGauge, Bee } from "../soez";
 
 /** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
  *  - 학생 본인: studentId 생략(본인). 일지 입력 가능, 커리큘럼 조회.
@@ -112,7 +112,7 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
             {data.progressBooks.map((b) => <span className="sp-hw-chip" key={b}>{b}</span>)}
           </div>
         )}
-        <LogEditor studentId={canEditCur ? s.id : undefined} tid={s.id} existing={data.daily} slots={data.engSlots} options={data.doneItemOptions} band={s.band} onSaved={reloadSilent} />
+        <LogEditor studentId={canEditCur ? s.id : undefined} tid={s.id} existing={data.daily} slots={data.engSlots} options={data.doneItemOptions} band={s.band} progressBooks={data.progressBooks || []} onSaved={reloadSilent} />
       </section>
 
       {/* 일지 이력 */}
@@ -299,7 +299,7 @@ function addMin(hm: string, min: number): string {
 /* 지난 일지 이력의 숙제 3분류 태그 색상. */
 const hwTagCls = (v: string) => (v === "완료" ? "sp-tag-done" : v === "미흡" ? "sp-tag-warn" : v === "안함" ? "sp-tag-bad" : "");
 
-function LogEditor({ studentId, tid, existing, slots, options, band, onSaved }: { studentId?: string; tid: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; options?: string[]; band: string; onSaved: () => void }) {
+function LogEditor({ studentId, tid, existing, slots, options, band, progressBooks = [], onSaved }: { studentId?: string; tid: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; options?: string[]; band: string; progressBooks?: string[]; onSaved: () => void }) {
   const items = options && options.length ? options : STUDENT_LOG_ITEMS;
   const isMid = band === "mid" || band === "bridge"; // 중고등(Bridge 포함) — 숙제 3분류·교재 진도
   const [date, setDate] = useState(todayStr());
@@ -454,6 +454,14 @@ function LogEditor({ studentId, tid, existing, slots, options, band, onSaved }: 
 
       <div className="sp-f">
         <span>{isMid ? "교재 · 진도" : "원서 진도번호"}</span>
+        {isMid && progressBooks.length > 0 && (
+          <div className="today-bookchips">
+            <span className="today-bookchips-lbl">교재</span>
+            {progressBooks.map((b) => (
+              <button type="button" className="today-bookchip" key={b} title="이 교재로 진도칸 채우기" onClick={() => { dirtyRef.current = true; setBookNo(b + " "); }}>{b}</button>
+            ))}
+          </div>
+        )}
         <input className="input" value={bookNo} onChange={(e) => setBookNo(e.target.value)} placeholder={isMid ? "예: 그래머인유즈 3과 p.40~45" : "예: 145"} />
       </div>
 
@@ -592,6 +600,7 @@ function LogHistory({ rows, band }: { rows: StudentLogRow[]; band: string }) {
             </div>
             <div className="sp-hist-body">
               {r.bookNo && <span className="sp-tag">{isMid ? "교재" : "원서"} {r.bookNo}</span>}
+              {isMid && r.bookNext && <span className="sp-tag">다음 {r.bookNext}</span>}
               {r.wordTest && <span className="sp-tag">단어 {r.wordTest}</span>}
               {isMid ? (
                 <>
@@ -637,7 +646,7 @@ export function StudentHome() {
         <div className="sp-shell-brand">
           {logo.url ? <img className="hub-logo logo-img" src={logo.url} alt="바꿈영수학원" /> : <span className="hub-logo logo-bee"><Bee size={34} /></span>}
           <div>
-            <b className="sp-shell-name">바꿈영수학원 <SoezLogo size={15} className="sp-shell-soez" /></b>
+            <b className="sp-shell-name">쏘이지</b>
             <span>{fmtFull(parseD(todayStr()))}</span>
           </div>
         </div>

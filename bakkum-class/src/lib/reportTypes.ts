@@ -20,6 +20,10 @@ export interface HwItem {
   completion: number; // 0..100
   status: "pending" | "done" | "late"; // 검사 전 / 검사완료 / 지연
   memo: string;
+  /** 지연(밀림) 횟수 — >0이면서 done이면 '지연검사완료'로 표시. */
+  delayCount?: number;
+  /** 실제 검사완료한 날짜(YYYY-MM-DD) — 지연 검사 시 '언제 검사했는지' 특이사항에 작게. */
+  checkedDate?: string;
 }
 
 export interface NoteItem {
@@ -46,11 +50,15 @@ export interface ProgressInfo {
   booksCompleted?: ProgressBook[]; // 이 달에 완료한 교재
 }
 
+/** 1:1 보충학습 한 줄 — 오늘/대시보드/리포트에서 입력한 보충수업(SupLog)과 같은 항목. */
 export interface SupItem {
   id: string;
-  date: string; // YYYY-MM-DD
-  minutes: number;
-  reason: string;
+  date: string; // 보충 일시 YYYY-MM-DD
+  minutes: number; // 보충 시간(분)
+  reason: string; // 보충 사유
+  name?: string; // 보충명
+  content?: string; // 학습내용
+  note?: string; // 비고
 }
 
 export interface ReportExtras {
@@ -59,7 +67,7 @@ export interface ReportExtras {
   evals: EvalItem[];
   homeworks: HwItem[];
   notes: NoteItem[];
-  /** 이번 달 보충수업(남은 분·사유) — 오늘 화면에서 입력된 것 자동 반영. */
+  /** 1:1 보충학습 — 오늘/대시보드/리포트에서 입력한 보충수업(SupLog) 자동 반영. */
   supplements?: SupItem[];
 }
 

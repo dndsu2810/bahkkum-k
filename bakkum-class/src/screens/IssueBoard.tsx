@@ -21,27 +21,29 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
 
   // 작성 폼
   const [page, setPage] = useState(defaultPage || "");
+  const [customPage, setCustomPage] = useState(""); // '직접 입력' 선택 시 화면 이름
   const [body, setBody] = useState("");
   const [shot, setShot] = useState("");
   const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
 
-  async function reload() {
-    setLoading(true);
+  // silent=true면 '불러오는 중…' 표시 없이 데이터만 제자리 갱신(목록 언마운트·스크롤 점프 방지).
+  async function refresh(silent = false) {
+    if (!silent) setLoading(true);
     try {
       const r = await feedbackApi.issues();
       setIssues(r.issues);
       setIsAdmin(r.isAdmin);
       setErr("");
     } catch {
-      setErr("불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+      if (!silent) setErr("불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
   useEffect(() => {
-    void reload();
+    void refresh();
     // 이 화면을 열면 내 글의 새 답변·해결을 '확인함'으로 → 종 배지 정리.
     feedbackApi.markIssuesSeen().then(() => window.dispatchEvent(new Event("issue-seen"))).catch(() => {});
   }, []);
@@ -51,14 +53,16 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
     setBusy(true);
     setErr("");
     try {
-      await feedbackApi.createIssue({ page, body: body.trim(), shot, link: link.trim() });
+      const screen = page === "__custom__" ? customPage.trim() : page;
+      await feedbackApi.createIssue({ page: screen, body: body.trim(), shot, link: link.trim() });
       setBody("");
       setShot("");
       setLink("");
       setPage(defaultPage || "");
+      setCustomPage("");
       setSent(true);
       setTimeout(() => setSent(false), 2000);
-      await reload();
+      await refresh(true);
     } catch {
       setErr("등록에 실패했어요. 다시 시도해 주세요.");
     } finally {
@@ -74,37 +78,40 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
     }
   }
   async function setStatus(i: Issue, status: string) {
+    setIssues((cur) => cur.map((x) => (x.id === i.id ? { ...x, status } : x))); // 즉시 반영
     try {
       await feedbackApi.setIssueStatus(i.id, status);
-      await reload();
     } catch {
       setErr("상태 변경에 실패했어요.");
+      await refresh(true);
     }
   }
   async function sendReply(i: Issue, reply: string, shot?: string) {
     try {
       await feedbackApi.replyIssue(i.id, reply.trim(), shot);
-      await reload();
+      await refresh(true); // 서버가 만든 답변 id·시각 반영(조용히)
     } catch {
       setErr("답변 저장에 실패했어요.");
     }
   }
   async function deleteReply(replyId: string) {
     if (!window.confirm("이 답변을 삭제할까요?")) return;
+    setIssues((cur) => cur.map((x) => ({ ...x, replies: (x.replies || []).filter((r) => r.id !== replyId) }))); // 즉시 반영
     try {
       await feedbackApi.removeReply(replyId);
-      await reload();
     } catch {
       setErr("답변 삭제에 실패했어요.");
+      await refresh(true);
     }
   }
   async function remove(i: Issue) {
     if (!window.confirm("이 요청을 삭제할까요?")) return;
+    setIssues((cur) => cur.filter((x) => x.id !== i.id)); // 즉시 반영
     try {
       await feedbackApi.removeIssue(i.id);
-      await reload();
     } catch {
       setErr("삭제에 실패했어요.");
+      await refresh(true);
     }
   }
 
@@ -138,8 +145,18 @@ export function IssueBoard({ defaultPage }: { defaultPage?: string } = {}) {
               {ISSUE_PAGES.map((pg) => (
                 <option key={pg} value={pg}>{pg}</option>
               ))}
+              <option value="__custom__">직접 입력…</option>
             </select>
           </label>
+          {page === "__custom__" && (
+            <input
+              className="input issue-custom-page"
+              autoFocus
+              value={customPage}
+              onChange={(e) => setCustomPage(e.target.value)}
+              placeholder="화면 이름을 직접 입력하세요 (예: 키오스크 등하원)"
+            />
+          )}
           <label className="issue-shot-btn">
             <Icon name="camera" /> {shot ? "사진 변경" : "스크린샷"}
             <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => onShot(e.target.files?.[0])} />

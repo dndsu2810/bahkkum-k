@@ -56,7 +56,7 @@ export function Login() {
         <div className="auth-brand">
           {logo.url ? <img className="auth-logo auth-logo-img" src={logo.url} alt="바꿈영수학원" /> : <span className="auth-logo soez-mark-bee"><Bee size={34} /></span>}
           <div>
-            <b>바꿈영수학원</b>
+            <b>쏘이지</b>
             <span>선생님·학생 로그인</span>
           </div>
         </div>

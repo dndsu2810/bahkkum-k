@@ -161,9 +161,15 @@
 .r-badge.done{ color:var(--teal-deep); background:var(--teal-tint) }
 .r-badge.late{ color:#9A6207; background:#F4EFE6 }
 .r-badge.pending{ color:var(--ink-3); background:#EFF2F4 }
+/* 지연검사완료 — 연한 붉은색 + 진한 붉은색 조합 */
+.r-badge.latedone{ color:#C0392B; background:#FBE3E1 }
 .r-hw-cmt{ display:flex; gap:9px; align-items:flex-start; padding:13px 20px; background:var(--teal-soft); border-top:1px solid var(--teal-tint) }
 .r-ck{ font-size:11.5px; font-weight:800; color:var(--teal); flex:none; padding-top:1px }
 .r-ctxt{ font-size:14px; font-weight:600; color:var(--ink-2); word-break:keep-all; line-height:1.6 }
+/* 지연 검사완료 — '언제 검사했는지'를 작게. 연한 붉은색 + 진한 붉은색 조합. */
+.r-hw-checkedat{ padding:8px 20px; background:#FCEBE9; border-top:1px solid #F4D3CF }
+.r-hw-checkedat .r-ck{ color:#C0392B }
+.r-hw-checkedat .r-ctxt{ font-size:12.5px; font-weight:600; color:#A33327 }
 .r-c-low{ background:var(--amber) } .r-c-mid{ background:var(--green) } .r-c-full{ background:var(--teal) }
 .r-t-low{ color:var(--amber) } .r-t-mid{ color:var(--green) } .r-t-full{ color:var(--teal-deep) }
 
@@ -189,8 +195,19 @@
 .r-ft .r-ftmeta{ font-size:12px; color:var(--ink-3); font-weight:600; text-align:right; line-height:1.6 }
 
 /* 보충수업 현황 */
-.r-sup{ display:flex; flex-direction:column; gap:8px }
+.r-sup{ display:flex; flex-direction:column; gap:12px }
+.r-sup-list{ display:flex; flex-direction:column; gap:8px }
 .r-sup-item{ display:flex; align-items:center; gap:12px; border:1px solid var(--line); border-radius:10px; padding:10px 14px; background:#fff }
 .r-sup-date{ font-size:13px; font-weight:700; color:#334155; white-space:nowrap; min-width:48px }
-.r-sup-min{ font-size:14px; font-weight:800; color:#1b3a63; white-space:nowrap; min-width:54px }
+.r-sup-min{ font-size:14px; font-weight:800; color:#1b3a63; white-space:nowrap; min-width:64px }
 .r-sup-reason{ font-size:13px; color:#475569; flex:1 }
+/* 1:1 보충학습 표 (수업명·학습내용·문항수·성취율·비고) */
+.r-suplearn{ border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#fff }
+.r-suplearn-row{ display:grid; grid-template-columns:.8fr .6fr 1fr 1.7fr 1.4fr 1fr; align-items:center; gap:10px; padding:10px 14px; border-top:1px solid var(--line); font-size:13px; color:#334155 }
+.r-suplearn-row:first-child{ border-top:none }
+.r-suplearn-head{ background:#1b3a63; color:#fff; font-weight:800; font-size:12.5px }
+.r-suplearn-head span{ text-align:center }
+.r-sl-subj{ font-weight:700 }
+.r-sl-content{ color:#475569 }
+.r-sl-num{ text-align:center; font-weight:700; color:#1b3a63 }
+.r-sl-note{ color:#475569 }

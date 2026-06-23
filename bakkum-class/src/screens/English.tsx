@@ -7,6 +7,7 @@ import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtMD, fmtMDDow, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
 import { Select, Empty } from "../components/ui";
+import { CopyMsgBtn, parentMakeupMsg, studentMakeupMsg } from "../components/MakeupList";
 import { useStore } from "../store";
 import { Icon } from "../icons";
 import { useApprovedChanges, arrivalOf, findSlotConflicts } from "../lib/changeReqLive";
@@ -61,6 +62,7 @@ const blankDaily = (studentId: string, date: string): EngDaily => ({
   points: 0,
   note: "",
   bookNo: "",
+  bookNext: "",
   wordTest: "",
   doneItems: [],
   comment: "",
@@ -73,6 +75,9 @@ const blankDaily = (studentId: string, date: string): EngDaily => ({
   testNone: false,
   updatedAt: 0,
 });
+
+/** 진도칩·요약에 보일 교재 표시 — 교재명 + 레벨(있으면). */
+const engBookLabel = (book: string, level: string) => book.trim() + (level.trim() ? " " + level.trim() : "");
 
 /** fromDate 다음의 첫 영어 수업 날짜(요일이 슬롯에 있는 날). 없으면 "". '다음 시간' 목표 이월용. */
 function nextEngDate(slots: { day: string }[], fromDate: string): string {
@@ -271,17 +276,17 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   };
   // 부제는 '이 화면에서 무엇을 하는지'만 사람 말로. (내부 동작 설명 X)
   const DESC: Record<Tab, string> = {
-    today: "오늘 등원 학생의 목표·숙제·코멘트를 기록하세요.",
-    tt: "이번 주 수업 시간표를 봅니다.",
-    att: "오늘 등원/지각/결석을 표시하세요. 결석은 보강 관리로 이어집니다.",
-    hw: "지난 숙제 검사와 오늘 내줄 숙제를 기록하세요.",
-    progress: "학생별 교재·진도를 기록하세요.",
-    test: "단어시험·테스트 점수를 기록하세요.",
-    makeup: "결석으로 생긴 보강 일정을 잡고 관리하세요.",
-    board: "이 반 학생들의 출결·진도·테스트 현황을 한눈에 봅니다.",
-    cur: "학생 화면에 보이는 '오늘 뭐해요?'(수업 내용)를 학생별로 수정하세요.",
-    items: "'오늘 한 것' 체크 항목을 추가·삭제하세요. 모두에게 또는 특정 학생에게.",
-    naesin: "내신기간 학생을 켜고 기간·학교·시험일을 정하세요. 켜진 기간엔 '오늘' 숙제가 자유입력+배부자료 기준으로 바뀝니다.",
+    today: "오늘 등원한 학생의 목표·숙제·코멘트를 기록해요.",
+    tt: "이번 주 수업 시간표를 봐요.",
+    att: "오늘 등원/지각/결석을 표시해요. 결석은 보강 관리로 이어져요.",
+    hw: "지난 숙제 검사와 오늘 내줄 숙제를 기록해요.",
+    progress: "학생별 교재·진도를 기록해요.",
+    test: "단어시험·테스트 점수를 기록해요.",
+    makeup: "결석으로 생긴 보강 일정을 잡고 관리해요.",
+    board: "이 반 학생들의 출결·진도·테스트 현황을 한눈에 봐요.",
+    cur: "학생 화면에 보이는 '오늘 뭐해요?'(수업 내용)를 학생별로 수정해요.",
+    items: "'오늘 한 것' 체크 항목을 추가·삭제해요. 모두에게 또는 특정 학생에게.",
+    naesin: "내신기간 학생을 켜고 기간·학교·시험일을 정해요. 켜진 기간엔 '오늘' 숙제가 자유입력+배부자료 기준으로 바뀌어요.",
   };
 
   // 시간표는 수학 주간 시간표와 동일 레이아웃(자체 page-head·주차 선택).
@@ -316,7 +321,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
       {showLive && <ConflictPopup conflicts={conflicts} date={date} />}
       {students.length === 0 && (
         <div className="hub-muted">
-          이 반에 배정된 영어 학생이 없어요. <b>학생 명단</b>에서 학생에 영어 + {band === "elem" ? "초등" : "중고등"}을 지정하세요.
+          이 반에 배정된 영어 학생이 없어요. <b>학생 명단</b>에서 학생에 영어 + {band === "elem" ? "초등" : "중고등"}을 지정해 주세요.
         </div>
       )}
 
@@ -350,10 +355,15 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
       ) : (
         <div className="eng-split">
           <div className="eng-side">
+            {band === "mid" && tab !== "today" && (
+              <button className="eng-rec-find" onClick={() => openModal(<StudentRecordPicker students={students} onPick={(s) => openModal(<StudentMonthlyModal studentId={s.id} name={s.name} naesin={naesinMap[s.id]} />)} />)}>
+                <Icon name="chart" /> 다른 학생 기록 찾기
+              </button>
+            )}
             {(tab === "today" ? todayList : students).length === 0 && (
               <div className="eng-side-empty">
                 {tab === "today"
-                  ? "오늘 등원 예정 학생이 없어요. 아래 ‘추가 등원’으로 학생을 추가하세요."
+                  ? "오늘 등원 예정 학생이 없어요. 아래 ‘추가 등원’으로 학생을 추가해 보세요."
                   : "표시할 학생이 없어요."}
               </div>
             )}
@@ -373,7 +383,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                     {tab === "today" && d && (d.hwChecked || hwProgress(d) !== null) && <span className="eng-dot ok" title="숙제 기록됨" />}
                   </button>
                   {band === "mid" && (
-                    <button className="eng-stu-rec" onClick={() => openModal(<StudentMonthlyModal studentId={s.id} name={s.name} />)} title="월별 누적 기록 보기" aria-label="월별 기록"><Icon name="chart" /></button>
+                    <button className="eng-stu-rec" onClick={() => openModal(<StudentMonthlyModal studentId={s.id} name={s.name} naesin={naesinMap[s.id]} />)} title="누적 기록 보기 (자료·진도·시험)" aria-label="누적 기록"><Icon name="chart" /></button>
                   )}
                 </div>
               );
@@ -596,6 +606,13 @@ function guessExamDate(events: EventItem[], school: string, today: string): stri
   return cand[0]?.date || "";
 }
 const NAESIN_BLANK = (sid: string): EngNaesin => ({ studentId: sid, on: false, startDate: "", endDate: "", school: "", grade: "", examDate: "", memo: "" });
+/** 토글은 켜졌지만 기간이 오늘을 벗어나 비활성일 때 사유. (활성이면 빈 문자열) */
+function naesinOffReason(rec: EngNaesin, today: string): string {
+  if (!rec.on || naesinActiveOn(rec, today)) return "";
+  if (rec.endDate && today > rec.endDate) return "기간 지남 · 평소 모드";
+  if (rec.startDate && today < rec.startDate) return "시작 전 · 평소 모드";
+  return "평소 모드";
+}
 
 function EngNaesinPanel({ students, naesinMap, onChanged }: { students: RosterStudent[]; naesinMap: Record<string, EngNaesin>; onChanged: () => void }) {
   const today = todayStr();
@@ -704,6 +721,7 @@ function EngNaesinPanel({ students, naesinMap, onChanged }: { students: RosterSt
                     </button>
                     <span className="naesin-name">{s.name}{s.grade && <span className="naesin-grade">{s.grade}</span>}</span>
                     {active && <span className="badge b-purple">내신중</span>}
+                    {!active && r.on && <span className="badge b-gray" title="시작·종료일이 오늘을 벗어나 평소 모드(단어·리딩·문법)로 보여요. 기간을 비우면 계속 내신모드예요.">{naesinOffReason(r, today)}</span>}
                     {r.on && r.examDate && <span className="naesin-dday">{ddayLabel(r.examDate, today)}</span>}
                   </div>
                   {r.on && (
@@ -796,15 +814,6 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
   }, [d, autoSave, dirty]);
   // 포인트 자동 적립 미리보기(출결·숙제 + 카탈로그 점수). 저장 시 서버가 동일 규칙으로 확정.
   const autoPts = useMemo(() => autoPointsOf(d, catMapOf(reasonsAll)), [d, reasonsAll]);
-
-  // 진행중 교재(진도·교재관리, '진도 기록' 탭) — 중고등 작업 화면에도 교재명을 보여준다.
-  const [progBooks, setProgBooks] = useState<string[]>([]);
-  useEffect(() => {
-    if (!showHw) { setProgBooks([]); return; }
-    let alive = true;
-    engApi.progress(d.studentId).then((list) => { if (alive) setProgBooks([...new Set(list.filter((p) => p.status === "진행" && p.book.trim()).map((p) => p.book.trim()))]); }).catch(() => {});
-    return () => { alive = false; };
-  }, [d.studentId, showHw]);
 
   // 내신모드 자유 숙제 — 지난 회차 '내줄 숙제'를 이번 '숙제 검사'로 이어 보여주기 + 배부 자료 기준 숙제.
   const [hist, setHist] = useState<EngDaily[]>([]);
@@ -1023,22 +1032,8 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
         </div>
       )}
 
-      {/* 중고등영어도 초등처럼 진도 체크 — 진도(교재·범위) + 단어시험 */}
-      {showHw && (
-        <div className="eng-field">
-          <div className="eng-label">진도 체크</div>
-          {progBooks.length > 0 && (
-            <div className="sp-progbooks" style={{ marginBottom: 8 }}>
-              <span className="sp-progbooks-l">교재</span>
-              {progBooks.map((b) => <span className="sp-hw-chip" key={b}>{b}</span>)}
-            </div>
-          )}
-          <div className="eng-grid2">
-            <input className="input" value={d.bookNo} onChange={(e) => setD({ ...d, bookNo: e.target.value })} placeholder="진도 (교재·범위, 예: Insight 3과)" />
-            <input className="input" value={d.wordTest} onChange={(e) => setD({ ...d, wordTest: e.target.value })} placeholder="단어시험 (예: 18/20)" />
-          </div>
-        </div>
-      )}
+      {/* 중고등영어 진도 체크는 학습 목표와 중복이라 제거됨(오늘 한 것·다음에 할 것·단어시험).
+          진도·교재는 '진도 기록' 탭, 단어 점수는 아래 '오늘 시험 기록'에서 입력해요. */}
 
       {/* 초등영어 수업일지 — 원서 진도·활동·단어시험 */}
       {!showHw && (
@@ -1715,7 +1710,7 @@ function EngTimetable({
 
       {total === 0 ? (
         <div className="hub-muted" style={{ padding: 20 }}>
-          이 주에 표시할 영어 수업이 없어요. <b>학생 명단</b>에서 학생 프로필 → 영어 수업시간을 입력하세요.
+          이 주에 표시할 영어 수업이 없어요. <b>학생 명단</b>에서 학생 프로필 → 영어 수업시간을 입력해 주세요.
         </div>
       ) : (
         <div className="card eng-week">
@@ -1885,6 +1880,8 @@ function EngMakeupRow({ mk, name, onEdit, onStatus, onRemove }: { mk: EngMakeup;
         </div>
       </div>
       <div className="mk-actions">
+        {!waiting && <CopyMsgBtn label="학부모 문자" text={parentMakeupMsg(name, mk, "영어")} />}
+        {!waiting && <CopyMsgBtn label="학생 문자" text={studentMakeupMsg(name, mk, "영어")} />}
         {waiting ? (
           <button className="btn primary sm" onClick={onEdit}><Icon name="calplus" />보강 일정</button>
         ) : st === "예정" ? (
@@ -1967,7 +1964,7 @@ function attTone(st: string): string {
   return st === "출석" ? "b-green" : st === "지각" || st === "조퇴" ? "b-orange" : st === "보강" ? "b-blue" : "b-gray";
 }
 function DashCard({
-  s, daily, band, date, getDaily, saveDaily, doneOptions, reasonsAll, onAddDoneItem, onAddNextGoal, examMode,
+  s, daily, band, date, getDaily, saveDaily, doneOptions, reasonsAll, onAddDoneItem, onAddNextGoal, examMode, open, onToggleOpen, out, onToggleOut,
 }: {
   s: RosterStudent;
   daily: Record<string, EngDaily>;
@@ -1980,39 +1977,49 @@ function DashCard({
   onAddDoneItem: (label: string, scope?: "all" | "student") => void;
   onAddNextGoal?: (sid: string, text: string) => void;
   examMode: boolean;
+  open: boolean;
+  onToggleOpen: () => void;
+  out: boolean;
+  onToggleOut: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const { openModal } = useStore();
   const d = daily[s.id];
   const st = d?.attStatus || (d?.attended ? "출석" : "");
   // 의미 있는 진행 상태 — 목표 수, 숙제검사 완/미완, 코멘트 완/미완.
   const goals = d?.goals?.length || 0;
-  const hwOk = !!d?.hwChecked || [d?.hwWord, d?.hwReading, d?.hwGrammar].some((x) => x === "완료");
-  const hasComment = !!(d?.comment && d.comment.trim());
+  // 숙제검사 완료 판정 — 일반 모드(hwWord/Reading/Grammar) + 내신대비(hwCheck 항목마다 상태 지정됨)도 인정.
+  const examHwOk = (d?.hwCheck?.length || 0) > 0 && (d?.hwCheck || []).every((c) => !!c.status);
+  const hwOk = !!d?.hwChecked || [d?.hwWord, d?.hwReading, d?.hwGrammar].some((x) => x === "완료") || examHwOk;
+  // 코멘트 — 수업 코멘트 또는 숙제 코멘트(내신대비) 중 하나라도 있으면 완료.
+  const hasComment = !!(d?.comment && d.comment.trim()) || !!(d?.hwComment && d.hwComment.trim());
   // 진행중 영어 교재(진도·교재관리) — 영어 화면이므로 영어 진도만 보여준다(수학과 섞지 않음).
   const [progBooks, setProgBooks] = useState<string[]>([]);
   useEffect(() => {
     let alive = true;
-    engApi.progress(s.id).then((list) => { if (alive) setProgBooks([...new Set(list.filter((p) => p.status === "진행" && p.book.trim()).map((p) => p.book.trim()))]); }).catch(() => {});
+    engApi.progress(s.id).then((list) => { if (alive) setProgBooks([...new Set(list.filter((p) => p.status === "진행" && p.book.trim()).map((p) => engBookLabel(p.book, p.level)))]); }).catch(() => {});
     return () => { alive = false; };
   }, [s.id]);
   return (
-    <div className={"eng-dash-card" + (open ? " open" : "")}>
+    <div id={"engcard-" + s.id} className={"eng-dash-card" + (open ? " open" : "") + (out ? " out" : "")}>
       {/* 상단 — 현재 진행상황 요약(항상 보임) */}
       <div className="eng-dash-sum">
         <span className="eng-dash-sum-name">{s.name}</span>
+        <button className="eng-dash-rec" onClick={() => openModal(<StudentMonthlyModal studentId={s.id} name={s.name} />)} title="누적 기록 보기 (자료·진도·시험)" aria-label="누적 기록"><Icon name="chart" /></button>
         <span className="eng-dash-sum-tags">
+          {out && <span className="badge b-gray">하원</span>}
           {st ? <span className={"badge " + attTone(st)}>{st}{st === "지각" && d?.lateMin ? ` ${d.lateMin}분` : ""}</span> : null}
           {progBooks.length > 0 && <span className="eng-sum-chip" title="진도·교재관리 진행중 교재">교재 {progBooks.join(", ")}</span>}
           {goals > 0 && <span className="eng-sum-chip">목표 {goals}</span>}
           {band !== "elem" && <span className={"eng-sum-chip" + (hwOk ? " ok" : " todo")}>숙제검사 {hwOk ? "완료" : "미완"}</span>}
           <span className={"eng-sum-chip" + (hasComment ? " ok" : " todo")}>코멘트 {hasComment ? "완료" : "미완"}</span>
         </span>
+        <button className={"eng-dash-out" + (out ? " on" : "")} onClick={onToggleOut} title={out ? "다시 등원으로 (맨 위로)" : "하원 — 카드를 맨 아래로 접어요"}>{out ? "등원" : "하원"}</button>
       </div>
       {/* 아래 — 접혀 있을 땐 블러로 살짝 보이고, 펼치면 입력(자동 저장) */}
       <div className={"eng-dash-peek" + (open ? " open" : "")}>
         <DailyEditor student={s.name} band={band} value={getDaily(s.id)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examMode} compact autoSave key={s.id} planNextDate={nextEngDate(s.engSlots, date)} />
       </div>
-      <button className="eng-dash-more" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <button className="eng-dash-more" onClick={onToggleOpen} aria-expanded={open}>
         {open ? "접기" : "자세히 보기 / 입력하기"}
       </button>
     </div>
@@ -2034,12 +2041,28 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
   onAddDoneItem: (label: string, scope?: "all" | "student") => void; onAddNextGoal?: (sid: string, text: string) => void; examModeOf?: (sid: string) => boolean;
 }) {
   const [q, setQ] = useState("");
+  // 카드 펼침(자세히 보기) 제어 — 칩을 누르면 그 학생 카드를 펼치고 그 위치로 스크롤한다.
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+  // 하원한 학생 — 카드를 맨 아래로 내리고 접는다(이 화면에서만, 새로고침하면 초기화).
+  const [outIds, setOutIds] = useState<Set<string>>(new Set());
+  const toggleOpen = (id: string) => setOpenIds((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleOut = (id: string) => {
+    const willOut = !outIds.has(id);
+    setOutIds((p) => { const n = new Set(p); willOut ? n.add(id) : n.delete(id); return n; });
+    if (willOut) setOpenIds((p) => { const n = new Set(p); n.delete(id); return n; }); // 하원하면 접기
+  };
+  const focusCard = (id: string) => {
+    setOpenIds((p) => new Set(p).add(id)); // 그 학생 입력란을 펼치고
+    window.setTimeout(() => document.getElementById("engcard-" + id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  };
   const attended = students.filter((s) => daily[s.id]?.attended);
   const attSet = new Set(attended.map((s) => s.id));
+  // 하원 학생은 맨 아래로(안정 정렬).
+  const ordered = [...attended].sort((a, b) => (outIds.has(a.id) ? 1 : 0) - (outIds.has(b.id) ? 1 : 0));
   const candidates = students.filter((s) => scheduledIds.has(s.id) && !attSet.has(s.id));
   const hits = q.trim() ? students.filter((s) => !attSet.has(s.id) && s.name.includes(q.trim())).slice(0, 24) : [];
   const markIn = (sid: string) => { setStatus(sid, "출석"); setQ(""); };
-  const markOut = (sid: string) => { void saveDaily({ ...getDaily(sid), attStatus: "", attended: false, lateMin: 0 }); };
+  const markOut = (sid: string) => { void saveDaily({ ...getDaily(sid), attStatus: "", attended: false, lateMin: 0 }); setOutIds((p) => { const n = new Set(p); n.delete(sid); return n; }); };
   return (
     <div className="eng-dash">
       <div className="eng-dash-sec">
@@ -2048,8 +2071,11 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
         </div>
         {attended.length > 0 && (
           <div className="eng-chiprow" style={{ marginBottom: 10 }}>
-            {attended.map((s) => (
-              <span className="eng-in-chip" key={s.id}>{s.name}<button className="eng-in-x" onClick={() => markOut(s.id)} aria-label="등원 취소">×</button></span>
+            {ordered.map((s) => (
+              <span className={"eng-in-chip" + (outIds.has(s.id) ? " out" : "")} key={s.id}>
+                <button type="button" className="eng-in-nm" onClick={() => focusCard(s.id)} title="이 학생 입력란으로 이동">{s.name}</button>
+                <button className="eng-in-x" onClick={() => markOut(s.id)} aria-label="등원 취소" title="등원 취소 (실수로 등원 처리했을 때)">×</button>
+              </span>
             ))}
           </div>
         )}
@@ -2068,8 +2094,8 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
       </div>
       {attended.length > 0 && (
         <div className="eng-dash-cards">
-          {attended.map((s) => (
-            <DashCard key={s.id} s={s} daily={daily} band={band} date={date} getDaily={getDaily} saveDaily={saveDaily} doneOptions={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examModeOf ? examModeOf(s.id) : false} />
+          {ordered.map((s) => (
+            <DashCard key={s.id} s={s} daily={daily} band={band} date={date} getDaily={getDaily} saveDaily={saveDaily} doneOptions={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examModeOf ? examModeOf(s.id) : false} open={openIds.has(s.id)} onToggleOpen={() => toggleOpen(s.id)} out={outIds.has(s.id)} onToggleOut={() => toggleOut(s.id)} />
           ))}
         </div>
       )}
@@ -2110,8 +2136,8 @@ function EngDashboard({
   examModeOf?: (sid: string) => boolean;
 }) {
   const { openModal } = useStore();
-  const showHw = band !== "elem"; // 초등영어는 숙제 없음
-  const canInputCards = showHw && !!todayList && !!getDaily && !!saveDaily && !!setStatus;
+  // 초등·중고등 모두 같은 카드형 대시보드를 쓴다(입력 항목만 DailyEditor가 band로 달리 보여줌).
+  const canInputCards = !!todayList && !!getDaily && !!saveDaily && !!setStatus;
 
   // 진행중 교재(진도·교재관리) — 학생별 맵. 초등 대시보드 표/상세에 교재명 표시(중고등은 DashCard에서 따로).
   const [booksByStudent, setBooksByStudent] = useState<Record<string, string[]>>({});
@@ -2250,11 +2276,38 @@ function ElemDailyModal({ name, d, books = [] }: { name: string; d?: EngDaily; b
   );
 }
 /* 학생 월별 누적 기록 — 출결·숙제·시험·포인트·학습목표 집계 + 날짜별 표. 중고등영어 학생 클릭 시. */
-function StudentMonthlyModal({ studentId, name }: { studentId: string; name: string }) {
+// 전체 학생 중에서 골라 누적 기록 열기(오늘 안 온 학생도).
+function StudentRecordPicker({ students, onPick }: { students: RosterStudent[]; onPick: (s: RosterStudent) => void }) {
   const { closeModal } = useStore();
+  const [q, setQ] = useState("");
+  const list = students.filter((s) => !q.trim() || s.name.includes(q.trim()));
+  return (
+    <>
+      <div className="modal-head">
+        <div className="modal-title">학생 기록 찾기</div>
+        <button className="modal-x" onClick={closeModal} aria-label="닫기"><Icon name="x" /></button>
+      </div>
+      <div className="modal-body">
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="학생 이름 검색" autoFocus />
+        <div className="eng-rec-list">
+          {list.length === 0 ? <div className="hub-muted" style={{ padding: 10 }}>학생이 없어요.</div> : list.map((s) => (
+            <button key={s.id} className="eng-rec-row" onClick={() => onPick(s)}><span>{s.name}</span><Icon name="chart" /></button>
+          ))}
+        </div>
+      </div>
+      <div className="modal-foot"><button className="btn ghost" onClick={closeModal}>닫기</button></div>
+    </>
+  );
+}
+function StudentMonthlyModal({ studentId, name, naesin }: { studentId: string; name: string; naesin?: EngNaesin }) {
+  const { closeModal } = useStore();
+  const bodyRef = useRef<HTMLDivElement>(null);
   const [daily, setDaily] = useState<EngDaily[]>([]);
   const [tests, setTests] = useState<EngTest[]>([]);
-  const [month, setMonth] = useState("");
+  const [period, setPeriod] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [naesinRec, setNaesinRec] = useState<EngNaesin | undefined>(naesin);
+  useEffect(() => { engApi.naesin().then((l) => setNaesinRec(l.find((r) => r.studentId === studentId))).catch(() => {}); }, [studentId]);
   // 열려 있는 동안 조용히 주기적 갱신 — 로딩 표시·스크롤 초기화 없이 데이터만 제자리 갱신(화면이 튀지 않게).
   useEffect(() => {
     const load = () => {
@@ -2271,9 +2324,14 @@ function StudentMonthlyModal({ studentId, name }: { studentId: string; name: str
     () => [...new Set([...daily.map((d) => d.date.slice(0, 7)), ...tests.map((t) => t.date.slice(0, 7))])].filter(Boolean).sort().reverse(),
     [daily, tests]
   );
-  useEffect(() => { if (months.length && !months.includes(month)) setMonth(months[0]); }, [months, month]);
-  const mDaily = useMemo(() => daily.filter((d) => d.date.slice(0, 7) === month).sort((a, b) => (a.date < b.date ? -1 : 1)), [daily, month]);
-  const mTests = useMemo(() => tests.filter((t) => t.date.slice(0, 7) === month).sort((a, b) => (a.date < b.date ? -1 : 1)), [tests, month]);
+  const fmtMonth = (ym: string) => { const [y, m] = ym.split("-"); return `${y}년 ${Number(m)}월`; };
+  // 기간 선택 — 내신기간(설정돼 있으면)을 첫 칩으로, 그다음 월별.
+  const naesinRange = naesinRec?.on && naesinRec.startDate ? { from: naesinRec.startDate, to: naesinRec.endDate || "9999-12-31" } : null;
+  const periods = [...(naesinRange ? [{ key: "naesin", label: "내신기간" }] : []), ...months.map((ym) => ({ key: ym, label: fmtMonth(ym) }))];
+  useEffect(() => { if (periods.length && !periods.some((p) => p.key === period)) setPeriod(periods[0].key); }, [periods, period]);
+  const inPeriod = (date: string) => (period === "naesin" ? !!naesinRange && date >= naesinRange.from && date <= naesinRange.to : date.slice(0, 7) === period);
+  const mDaily = useMemo(() => daily.filter((d) => inPeriod(d.date)).sort((a, b) => (a.date < b.date ? -1 : 1)), [daily, period, naesinRec]);
+  const mTests = useMemo(() => tests.filter((t) => inPeriod(t.date)).sort((a, b) => (a.date < b.date ? -1 : 1)), [tests, period, naesinRec]);
   const attDays = mDaily.filter((d) => d.attStatus).length;
   const present = mDaily.filter((d) => ["출석", "지각", "조퇴"].includes(d.attStatus)).length;
   const lateN = mDaily.filter((d) => d.attStatus === "지각").length;
@@ -2283,22 +2341,41 @@ function StudentMonthlyModal({ studentId, name }: { studentId: string; name: str
   const goalsDone = mDaily.reduce((n, d) => n + (d.goals?.filter((g) => g.done).length || 0), 0);
   const cnt = (f: "hwWord" | "hwReading" | "hwGrammar", v: HwStatus) => mDaily.filter((d) => d[f] === v).length;
   const hwLine = (label: string, f: "hwWord" | "hwReading" | "hwGrammar") => `${label} · 완료 ${cnt(f, "완료")} / 미흡 ${cnt(f, "미흡")} / 안함 ${cnt(f, "안함")}`;
-  const fmtMonth = (ym: string) => { const [y, m] = ym.split("-"); return `${y}년 ${Number(m)}월`; };
   const md = (date: string) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+  const periodLabel = periods.find((p) => p.key === period)?.label || "";
+  async function exportImage(print: boolean) {
+    const el = bodyRef.current; if (!el) return;
+    setExporting(true);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(el, { backgroundColor: "#ffffff", scale: 2 });
+      if (print) {
+        const w = window.open("", "_blank"); if (!w) return;
+        w.document.write(`<img src="${canvas.toDataURL("image/png")}" style="width:100%" onload="setTimeout(()=>{print()},200)" />`);
+        w.document.close();
+      } else {
+        const a = document.createElement("a");
+        a.href = canvas.toDataURL("image/png");
+        a.download = `${name}_${periodLabel || "기록"}.png`;
+        a.click();
+      }
+    } catch { alert("내보내기에 실패했어요."); }
+    finally { setExporting(false); }
+  }
   return (
     <>
       <div className="modal-head">
-        <div className="modal-title">{name} · 월별 누적 기록</div>
+        <div className="modal-title">{name} · 누적 기록</div>
         <button className="modal-x" onClick={closeModal} aria-label="닫기"><Icon name="x" /></button>
       </div>
-      <div className="modal-body">
-        {months.length === 0 ? (
+      <div className="modal-body" ref={bodyRef}>
+        {periods.length === 0 ? (
           <div className="hub-muted">아직 기록이 없어요.</div>
         ) : (
           <>
             <div className="sm-months">
-              {months.map((ym) => (
-                <button key={ym} className={"sm-month" + (ym === month ? " on" : "")} onClick={() => setMonth(ym)}>{fmtMonth(ym)}</button>
+              {periods.map((p) => (
+                <button key={p.key} className={"sm-month" + (p.key === period ? " on" : "") + (p.key === "naesin" ? " naesin" : "")} onClick={() => setPeriod(p.key)}>{p.label}</button>
               ))}
             </div>
             <div className="smm-stats">
@@ -2328,6 +2405,40 @@ function StudentMonthlyModal({ studentId, name }: { studentId: string; name: str
               )}
             </div>
             <div className="smm-block">
+              <div className="smm-block-h">자료·진도·시험 흐름 <span className="smm-flow-hint">최근 순 · 다음 진도 정할 때 참고</span></div>
+              {(() => {
+                const byDate: Record<string, EngTest[]> = {};
+                for (const t of mTests) (byDate[t.date] ||= []).push(t);
+                const flow = [...mDaily].sort((a, b) => (a.date < b.date ? 1 : -1)).filter((d) => {
+                  const hw = d.hwAssign?.length ? d.hwAssign.join(", ") : d.homework;
+                  return d.bookNo || (d.doneItems?.length) || d.materials || hw || (byDate[d.date]?.length);
+                });
+                if (flow.length === 0) return <div className="hub-muted">기록 없음</div>;
+                return (
+                  <div className="smm-flow">
+                    {flow.map((d) => {
+                      const prog = [d.bookNo, ...(d.doneItems || [])].filter(Boolean).join(", ");
+                      const hw = d.hwAssign?.length ? d.hwAssign.join(", ") : d.homework;
+                      const ts = byDate[d.date] || [];
+                      return (
+                        <div className="smm-flow-it" key={d.date}>
+                          <span className="smm-flow-d">{md(d.date)}</span>
+                          <div className="smm-flow-body">
+                            {prog && <div><span className="smm-flow-tag">진도</span>{prog}</div>}
+                            {d.materials && <div><span className="smm-flow-tag">자료</span>{d.materials}</div>}
+                            {hw && <div><span className="smm-flow-tag">숙제</span>{hw}</div>}
+                            {ts.map((t) => (
+                              <div key={t.id}><span className="smm-flow-tag test">시험</span>{t.name} {t.score}/{t.total}{t.result ? ` · ${t.result}` : ""}</div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="smm-block">
               <div className="smm-block-h">날짜별</div>
               <table className="smm-tbl">
                 <thead><tr><th>날짜</th><th>출결</th><th>단어</th><th>리딩</th><th>문법</th><th>점</th></tr></thead>
@@ -2347,7 +2458,9 @@ function StudentMonthlyModal({ studentId, name }: { studentId: string; name: str
         )}
       </div>
       <div className="modal-foot">
-        <button className="btn primary" onClick={closeModal}>닫기</button>
+        {periods.length > 0 && <button className="btn ghost" disabled={exporting} onClick={() => exportImage(false)}><Icon name="camera" /> {exporting ? "처리 중…" : "이미지 저장"}</button>}
+        {periods.length > 0 && <button className="btn ghost" disabled={exporting} onClick={() => exportImage(true)}><Icon name="fileText" /> 인쇄</button>}
+        <button className="btn primary" onClick={closeModal} style={{ marginLeft: "auto" }}>닫기</button>
       </div>
     </>
   );

@@ -77,8 +77,8 @@ export async function handlePost(env: Env, request: Request, p: string, me: Sess
   // 목록 — 학생은 audience='all'만. 읽음 여부 포함.
   if (p === "/api/posts" && m === "GET") {
     const q = isStaff
-      ? env.DB.prepare("SELECT id,title,audience,banner,author_name,editor_name,files,created_at,updated_at FROM class_post ORDER BY created_at DESC LIMIT 300")
-      : env.DB.prepare("SELECT id,title,audience,banner,author_name,editor_name,files,created_at,updated_at FROM class_post WHERE audience='all' ORDER BY created_at DESC LIMIT 300");
+      ? env.DB.prepare("SELECT id,title,audience,banner,author_name,editor_name,files,created_at,updated_at FROM class_post ORDER BY updated_at DESC LIMIT 300")
+      : env.DB.prepare("SELECT id,title,audience,banner,author_name,editor_name,files,created_at,updated_at FROM class_post WHERE audience='all' ORDER BY updated_at DESC LIMIT 300");
     const r = await q.all<Record<string, unknown>>();
     const rows = r.results || [];
     const readSet = new Set<string>();

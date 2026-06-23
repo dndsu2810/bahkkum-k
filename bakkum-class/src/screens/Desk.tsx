@@ -4,6 +4,8 @@ import { listUsers, type UserRow } from "../lib/authApi";
 import { ROLE_LABEL } from "../lib/roles";
 import { DOW_ORDER } from "../lib/dates";
 import { todayApi, type TodayRecord } from "../lib/adminApi";
+import { useAuth } from "../auth";
+import { ProfileModal } from "./StudentMaster";
 
 type Tab = "today" | "timetable" | "students" | "accounts";
 
@@ -20,12 +22,17 @@ const fmtTime = (t: string): string => {
 
 /** 데스크 화면 — 전체 시간표(수학 기준) · 학생 조회 · 강사 계정 리스트. 운영 보조용 조회 중심. */
 export function Desk({ tab: initialTab }: { tab?: Tab } = {}) {
+  const { user } = useAuth();
+  const canEdit = !!user && user.role !== "student";
   const [tab, setTab] = useState<Tab>(initialTab || "today");
   const [roster, setRoster] = useState<RosterStudent[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [tt, setTt] = useState<TtLesson[]>([]);
   const [today, setToday] = useState<{ date: string; records: TodayRecord[] } | null>(null);
   const [err, setErr] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const openStudent = roster.find((r) => r.id === openId) || null;
+  const applyLocal = (next: RosterStudent) => setRoster((cur) => cur.map((r) => (r.id === next.id ? next : r)));
 
   useEffect(() => {
     getRoster().then(setRoster).catch(() => setErr("명단을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."));
@@ -39,13 +46,13 @@ export function Desk({ tab: initialTab }: { tab?: Tab } = {}) {
 
   // 요일별로 '같은 시간대'를 묶어서 한 줄에 모아 보여준다(수학·영어 통합).
   const byDay = useMemo(() => {
-    const map: Record<string, Record<string, { name: string; subject: string }[]>> = {};
+    const map: Record<string, Record<string, { studentId: string; name: string; subject: string }[]>> = {};
     for (const d of DOW_ORDER) map[d] = {};
     for (const l of tt) {
       (map[l.day] ||= {});
-      (map[l.day][l.time] ||= []).push({ name: l.name, subject: l.subject });
+      (map[l.day][l.time] ||= []).push({ studentId: l.studentId, name: l.name, subject: l.subject });
     }
-    const out: Record<string, { time: string; people: { name: string; subject: string }[] }[]> = {};
+    const out: Record<string, { time: string; people: { studentId: string; name: string; subject: string }[] }[]> = {};
     for (const d of DOW_ORDER) {
       out[d] = Object.keys(map[d] || {})
         .sort((a, b) => timeKey(a) - timeKey(b))
@@ -93,9 +100,14 @@ export function Desk({ tab: initialTab }: { tab?: Tab } = {}) {
                   <div className="desk-tt-row" key={i}>
                     <span className="desk-tt-time">{fmtTime(slot.time)}</span>
                     <span className="desk-tt-names">
-                      {slot.people.map((p, j) => (
-                        <span className={"desk-tt-name " + (p.subject === "english" ? "eng" : "math")} key={j}>{p.name}</span>
-                      ))}
+                      {slot.people.map((p, j) => {
+                        const cls = "desk-tt-name " + (p.subject === "english" ? "eng" : "math");
+                        return roster.some((r) => r.id === p.studentId) ? (
+                          <button type="button" className={cls + " is-link"} key={j} onClick={() => setOpenId(p.studentId)} title="학생 정보 보기">{p.name}</button>
+                        ) : (
+                          <span className={cls} key={j}>{p.name}</span>
+                        );
+                      })}
                     </span>
                   </div>
                 ))}
@@ -150,6 +162,10 @@ export function Desk({ tab: initialTab }: { tab?: Tab } = {}) {
             비밀번호는 보안상 표시되지 않습니다. 계정 추가·비번 변경은 원장 설정에서 합니다.
           </p>
         </>
+      )}
+
+      {openStudent && (
+        <ProfileModal key={openStudent.id} student={openStudent} canEdit={canEdit} onClose={() => setOpenId(null)} onSaved={applyLocal} />
       )}
     </div>
   );

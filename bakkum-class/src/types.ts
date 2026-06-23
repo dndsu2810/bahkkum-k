@@ -89,6 +89,8 @@ export interface HwLog {
   recheckDate?: string;
   /** 결석 자동 이월 출처 날짜(YYYY-MM-DD). 그 날 결석으로 다음 등원일로 넘겨짐 → 출석으로 바꾸면 복원. */
   carriedFrom?: string;
+  /** 실제로 검사완료한 날짜(YYYY-MM-DD). 지연 숙제를 며칠 뒤 검사하면 '언제 검사했는지'를 기록 → 월말리포트 특이사항. */
+  checkedDate?: string;
 }
 
 /** A progress record (진도·교재관리). 교재 단위로 관리: 시작일 입력 → 완료 전까지 '진행중' → 완료하면 '교재 완료'. */
@@ -101,15 +103,22 @@ export interface ProgLog {
   startDate: string; // 학습 시작일
   endDate?: string; // 완료일(완료 시 기록)
   memo: string;
+  updatedAt?: number; // 마지막 수정 시각 — 수정한 교재를 목록 위로 올리는 정렬용(없으면 시작일로 대체)
 }
 
 /** 보충수업 기록 — 그날 채우지 못해 '남은' 수업 분과 사유. 오늘 화면에서 입력 → 월말리포트 반영. */
 export interface SupLog {
   id: string;
   studentId: string;
-  date: string; // YYYY-MM-DD
-  minutes: number; // 남은(보충 필요) 분
-  reason: string; // 왜 남았는지
+  date: string; // 보충 일시 YYYY-MM-DD
+  minutes: number; // 보충 시간(분)
+  reason: string; // 보충 사유
+  /** 보충명 (예: 연산학습, 서술형 특강) — 1:1 보충학습 표. */
+  name?: string;
+  /** 학습내용 — 1:1 보충학습 표. */
+  content?: string;
+  /** 비고 — 1:1 보충학습 표. */
+  note?: string;
 }
 
 /** A test/평가 record (테스트 관리 → 노션 수학 테스트 DB와 동일 양식 → 월말리포트 평가에 누적). */
@@ -120,9 +129,15 @@ export interface TestLog {
   type: string; // 시험 유형 (예: 주간평가, 경시대회)
   round: string; // 회차 (예: 6월 2주차)
   range: string; // 시험 범위
-  score: number; // 점수 (status가 '예정'이면 미입력으로 간주)
+  score: number; // 환산 점수 0~100 (status가 '예정'이면 미입력으로 간주). 월말리포트·노션이 쓰는 최종 값.
   status: "예정" | "완료"; // 평가 상태
   memo: string; // 특이사항
+  /** 점수 입력 방식 — 'score' 점수 직접 / 'max' 점수·만점 / 'ratio' 맞힌수·총문항. 없으면 'score'(기존 기록 호환). */
+  scoreMode?: "score" | "max" | "ratio";
+  /** 'max'면 받은 점수, 'ratio'면 맞힌 갯수. (표시·재계산용) */
+  scoreNum?: number;
+  /** 'max'면 만점, 'ratio'면 총 문항수. (표시·재계산용) */
+  scoreDen?: number;
 }
 
 /** 강사 업무 보드(칸반) 카드 1장. */

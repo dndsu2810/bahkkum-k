@@ -103,7 +103,7 @@ export function Materials() {
       <div className="sm-head">
         <div>
           <h1 className="sm-title">자료 / 프린트 배부</h1>
-          <p className="sm-desc">인쇄할 프린트를 등록하고, 인쇄해두면 학생에게 수업·숙제로 배부하세요. 누가 받았는지·완료됐는지 한눈에 봅니다.</p>
+          <p className="sm-desc">인쇄할 프린트를 등록하고, 인쇄해두면 학생에게 수업·숙제로 배부해요. 누가 받았는지·완료됐는지 한눈에 봐요.</p>
         </div>
         <div className="cal-viewtoggle">
           {FILTERS.map((f) => (

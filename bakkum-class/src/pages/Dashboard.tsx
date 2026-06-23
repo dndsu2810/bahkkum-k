@@ -15,6 +15,7 @@ import { buildReport, copyText } from "../lib/report";
 import { parseGrade } from "../lib/grade";
 import { WeekdayBars } from "../components/charts";
 import { StudentTable } from "../components/StudentTable";
+import { StudentModal } from "../components/modals";
 import { Select } from "../components/ui";
 import { Icon, type IconName } from "../icons";
 
@@ -46,7 +47,7 @@ function Stat({ icon, tone, num, label, sub }: { icon: IconName; tone: string; n
 
 
 export function Dashboard() {
-  const { data, toast } = useStore();
+  const { data, toast, openModal } = useStore();
   const [curMonth, setCurMonth] = useState(curMonthStr());
 
   const active = activeStudents(data.students); // 전체 재원 (명단엔 전원 표시)
@@ -161,12 +162,12 @@ export function Dashboard() {
           <div>
             <div className="card-title">재원 학생</div>
             <div className="card-sub">
-              전체 {active.length}명{fresh.length ? ` · 이번 달 재적 ${enrolled.length}명 (신규 ${fresh.length}명은 다음 달부터)` : ""}
+              전체 {active.length}명{fresh.length ? ` · 이번 달 재적 ${enrolled.length}명 (신규 ${fresh.length}명은 다음 달부터)` : ""} · 학생을 누르면 상세정보가 떠요
             </div>
           </div>
         </div>
         <div className="tbl-wrap">
-          <StudentTable list={active} withActions={false} />
+          <StudentTable list={active} withActions={false} onRowClick={(id) => openModal(<StudentModal id={id} />)} />
         </div>
       </div>
     </section>

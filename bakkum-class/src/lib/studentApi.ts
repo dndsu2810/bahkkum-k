@@ -48,6 +48,7 @@ export interface StudentLogRow {
   hwAssign: string[];
   hwCheck: { text: string; status: string }[];
   bookNo: string;
+  bookNext: string; // 중고등영어 '다음에 할 것'(진도 예고)
   wordTest: string;
   doneItems: string[];
   startTime: string;

@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { Lesson, Makeup, ScheduleVersion, StudentStatus, TestLog } from "../types";
 import { useStore } from "../store";
 import { createStudent, hideStudent, pushTestNotion } from "../api";
 import { DOW_ORDER, fmtMDDow, todayStr, uid } from "../lib/dates";
 import { activeStudents, studentById } from "../lib/logic";
 import { GRADE_OPTIONS } from "../lib/grade";
+import { scoreLabel, computeScore, type ScoreMode } from "../lib/score";
+import { ScoreInput } from "./ScoreInput";
 import { Icon } from "../icons";
 
 // 수학 테스트 평가 종류(선택). 첫 항목이 기본값.
@@ -675,7 +677,10 @@ export function TestModal({ id, presetStudentId }: { id: string | null; presetSt
   const [round, setRound] = useState(ex?.round ?? "");
   const [range, setRange] = useState(ex?.range ?? "");
   const [status, setStatus] = useState<TestLog["status"]>(ex?.status ?? "예정");
-  const [score, setScore] = useState(ex?.score ?? 0);
+  // 점수 입력 방식 — 점수/만점/갯수. 기존 기록(scoreMode 없음)은 '점수'로 보고 score를 그대로.
+  const [scoreMode, setScoreMode] = useState<ScoreMode>(ex?.scoreMode ?? "score");
+  const [scoreNum, setScoreNum] = useState(ex?.scoreMode && ex.scoreMode !== "score" ? (ex.scoreNum ?? 0) : (ex?.score ?? 0));
+  const [scoreDen, setScoreDen] = useState(ex?.scoreDen ?? 100);
   const [memo, setMemo] = useState(ex?.memo ?? "");
 
   function save() {
@@ -690,9 +695,12 @@ export function TestModal({ id, presetStudentId }: { id: string | null; presetSt
       type: type.trim(),
       round: round.trim(),
       range: range.trim(),
-      score: status === "완료" ? +score || 0 : 0,
+      score: status === "완료" ? computeScore(scoreMode, scoreNum, scoreDen) : 0,
       status,
       memo: memo.trim(),
+      scoreMode,
+      scoreNum,
+      scoreDen,
     };
     mutate((d) => {
       if (id) {
@@ -767,16 +775,11 @@ export function TestModal({ id, presetStudentId }: { id: string | null; presetSt
           </div>
           <div className="field">
             <label>점수</label>
-            <input
-              className="input"
-              type="number"
-              min={0}
-              max={100}
-              value={score}
-              disabled={status !== "완료"}
-              placeholder={status === "예정" ? "완료 시 입력" : ""}
-              onChange={(e) => setScore(+e.target.value || 0)}
-            />
+            {status === "완료" ? (
+              <ScoreInput mode={scoreMode} num={scoreNum} den={scoreDen} onChange={(v) => { setScoreMode(v.scoreMode); setScoreNum(v.scoreNum); setScoreDen(v.scoreDen); }} />
+            ) : (
+              <div className="hub-muted" style={{ padding: "8px 0" }}>완료로 바꾸면 점수를 입력해요</div>
+            )}
           </div>
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
@@ -796,6 +799,109 @@ export function TestModal({ id, presetStudentId }: { id: string | null; presetSt
           <Icon name="check" />
           저장
         </button>
+      </div>
+    </>
+  );
+}
+
+/* ---------------- 수학 누적 기록 (중고등영어 누적기록과 동일 구성) ---------------- */
+export function MathMonthlyModal({ studentId, name }: { studentId: string; name: string }) {
+  const { data, closeModal } = useStore();
+  const [period, setPeriod] = useState("");
+
+  // 이 학생의 누적 데이터 — 로컬 스토어에서.
+  const tests = useMemo(() => data.testLog.filter((t) => t.studentId === studentId), [data.testLog, studentId]);
+  const prog = useMemo(() => data.progressLog.filter((p) => p.studentId === studentId), [data.progressLog, studentId]);
+  const hws = useMemo(() => data.homeworkLog.filter((h) => h.studentId === studentId), [data.homeworkLog, studentId]);
+  const sups = useMemo(() => (data.supplements || []).filter((s) => s.studentId === studentId), [data.supplements, studentId]);
+  const atts = useMemo(
+    () => Object.entries(data.attendance).filter(([k]) => k.split("|")[1] === studentId).map(([k, r]) => ({ date: k.split("|")[0], ...r })),
+    [data.attendance, studentId]
+  );
+
+  const months = useMemo(
+    () => [...new Set([...tests.map((t) => t.date.slice(0, 7)), ...hws.map((h) => h.date.slice(0, 7)), ...atts.map((a) => a.date.slice(0, 7))])].filter(Boolean).sort().reverse(),
+    [tests, hws, atts]
+  );
+  useEffect(() => { if (months.length && !months.includes(period)) setPeriod(months[0]); }, [months, period]);
+  const fmtMonth = (ym: string) => { const [y, m] = ym.split("-"); return `${y}년 ${Number(m)}월`; };
+  const inP = (date: string) => date.slice(0, 7) === period;
+
+  const mAtt = atts.filter((a) => inP(a.date));
+  const mTests = tests.filter((t) => inP(t.date)).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const mHw = hws.filter((h) => inP(h.date));
+  const mSup = sups.filter((s) => inP(s.date));
+  const present = mAtt.filter((a) => ["출석", "지각", "조퇴", "보강"].includes(a.status)).length;
+  const lateN = mAtt.filter((a) => a.status === "지각").length;
+  const absentN = mAtt.filter((a) => ["결석", "무단결석"].includes(a.status)).length;
+  const hwDone = mHw.filter((h) => h.status === "done").length;
+  const supMin = mSup.reduce((n, s) => n + (s.minutes || 0), 0);
+  const md = (date: string) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+  const ingBooks = prog.filter((p) => p.pct < 100 && p.unit.trim());
+  const doneBooks = prog.filter((p) => p.pct >= 100 && p.unit.trim());
+
+  return (
+    <>
+      <div className="modal-head">
+        <div className="modal-title">{name} · 누적 기록</div>
+        <button className="modal-x" onClick={closeModal} aria-label="닫기"><Icon name="x" /></button>
+      </div>
+      <div className="modal-body">
+        {months.length === 0 ? (
+          <div className="hub-muted">아직 기록이 없어요.</div>
+        ) : (
+          <>
+            <div className="sm-months">
+              {months.map((ym) => (
+                <button key={ym} className={"sm-month" + (ym === period ? " on" : "")} onClick={() => setPeriod(ym)}>{fmtMonth(ym)}</button>
+              ))}
+            </div>
+            <div className="smm-stats">
+              <div className="smm-stat"><span>출석</span><b>{present}<em>/{mAtt.length}일</em></b></div>
+              <div className="smm-stat"><span>지각</span><b>{lateN}</b></div>
+              <div className="smm-stat"><span>결석</span><b>{absentN}</b></div>
+              <div className="smm-stat"><span>숙제검사</span><b>{hwDone}<em>/{mHw.length}</em></b></div>
+              <div className="smm-stat"><span>보충</span><b>{supMin}<em>분</em></b></div>
+            </div>
+            <div className="smm-block">
+              <div className="smm-block-h">진도·교재</div>
+              {ingBooks.length === 0 && doneBooks.length === 0 ? <div className="hub-muted">진도 기록 없음</div> : (
+                <div className="smm-hw">
+                  {ingBooks.length > 0 && <div>진행중 · {ingBooks.map((p) => p.unit + (p.area ? `(${p.area})` : "")).join(", ")}</div>}
+                  {doneBooks.length > 0 && <div className="muted">완료 · {doneBooks.map((p) => p.unit).join(", ")}</div>}
+                </div>
+              )}
+            </div>
+            <div className="smm-block">
+              <div className="smm-block-h">시험{mTests.length > 0 ? ` · ${mTests.length}회` : ""}</div>
+              {mTests.length === 0 ? <div className="hub-muted">시험 기록 없음</div> : (
+                <div className="smm-tests">
+                  {mTests.map((t) => (
+                    <div className="smm-test" key={t.id}>
+                      <span className="smm-test-d">{md(t.date)}</span>
+                      <span className="smm-test-nm">{t.type || "시험"}{t.range ? ` · ${t.range}` : ""}</span>
+                      <span className="smm-test-sc">{t.status === "예정" ? "예정" : scoreLabel(t)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="smm-block">
+              <div className="smm-block-h">숙제 흐름 <span className="smm-flow-hint">최근 순</span></div>
+              {mHw.length === 0 ? <div className="hub-muted">기록 없음</div> : (
+                <div className="smm-tests">
+                  {[...mHw].sort((a, b) => (a.date < b.date ? 1 : -1)).map((h) => (
+                    <div className="smm-test" key={h.id}>
+                      <span className="smm-test-d">{md(h.date)}</span>
+                      <span className="smm-test-nm">{h.book}{h.tags.length ? ` · ${h.tags.join(", ")}` : ""}</span>
+                      <span className={"badge " + (h.status === "done" ? "b-green" : h.status === "late" ? "b-orange" : "b-gray")}>{h.status === "done" ? `검사완료 ${h.completion}%` : h.status === "late" ? `${h.delayCount || 1}차 밀림` : "검사 전"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </>
   );

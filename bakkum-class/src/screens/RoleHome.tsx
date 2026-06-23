@@ -57,7 +57,7 @@ export function RoleHome({ role }: { role: Role }) {
               </div>
             ) : (
               <p className="hub-muted" style={{ marginTop: 16 }}>
-                아직 배정된 화면이 없어요. 원장에게 화면 배정을 요청하세요.
+                아직 배정된 화면이 없어요. 원장님께 화면 배정을 요청해 주세요.
               </p>
             )}
           </div>

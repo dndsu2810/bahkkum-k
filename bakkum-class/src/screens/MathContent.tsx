@@ -5,6 +5,7 @@ import { Students } from "../pages/Students";
 import { Timetable } from "../pages/Timetable";
 import { MakeupPage } from "../pages/Makeup";
 import { Today } from "../pages/Today";
+import { TodayDashboard } from "../pages/TodayDashboard";
 import { Schedule } from "../pages/Schedule";
 import { Homework } from "../pages/Homework";
 import { Progress } from "../pages/Progress";
@@ -42,6 +43,7 @@ export function MathContent() {
   return (
     <>
       {page === "today" && <Today />}
+      {page === "classdash" && <TodayDashboard />}
       {page === "dashboard" && <Dashboard />}
       {page === "schedule" && <Schedule />}
       {page === "attendance" && <Attendance />}

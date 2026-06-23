@@ -25,8 +25,9 @@ export interface WsGroup {
 /* ---- 수학 수업관리 (기존 앱 메뉴 그대로) ---- */
 const MATH: WsEntry[] = [
   { key: "today", label: "오늘", icon: "today", kind: "math", page: "today" },
+  { key: "classdash", label: "대시보드", icon: "dashboard", kind: "math", page: "classdash" },
   { key: "timetable", label: "시간표", icon: "cal", kind: "math", page: "timetable" },
-  { key: "dashboard", label: "대시보드", icon: "dashboard", kind: "math", page: "dashboard" },
+  { key: "dashboard", label: "강사 대시보드", icon: "chart", kind: "math", page: "dashboard" },
   { key: "attendance", label: "출결 기록", icon: "clipboard", kind: "math", page: "attendance" },
   { key: "homework", label: "숙제 기록", icon: "book", kind: "math", page: "homework" },
   { key: "progress", label: "진도·교재관리", icon: "chart", kind: "math", page: "progress" },
@@ -91,10 +92,8 @@ const SETTINGS: WsEntry = { key: "settings", label: "설정", icon: "gear", kind
 
 // 전체 시간표(공통) — 수학·영어 통합. 데스크 전용이던 화면을 모든 스태프 공통으로.
 const ALL_TT: WsEntry = { key: "all_timetable", label: "전체 시간표", icon: "cal", kind: "hub" };
-// 데스크 전용
-const DESK_TODAY: WsEntry = { key: "desk_today", label: "오늘", icon: "today", kind: "hub" };
-const DESK_STU: WsEntry = { key: "desk_students", label: "학생 정보", icon: "students", kind: "hub" };
-const DESK_ACC: WsEntry = { key: "desk_accounts", label: "강사 계정 리스트", icon: "users", kind: "hub" };
+// 강사 정보 안내(공통) — 강사명·담당과목·추가 업무담당·전화번호. 데스크 '강사 계정 리스트'를 대체.
+const TEACHER_GUIDE: WsEntry = { key: "teacher_guide", label: "강사 정보 안내", icon: "users", kind: "hub" };
 
 /** 역할·배정에 따라 이 사용자의 사이드바 그룹을 만든다. */
 export function sidebarFor(user: AuthUser): WsGroup[] {
@@ -116,13 +115,13 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   // 월말리포트(초등 전용)는 초등 영어 그룹 안에.
   if (role === "english_elem" || role === "admin") groups.push({ label: "영어 수업관리 (초등)", entries: [...engEntries("elem"), ENGREPORT] });
 
-  // 데스크 (전체 시간표는 공통으로 이동)
-  if (role === "desk") groups.push({ label: "데스크", entries: [DESK_TODAY, DESK_STU, DESK_ACC] });
+  // 데스크 전용 그룹은 없앴다 — 필요한 정보(전체 시간표·학생 명단·강사 정보 안내)는 모두 '공통'에 있다.
 
   // 공통 — 학생 명단(전과목 공통)·변경요청·특이사항·매뉴얼·SNS
   const common: WsEntry[] = [];
   if (areas.has("students")) common.push(MASTER);
   common.push(ALL_TT); // 전체 시간표(수학·영어 통합) — 모든 스태프 공통.
+  common.push(TEACHER_GUIDE); // 강사 정보 안내 — 모든 스태프 공통(데스크 '강사 계정 리스트' 대체).
   common.push(RANKING);
   // 포인트 항목·자료 배부 — 강사·원장 공용(수학·영어 모두 같은 화면).
   const isTeacher = role === "admin" || areas.has("math") || role === "english_mid" || role === "english_elem";

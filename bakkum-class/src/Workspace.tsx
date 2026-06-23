@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "./store";
 import { useAuth } from "./auth";
 import { getMyPrefs, saveMyPrefs } from "./lib/authApi";
@@ -16,6 +16,7 @@ import { MessageSend } from "./screens/MessageSend";
 import { Notes } from "./screens/Notes";
 import { BoardShared } from "./screens/BoardShared";
 import { Desk } from "./screens/Desk";
+import { TeacherGuide } from "./screens/TeacherGuide";
 import { TimetableAll } from "./screens/TimetableAll";
 import { Wiki } from "./screens/Wiki";
 import { Sns } from "./screens/Sns";
@@ -70,10 +71,32 @@ export function Workspace() {
     if (h.startsWith("math:")) store.navigate(h.slice(5) as PageId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // 화면(또는 수학 페이지) 바뀔 때 주소 해시 갱신 — 그 주소로 새로고침/공유하면 같은 화면이 열린다.
+  // 해시 → 화면 상태로 반영(뒤로/앞으로 가기 처리에 재사용).
+  const applyHash = useCallback((h: string) => {
+    if (h.startsWith("math:")) { setView("math"); store.navigate(h.slice(5) as PageId); return; }
+    const e = h ? byKey.get(h) : undefined;
+    if (e) { setView(e.kind === "math" ? "math" : h); if (e.kind === "math" && e.page) store.navigate(e.page); return; }
+    const d = user ? defaultEntry(user) : "home";
+    const de = byKey.get(d);
+    setView(de?.kind === "math" ? "math" : d);
+    if (de?.kind === "math" && de.page) store.navigate(de.page);
+  }, [byKey, store, user]);
+  // 뒤로/앞으로 가기(popstate) → 해시를 읽어 화면 복원. 이 변경은 다시 히스토리에 push하지 않게 skip.
+  const skipHashSync = useRef(false);
+  const firstSync = useRef(true);
+  useEffect(() => {
+    function onPop() { skipHashSync.current = true; applyHash(location.hash.slice(1)); }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [applyHash]);
+  // 화면(또는 수학 페이지) 바뀔 때 주소 해시 갱신 — 사용자가 이동하면 히스토리에 쌓아(pushState) 뒤로가기가 되게.
   useEffect(() => {
     const h = view === "math" ? "math:" + store.page : view;
-    if (location.hash.slice(1) !== h) history.replaceState(null, "", "#" + h);
+    if (location.hash.slice(1) === h) return;
+    if (skipHashSync.current) { skipHashSync.current = false; return; } // 뒤로가기로 인한 변경은 push 안 함
+    if (firstSync.current) history.replaceState(null, "", "#" + h);     // 첫 동기화는 교체(불필요한 엔트리 방지)
+    else history.pushState(null, "", "#" + h);
+    firstSync.current = false;
   }, [view, store.page]);
   const [cats, setCats] = useState<Category[]>(getCategories());
 
@@ -325,6 +348,7 @@ export function Workspace() {
     } else {
       setView(e.key);
     }
+    setNavOpen(false); // 모바일 서랍이 열려 있으면 화면 이동과 함께 닫기
   }
 
   function isActive(e: WsEntry): boolean {
@@ -338,6 +362,8 @@ export function Workspace() {
   // 사이드바 메뉴 검색 + 범위(전체/카테고리) 필터.
   const [navQ, setNavQ] = useState("");
   const [navScope, setNavScope] = useState("전체");
+  // 모바일: 왼쪽 메뉴를 서랍처럼 열고 닫기. 화면 이동·바깥 탭 시 닫힘.
+  const [navOpen, setNavOpen] = useState(false);
   const navScopes = useMemo(() => ["전체", ...orderedGroups.map((g) => g.label).filter((l): l is string => !!l)], [orderedGroups]);
   const searching = navQ.trim() !== "" || navScope !== "전체";
   const searchResults = useMemo(() => {
@@ -359,7 +385,7 @@ export function Workspace() {
       math: ["today", "master", "board", "timetable"],
       english_mid: ["eng_today_mid", "eng_tt_mid", "master", "board"],
       english_elem: ["eng_today_elem", "eng_tt_elem", "master", "board"],
-      desk: ["desk_today", "all_timetable", "desk_students", "board"],
+      desk: ["all_timetable", "teacher_guide", "checkin", "notices"],
     };
     const keys = keysByRole[user?.role || ""] || [];
     return keys.map((k) => byKey.get(k)).filter((e): e is WsEntry => !!e);
@@ -486,7 +512,16 @@ export function Workspace() {
   if (!user) return null;
 
   return (
-    <div className="app">
+    <div className={"app" + (navOpen ? " nav-open" : "")}>
+      <button
+        className="nav-toggle"
+        onClick={() => setNavOpen((v) => !v)}
+        aria-label={navOpen ? "메뉴 닫기" : "메뉴 열기"}
+        aria-expanded={navOpen}
+      >
+        <Icon name={navOpen ? "x" : "menu"} />
+      </button>
+      <div className="nav-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />
       <aside className="side">
         <div className="brand" style={{ cursor: "default" }}>
           {logoUrl ? (
@@ -495,7 +530,7 @@ export function Workspace() {
             <span className="logo logo-bee" style={logoSize ? { width: logoSize, height: logoSize } : undefined}><Bee size={logoSize ? Math.round(logoSize * 0.95) : 36} title="쏘이지" /></span>
           )}
           <div>
-            <b>바꿈영수학원</b>
+            <b>쏘이지</b>
             <span>
               {user.name}님{user.role === "admin" ? ` · ${ROLE_LABEL[shownRole(user)]}${user.duty?.length ? ` · ${dutyText(user.duty)}` : ""}` : `, 담당: ${dutyLabel(user)}`}
             </span>
@@ -552,6 +587,7 @@ export function Workspace() {
                   >
                     <span className={"nav-caret" + (isCollapsed ? " closed" : "")}>▾</span>
                     {lbl}
+                    {lbl === "등하원" && <span className="nav-beta">베타</span>}
                   </button>
                 )}
                 {!isCollapsed && items.map((e) => row(e, lbl))}
@@ -696,6 +732,7 @@ function Body({ view, cats, jumpStudent, reqPrefill, homeTiles, homeSummary, cta
     return <English key={view} band={band} tab={tab} />;
   }
   if (view === "all_timetable") return <TimetableAll />;
+  if (view === "teacher_guide") return <TeacherGuide />;
   if (view.startsWith("desk_")) {
     const tab = view === "desk_students" ? "students" : view === "desk_accounts" ? "accounts" : view === "desk_today" ? "today" : "timetable";
     return <Desk key={view} tab={tab} />;

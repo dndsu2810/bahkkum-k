@@ -143,7 +143,7 @@ export function EngReport() {
           await new Promise((r) => setTimeout(r, 300));
         }
       }
-      setProgress("완료! 전체 저장됨");
+      setProgress("리포트를 저장했어요");
     } catch {
       setErr("이미지 저장 중 오류가 났어요.");
     } finally {
@@ -162,7 +162,7 @@ export function EngReport() {
       <div className="sm-head">
         <div>
           <h1 className="sm-title">영어 월말리포트 (초등)</h1>
-          <p className="sm-desc">월을 고르고 학생별로 8개 항목 등급·코멘트를 입력한 뒤, 3장 양식(표지·레이더·코멘트)을 미리보기·저장하세요.</p>
+          <p className="sm-desc">월을 고르고 학생별로 8개 항목 등급·코멘트를 입력한 뒤, 3장 양식(표지·레이더·코멘트)을 미리보기·저장해요.</p>
         </div>
         <div className="sm-count">{students.length}명</div>
       </div>
@@ -184,7 +184,7 @@ export function EngReport() {
       {err && <div className="auth-err" style={{ marginBottom: 10 }}>{err}</div>}
 
       {students.length === 0 ? (
-        <div className="hub-muted">초등영어 학생이 없어요. <b>학생 명단</b>에서 학생에 영어 + 초등을 지정하세요.</div>
+        <div className="hub-muted">초등영어 학생이 없어요. <b>학생 명단</b>에서 학생에 영어 + 초등을 지정해 주세요.</div>
       ) : (
         <div className="eng-split">
           <div className="eng-side">
@@ -200,7 +200,7 @@ export function EngReport() {
 
           <div className="eng-main">
             {!selStudent || !rep ? (
-              <div className="hub-muted" style={{ padding: 20 }}>왼쪽에서 학생을 선택하세요.</div>
+              <div className="hub-muted" style={{ padding: 20 }}>왼쪽에서 학생을 고르면 등급·코멘트를 입력할 수 있어요.</div>
             ) : (
               <div className="er-edit">
                 <div className="er-edit-h">

@@ -145,8 +145,8 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
   if (p === "/api/issue" && m === "GET") {
     // 원장·개발자(지현T)는 전체, 그 외는 본인 글만.
     const q = isIssueMgr
-      ? env.DB.prepare("SELECT * FROM class_issue ORDER BY created_at DESC LIMIT 500")
-      : env.DB.prepare("SELECT * FROM class_issue WHERE author_sub=? ORDER BY created_at DESC LIMIT 200").bind(me.sub);
+      ? env.DB.prepare("SELECT * FROM class_issue ORDER BY updated_at DESC LIMIT 500")
+      : env.DB.prepare("SELECT * FROM class_issue WHERE author_sub=? ORDER BY updated_at DESC LIMIT 200").bind(me.sub);
     const r = await q.all<Record<string, unknown>>();
     const issues = (r.results || []).map(issueRow);
     // 답변 스레드 한 번에 가져와 글별로 묶기.
@@ -233,15 +233,23 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
   // 알림 개수(종 배지) — 원장: 새 접수 건수 / 그 외: 내 글에 새 답변·해결(seen=0) 건수.
   if (p === "/api/issue/unseen" && m === "GET") {
     if (isIssueMgr) {
-      const r = await env.DB.prepare("SELECT COUNT(*) n FROM class_issue WHERE status='접수'").first<{ n: number }>();
+      // 관리자(지현T 등) 배지는 '마지막으로 게시판을 본 시각' 이후 새로 들어오거나 갱신된
+      // 접수 건만 센다 → 읽으면(게시판 열면) 정리됨. (상태를 안 바꿔도 사라지도록)
+      // 내가 올린 요청은 내 배지에서 제외 — 내가 보낸 글이 내 종에 '1'로 뜨면 헷갈림.
+      const ts = Number(await cfg(env, `issue_mgr_seen_${me.sub}`)) || 0;
+      const r = await env.DB.prepare("SELECT COUNT(*) n FROM class_issue WHERE status='접수' AND author_sub<>? AND updated_at>?").bind(me.sub, ts).first<{ n: number }>();
       return json({ count: Number(r?.n) || 0, kind: "new" });
     }
     const r = await env.DB.prepare("SELECT COUNT(*) n FROM class_issue WHERE author_sub=? AND seen=0").bind(me.sub).first<{ n: number }>();
     return json({ count: Number(r?.n) || 0, kind: "reply" });
   }
-  // 내 글 답변/해결 확인 처리(작성자가 화면 열 때).
+  // 확인 처리(게시판 화면 열 때). 작성자: 내 글 새 답변·해결을 읽음 / 관리자: 새 접수 종 배지 정리.
   if (p === "/api/issue/seen" && m === "POST") {
     await env.DB.prepare("UPDATE class_issue SET seen=1 WHERE author_sub=? AND seen=0").bind(me.sub).run();
+    // 관리자 배지는 '마지막으로 본 시각' 기준이라, 게시판을 열면 그 시각을 지금으로 갱신해 정리.
+    if (isIssueMgr) {
+      await env.DB.prepare("INSERT INTO class_config(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(`issue_mgr_seen_${me.sub}`, String(Date.now())).run();
+    }
     return json({ ok: true });
   }
   if (p === "/api/issue/delete" && m === "POST") {

@@ -208,7 +208,7 @@ function BodyEditor({ value, onChange }: { value: string; onChange: (v: string) 
   return (
     <div className="wbe">
       <div className="wbe-bar">
-        <span className="wbe-hint">글과 표를 블록으로 추가·수정하세요. 표는 칸을 눌러 바로 입력합니다.</span>
+        <span className="wbe-hint">글과 표를 블록으로 추가·수정해요. 표는 칸을 눌러 바로 입력해요.</span>
         <button type="button" className="btn ghost sm" onClick={() => setMode("text")}>직접 입력으로</button>
       </div>
 
@@ -485,7 +485,7 @@ export function Wiki() {
             {current.images.length > 0 && <ImageGrid images={current.images} />}
           </div>
         ) : (
-          <div className="hub-muted" style={{ padding: 24 }}>왼쪽에서 글을 고르거나 새 글을 작성하세요.</div>
+          <div className="hub-muted" style={{ padding: 24 }}>왼쪽에서 글을 고르거나 새 글을 작성해 보세요.</div>
         )}
       </div>
     </div>

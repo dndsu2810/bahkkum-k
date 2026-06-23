@@ -41,7 +41,7 @@ export function PointCatalog() {
       <div className="sm-head">
         <div>
           <h1 className="sm-title">포인트 항목</h1>
-          <p className="sm-desc">적립·차감 사유와 점수를 직접 작성하세요. 여기서 만든 항목이 수업 기록의 포인트 버튼으로 그대로 나옵니다.</p>
+          <p className="sm-desc">적립·차감 사유와 점수를 직접 적어요. 여기서 만든 항목이 수업 기록의 포인트 버튼으로 그대로 나와요.</p>
         </div>
         {canEdit && (
           <button className="btn primary" onClick={save} disabled={saved}>{saved ? "저장됨" : "저장"}</button>
@@ -51,7 +51,7 @@ export function PointCatalog() {
       {err && <div className="auth-err" style={{ marginBottom: 10 }}>{err}</div>}
 
       <div className="card" style={{ padding: 14 }}>
-        <div className="pc-legend">적립은 <b className="pc-plus">+점수</b>, 차감은 <b className="pc-minus">-점수</b>로 입력하세요. (예: 출석 100, 지각 -100)</div>
+        <div className="pc-legend">적립은 <b className="pc-plus">+점수</b>, 차감은 <b className="pc-minus">-점수</b>로 입력해요. (예: 출석 100, 지각 -100)</div>
         {!loaded ? (
           <div className="hub-muted">불러오는 중…</div>
         ) : (

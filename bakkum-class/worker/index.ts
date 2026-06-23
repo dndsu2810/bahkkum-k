@@ -69,6 +69,7 @@ import { handleEng, handleStudent, ensureEngTables } from "./eng";
 import { handleFeedback } from "./feedback";
 import { handleMessages } from "./message";
 import { handleCheckin } from "./checkin";
+import { runCheckinAlerts } from "./checkinbot";
 import { handleOrders } from "./orders";
 import { handleMeeting } from "./meeting";
 import { handlePost } from "./post";
@@ -189,13 +190,48 @@ export default {
         }
         if (p === "/api/config" && request.method === "POST") {
           const me = await readSession(env, request);
-          if (!me || me.role !== "admin") return json({ error: "forbidden" }, 403);
+          if (!me) return json({ error: "forbidden" }, 403);
           const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+          const keys = Object.keys(b);
+          // 원장(admin)은 모든 설정 저장. 수학 강사는 '연간 수업 계획표' 키만. 강사 정보 안내(teacher_info)는 강사 누구나(학생 제외).
+          const isPlanKey = (k: string) => (k.startsWith("math_plan_") || k.startsWith("math_year_plan")) && !k.startsWith("secret_");
+          const allowed =
+            me.role === "admin" ||
+            (me.role === "math" && keys.length > 0 && keys.every(isPlanKey)) ||
+            (me.role !== "student" && keys.length > 0 && keys.every((k) => k === "teacher_info"));
+          if (!allowed) return json({ error: "forbidden" }, 403);
           await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_config (k TEXT PRIMARY KEY, v TEXT NOT NULL DEFAULT '')").run();
           for (const [k, v] of Object.entries(b)) {
             await env.DB.prepare("INSERT INTO class_config(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(k, String(v ?? "")).run();
           }
           return json({ ok: true });
+        }
+
+        // 링크 미리보기(북마크 카드) — 대상 페이지의 og 메타 추출. 스태프 전용·http(s)만(SSRF 방지).
+        if (p === "/api/linkmeta" && request.method === "GET") {
+          const me = await readSession(env, request);
+          if (!me) return json({ error: "unauthorized" }, 401);
+          let u: URL;
+          try { u = new URL(url.searchParams.get("url") || ""); } catch { return json({ error: "bad_url" }, 400); }
+          if (u.protocol !== "http:" && u.protocol !== "https:") return json({ error: "bad_url" }, 400);
+          const site = u.hostname.replace(/^www\./, "");
+          try {
+            const r = await fetch(u.href, { headers: { "user-agent": "Mozilla/5.0 (compatible; SoezBot/1.0)", accept: "text/html" }, redirect: "follow" });
+            const html = (await r.text()).slice(0, 200000);
+            const meta = (prop: string) => {
+              const m = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]*content=["']([^"']*)["']`, "i")) || html.match(new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${prop}["']`, "i"));
+              return m ? decodeEntities(m[1].trim()) : "";
+            };
+            const titleTag = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+            const title = meta("og:title") || (titleTag ? decodeEntities(titleTag[1].trim()) : "") || site;
+            const desc = meta("og:description") || meta("description");
+            let image = meta("og:image");
+            if (image && image.startsWith("//")) image = u.protocol + image;
+            else if (image && image.startsWith("/")) image = u.origin + image;
+            return json({ url: u.href, title, desc, image, site });
+          } catch {
+            return json({ url: u.href, title: site, desc: "", image: "", site });
+          }
         }
 
         // ---- 통합 허브 인증 ----
@@ -482,24 +518,32 @@ export default {
         return json({ error: "briefing_failed", message: String(e) }, 500);
       }
     }
+    // 등하원 알림봇 미리보기/수동테스트. ?at=HH:MM 시각 기준, send=1 이면 실제 발송(아니면 dry-run).
+    if (p === "/__checkin") {
+      if (env.BOT_SECRET && url.searchParams.get("key") !== env.BOT_SECRET) return json({ error: "forbidden" }, 403);
+      const at = url.searchParams.get("at");
+      const atMinutes = at && /^\d{1,2}:\d{2}$/.test(at) ? Number(at.split(":")[0]) * 60 + Number(at.split(":")[1]) : undefined;
+      const doSend = url.searchParams.get("send") === "1";
+      try {
+        return json({ at, send: doSend, groups: await runCheckinAlerts(env, { atMinutes, dry: !doSend }) });
+      } catch (e) {
+        return json({ error: "checkin_failed", message: String(e) }, 500);
+      }
+    }
     return env.ASSETS.fetch(request);
   },
 
-  // 크론: 13:00 KST(=04:00 UTC) 낮 브리핑, 21:00 KST(=12:00 UTC) 밤 요약.
+  // 크론: 매분(등하원 알림봇) + 13:00 KST(낮 브리핑) + 21:00 KST(밤 요약).
   async scheduled(event: ScheduledController, env: Env): Promise<void> {
-    const hourUtc = new Date(event.scheduledTime).getUTCHours();
-    const slot: "noon" | "night" = hourUtc < 8 ? "noon" : "night";
-    try {
-      await runBriefing(env, slot, true);
-    } catch (e) {
-      console.error("scheduled briefing failed", String(e));
+    // 일일 브리핑은 지정된 크론에서만(매분 크론과 구분).
+    if (event.cron === "0 4 * * *" || event.cron === "0 12 * * *") {
+      const slot: "noon" | "night" = event.cron === "0 4 * * *" ? "noon" : "night";
+      try { await runBriefing(env, slot, true); } catch (e) { console.error("scheduled briefing failed", String(e)); }
+      try { await flushKioskOutbox(env); } catch (e) { console.error("flushKioskOutbox failed", String(e)); }
+      return;
     }
-    // 키오스크 미러링 미전송 건 재전송(유실 방지)
-    try {
-      await flushKioskOutbox(env);
-    } catch (e) {
-      console.error("flushKioskOutbox failed", String(e));
-    }
+    // 매분 — 등하원 알림봇.
+    try { await runCheckinAlerts(env); } catch (e) { console.error("checkin alerts failed", String(e)); }
   },
 };
 
@@ -1849,6 +1893,8 @@ async function ensureSchedulesTable(env: Env): Promise<void> {
     "ALTER TABLE class_homework ADD COLUMN carried_from TEXT NOT NULL DEFAULT ''",
     // 진도·교재관리 개편 — 교재 완료일(완료 시점). 월말리포트 '이번 달 완료 교재' 집계용.
     "ALTER TABLE class_progress ADD COLUMN end_date TEXT NOT NULL DEFAULT ''",
+    // 마지막 수정 시각 — 수정한 교재를 목록 위로 올리는 정렬용.
+    "ALTER TABLE class_progress ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0",
   ]) {
     try { await env.DB.prepare(a).run(); } catch { /* 이미 있으면 무시 */ }
   }
@@ -2078,6 +2124,7 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
       startDate: String(r.start_date ?? ""),
       endDate: String(r.end_date ?? ""),
       memo: String(r.memo ?? ""),
+      updatedAt: Number(r.updated_at ?? 0),
     }));
 
   // 테스트 기록 — 별도 쿼리 + try/catch(테이블 없어도 나머지 읽기 안 깨지게)
@@ -2247,9 +2294,9 @@ async function putData(env: Env, request: Request): Promise<Response> {
     stmts.push(
       env.DB
         .prepare(
-          "INSERT INTO class_progress(id,student_id,date,unit,area,pct,start_date,end_date,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET student_id=excluded.student_id,date=excluded.date,unit=excluded.unit,area=excluded.area,pct=excluded.pct,start_date=excluded.start_date,end_date=excluded.end_date,memo=excluded.memo"
+          "INSERT INTO class_progress(id,student_id,date,unit,area,pct,start_date,end_date,memo,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET student_id=excluded.student_id,date=excluded.date,unit=excluded.unit,area=excluded.area,pct=excluded.pct,start_date=excluded.start_date,end_date=excluded.end_date,memo=excluded.memo,updated_at=excluded.updated_at"
         )
-        .bind(pr.id, pr.studentId, pr.startDate || "", pr.unit || "", pr.area || "", pr.pct || 0, pr.startDate || "", pr.endDate || "", pr.memo || "", Date.now())
+        .bind(pr.id, pr.studentId, pr.startDate || "", pr.unit || "", pr.area || "", pr.pct || 0, pr.startDate || "", pr.endDate || "", pr.memo || "", Date.now(), Number(pr.updatedAt) || Date.now())
     );
   }
 
@@ -3023,4 +3070,13 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: { "content-type": "application/json; charset=utf-8" },
   });
+}
+
+// HTML 엔티티 일부 디코드(링크 메타 제목·설명용).
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#0?39;|&apos;|&#x27;/gi, "'").replace(/&nbsp;/g, " ")
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)));
 }

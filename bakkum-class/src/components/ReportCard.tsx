@@ -265,6 +265,9 @@ export function ReportCard({ data }: { data: ReportData }) {
           {extras.homeworks.map((h) => {
             const cc = compClasses(h.completion);
             const md = /^(\d{4})-(\d{2})-(\d{2})$/.exec(h.date);
+            // 지연됐다가 검사완료한 숙제 — 별도 표시 + 언제 검사했는지(특이사항).
+            const lateDone = h.status === "done" && (h.delayCount || 0) > 0;
+            const cd = h.checkedDate ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(h.checkedDate) : null;
             return (
               <div className="r-hw-item" key={h.id}>
                 <div className="r-hw-main">
@@ -289,10 +292,16 @@ export function ReportCard({ data }: { data: ReportData }) {
                     </div>
                     <div className="r-cbar"><span className={cc.bar} style={{ width: h.completion + "%" }} /></div>
                   </div>
-                  <div className={"r-badge " + (h.status === "done" ? "done" : h.status === "late" ? "late" : "pending")}>
-                    {h.status === "done" ? "검사 완료" : h.status === "late" ? "지연" : "검사 전"}
+                  <div className={"r-badge " + (lateDone ? "latedone" : h.status === "done" ? "done" : h.status === "late" ? "late" : "pending")}>
+                    {lateDone ? "지연검사완료" : h.status === "done" ? "검사 완료" : h.status === "late" ? "지연" : "검사 전"}
                   </div>
                 </div>
+                {lateDone && (
+                  <div className="r-hw-cmt r-hw-checkedat">
+                    <span className="r-ck">지연</span>
+                    <span className="r-ctxt">원래 마감 {md ? `${+md[2]}/${+md[3]}` : h.date}{cd ? ` · ${+cd[2]}/${+cd[3]} 검사 완료` : " · 검사 완료"}{(h.delayCount || 0) > 1 ? ` · ${h.delayCount}차 밀림` : ""}</span>
+                  </div>
+                )}
                 {h.memo && (
                   <div className="r-hw-cmt">
                     <span className="r-ck">선생님 메모</span>
@@ -309,14 +318,20 @@ export function ReportCard({ data }: { data: ReportData }) {
       show: showSup,
       aside: <span className="r-sec-aside">총 {supTotal}분 · {sups.length}건</span>,
       body: (
-        <div className="r-sup">
+        <div className="r-suplearn">
+          <div className="r-suplearn-row r-suplearn-head">
+            <span>보충일시</span><span>시간</span><span>보충명</span><span>학습내용</span><span>보충사유</span><span>비고</span>
+          </div>
           {sups.map((sp) => {
             const md = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sp.date);
             return (
-              <div className="r-sup-item" key={sp.id}>
-                <span className="r-sup-date">{md ? `${md[2]}/${md[3]}` : sp.date}</span>
-                <span className="r-sup-min">{sp.minutes}분</span>
-                <span className="r-sup-reason">{sp.reason || "—"}</span>
+              <div className="r-suplearn-row" key={sp.id}>
+                <span className="r-sl-num">{md ? `${+md[2]}/${+md[3]}` : sp.date}</span>
+                <span className="r-sl-num">{sp.minutes ? `${sp.minutes}분` : "—"}</span>
+                <span className="r-sl-subj">{sp.name || "—"}</span>
+                <span className="r-sl-content">{sp.content || "—"}</span>
+                <span className="r-sl-content">{sp.reason || "—"}</span>
+                <span className="r-sl-note">{sp.note || "—"}</span>
               </div>
             );
           })}

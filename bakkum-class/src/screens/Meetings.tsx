@@ -560,7 +560,7 @@ function MeetingActionItems({ meeting }: { meeting: MeetingDetail }) {
 
   return (
     <div className="mt-actions card">
-      <div className="mt-actions-h">액션 아이템 <span className="mt-actions-sub">필요한 일은 강사 업무로 배정하세요</span></div>
+      <div className="mt-actions-h">액션 아이템 <span className="mt-actions-sub">필요한 일은 강사 업무로 배정해요</span></div>
       <ul className="mt-actions-list">
         {items.map((t, i) => (
           <li key={i} className="mt-action-row">
