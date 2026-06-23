@@ -101,6 +101,20 @@ async function boardForStudent(env: Env, sid: string, rules: BaseballRule[], cfg
   return computeBoard(sid, autos, eventsFromRows(eRes.results || []), cfg);
 }
 
+/** 들어온 id를 쏘이지 로스터 id로 정규화. 로스터 id면 그대로, 아니면 online_id/출석번호로 매핑. */
+async function resolveStudentId(env: Env, raw: string): Promise<string> {
+  const n = Number(raw);
+  if (Number.isFinite(n) && n > 0) {
+    const s = await env.DB.prepare("SELECT id FROM students WHERE id=? AND (hidden IS NULL OR hidden=0)").bind(n).first();
+    if (s) return String(n);
+  }
+  try {
+    const m = await env.DB.prepare("SELECT student_id FROM class_student_meta WHERE online_id=? OR checkin_no=? LIMIT 1").bind(String(raw), String(raw)).first<{ student_id: string }>();
+    if (m?.student_id) return String(m.student_id);
+  } catch { /* ignore */ }
+  return String(raw);
+}
+
 /** 수학 수강 학생 id 집합(class_student_meta.subjects에 'math'). */
 async function mathStudentIds(env: Env): Promise<Set<string>> {
   const out = new Set<string>();
@@ -151,17 +165,33 @@ export async function handleBaseball(env: Env, request: Request, p: string, me: 
   const isTeacher = !!me && (me.role === "admin" || me.role === "math");
   const isStudent = !!me && me.role === "student";
 
-  // 학생 본인 전광판 — 학생/선생님 모두 조회 가능(학생은 본인만).
+  // 키오스크 CORS 프리플라이트(읽기 전용).
+  if (p === "/api/baseball/board" && m === "OPTIONS") {
+    return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "x-read-token, authorization, content-type", "access-control-allow-methods": "GET, OPTIONS" } });
+  }
+
+  // 학생 전광판 — (1) 키오스크(띵동) 읽기 토큰 또는 (2) 로그인 세션(학생 본인/선생님).
   if (p === "/api/baseball/board" && m === "GET") {
-    if (!me) return json({ error: "forbidden" }, 403);
-    let sid = String(url.searchParams.get("student_id") || "");
-    if (isStudent) sid = String(me.sub); // 학생은 본인 강제
+    const token = env.KIOSK_READ_TOKEN || "";
+    const provided = request.headers.get("x-read-token") || request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    const viaToken = !!token && provided === token;
+
+    let sid = String(url.searchParams.get("student_id") || url.searchParams.get("online_id") || "");
+    if (!viaToken) {
+      if (!me) return json({ error: "forbidden" }, 403);
+      if (isStudent) sid = String(me.sub); // 학생은 본인 강제
+      else if (!isTeacher) return json({ error: "forbidden" }, 403);
+    }
     if (!sid) return json({ error: "student_required" }, 400);
-    if (!isTeacher && !isStudent) return json({ error: "forbidden" }, 403);
+
+    sid = await resolveStudentId(env, sid); // 띵동 id가 로스터 id와 다르면 online_id/출석번호로 매핑
     const board = await baseballBoardFor(env, sid);
     let photo = "";
     try { const r = await env.DB.prepare("SELECT photo FROM class_student_meta WHERE student_id=?").bind(sid).first<{ photo: string }>(); photo = String(r?.photo ?? ""); } catch { /* ignore */ }
-    return json({ board, photo });
+    // 키오스크가 PULL 확인용으로 쓰는 표식 + CORS(읽기 전용).
+    return new Response(JSON.stringify({ source: "soez", studentId: sid, board, photo }), {
+      headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*", "cache-control": "no-store" },
+    });
   }
 
   // 이 아래는 선생님(수학·원장) 전용.

@@ -94,6 +94,7 @@ export interface Env {
   // 학습키오스크(bakuum-kiosk) 포인트 미러링 — 수학 학생 적립/감점을 키오스크로 단방향 전송
   KIOSK_URL?: string; // 예: https://bakuum-kiosk.pages.dev
   KIOSK_POINTS_KEY?: string; // 키오스크 EXTERNAL_POINTS_KEY와 동일 값 (Secret)
+  KIOSK_READ_TOKEN?: string; // 키오스크(띵동) 전용 읽기 토큰 — 수학 전광판 board 조회 (Secret)
   // 회의록 — 음성→텍스트(Whisper)·텍스트→요약(Claude) (Worker Secret로 주입)
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
