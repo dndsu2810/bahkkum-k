@@ -845,6 +845,8 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
     setD({ ...d, hwCheck: status ? [...others, { text, status }] : others });
   }
   function removeCheck(text: string) { setD({ ...d, hwCheck: d.hwCheck.filter((c) => c.text !== text) }); }
+  // 검사할 숙제 직접 추가 — 상태는 비워둔다. 당일 추가해도 '검사 완료'로 잡히지 않고, 교사가 완료/미흡/안함을 눌러야 검사로 인정.
+  function addCheck(text: string) { const v = text.trim(); if (!v || d.hwCheck.some((c) => c.text === v) || carried.includes(v)) return; setD({ ...d, hwCheck: [...d.hwCheck, { text: v, status: "" }] }); }
   function addAssign(text: string) { const v = text.trim(); if (!v || d.hwAssign.includes(v)) return; setD({ ...d, hwAssign: [...d.hwAssign, v] }); }
   function removeAssign(text: string) { setD({ ...d, hwAssign: d.hwAssign.filter((x) => x !== text) }); }
   // 내신모드 자유 숙제 칸 — 내신 기간이거나, 숙제 자료가 배부되어 검사/내줄 항목이 생기면 평소에도 표시.
@@ -1001,8 +1003,8 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
               </div>
             )}
             <div className="eng-add-row" style={{ marginTop: 8 }}>
-              <input className="sm-input" value={newCheck} onChange={(e) => setNewCheck(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && newCheck.trim()) { setCheckStatus(newCheck.trim(), "완료"); setNewCheck(""); } }} placeholder="검사할 숙제 직접 추가" />
-              <button className="btn ghost sm" onClick={() => { if (newCheck.trim()) { setCheckStatus(newCheck.trim(), "완료"); setNewCheck(""); } }} disabled={!newCheck.trim()}>추가</button>
+              <input className="sm-input" value={newCheck} onChange={(e) => setNewCheck(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && newCheck.trim()) { addCheck(newCheck); setNewCheck(""); } }} placeholder="검사할 숙제 직접 추가" />
+              <button className="btn ghost sm" onClick={() => { if (newCheck.trim()) { addCheck(newCheck); setNewCheck(""); } }} disabled={!newCheck.trim()}>추가</button>
             </div>
             </>
             )}
