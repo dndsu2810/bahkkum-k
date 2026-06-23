@@ -957,6 +957,14 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
         </div>
       )}
 
+      {/* 교재 · 진도 — 학생도 입력하는 칸. 내신모드(또는 이미 입력된 내용이 있으면) 선생님 화면에도 보여 학생 입력을 확인·수정한다. */}
+      {showHw && (examMode || d.bookNo) && (
+        <div className="eng-field">
+          <div className="eng-label">교재 · 진도 <span className="eng-mk-tag soft">학생도 입력해요</span></div>
+          <input className="input" value={d.bookNo} onChange={(e) => setD({ ...d, bookNo: e.target.value })} placeholder="예: 그래머인유즈 3과 p.40~45" />
+        </div>
+      )}
+
       {/* 평소 모드 — 기존 단어/리딩/문법 3분류 숙제(포인트 자동적립 기준) */}
       {showHw && !examMode && (
         <div className="eng-field">
@@ -2419,13 +2427,16 @@ function StudentMonthlyModal({ studentId, name, naesin }: { studentId: string; n
                 for (const t of mTests) (byDate[t.date] ||= []).push(t);
                 const flow = [...mDaily].sort((a, b) => (a.date < b.date ? 1 : -1)).filter((d) => {
                   const hw = d.hwAssign?.length ? d.hwAssign.join(", ") : d.homework;
-                  return d.bookNo || (d.doneItems?.length) || d.materials || hw || (byDate[d.date]?.length);
+                  return d.bookNo || (d.doneItems?.length) || d.materials || hw || (d.goals?.length) || (d.hwCheck?.length) || (byDate[d.date]?.length);
                 });
                 if (flow.length === 0) return <div className="hub-muted">기록 없음</div>;
                 return (
                   <div className="smm-flow">
                     {flow.map((d) => {
                       const prog = [d.bookNo, ...(d.doneItems || [])].filter(Boolean).join(", ");
+                      const goals = (d.goals || []).map((g) => g.text).filter(Boolean).join(", ");
+                      // 검사한 숙제(내신모드) — 항목+상태. '숙제 뭐였는지' 확인용.
+                      const checked = (d.hwCheck || []).filter((c) => c.text).map((c) => c.text + (c.status ? ` (${c.status})` : "")).join(", ");
                       const hw = d.hwAssign?.length ? d.hwAssign.join(", ") : d.homework;
                       const ts = byDate[d.date] || [];
                       return (
@@ -2433,8 +2444,10 @@ function StudentMonthlyModal({ studentId, name, naesin }: { studentId: string; n
                           <span className="smm-flow-d">{md(d.date)}</span>
                           <div className="smm-flow-body">
                             {prog && <div><span className="smm-flow-tag">진도</span>{prog}</div>}
+                            {goals && <div><span className="smm-flow-tag">목표</span>{goals}</div>}
                             {d.materials && <div><span className="smm-flow-tag">자료</span>{d.materials}</div>}
-                            {hw && <div><span className="smm-flow-tag">숙제</span>{hw}</div>}
+                            {checked && <div><span className="smm-flow-tag">숙제검사</span>{checked}</div>}
+                            {hw && <div><span className="smm-flow-tag">내줄숙제</span>{hw}</div>}
                             {ts.map((t) => (
                               <div key={t.id}><span className="smm-flow-tag test">시험</span>{t.name} {t.score}/{t.total}{t.result ? ` · ${t.result}` : ""}</div>
                             ))}
