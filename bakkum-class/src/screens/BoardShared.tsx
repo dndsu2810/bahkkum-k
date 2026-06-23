@@ -80,8 +80,8 @@ export function BoardShared() {
 
   // 보관(archived)·원장 전용은 제외. 완료는 칸에서 월별로 따로 거른다(아래).
   const visible = useMemo(() => tasks.filter((t) => !t.archived && !t.adminOnly), [tasks]);
-  // 전체보기 / 내 담당 보기 — 로그인 사용자가 담당자로 지정된 것만.
-  const [mine, setMine] = useState(false);
+  // 전체보기 / 내 담당 보기 — 로그인 사용자가 담당자로 지정된 것만. 기본은 '내 담당'.
+  const [mine, setMine] = useState(true);
   const myName = user?.name || "";
   const isMine = (t: BoardTask) => t.assignee.split(",").map((s) => s.trim()).includes(myName);
   const scoped = useMemo(() => (mine ? visible.filter(isMine) : visible), [visible, mine, myName]); // eslint-disable-line react-hooks/exhaustive-deps
