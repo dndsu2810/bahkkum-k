@@ -754,9 +754,10 @@ export function Today() {
                               />
                               <span className="today-hw-pctsign">%</span>
                             </span>
-                            <button className={"btn sm" + (hw.status === "done" ? " primary" : "")} onClick={() => toggleDone(hw.id)} title="검사 완료">
-                              <Icon name="check" />{hw.status === "done" ? ((hw.delayCount || 0) > 0 ? "지연완료됨" : "완료됨") : ((hw.delayCount || 0) > 0 ? "지연검사완료" : "검사완료")}
+                            <button className={"btn sm hw-donebtn" + (hw.status === "done" ? " on" : "")} onClick={() => toggleDone(hw.id)} title={hw.status === "done" ? "다시 누르면 '검사 전'으로 돌아가요" : "검사 완료로 표시해요"}>
+                              <Icon name="check" />{hw.status === "done" ? ((hw.delayCount || 0) > 0 ? "지연 검사완료됨" : "검사완료됨") : ((hw.delayCount || 0) > 0 ? "지연검사완료" : "검사완료")}
                             </button>
+                            {hw.status === "done" && <span className="hw-donenote">검사가 완료되었어요</span>}
                             <button className="btn ghost sm" onClick={() => delayHw(hw.id)} title="지연 — 다시 검사할 날짜 지정">지연</button>
                           </div>
                         );

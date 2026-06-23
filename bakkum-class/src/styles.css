@@ -2789,6 +2789,11 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .mat-arow.done .mat-arow-name{text-decoration:line-through}
 .mat-arow-date{font-size:var(--t-cap);color:var(--ink3)}
 
+/* 숙제 검사완료 버튼 — 완료 상태를 초록으로 분명히. 누른 건지 헷갈리지 않게 옆에 작은 초록 안내문. */
+.hw-donebtn.on{background:var(--green);border-color:var(--ink);color:var(--ink);font-weight:700}
+.hw-donebtn.on:hover{background:var(--green);filter:brightness(.95)}
+.hw-donenote{color:var(--green);font-size:var(--t-cap);font-weight:700;white-space:nowrap}
+
 /* 테스트 재시(NP) 칩 — 미통과 표시(빨강) */
 .sm-subj-chip.np.on{background:var(--bad);color:#fff;border-color:var(--bad)}
 
