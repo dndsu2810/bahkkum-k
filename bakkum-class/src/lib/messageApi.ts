@@ -43,6 +43,8 @@ export const messageApi = {
   /** 답장 확인 처리(발송 화면 열 때). */
   markRepliesSeen: () => jpost("/api/messages/replies/seen", {}),
 
+  /** 오늘 받은 하원 알림 문구(학생) — 없으면 null. 다음날이면 자동으로 null. */
+  checkoutToday: () => jget<{ notice: string | null }>("/api/messages/checkout-today").then((j) => j.notice),
   /** 받은 메시지(학생 본인). */
   inbox: () => jget<{ messages: Message[] }>("/api/messages/inbox").then((j) => j.messages),
   /** 안읽음 수(종 배지용). */

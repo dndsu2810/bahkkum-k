@@ -623,7 +623,18 @@ export function StudentHome() {
   const [boardRules, setBoardRules] = useState<BaseballRule[]>([]); // 상벌점 항목(선생님 수정 시 반영)
   const [boardCfg, setBoardCfg] = useState<BaseballConfig | undefined>(undefined);
   const [boardOpen, setBoardOpen] = useState(false);
+  const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null); // 하원 배너(오늘만)
   const logo = getCachedLogo();
+  // 하원 배너 — 오늘 강사가 하원 누르면 상단에 계속 떠있고, 다음날이면 자동으로 사라짐(15초 폴링).
+  useEffect(() => {
+    let alive = true;
+    const load = () => messageApi.checkoutToday().then((n) => { if (alive) setCheckoutNotice(n); }).catch(() => {});
+    void load();
+    const iv = window.setInterval(load, 15000);
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    return () => { alive = false; window.clearInterval(iv); window.removeEventListener("focus", onFocus); };
+  }, []);
   useEffect(() => {
     let alive = true;
     const load = () => postApi.unseen().then((n) => { if (alive) setNoticeUnseen(n); }).catch(() => {});
@@ -677,6 +688,12 @@ export function StudentHome() {
         </div>
       </header>
       <main className="sp-shell-body">
+        {checkoutNotice && (
+          <div className="sp-checkout-banner" role="status">
+            <span className="sp-checkout-ic">👋</span>
+            <span className="sp-checkout-txt">{checkoutNotice}</span>
+          </div>
+        )}
         <NoticeBanner />
         <StudentPage />
       </main>

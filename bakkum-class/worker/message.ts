@@ -4,6 +4,7 @@
 
 import type { Env } from "./index";
 import type { SessionUser } from "./auth";
+import { kstToday } from "./briefing";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -23,6 +24,8 @@ export async function ensureMessageTables(env: Env): Promise<void> {
     "CREATE TABLE IF NOT EXISTS class_message (id TEXT PRIMARY KEY, batch_id TEXT NOT NULL DEFAULT '', sender_sub TEXT NOT NULL DEFAULT '', sender_name TEXT NOT NULL DEFAULT '', sender_role TEXT NOT NULL DEFAULT '', recipient_id TEXT NOT NULL DEFAULT '', recipient_name TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, read_at INTEGER NOT NULL DEFAULT 0, reply_body TEXT NOT NULL DEFAULT '', reply_at INTEGER NOT NULL DEFAULT 0, reply_seen INTEGER NOT NULL DEFAULT 0)",
     // 기존 테이블에 reply_seen 추가(이미 있으면 무시) — 강사가 답장을 확인했는지 추적.
     "ALTER TABLE class_message ADD COLUMN reply_seen INTEGER NOT NULL DEFAULT 0",
+    // 메시지 종류 — 'msg'(일반) | 'checkout'(하원 알림: 메시지함 대신 상단 배너로만, 다음날 사라짐).
+    "ALTER TABLE class_message ADD COLUMN kind TEXT NOT NULL DEFAULT 'msg'",
     "CREATE INDEX IF NOT EXISTS idx_message_recipient ON class_message(recipient_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_message_sender ON class_message(sender_sub, created_at)",
   ];
@@ -75,16 +78,24 @@ export async function handleMessages(env: Env, request: Request, p: string, me: 
     return json({ ok: true, count: recipients.length });
   }
 
-  // 하원 알림 — 강사(누구나, 학생 제외)가 대시보드에서 하원 누르면 그 학생에게 1줄 알림.
+  // 하원 알림 — 강사(누구나, 학생 제외)가 대시보드에서 하원 누르면 그 학생 상단 배너에 표시(다음날 사라짐).
   if (p === "/api/messages/checkout-notify" && m === "POST") {
     if (me.role === "student") return json({ error: "forbidden" }, 403);
     const b = (await request.json().catch(() => ({}))) as { studentId?: string; studentName?: string };
     const sid = String(b.studentId || "").trim();
     if (!sid) return json({ error: "student_required" }, 400);
     await env.DB.prepare(
-      "INSERT INTO class_message(id,batch_id,sender_sub,sender_name,sender_role,recipient_id,recipient_name,body,created_at,read_at,reply_body,reply_at) VALUES(?,?,?,?,?,?,?,?,?,0,'',0)"
+      "INSERT INTO class_message(id,batch_id,sender_sub,sender_name,sender_role,recipient_id,recipient_name,body,created_at,read_at,reply_body,reply_at,kind) VALUES(?,?,?,?,?,?,?,?,?,0,'',0,'checkout')"
     ).bind(newId("msg"), newId("bat"), me.sub, me.name, me.role, sid, String(b.studentName || ""), "하원하세요! Good Bye! 👋", Date.now()).run();
     return json({ ok: true });
+  }
+
+  // 하원 배너(학생) — 오늘 받은 하원 알림이 있으면 그 문구를, 없으면 null. 다음날이면 자동으로 안 뜸.
+  if (p === "/api/messages/checkout-today" && m === "GET") {
+    if (me.role !== "student") return json({ notice: null });
+    const startToday = Date.parse(kstToday().date + "T00:00:00+09:00");
+    const row = await env.DB.prepare("SELECT body FROM class_message WHERE recipient_id=? AND kind='checkout' AND created_at>=? ORDER BY created_at DESC LIMIT 1").bind(me.sub, startToday).first<{ body: string }>();
+    return json({ notice: row?.body ?? null });
   }
 
   if (p === "/api/messages/sent" && m === "GET") {
@@ -118,13 +129,13 @@ export async function handleMessages(env: Env, request: Request, p: string, me: 
   /* ============ 받는 쪽(학생 본인) ============ */
   if (p === "/api/messages/inbox" && m === "GET") {
     if (me.role !== "student") return json({ error: "forbidden" }, 403);
-    const r = await env.DB.prepare("SELECT * FROM class_message WHERE recipient_id=? ORDER BY created_at DESC LIMIT 200").bind(me.sub).all<Record<string, unknown>>();
+    const r = await env.DB.prepare("SELECT * FROM class_message WHERE recipient_id=? AND kind!='checkout' ORDER BY created_at DESC LIMIT 200").bind(me.sub).all<Record<string, unknown>>();
     return json({ messages: (r.results || []).map(msgRow) });
   }
 
   if (p === "/api/messages/unread" && m === "GET") {
     if (me.role !== "student") return json({ count: 0 });
-    const r = await env.DB.prepare("SELECT COUNT(*) n FROM class_message WHERE recipient_id=? AND read_at=0").bind(me.sub).first<{ n: number }>();
+    const r = await env.DB.prepare("SELECT COUNT(*) n FROM class_message WHERE recipient_id=? AND read_at=0 AND kind!='checkout'").bind(me.sub).first<{ n: number }>();
     return json({ count: Number(r?.n ?? 0) });
   }
 

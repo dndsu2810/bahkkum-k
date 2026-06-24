@@ -3628,3 +3628,8 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .hwc-add{display:flex;gap:6px;margin-top:2px}
 .hwc-add .input{flex:1}
 .hwc-empty{font-size:var(--t-cap);color:var(--ink4)}
+/* 하원 배너(학생 상단) — 오늘 하루 계속 표시, 다음날 사라짐 */
+.sp-checkout-banner{display:flex;align-items:center;gap:10px;background:var(--brand-soft,#FDEFD3);border:1px solid var(--brand-line,#F3DDB0);
+  color:var(--brand-d,#C5851E);border-radius:var(--r-md);padding:12px 16px;margin-bottom:10px;font-weight:800;font-size:var(--t-md)}
+.sp-checkout-ic{font-size:20px;line-height:1}
+.sp-checkout-txt{flex:1}
