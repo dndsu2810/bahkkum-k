@@ -3603,3 +3603,6 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .dash-drag{cursor:grab;color:var(--ink4);font-size:14px;line-height:1;letter-spacing:-3px;padding:2px 5px 2px 0;user-select:none;flex:none;align-self:center}
 .dash-drag:active{cursor:grabbing}
 .eng-dash-card[draggable]{}
+/* 오늘 사이드 목록 — 이름 전부 보이게(잘림 방지), 뱃지·시간은 다음 줄로 줄바꿈 */
+.today-side-nm{flex:0 0 auto;overflow:visible;text-overflow:clip;max-width:none}
+.today-side-row .eng-stu-name{flex-wrap:wrap;row-gap:4px}

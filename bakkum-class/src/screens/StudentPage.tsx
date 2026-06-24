@@ -449,8 +449,8 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
             })}
           </div>
         )}
-        {/* 진행중 교재 칩 — 누르면 목표 입력칸에 채워져요. 내용을 더해 목표로 추가하면 돼요. 내신기간엔 숨겨요. */}
-        {!examMode && progressBooks.length > 0 && (
+        {/* 진행중 교재 칩 — 누르면 목표 입력칸에 채워져요. 내신모드에서도 강사 대시보드처럼 항상 보여줘요. */}
+        {progressBooks.length > 0 && (
           <div className="today-bookchips" style={{ marginTop: 6 }}>
             <span className="today-bookchips-lbl">진행중 교재</span>
             {progressBooks.map((b) => (
