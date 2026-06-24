@@ -188,8 +188,10 @@ export async function handleBaseball(env: Env, request: Request, p: string, me: 
     const board = await baseballBoardFor(env, sid);
     let photo = "";
     try { const r = await env.DB.prepare("SELECT photo FROM class_student_meta WHERE student_id=?").bind(sid).first<{ photo: string }>(); photo = String(r?.photo ?? ""); } catch { /* ignore */ }
+    // 상벌점 항목 구성(켜진 규칙) + 기준값 — 학생 화면 '상벌점 항목 안내'에 그대로 반영.
+    const [rules, cfg] = await Promise.all([loadRules(env), loadConfig(env)]);
     // 키오스크가 PULL 확인용으로 쓰는 표식 + CORS(읽기 전용).
-    return new Response(JSON.stringify({ source: "soez", studentId: sid, board, photo }), {
+    return new Response(JSON.stringify({ source: "soez", studentId: sid, board, photo, rules: rules.filter((r) => r.enabled), cfg }), {
       headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*", "cache-control": "no-store" },
     });
   }

@@ -15,7 +15,7 @@ import { Icon } from "../icons";
 import { HexAvatar, CombGauge, Bee, SoezLogo } from "../soez";
 import { Scoreboard } from "../components/Scoreboard";
 import { baseballApi } from "../lib/baseballApi";
-import type { MathBoard } from "../lib/baseball";
+import type { MathBoard, BaseballRule, BaseballConfig } from "../lib/baseball";
 
 /** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
  *  - 학생 본인: studentId 생략(본인). 일지 입력 가능, 커리큘럼 조회.
@@ -640,6 +640,8 @@ export function StudentHome() {
   const [noticeUnseen, setNoticeUnseen] = useState(0);
   const [board, setBoard] = useState<MathBoard | null>(null); // 수학 전광판(수학생만)
   const [boardPhoto, setBoardPhoto] = useState(""); // 학생 사진(모달 헤더)
+  const [boardRules, setBoardRules] = useState<BaseballRule[]>([]); // 상벌점 항목(선생님 수정 시 반영)
+  const [boardCfg, setBoardCfg] = useState<BaseballConfig | undefined>(undefined);
   const [boardOpen, setBoardOpen] = useState(false);
   const logo = getCachedLogo();
   useEffect(() => {
@@ -653,7 +655,7 @@ export function StudentHome() {
   // 본인 수학 전광판 — 선생님이 볼/출결 반영하면 학생 화면에 부드럽게 갱신(15초·focus).
   useEffect(() => {
     let alive = true;
-    const load = () => baseballApi.board().then((r) => { if (alive) { setBoard(r.board); setBoardPhoto(r.photo || ""); } }).catch(() => {});
+    const load = () => baseballApi.board().then((r) => { if (alive) { setBoard(r.board); setBoardPhoto(r.photo || ""); setBoardRules(r.rules || []); setBoardCfg(r.cfg); } }).catch(() => {});
     void load();
     const iv = window.setInterval(load, 15000);
     const onFocus = () => void load();
@@ -713,7 +715,7 @@ export function StudentHome() {
                 <p className="bb-modal-sub">수학 전광판 · {board.monthLabel.replace("-", ".")}</p>
               </div>
             </div>
-            <Scoreboard board={board} />
+            <Scoreboard board={board} rules={boardRules} cfg={boardCfg} />
           </div>
         </div>
       )}

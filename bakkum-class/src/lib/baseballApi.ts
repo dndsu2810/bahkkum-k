@@ -51,8 +51,8 @@ export interface NewEvent {
 export const baseballApi = {
   /** 반 전체 현황 + 규칙 + 기준값(선생님). */
   classView: () => jget<ClassResp>("/api/baseball/class"),
-  /** 한 학생 전광판(선생님은 student_id, 학생 본인은 생략). 학생 사진(photo)도 함께. */
-  board: (sid?: string) => jget<{ board: MathBoard | null; photo?: string }>("/api/baseball/board" + (sid ? "?student_id=" + encodeURIComponent(sid) : "")),
+  /** 한 학생 전광판(선생님은 student_id, 학생 본인은 생략). 사진·상벌점 규칙·기준값도 함께. */
+  board: (sid?: string) => jget<{ board: MathBoard | null; photo?: string; rules?: BaseballRule[]; cfg?: BaseballConfig }>("/api/baseball/board" + (sid ? "?student_id=" + encodeURIComponent(sid) : "")),
   /** 규칙·기준값 저장(전체 교체). */
   saveRules: (rules: BaseballRule[], cfg?: Partial<BaseballConfig>) => jsend("/api/baseball/rules", "POST", { rules, cfg }),
   /** 이벤트 추가(볼 주기·취소·면제·보충완료·자동무효화). */

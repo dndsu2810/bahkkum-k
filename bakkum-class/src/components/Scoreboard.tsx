@@ -1,7 +1,8 @@
 // 수학 전광판 패널 — 학생 모달·선생님 화면 공용. board(MathBoard)만 받아 그린다.
 import { useState } from "react";
-import type { MathBoard, BoardRecent } from "../lib/baseball";
+import type { MathBoard, BoardRecent, BaseballRule, BaseballConfig } from "../lib/baseball";
 import { statusLabel } from "../lib/baseball";
+import { Icon } from "../icons";
 
 function Dots({ filled, total, tone }: { filled: number; total: number; tone: "strike" | "ball" | "out" }) {
   return (
@@ -21,9 +22,12 @@ const RECENT_TONE: Record<BoardRecent["tone"], { cls: string; txt: string }> = {
   honey: { cls: "bb-rc-honey", txt: "꿀" },
 };
 
-export function Scoreboard({ board, showRecent = true }: { board: MathBoard; showRecent?: boolean }) {
+export function Scoreboard({ board, showRecent = true, rules, cfg }: { board: MathBoard; showRecent?: boolean; rules?: BaseballRule[]; cfg?: BaseballConfig }) {
   const [showAll, setShowAll] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const round = board.penaltyRounds + 1; // 1회부터 시작, 쓰리아웃 초기화마다 +1
+  const strikeRules = (rules || []).filter((r) => r.kind === "strike").sort((a, b) => a.sort - b.sort);
+  const ballRules = (rules || []).filter((r) => r.kind === "ball").sort((a, b) => a.sort - b.sort);
 
   // 회차별 그룹(최신 회차 먼저).
   const byRound = new Map<number, BoardRecent[]>();
@@ -73,6 +77,37 @@ export function Scoreboard({ board, showRecent = true }: { board: MathBoard; sho
         <span className="bb-goal-counts">스트라이크 {board.S}개 · 볼 {board.B}개 · 아웃 {board.O}개</span>
         <span className="bb-goal-msg">{board.goal}</span>
       </div>
+
+      {/* 상벌점 항목 안내 — 누르면 펼쳐 보고 다시 누르면 닫힘. 선생님이 항목을 바꾸면 그대로 반영. */}
+      {rules && rules.length > 0 && (
+        <div className="bb-rinfo">
+          <button className={"bb-rinfo-toggle" + (showRules ? " open" : "")} onClick={() => setShowRules((v) => !v)} aria-expanded={showRules}>
+            <span>상벌점 항목 보기</span>
+            <span className="bb-rinfo-caret"><Icon name="chev" /></span>
+          </button>
+          {showRules && (
+            <div className="bb-rinfo-body">
+              <div className="bb-rinfo-cols">
+                <div className="bb-rinfo-col">
+                  <p className="bb-rinfo-h strike">벌점 · 스트라이크</p>
+                  {strikeRules.length === 0 ? <p className="bb-rinfo-empty">항목 없음</p> : strikeRules.map((r) => (
+                    <div className="bb-rinfo-item" key={r.id}><span>{r.label}</span><b className="strike">+{r.points}</b></div>
+                  ))}
+                </div>
+                <div className="bb-rinfo-col">
+                  <p className="bb-rinfo-h ball">상점 · 볼</p>
+                  {ballRules.length === 0 ? <p className="bb-rinfo-empty">항목 없음</p> : ballRules.map((r) => (
+                    <div className="bb-rinfo-item" key={r.id}><span>{r.label}</span><b className="ball">+{r.points}</b></div>
+                  ))}
+                </div>
+              </div>
+              {cfg && (
+                <p className="bb-rinfo-note">스트라이크 {cfg.strikesPerOut}개 = 아웃 1개 · 볼 {cfg.ballsToClearOut}개 = 아웃 1개 감소 · 아웃 {cfg.outsForMakeup}개 = 보충{cfg.monthlyReset ? " · 매월 초기화" : ""}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {showRecent && board.history.length > 0 && (
         <div className="bb-recent">

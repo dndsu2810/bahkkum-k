@@ -3579,3 +3579,19 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .bb-round-h{display:flex;align-items:center;gap:7px;margin:8px 0 5px}
 .bb-round-h b{font-size:var(--t-sm);color:var(--ink)}
 .bb-round-now{font-size:10px;font-weight:700;color:var(--brand-d,#C5851E);background:var(--brand-soft,#FDEFD3);border-radius:var(--r-full);padding:1px 7px}
+/* 상벌점 항목 안내(학생 모달) */
+.bb-rinfo{border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden}
+.bb-rinfo-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;background:var(--card2);border:none;padding:11px 14px;font-size:var(--t-sm);font-weight:700;color:var(--ink);cursor:pointer}
+.bb-rinfo-caret{display:inline-flex;width:16px;height:16px;color:var(--ink3);transition:transform .15s}
+.bb-rinfo-toggle.open .bb-rinfo-caret{transform:rotate(180deg)}
+.bb-rinfo-body{padding:12px 14px;border-top:1px solid var(--line)}
+.bb-rinfo-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.bb-rinfo-h{font-size:var(--t-cap);font-weight:700;margin:0 0 6px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+.bb-rinfo-h.strike{color:#C5651E}.bb-rinfo-h.ball{color:var(--ok)}
+.bb-rinfo-item{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:var(--t-sm);padding:3px 0}
+.bb-rinfo-item span{color:var(--ink)}
+.bb-rinfo-item b{font-weight:800;flex:0 0 auto}
+.bb-rinfo-item b.strike{color:#E8804D}.bb-rinfo-item b.ball{color:var(--ok)}
+.bb-rinfo-empty{font-size:var(--t-cap);color:var(--ink4);margin:2px 0}
+.bb-rinfo-note{font-size:11px;color:var(--ink3);margin:10px 0 0;line-height:1.5}
+@media(max-width:360px){.bb-rinfo-cols{grid-template-columns:1fr}}
