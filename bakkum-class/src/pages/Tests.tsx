@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { TestLog } from "../types";
 import { useStore } from "../store";
 import { activeStudents } from "../lib/logic";
-import { todayStr, uid } from "../lib/dates";
+import { todayStr, uid, weekOfMonthLabel } from "../lib/dates";
 import { TodayLink } from "../components/ui";
 import { TEST_TYPES } from "../components/modals";
 import { ScoreInput, type ScoreValue } from "../components/ScoreInput";
@@ -40,7 +40,7 @@ export function Tests() {
   // 입력 폼.
   const [type, setType] = useState(TEST_TYPES[0]);
   const [date, setDate] = useState(todayStr());
-  const [round, setRound] = useState("");
+  const [round, setRound] = useState(weekOfMonthLabel(todayStr())); // 시험일 기준 자동
   const [range, setRange] = useState("");
   const [status, setStatus] = useState<TestLog["status"]>("예정");
   const [sMode, setSMode] = useState<ScoreMode>("score");
@@ -71,7 +71,7 @@ export function Tests() {
     };
     mutate((d) => { d.testLog.push(rec); });
     pushTestNotion(rec.studentId, { date: rec.date, type: rec.type, round: rec.round, range: rec.range, score: rec.score, status: rec.status, memo: rec.memo });
-    setRound(""); setRange(""); setSNum(0); setStatus("예정"); setDate(todayStr());
+    setRange(""); setSNum(0); setStatus("예정"); setDate(todayStr()); setRound(weekOfMonthLabel(todayStr()));
     toast("테스트를 기록했어요.");
   }
 
@@ -151,10 +151,10 @@ export function Tests() {
                 </label>
                 <label className="test-f">
                   <span>시험일</span>
-                  <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                  <input className="input" type="date" value={date} onChange={(e) => { setDate(e.target.value); setRound(weekOfMonthLabel(e.target.value)); }} />
                 </label>
                 <label className="test-f">
-                  <span>회차</span>
+                  <span>회차 <em className="test-f-auto">시험일 기준 자동</em></span>
                   <input className="input" value={round} onChange={(e) => setRound(e.target.value)} placeholder="예: 6월 2주차" />
                 </label>
                 <label className="test-f wide">
@@ -185,9 +185,9 @@ export function Tests() {
                   <div className={"test-rec" + (t.status === "완료" ? " done" : "")} key={t.id}>
                     {editId === t.id ? (
                       <div className="test-rec-editrow">
-                        <input className="input" type="date" value={eDate} onChange={(e) => setEDate(e.target.value)} aria-label="시험일" />
+                        <input className="input" type="date" value={eDate} onChange={(e) => { setEDate(e.target.value); setERound(weekOfMonthLabel(e.target.value)); }} aria-label="시험일" />
                         <input className="input" value={eType} onChange={(e) => setEType(e.target.value)} placeholder="시험명" onKeyDown={(e) => { if (e.key === "Enter") saveEdit(t); }} />
-                        <input className="input" value={eRound} onChange={(e) => setERound(e.target.value)} placeholder="회차" />
+                        <input className="input" value={eRound} onChange={(e) => setERound(e.target.value)} placeholder="회차(예: 6월 2주차)" />
                         <input className="input" value={eRange} onChange={(e) => setERange(e.target.value)} placeholder="시험 범위" onKeyDown={(e) => { if (e.key === "Enter") saveEdit(t); }} />
                         <button className="btn primary sm" onClick={() => saveEdit(t)}>저장</button>
                         <button className="btn ghost sm" onClick={() => setEditId(null)}>취소</button>

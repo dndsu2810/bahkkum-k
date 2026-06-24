@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import type { Student, SupLog, TestLog } from "../types";
-import { fmtMDDow, uid } from "../lib/dates";
+import { fmtMDDow, uid, weekOfMonthLabel } from "../lib/dates";
 import { nextLessonDate } from "../lib/logic";
 import { pushTestNotion } from "../api";
 import { TEST_TYPES } from "./modals";
@@ -19,6 +19,7 @@ function TodayTestRow({ t, onScore, onToggle, onRemove }: { t: TestLog; onScore:
       <span className="today-hwitem-name">
         <b>{t.type || "시험"}</b>
         {t.status === "예정" && <span className="badge b-orange" title="예약된 시험 — 점수를 넣으면 완료돼요">예정</span>}
+        {t.round ? <span className="test-rec-round">{t.round}</span> : null}
         {t.range ? <span className="muted"> · {t.range}</span> : null}
       </span>
       <ScoreInput mode={mode} num={num} den={den} onChange={onScore} />
@@ -44,6 +45,7 @@ export function TodayTests({ student, day }: { student: Student; day: string }) 
   const [sMode, setSMode] = useState<ScoreMode>("score");
   const [sNum, setSNum] = useState(0);
   const [sDen, setSDen] = useState(100);
+  const [todayRange, setTodayRange] = useState("");
   const [planName, setPlanName] = useState("");
   const [planRange, setPlanRange] = useState("");
 
@@ -54,10 +56,10 @@ export function TodayTests({ student, day }: { student: Student; day: string }) 
     const nm = name.trim();
     if (!nm) return;
     const score = computeScore(sMode, sNum, sDen);
-    const rec: TestLog = { id: uid(), studentId: sid, date: day, type: nm, round: "", range: "", score, status: "완료", memo: "", scoreMode: sMode, scoreNum: sNum, scoreDen: sDen };
+    const rec: TestLog = { id: uid(), studentId: sid, date: day, type: nm, round: weekOfMonthLabel(day), range: todayRange.trim(), score, status: "완료", memo: "", scoreMode: sMode, scoreNum: sNum, scoreDen: sDen };
     mutate((d) => { d.testLog.push(rec); });
     pushN(rec);
-    setSNum(0);
+    setSNum(0); setTodayRange("");
     toast(`${student.name} · 시험 기록`);
   }
   function patch(t: TestLog, fn: (x: TestLog) => void) {
@@ -73,7 +75,7 @@ export function TodayTests({ student, day }: { student: Student; day: string }) 
     const nm = planName.trim();
     if (!nm) return;
     if (!nextDate) { toast("다음 수업 일정이 없어 예약할 수 없어요."); return; }
-    const rec: TestLog = { id: uid(), studentId: sid, date: nextDate, type: nm, round: "", range: planRange.trim(), score: 0, status: "예정", memo: "" };
+    const rec: TestLog = { id: uid(), studentId: sid, date: nextDate, type: nm, round: weekOfMonthLabel(nextDate), range: planRange.trim(), score: 0, status: "예정", memo: "" };
     mutate((d) => { d.testLog.push(rec); });
     pushN(rec);
     setPlanName("");
@@ -85,7 +87,7 @@ export function TodayTests({ student, day }: { student: Student; day: string }) 
     <>
       {/* 오늘 본 시험 */}
       <div className="eng-field today-hwsec">
-        <div className="eng-label">오늘 본 시험</div>
+        <div className="eng-label">오늘 본 시험 {day ? <span className="today-sup-hint">{weekOfMonthLabel(day)}</span> : null}</div>
         {todays.length === 0 ? (
           <div className="today-hwrow-empty">아직 오늘 본 시험이 없어요. 아래에서 추가하거나, 미리 예약해 두면 그날 여기 떠요</div>
         ) : (
@@ -101,6 +103,13 @@ export function TodayTests({ student, day }: { student: Student; day: string }) 
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") addToday(); }}
           />
+          <input
+            className="today-assign-input"
+            placeholder="시험 범위 (예: 5단원 분수)"
+            value={todayRange}
+            onChange={(e) => setTodayRange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") addToday(); }}
+          />
           <ScoreInput mode={sMode} num={sNum} den={sDen} onChange={(v) => { setSMode(v.scoreMode); setSNum(v.scoreNum); setSDen(v.scoreDen); }} />
           <button className="btn sm" onClick={addToday} disabled={!name.trim()}>추가</button>
         </div>
@@ -108,7 +117,7 @@ export function TodayTests({ student, day }: { student: Student; day: string }) 
 
       {/* 다음 시간에 볼 시험 (예약) */}
       <div className="eng-field today-hwsec">
-        <div className="eng-label">다음 시간에 볼 시험 {nextDate ? <span className="today-sup-hint">{fmtMDDow(nextDate)} 준비</span> : null}</div>
+        <div className="eng-label">다음 시간에 볼 시험 {nextDate ? <span className="today-sup-hint">{fmtMDDow(nextDate)} · {weekOfMonthLabel(nextDate)} 준비</span> : null}</div>
         {!nextDate ? (
           <div className="today-hwrow-empty">다음 수업 일정이 없어 예약할 수 없어요. (시간표 확인)</div>
         ) : (
@@ -117,6 +126,7 @@ export function TodayTests({ student, day }: { student: Student; day: string }) 
               <div className="today-hwitem assigned" key={p.id}>
                 <span className="today-hwitem-name">
                   <b>{p.type}</b><span className="badge b-orange">예약</span>
+                  {p.round ? <span className="test-rec-round">{p.round}</span> : null}
                   {p.range ? <span className="muted"> · {p.range}</span> : null}
                 </span>
                 <button className="btn ghost sm" onClick={() => removeT(p)} title="삭제"><Icon name="trash" /></button>

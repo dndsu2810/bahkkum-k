@@ -25,6 +25,17 @@ export function parseD(s: string): Date {
   return new Date(+p[0], +p[1] - 1, +p[2]);
 }
 
+/** 시험일 'YYYY-MM-DD' → "N월 N주차" (그 달의 몇 번째 주). 월요일 시작, 1일이 든 주가 1주차. */
+export function weekOfMonthLabel(s: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
+  const d = parseD(s);
+  const day = d.getDate();
+  const firstDow = new Date(d.getFullYear(), d.getMonth(), 1).getDay(); // 0=일..6=토
+  const firstOffsetMon = (firstDow + 6) % 7; // 1일의 요일을 월=0 기준으로 변환
+  const week = Math.floor((day - 1 + firstOffsetMon) / 7) + 1;
+  return `${d.getMonth() + 1}월 ${week}주차`;
+}
+
 /** Date → 'YYYY-MM-DD' (로컬 기준). */
 export function ymd(d: Date): string {
   return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
