@@ -4,7 +4,7 @@ import type { AttRecord, Attitude, AttStatus, HwLog, Makeup, Student } from "../
 import { DOW, fmtFull, fmtMDDow, parseD, timeToMin, todayStr, uid, ymd } from "../lib/dates";
 import { activeStudents, attendsOn, effectiveLessons, nextLessonDate, studentById } from "../lib/logic";
 import { loadCheckout, saveCheckout, pruneCheckout } from "../lib/checkoutState";
-import { useDashOrder } from "../lib/dashOrder";
+import { useDashOrder, isInteractiveTarget } from "../lib/dashOrder";
 import { applyMakeup, findBoKey } from "../lib/attendanceLogic";
 import { holidayName } from "../lib/holidays";
 import { awardPoints, pushAttendanceNotion, pushHomeworkNotion, attendancePoints, loadPointCatalog } from "../api";
@@ -634,9 +634,9 @@ export function TodayDashboard() {
                 <div id={"mathcard-" + e.key} key={e.key} className={"eng-dash-card" + (open ? " open" : "") + (out ? " out" : "") + (done ? " alldone" : "")}
                   onDragOver={(ev) => ev.preventDefault()}
                   onDrop={(ev) => { ev.preventDefault(); if (dragKey) move(dragKey, e.key, cardEntries.map((x) => x.key)); setDragKey(null); }}>
-                  {/* 요약 줄 — 항상 보임 */}
-                  <div className="eng-dash-sum">
-                    <span className="dash-drag" draggable onDragStart={() => setDragKey(e.key)} title="드래그해서 순서 이동" aria-label="순서 이동">⋮⋮</span>
+                  {/* 요약 줄 — 항상 보임. 요약줄 아무 데나 잡아 드래그(버튼·입력은 제외). */}
+                  <div className="eng-dash-sum draggable" draggable
+                    onDragStart={(ev) => { if (isInteractiveTarget(ev.target)) { ev.preventDefault(); return; } setDragKey(e.key); }}>
                     <span className="eng-dash-sum-name">{s.name}</span>
                     <button className="eng-dash-rec" onClick={() => openModal(<MathMonthlyModal studentId={s.id} name={s.name} />)} title="누적 기록 보기 (출결·진도·시험)" aria-label="누적 기록"><Icon name="chart" /></button>
                     <span className="eng-dash-sum-tags">

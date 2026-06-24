@@ -3606,3 +3606,7 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 /* 오늘 사이드 목록 — 이름 전부 보이게(잘림 방지), 뱃지·시간은 다음 줄로 줄바꿈 */
 .today-side-nm{flex:0 0 auto;overflow:visible;text-overflow:clip;max-width:none}
 .today-side-row .eng-stu-name{flex-wrap:wrap;row-gap:4px}
+/* 카드 요약줄을 잡아 드래그(핸들 불필요). 좌우·상하 모두 그리드에서 재배치됨. */
+.eng-dash-sum.draggable{cursor:grab;user-select:none}
+.eng-dash-sum.draggable:active{cursor:grabbing}
+.eng-dash-card.drag-over{outline:2px dashed var(--brand);outline-offset:-2px}

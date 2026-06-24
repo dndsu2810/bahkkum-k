@@ -7,6 +7,12 @@ function loadOrder(key: string): string[] {
   catch { return []; }
 }
 
+/** 드래그 시작 지점이 버튼·입력 등 조작 요소면 true → 드래그를 막아 클릭/입력이 정상 동작하게. */
+export function isInteractiveTarget(t: EventTarget | null): boolean {
+  const el = t as HTMLElement | null;
+  return !!(el && el.closest && el.closest('button,input,textarea,select,a,[contenteditable="true"]'));
+}
+
 export function useDashOrder(scope: string, day: string) {
   const key = `bk_dashord_${scope}_${day}`;
   const [order, setOrder] = useState<string[]>(() => loadOrder(key));

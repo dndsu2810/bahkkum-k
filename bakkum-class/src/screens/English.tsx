@@ -7,7 +7,7 @@ import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtDayBand, fmtMD, fmtMDDow, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
 import { loadCheckout, saveCheckout, pruneCheckout } from "../lib/checkoutState";
-import { useDashOrder } from "../lib/dashOrder";
+import { useDashOrder, isInteractiveTarget } from "../lib/dashOrder";
 import { Select, Empty } from "../components/ui";
 import { CopyMsgBtn, parentMakeupMsg, studentMakeupMsg } from "../components/MakeupList";
 import { useStore } from "../store";
@@ -2080,9 +2080,9 @@ function DashCard({
     <div id={"engcard-" + s.id} className={"eng-dash-card" + (open ? " open" : "") + (out ? " out" : "")}
       onDragOver={onDropOn ? (e) => e.preventDefault() : undefined}
       onDrop={onDropOn ? (e) => { e.preventDefault(); onDropOn(); } : undefined}>
-      {/* 상단 — 현재 진행상황 요약(항상 보임) */}
-      <div className="eng-dash-sum">
-        {onDragStart && <span className="dash-drag" draggable onDragStart={onDragStart} title="드래그해서 순서 이동" aria-label="순서 이동">⋮⋮</span>}
+      {/* 상단 — 현재 진행상황 요약(항상 보임). 요약줄 아무 데나 잡아 드래그(버튼·입력은 제외). */}
+      <div className={"eng-dash-sum" + (onDragStart ? " draggable" : "")} draggable={!!onDragStart}
+        onDragStart={onDragStart ? (e) => { if (isInteractiveTarget(e.target)) { e.preventDefault(); return; } onDragStart(); } : undefined}>
         <span className="eng-dash-sum-name">{s.name}</span>
         <button className="eng-dash-rec" onClick={() => openModal(<StudentMonthlyModal studentId={s.id} name={s.name} />)} title="누적 기록 보기 (자료·진도·시험)" aria-label="누적 기록"><Icon name="chart" /></button>
         <span className="eng-dash-sum-tags">
