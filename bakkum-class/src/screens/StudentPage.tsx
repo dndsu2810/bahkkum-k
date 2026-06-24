@@ -711,7 +711,7 @@ export function StudentHome() {
             <div className="bb-modal-head">
               <HexAvatar name={user?.name || ""} photo={boardPhoto} size={46} />
               <div>
-                <p className="bb-modal-name">{user?.name}</p>
+                <p className="bb-modal-name">{user?.name}<span className="bb-name-round">{board.penaltyRounds + 1}회</span></p>
                 <p className="bb-modal-sub">수학 전광판 · {board.monthLabel.replace("-", ".")}</p>
               </div>
             </div>

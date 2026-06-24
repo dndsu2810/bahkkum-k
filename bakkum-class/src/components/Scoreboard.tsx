@@ -1,7 +1,6 @@
 // 수학 전광판 패널 — 학생 모달·선생님 화면 공용. board(MathBoard)만 받아 그린다.
 import { useState } from "react";
 import type { MathBoard, BoardRecent, BaseballRule, BaseballConfig } from "../lib/baseball";
-import { statusLabel } from "../lib/baseball";
 import { Icon } from "../icons";
 
 function Dots({ filled, total, tone }: { filled: number; total: number; tone: "strike" | "ball" | "out" }) {
@@ -25,7 +24,7 @@ const RECENT_TONE: Record<BoardRecent["tone"], { cls: string; txt: string }> = {
 export function Scoreboard({ board, showRecent = true, rules, cfg }: { board: MathBoard; showRecent?: boolean; rules?: BaseballRule[]; cfg?: BaseballConfig }) {
   const [showAll, setShowAll] = useState(false);
   const [showRules, setShowRules] = useState(false);
-  const round = board.penaltyRounds + 1; // 1회부터 시작, 쓰리아웃 초기화마다 +1
+  const round = board.penaltyRounds + 1; // 현재 회차(기록 보기 '진행 중' 표시용)
   const strikeRules = (rules || []).filter((r) => r.kind === "strike").sort((a, b) => a.sort - b.sort);
   const ballRules = (rules || []).filter((r) => r.kind === "ball").sort((a, b) => a.sort - b.sort);
 
@@ -66,12 +65,12 @@ export function Scoreboard({ board, showRecent = true, rules, cfg }: { board: Ma
         </div>
       </div>
 
-      <div className="bb-meta">
-        <span className={"bb-status bb-st-" + board.status}>현재 {round}회</span>
-        {board.pendingMakeup && <span className="bb-status bb-st-makeup">지금 보충 대상</span>}
-        {board.status !== "clean" && !board.pendingMakeup && <span className={"bb-status bb-st-" + board.status}>{statusLabel(board.status)}</span>}
-        {board.honey > 0 && <span className="bb-honeycount">꿀 전환 {board.honey}회</span>}
-      </div>
+      {(board.pendingMakeup || board.honey > 0) && (
+        <div className="bb-meta">
+          {board.pendingMakeup && <span className="bb-status bb-st-makeup">지금 보충 대상</span>}
+          {board.honey > 0 && <span className="bb-honeycount">꿀 전환 {board.honey}회</span>}
+        </div>
+      )}
 
       <div className={"bb-goal" + (board.pendingMakeup ? " danger" : board.status === "clean" ? " clean" : "")}>
         <span className="bb-goal-counts">스트라이크 {board.S}개 · 볼 {board.B}개 · 아웃 {board.O}개</span>

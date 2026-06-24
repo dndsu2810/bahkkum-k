@@ -3595,3 +3595,5 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .bb-rinfo-empty{font-size:var(--t-cap);color:var(--ink4);margin:2px 0}
 .bb-rinfo-note{font-size:11px;color:var(--ink3);margin:10px 0 0;line-height:1.5}
 @media(max-width:360px){.bb-rinfo-cols{grid-template-columns:1fr}}
+.bb-modal-name{display:flex;align-items:center;gap:8px}
+.bb-name-round{font-size:11px;font-weight:700;color:var(--brand-d,#C5851E);background:var(--brand-soft,#FDEFD3);border-radius:var(--r-full);padding:2px 9px}
