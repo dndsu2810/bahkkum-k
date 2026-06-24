@@ -648,6 +648,7 @@ export function Workspace() {
               onGo={goKey}
               canMessage={byKey.has("messages_send")}
               isAdmin={user.role === "admin"}
+              mySub={user.sub}
               reqPending={reqPending}
               ordersPending={ordersPending}
             />

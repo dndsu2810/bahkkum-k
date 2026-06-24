@@ -156,8 +156,9 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
 
   /* ============ 오류·개선 요청 ============ */
   if (p === "/api/issue" && m === "GET") {
-    // 원장·개발자(지현T)는 전체, 그 외는 본인 글만.
-    const q = isIssueMgr
+    // 강사(스태프)는 모두 전체를 똑같이 본다. 학생만 본인 글.
+    const staffSeesAll = me.role !== "student";
+    const q = staffSeesAll
       ? env.DB.prepare("SELECT * FROM class_issue ORDER BY updated_at DESC LIMIT 500")
       : env.DB.prepare("SELECT * FROM class_issue WHERE author_sub=? ORDER BY updated_at DESC LIMIT 200").bind(me.sub);
     const r = await q.all<Record<string, unknown>>();

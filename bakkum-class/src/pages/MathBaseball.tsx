@@ -191,23 +191,12 @@ function StudentCard({ s, expanded, onToggle, ballRules, busy, memo, setMemo, on
   );
 }
 
-/* ───────── 벌·상 항목(규칙) + 기준값 설정 모달 ───────── */
-function RulesEditor({ rules, cfg, onClose, onSaved }: { rules: BaseballRule[]; cfg: BaseballConfig; onClose: () => void; onSaved: () => void }) {
-  const [draft, setDraft] = useState<BaseballRule[]>(() => rules.map((r) => ({ ...r })));
-  const [c, setC] = useState<BaseballConfig>({ ...cfg });
-  const [saving, setSaving] = useState(false);
-
-  const upd = (i: number, patch: Partial<BaseballRule>) => setDraft((d) => d.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-  const del = (i: number) => setDraft((d) => d.filter((_, j) => j !== i));
-  const add = (kind: "strike" | "ball") => setDraft((d) => [...d, { id: "", kind, label: "", points: 1, trigger: "manual", threshold: 50, enabled: true, sort: d.filter((r) => r.kind === kind).length }]);
-
-  async function save() {
-    setSaving(true);
-    try { await baseballApi.saveRules(draft.filter((r) => r.label.trim()), c); onSaved(); }
-    catch { setSaving(false); }
-  }
-
-  const Section = ({ kind, title }: { kind: "strike" | "ball"; title: string }) => (
+/* 규칙 한 묶음(벌/상) — 최상위 컴포넌트로 분리해 입력할 때마다 리마운트되지 않게(렉 방지). */
+function RuleSection({ draft, kind, title, upd, del, add }: {
+  draft: BaseballRule[]; kind: "strike" | "ball"; title: string;
+  upd: (i: number, patch: Partial<BaseballRule>) => void; del: (i: number) => void; add: (kind: "strike" | "ball") => void;
+}) {
+  return (
     <div className="bb-rsec">
       <div className="bb-rsec-h"><b>{title}</b><button className="btn ghost sm" onClick={() => add(kind)}><Icon name="plus" /> 항목 추가</button></div>
       {draft.map((r, i) => r.kind !== kind ? null : (
@@ -228,6 +217,23 @@ function RulesEditor({ rules, cfg, onClose, onSaved }: { rules: BaseballRule[]; 
       ))}
     </div>
   );
+}
+
+/* ───────── 벌·상 항목(규칙) + 기준값 설정 모달 ───────── */
+function RulesEditor({ rules, cfg, onClose, onSaved }: { rules: BaseballRule[]; cfg: BaseballConfig; onClose: () => void; onSaved: () => void }) {
+  const [draft, setDraft] = useState<BaseballRule[]>(() => rules.map((r) => ({ ...r })));
+  const [c, setC] = useState<BaseballConfig>({ ...cfg });
+  const [saving, setSaving] = useState(false);
+
+  const upd = (i: number, patch: Partial<BaseballRule>) => setDraft((d) => d.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const del = (i: number) => setDraft((d) => d.filter((_, j) => j !== i));
+  const add = (kind: "strike" | "ball") => setDraft((d) => [...d, { id: "", kind, label: "", points: 1, trigger: "manual", threshold: 50, enabled: true, sort: d.filter((r) => r.kind === kind).length }]);
+
+  async function save() {
+    setSaving(true);
+    try { await baseballApi.saveRules(draft.filter((r) => r.label.trim()), c); onSaved(); }
+    catch { setSaving(false); }
+  }
 
   return (
     <div className="prof-overlay bb-overlay" onClick={onClose} role="dialog" aria-modal="true">
@@ -236,8 +242,8 @@ function RulesEditor({ rules, cfg, onClose, onSaved }: { rules: BaseballRule[]; 
         <h2 className="bb-rules-title">벌·상 항목 설정</h2>
         <p className="bb-rules-sub">출결·숙제에서 자동으로 인식할 벌(스트라이크)과, 선생님이 직접 줄 상(볼)을 정해요.</p>
 
-        <Section kind="strike" title="벌 — 스트라이크 (자동 인식)" />
-        <Section kind="ball" title="상 — 볼 (선생님이 직접)" />
+        <RuleSection draft={draft} kind="strike" title="벌 — 스트라이크 (자동 인식)" upd={upd} del={del} add={add} />
+        <RuleSection draft={draft} kind="ball" title="상 — 볼 (선생님이 직접)" upd={upd} del={del} add={add} />
 
         <div className="bb-cfg">
           <b className="bb-cfg-h">기준값</b>

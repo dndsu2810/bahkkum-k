@@ -13,10 +13,11 @@ interface Notif { key: string; title: string; sub?: string; tone?: string; go?: 
  * 상단 바로가기(요청/메시지·권한자만/주문/시간표변경) + 알림 목록 + 보관함.
  * 알림 클릭 → 해당 화면 이동 + 보관함으로 이동. 출처: 오류·개선 요청 답변/접수, 공지사항, 변경요청·주문 요약.
  */
-export function NotificationBell({ onGo, canMessage, isAdmin, reqPending, ordersPending }: {
+export function NotificationBell({ onGo, canMessage, isAdmin, mySub, reqPending, ordersPending }: {
   onGo: (key: string) => void;
   canMessage: boolean;
   isAdmin: boolean;
+  mySub: string;
   reqPending: number;
   ordersPending: number;
 }) {
@@ -42,17 +43,20 @@ export function NotificationBell({ onGo, canMessage, isAdmin, reqPending, orders
   const items = useMemo<Notif[]>(() => {
     const out: Notif[] = [];
     for (const i of issues) {
-      if (isAdmin) {
-        if (i.status === "접수") out.push({ key: `iss:${i.id}:${i.createdAt}`, title: "새 오류·개선 요청", sub: `${i.authorName} · ${i.body.slice(0, 40)}`, tone: "new", go: "issues" });
-      } else if (!i.seen && (i.reply || i.status !== "접수")) {
+      const mine = i.authorSub === mySub;
+      // 내가 올린 요청에 답변·상태변경 → 작성자에게만. (남의 글 해결 알림이 오지 않도록)
+      if (mine && !i.seen && (i.reply || i.status !== "접수")) {
         out.push({ key: `iss:${i.id}:${i.updatedAt}`, title: i.reply ? "내 요청에 답변이 달렸어요" : "내 요청 상태가 바뀌었어요", sub: `${i.status} · ${(i.reply || i.body).slice(0, 40)}`, tone: "reply", go: "issues" });
+      } else if (isAdmin && !mine && i.status === "접수") {
+        // 관리자: 남이 새로 올린 접수만 처리 알림.
+        out.push({ key: `iss:${i.id}:${i.createdAt}`, title: "새 오류·개선 요청", sub: `${i.authorName} · ${i.body.slice(0, 40)}`, tone: "new", go: "issues" });
       }
     }
     for (const n of notices) out.push({ key: `ntc:${n.id}:${n.createdAt}`, title: "공지사항", sub: n.text.slice(0, 60), tone: "notice" });
     if (reqPending > 0) out.push({ key: `reqs:${reqPending}`, title: `받은 시간표 변경 요청 ${reqPending}건`, tone: "warn", go: "reqs" });
     if (ordersPending > 0) out.push({ key: `ord:${ordersPending}`, title: `구매 전 주문 ${ordersPending}건`, tone: "warn", go: "orders" });
     return out;
-  }, [issues, notices, isAdmin, reqPending, ordersPending]);
+  }, [issues, notices, isAdmin, mySub, reqPending, ordersPending]);
 
   const active = items.filter((i) => !arch.has(i.key));
   const archived = items.filter((i) => arch.has(i.key));
