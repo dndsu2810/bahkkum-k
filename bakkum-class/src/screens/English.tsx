@@ -7,6 +7,7 @@ import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtDayBand, fmtMD, fmtMDDow, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
 import { loadCheckout, saveCheckout, pruneCheckout } from "../lib/checkoutState";
+import { useDashOrder } from "../lib/dashOrder";
 import { Select, Empty } from "../components/ui";
 import { CopyMsgBtn, parentMakeupMsg, studentMakeupMsg } from "../components/MakeupList";
 import { useStore } from "../store";
@@ -2038,7 +2039,7 @@ function attTone(st: string): string {
   return st === "출석" ? "b-green" : st === "지각" || st === "조퇴" ? "b-orange" : st === "보강" ? "b-blue" : "b-gray";
 }
 function DashCard({
-  s, daily, band, date, getDaily, saveDaily, doneOptions, reasonsAll, onAddDoneItem, onAddNextGoal, examMode, open, onToggleOpen, out, onToggleOut,
+  s, daily, band, date, getDaily, saveDaily, doneOptions, reasonsAll, onAddDoneItem, onAddNextGoal, examMode, open, onToggleOpen, out, onToggleOut, onDragStart, onDropOn,
 }: {
   s: RosterStudent;
   daily: Record<string, EngDaily>;
@@ -2055,6 +2056,8 @@ function DashCard({
   onToggleOpen: () => void;
   out: boolean;
   onToggleOut: () => void;
+  onDragStart?: () => void;
+  onDropOn?: () => void;
 }) {
   const { openModal } = useStore();
   const d = daily[s.id];
@@ -2074,9 +2077,12 @@ function DashCard({
     return () => { alive = false; };
   }, [s.id]);
   return (
-    <div id={"engcard-" + s.id} className={"eng-dash-card" + (open ? " open" : "") + (out ? " out" : "")}>
+    <div id={"engcard-" + s.id} className={"eng-dash-card" + (open ? " open" : "") + (out ? " out" : "")}
+      onDragOver={onDropOn ? (e) => e.preventDefault() : undefined}
+      onDrop={onDropOn ? (e) => { e.preventDefault(); onDropOn(); } : undefined}>
       {/* 상단 — 현재 진행상황 요약(항상 보임) */}
       <div className="eng-dash-sum">
+        {onDragStart && <span className="dash-drag" draggable onDragStart={onDragStart} title="드래그해서 순서 이동" aria-label="순서 이동">⋮⋮</span>}
         <span className="eng-dash-sum-name">{s.name}</span>
         <button className="eng-dash-rec" onClick={() => openModal(<StudentMonthlyModal studentId={s.id} name={s.name} />)} title="누적 기록 보기 (자료·진도·시험)" aria-label="누적 기록"><Icon name="chart" /></button>
         <span className="eng-dash-sum-tags">
@@ -2134,13 +2140,17 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
     setOpenIds((p) => new Set(p).add(id)); // 그 학생 입력란을 펼치고
     window.setTimeout(() => document.getElementById("engcard-" + id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
   };
+  // 표시 순서 — 등원(클릭) 순으로 쌓이고 드래그로 재정렬(날짜·밴드별 저장).
+  const { push: pushOrder, sortItems, move } = useDashOrder("eng-" + band, date);
+  const [dragId, setDragId] = useState<string | null>(null);
   const attended = students.filter((s) => daily[s.id]?.attended);
   const attSet = new Set(attended.map((s) => s.id));
-  // 하원 학생은 맨 아래로(안정 정렬).
-  const ordered = [...attended].sort((a, b) => (outIds.has(a.id) ? 1 : 0) - (outIds.has(b.id) ? 1 : 0));
+  // 저장된 순서로 정렬한 뒤, 하원 학생만 맨 아래로(안정 정렬).
+  const ordered = sortItems(attended, (s) => s.id).sort((a, b) => (outIds.has(a.id) ? 1 : 0) - (outIds.has(b.id) ? 1 : 0));
+  const orderedIds = ordered.map((s) => s.id);
   const candidates = students.filter((s) => scheduledIds.has(s.id) && !attSet.has(s.id));
   const hits = q.trim() ? students.filter((s) => !attSet.has(s.id) && s.name.includes(q.trim())).slice(0, 24) : [];
-  const markIn = (sid: string) => { setStatus(sid, "출석"); setQ(""); };
+  const markIn = (sid: string) => { setStatus(sid, "출석"); setQ(""); pushOrder(sid); };
   const markOut = (sid: string) => { void saveDaily({ ...getDaily(sid), attStatus: "", attended: false, lateMin: 0 }); const next = new Set(outIds); next.delete(sid); setOutIds(next); saveCheckout(outScope, date, next); };
   return (
     <div className="eng-dash">
@@ -2174,7 +2184,8 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
       {attended.length > 0 && (
         <div className="eng-dash-cards">
           {ordered.map((s) => (
-            <DashCard key={s.id} s={s} daily={daily} band={band} date={date} getDaily={getDaily} saveDaily={saveDaily} doneOptions={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examModeOf ? examModeOf(s.id) : false} open={openIds.has(s.id)} onToggleOpen={() => toggleOpen(s.id)} out={outIds.has(s.id)} onToggleOut={() => toggleOut(s.id)} />
+            <DashCard key={s.id} s={s} daily={daily} band={band} date={date} getDaily={getDaily} saveDaily={saveDaily} doneOptions={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examModeOf ? examModeOf(s.id) : false} open={openIds.has(s.id)} onToggleOpen={() => toggleOpen(s.id)} out={outIds.has(s.id)} onToggleOut={() => toggleOut(s.id)}
+              onDragStart={() => setDragId(s.id)} onDropOn={() => { if (dragId) move(dragId, s.id, orderedIds); setDragId(null); }} />
           ))}
         </div>
       )}
@@ -2502,7 +2513,7 @@ function StudentMonthlyModal({ studentId, name, naesin }: { studentId: string; n
             <div className="smm-block">
               <div className="smm-block-h">날짜별</div>
               <table className="smm-tbl">
-                <thead><tr><th>날짜</th><th>출결</th><th>단어</th><th>리딩</th><th>문법</th><th>점</th></tr></thead>
+                <thead><tr><th>날짜</th><th>출결</th><th>단어</th><th>리딩</th><th>문법</th><th>포인트</th></tr></thead>
                 <tbody>
                   {mDaily.map((d) => (
                     <tr key={d.date}>

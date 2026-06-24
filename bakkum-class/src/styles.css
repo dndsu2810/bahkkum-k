@@ -3599,3 +3599,7 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .bb-name-round{font-size:11px;font-weight:700;color:var(--brand-d,#C5851E);background:var(--brand-soft,#FDEFD3);border-radius:var(--r-full);padding:2px 9px}
 .test-f-auto{font-weight:500;font-size:11px;color:var(--ink4);margin-left:4px}
 .test-rec-del svg{width:15px;height:15px}
+/* 대시보드 카드 드래그 핸들 */
+.dash-drag{cursor:grab;color:var(--ink4);font-size:14px;line-height:1;letter-spacing:-3px;padding:2px 5px 2px 0;user-select:none;flex:none;align-self:center}
+.dash-drag:active{cursor:grabbing}
+.eng-dash-card[draggable]{}

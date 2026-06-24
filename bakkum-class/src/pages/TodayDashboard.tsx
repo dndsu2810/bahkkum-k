@@ -4,6 +4,7 @@ import type { AttRecord, Attitude, AttStatus, HwLog, Makeup, Student } from "../
 import { DOW, fmtFull, fmtMDDow, parseD, timeToMin, todayStr, uid, ymd } from "../lib/dates";
 import { activeStudents, attendsOn, effectiveLessons, nextLessonDate, studentById } from "../lib/logic";
 import { loadCheckout, saveCheckout, pruneCheckout } from "../lib/checkoutState";
+import { useDashOrder } from "../lib/dashOrder";
 import { applyMakeup, findBoKey } from "../lib/attendanceLogic";
 import { holidayName } from "../lib/holidays";
 import { awardPoints, pushAttendanceNotion, pushHomeworkNotion, attendancePoints, loadPointCatalog } from "../api";
@@ -79,6 +80,9 @@ export function TodayDashboard() {
   // 하원은 새로고침해도 그날 분은 유지(날짜별 localStorage).
   const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
   const [outKeys, setOutKeys] = useState<Set<string>>(() => loadCheckout("math", day));
+  // 카드 표시 순서 — 시간순으로 시작, 드래그로 재정렬(날짜별 저장).
+  const { sortItems, move } = useDashOrder("math", day);
+  const [dragKey, setDragKey] = useState<string | null>(null);
   useEffect(() => { setOutKeys(loadCheckout("math", day)); }, [day]); // 날짜 바꾸면 그날 하원 상태로 교체
   useEffect(() => { pruneCheckout(todayStr()); }, []); // 오래된 날짜 키 정리
   const toggleOpen = (key: string) => setOpenKeys((p) => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; });
@@ -522,8 +526,8 @@ export function TodayDashboard() {
   const entryIsCho = (e: DayEntry) => (e.student.grade || "").startsWith("초");
   const choEntries = entries.filter(entryIsCho).length;
   const shownEntries = gradeTab === "all" ? entries : entries.filter((e) => (gradeTab === "cho" ? entryIsCho(e) : !entryIsCho(e)));
-  // 하원한 학생 카드는 맨 아래로(안정 정렬).
-  const cardEntries = [...shownEntries].sort((a, b) => (outKeys.has(a.key) ? 1 : 0) - (outKeys.has(b.key) ? 1 : 0));
+  // 저장된 순서로 정렬 후, 하원한 학생 카드는 맨 아래로(안정 정렬). 드래그로 재정렬.
+  const cardEntries = sortItems(shownEntries, (e) => e.key).sort((a, b) => (outKeys.has(a.key) ? 1 : 0) - (outKeys.has(b.key) ? 1 : 0));
   // 등원 학생 추가 검색 — 이미 카드에 있는 학생은 제외.
   const addExtra = (sid: string) => { setExtraIds((p) => new Set(p).add(sid)); setAddQ(""); };
   const addHits = addQ.trim()
@@ -627,9 +631,12 @@ export function TodayDashboard() {
                 const checkDone = checkHws.length > 0 && checkHws.every((h) => h.status === "done");
                 const testCnt = data.testLog.filter((t) => t.studentId === s.id && t.date === day).length;
                 return (
-                <div id={"mathcard-" + e.key} key={e.key} className={"eng-dash-card" + (open ? " open" : "") + (out ? " out" : "") + (done ? " alldone" : "")}>
+                <div id={"mathcard-" + e.key} key={e.key} className={"eng-dash-card" + (open ? " open" : "") + (out ? " out" : "") + (done ? " alldone" : "")}
+                  onDragOver={(ev) => ev.preventDefault()}
+                  onDrop={(ev) => { ev.preventDefault(); if (dragKey) move(dragKey, e.key, cardEntries.map((x) => x.key)); setDragKey(null); }}>
                   {/* 요약 줄 — 항상 보임 */}
                   <div className="eng-dash-sum">
+                    <span className="dash-drag" draggable onDragStart={() => setDragKey(e.key)} title="드래그해서 순서 이동" aria-label="순서 이동">⋮⋮</span>
                     <span className="eng-dash-sum-name">{s.name}</span>
                     <button className="eng-dash-rec" onClick={() => openModal(<MathMonthlyModal studentId={s.id} name={s.name} />)} title="누적 기록 보기 (출결·진도·시험)" aria-label="누적 기록"><Icon name="chart" /></button>
                     <span className="eng-dash-sum-tags">
