@@ -83,7 +83,7 @@ export async function handleMessages(env: Env, request: Request, p: string, me: 
     if (!sid) return json({ error: "student_required" }, 400);
     await env.DB.prepare(
       "INSERT INTO class_message(id,batch_id,sender_sub,sender_name,sender_role,recipient_id,recipient_name,body,created_at,read_at,reply_body,reply_at) VALUES(?,?,?,?,?,?,?,?,?,0,'',0)"
-    ).bind(newId("msg"), newId("bat"), me.sub, me.name, me.role, sid, String(b.studentName || ""), "하원해도 좋아요! 정리하고 안녕히 가세요 🙌", Date.now()).run();
+    ).bind(newId("msg"), newId("bat"), me.sub, me.name, me.role, sid, String(b.studentName || ""), "하원하세요! Good Bye! 👋", Date.now()).run();
     return json({ ok: true });
   }
 
