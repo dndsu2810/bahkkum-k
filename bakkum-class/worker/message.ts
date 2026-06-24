@@ -75,6 +75,18 @@ export async function handleMessages(env: Env, request: Request, p: string, me: 
     return json({ ok: true, count: recipients.length });
   }
 
+  // 하원 알림 — 강사(누구나, 학생 제외)가 대시보드에서 하원 누르면 그 학생에게 1줄 알림.
+  if (p === "/api/messages/checkout-notify" && m === "POST") {
+    if (me.role === "student") return json({ error: "forbidden" }, 403);
+    const b = (await request.json().catch(() => ({}))) as { studentId?: string; studentName?: string };
+    const sid = String(b.studentId || "").trim();
+    if (!sid) return json({ error: "student_required" }, 400);
+    await env.DB.prepare(
+      "INSERT INTO class_message(id,batch_id,sender_sub,sender_name,sender_role,recipient_id,recipient_name,body,created_at,read_at,reply_body,reply_at) VALUES(?,?,?,?,?,?,?,?,?,0,'',0)"
+    ).bind(newId("msg"), newId("bat"), me.sub, me.name, me.role, sid, String(b.studentName || ""), "하원해도 좋아요! 정리하고 안녕히 가세요 🙌", Date.now()).run();
+    return json({ ok: true });
+  }
+
   if (p === "/api/messages/sent" && m === "GET") {
     if (!canSend(me)) return json({ error: "forbidden" }, 403);
     const r = await env.DB.prepare("SELECT * FROM class_message WHERE sender_sub=? ORDER BY created_at DESC LIMIT 500").bind(me.sub).all<Record<string, unknown>>();

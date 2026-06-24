@@ -33,6 +33,9 @@ export const messageApi = {
   /** 발송(원장·수학) — 학생 1명당 1건 개별 생성. */
   send: (recipients: { id: string; name: string }[], body: string) =>
     jpost<{ ok?: boolean; count?: number; error?: string }>("/api/messages/send", { recipients, body }),
+  /** 하원 알림 — 강사 누구나. 그 학생에게 "하원해도 좋아요" 1줄. */
+  notifyCheckout: (studentId: string, studentName: string) =>
+    jpost<{ ok?: boolean }>("/api/messages/checkout-notify", { studentId, studentName }),
   /** 내가 보낸 메시지(원장·수학). */
   sent: () => jget<{ messages: Message[] }>("/api/messages/sent").then((j) => j.messages),
   /** 아직 확인 안 한 학생 답장 수(사이드바 배지). */

@@ -3,7 +3,7 @@ import { useStore } from "../store";
 import type { AttRecord, Attitude, AttStatus, HwLog, Makeup, Student } from "../types";
 import { DOW, fmtFull, fmtMDDow, parseD, timeToMin, todayStr, uid, ymd } from "../lib/dates";
 import { activeStudents, attendsOn, effectiveLessons, nextLessonDate, studentById } from "../lib/logic";
-import { loadCheckout, saveCheckout, pruneCheckout } from "../lib/checkoutState";
+import { loadCheckout, saveCheckout, pruneCheckout, notifyCheckoutOnce } from "../lib/checkoutState";
 import { useDashOrder, isInteractiveTarget } from "../lib/dashOrder";
 import { applyMakeup, findBoKey } from "../lib/attendanceLogic";
 import { holidayName } from "../lib/holidays";
@@ -86,12 +86,15 @@ export function TodayDashboard() {
   useEffect(() => { setOutKeys(loadCheckout("math", day)); }, [day]); // 날짜 바꾸면 그날 하원 상태로 교체
   useEffect(() => { pruneCheckout(todayStr()); }, []); // 오래된 날짜 키 정리
   const toggleOpen = (key: string) => setOpenKeys((p) => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; });
-  const toggleOut = (key: string) => {
+  const toggleOut = (key: string, student?: { id: string; name: string }) => {
     const willOut = !outKeys.has(key);
     const next = new Set(outKeys); willOut ? next.add(key) : next.delete(key);
     setOutKeys(next);
     saveCheckout("math", day, next);
-    if (willOut) setOpenKeys((p) => { const n = new Set(p); n.delete(key); return n; }); // 하원하면 접기
+    if (willOut) {
+      setOpenKeys((p) => { const n = new Set(p); n.delete(key); return n; }); // 하원하면 접기
+      if (student) notifyCheckoutOnce(student.id, student.name, day); // 학생에게 '하원해도 좋아요' 알림
+    }
   };
   const focusCard = (key: string) => {
     setOpenKeys((p) => new Set(p).add(key)); // 그 학생 입력란을 펼치고 그 위치로 이동
@@ -653,7 +656,7 @@ export function TodayDashboard() {
                       {!!s.birthdate && s.birthdate.slice(5) === day.slice(5) && <span className="badge b-pink" title="오늘 생일">🎂</span>}
                       {done && <span className="eng-dot ok" title="출결·숙제 완료" />}
                     </span>
-                    <button className={"eng-dash-out" + (out ? " on" : "")} onClick={() => toggleOut(e.key)} title={out ? "다시 등원으로 (맨 위로)" : "하원 — 카드를 맨 아래로 접어요"}>{out ? "등원" : "하원"}</button>
+                    <button className={"eng-dash-out" + (out ? " on" : "")} onClick={() => toggleOut(e.key, { id: e.student.id, name: e.student.name })} title={out ? "다시 등원으로 (맨 위로)" : "하원 — 카드를 맨 아래로 접어요"}>{out ? "등원" : "하원"}</button>
                   </div>
                   {/* 접혀 있을 땐 블러로 살짝 보이고, 펼치면 입력 (중고등영어 카드와 동일) */}
                   <div className={"eng-dash-peek math-card-body" + (open ? " open" : "")}>

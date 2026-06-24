@@ -6,7 +6,7 @@ import { eventsApi, type EventItem } from "../lib/hubApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtDayBand, fmtMD, fmtMDDow, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
-import { loadCheckout, saveCheckout, pruneCheckout } from "../lib/checkoutState";
+import { loadCheckout, saveCheckout, pruneCheckout, notifyCheckoutOnce } from "../lib/checkoutState";
 import { useDashOrder, isInteractiveTarget } from "../lib/dashOrder";
 import { Select, Empty } from "../components/ui";
 import { HwChecklist } from "../components/HwChecklist";
@@ -2121,12 +2121,15 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
   useEffect(() => { setOutIds(loadCheckout(outScope, date)); }, [outScope, date]); // 날짜/밴드 바뀌면 그날 하원 상태로 교체
   useEffect(() => { pruneCheckout(todayStr()); }, []); // 오래된 날짜 키 정리
   const toggleOpen = (id: string) => setOpenIds((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const toggleOut = (id: string) => {
+  const toggleOut = (id: string, name?: string) => {
     const willOut = !outIds.has(id);
     const next = new Set(outIds); willOut ? next.add(id) : next.delete(id);
     setOutIds(next);
     saveCheckout(outScope, date, next);
-    if (willOut) setOpenIds((p) => { const n = new Set(p); n.delete(id); return n; }); // 하원하면 접기
+    if (willOut) {
+      setOpenIds((p) => { const n = new Set(p); n.delete(id); return n; }); // 하원하면 접기
+      notifyCheckoutOnce(id, name || "", date); // 학생에게 '하원해도 좋아요' 알림
+    }
   };
   const focusCard = (id: string) => {
     setOpenIds((p) => new Set(p).add(id)); // 그 학생 입력란을 펼치고
@@ -2176,7 +2179,7 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
       {attended.length > 0 && (
         <div className="eng-dash-cards">
           {ordered.map((s) => (
-            <DashCard key={s.id} s={s} daily={daily} band={band} date={date} getDaily={getDaily} saveDaily={saveDaily} doneOptions={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examModeOf ? examModeOf(s.id) : false} open={openIds.has(s.id)} onToggleOpen={() => toggleOpen(s.id)} out={outIds.has(s.id)} onToggleOut={() => toggleOut(s.id)}
+            <DashCard key={s.id} s={s} daily={daily} band={band} date={date} getDaily={getDaily} saveDaily={saveDaily} doneOptions={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examModeOf ? examModeOf(s.id) : false} open={openIds.has(s.id)} onToggleOpen={() => toggleOpen(s.id)} out={outIds.has(s.id)} onToggleOut={() => toggleOut(s.id, s.name)}
               onDragStart={() => setDragId(s.id)} onDropOn={() => { if (dragId) move(dragId, s.id, orderedIds); setDragId(null); }} />
           ))}
         </div>

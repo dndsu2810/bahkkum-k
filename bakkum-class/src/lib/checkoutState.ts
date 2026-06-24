@@ -1,9 +1,23 @@
 // 하원(카드를 맨 아래로 접기) 상태 — 화면 전용 UI 상태지만, 새로고침해도 그날 분은 유지한다.
 // 날짜별로 localStorage에 저장. scope로 화면(math/eng-mid 등)을 구분.
 import { parseD, ymd } from "./dates";
+import { messageApi } from "./messageApi";
 
 const PREFIX = "checkout-out:";
 const keyFor = (scope: string, day: string) => `${PREFIX}${scope}:${day}`;
+
+/** 하원 누를 때 그 학생에게 '하원해도 좋아요' 알림 1줄 — 같은 날 학생당 1회만(중복 방지). */
+export function notifyCheckoutOnce(studentId: string, name: string, day: string): void {
+  const id = String(studentId || "").trim();
+  if (!id) return;
+  const k = "co-notified:" + day;
+  let sent: string[] = [];
+  try { sent = JSON.parse(localStorage.getItem(k) || "[]"); } catch { /* ignore */ }
+  if (sent.includes(id)) return;
+  sent.push(id);
+  try { localStorage.setItem(k, JSON.stringify(sent)); } catch { /* ignore */ }
+  void messageApi.notifyCheckout(id, name).catch(() => { /* 알림 실패는 하원 동작에 영향 없음 */ });
+}
 
 export function loadCheckout(scope: string, day: string): Set<string> {
   try {
