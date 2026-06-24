@@ -33,7 +33,7 @@ export function QueueCard() {
         const t = d.tickets[s];
         if (t && t.status === "called" && t.calledAt && t.calledAt !== lastCalledAt.current[s]) {
           lastCalledAt.current[s] = t.calledAt;
-          speak(`${name} 차례입니다`);
+          speak(`${name} 학생 차례입니다`);
           setAlertSub(s);
         }
         if (!t || t.status !== "called") { if (alertSub === s) setAlertSub(null); }
@@ -66,7 +66,7 @@ export function QueueCard() {
         <div className="qc-turn" role="alert">
           <span className="qc-turn-ic"><Icon name="bell" /></span>
           <div className="qc-turn-txt">
-            <b>{name} 차례입니다</b>
+            <b>{name} 학생 차례입니다</b>
             <span>{SUBJECT_LABEL[alertSub]} · 들어오세요</span>
           </div>
           <button className="btn sm qc-turn-x" onClick={() => setAlertSub(null)}>확인</button>
