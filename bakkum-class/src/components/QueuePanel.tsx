@@ -47,7 +47,14 @@ export function QueuePanel({ subject }: { subject: QueueSubject }) {
               {r.raised && <span className="qp-raised">손듦</span>}
               {r.status === "called" && <span className="qp-called">호출됨</span>}
               <div className="qp-btns">
-                <button className="btn ghost sm" disabled={busy} onClick={() => act(() => queueApi.call(r.id))}>호출</button>
+                {r.status === "called" ? (
+                  <>
+                    <button className="btn ghost sm" disabled={busy} onClick={() => act(() => queueApi.call(r.id))}>다시 호출</button>
+                    <button className="btn ghost sm" disabled={busy} onClick={() => act(() => queueApi.wait(r.id))}>대기로</button>
+                  </>
+                ) : (
+                  <button className="btn ghost sm" disabled={busy} onClick={() => act(() => queueApi.call(r.id))}>호출</button>
+                )}
                 <button className="btn primary sm" disabled={busy} onClick={() => act(() => queueApi.done(r.id))}>완료</button>
               </div>
             </div>

@@ -13,7 +13,7 @@ async function jpost<T = { ok?: boolean }>(url: string, body?: unknown): Promise
 }
 
 export type QueueSubject = "english" | "math";
-export interface MyTicket { number: number; status: "waiting" | "called" | "done"; ahead: number; raised: boolean }
+export interface MyTicket { number: number; status: "waiting" | "called" | "done"; ahead: number; raised: boolean; calledAt: number }
 export interface MineResp { subjects: QueueSubject[]; tickets: Partial<Record<QueueSubject, MyTicket | null>> }
 export interface QueueRow { id: string; number: number; name: string; status: "waiting" | "called"; raised: boolean }
 
@@ -33,6 +33,8 @@ export const queueApi = {
   list: (subject: QueueSubject) => jget<{ list: QueueRow[] }>("/api/queue/list?subject=" + subject).then((j) => j.list),
   /** 강사 — 호출(차례). */
   call: (id: string) => jpost("/api/queue/call", { id }),
+  /** 강사 — 호출 취소(대기로). */
+  wait: (id: string) => jpost("/api/queue/wait", { id }),
   /** 강사 — 완료(줄에서 제거). */
   done: (id: string) => jpost("/api/queue/done", { id }),
 };

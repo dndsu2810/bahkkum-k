@@ -44,11 +44,11 @@ async function enrolledSubjects(env: Env, sid: string): Promise<string[]> {
 }
 
 /** 한 학생의 과목별 활성 티켓 + 앞에 몇 명. */
-async function myTicket(env: Env, sid: string, subject: string, date: string): Promise<{ number: number; status: string; ahead: number; raised: boolean } | null> {
-  const t = await env.DB.prepare("SELECT number,status,raised FROM class_queue WHERE subject=? AND student_id=? AND date=? AND status!='done' ORDER BY created_at DESC LIMIT 1").bind(subject, sid, date).first<{ number: number; status: string; raised: number }>();
+async function myTicket(env: Env, sid: string, subject: string, date: string): Promise<{ number: number; status: string; ahead: number; raised: boolean; calledAt: number } | null> {
+  const t = await env.DB.prepare("SELECT number,status,raised,called_at FROM class_queue WHERE subject=? AND student_id=? AND date=? AND status!='done' ORDER BY created_at DESC LIMIT 1").bind(subject, sid, date).first<{ number: number; status: string; raised: number; called_at: number }>();
   if (!t) return null;
   const a = await env.DB.prepare("SELECT COUNT(*) n FROM class_queue WHERE subject=? AND date=? AND status!='done' AND number<?").bind(subject, date, t.number).first<{ n: number }>();
-  return { number: Number(t.number), status: String(t.status), ahead: Number(a?.n ?? 0), raised: !!t.raised };
+  return { number: Number(t.number), status: String(t.status), ahead: Number(a?.n ?? 0), raised: !!t.raised, calledAt: Number(t.called_at ?? 0) };
 }
 
 export async function handleQueue(env: Env, request: Request, p: string, me: SessionUser | null): Promise<Response | null> {
@@ -116,7 +116,15 @@ export async function handleQueue(env: Env, request: Request, p: string, me: Ses
   if (p === "/api/queue/call" && m === "POST") {
     const b = (await request.json().catch(() => ({}))) as { id?: string };
     if (!b.id) return json({ error: "bad_input" }, 400);
+    // 다시 호출도 학생 화면이 새 호출로 인식하도록 called_at 갱신.
     await env.DB.prepare("UPDATE class_queue SET status='called', raised=0, called_at=? WHERE id=?").bind(Date.now(), String(b.id)).run();
+    return json({ ok: true });
+  }
+
+  if (p === "/api/queue/wait" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string };
+    if (!b.id) return json({ error: "bad_input" }, 400);
+    await env.DB.prepare("UPDATE class_queue SET status='waiting' WHERE id=? AND status='called'").bind(String(b.id)).run();
     return json({ ok: true });
   }
 

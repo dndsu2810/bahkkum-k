@@ -3664,3 +3664,14 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .qp-raised-badge svg{width:14px;height:14px;vertical-align:-2px;margin-right:3px}
 .qc-card .qc{gap:8px}
 .qc-card .qc-row{padding:9px 11px}
+/* 학생 '차례' 큰 배너(상단 고정) — 호출 시 눈에 띄게 */
+.qc-turn{position:fixed;top:0;left:0;right:0;z-index:200;display:flex;align-items:center;gap:14px;
+  background:var(--ok,#3a8a52);color:#fff;padding:16px 20px;box-shadow:0 6px 24px rgba(0,0,0,.18);animation:qcTurnIn .25s ease}
+@keyframes qcTurnIn{from{transform:translateY(-100%)}to{transform:none}}
+.qc-turn-ic{display:inline-flex;width:30px;height:30px;flex:none}
+.qc-turn-ic svg{width:30px;height:30px;stroke:#fff;stroke-width:2.4}
+.qc-turn-txt{display:flex;flex-direction:column;line-height:1.25}
+.qc-turn-txt b{font-size:var(--t-lg);font-weight:800}
+.qc-turn-txt span{font-size:var(--t-sm);opacity:.92}
+.qc-turn-x{margin-left:auto;background:#fff;color:var(--ok,#3a8a52);border:none;font-weight:800}
+.qc-hint{font-size:var(--t-cap);color:var(--ink4);margin:8px 2px 0}
