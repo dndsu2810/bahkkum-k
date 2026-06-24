@@ -3610,3 +3610,21 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .eng-dash-sum.draggable{cursor:grab;user-select:none}
 .eng-dash-sum.draggable:active{cursor:grabbing}
 .eng-dash-card.drag-over{outline:2px dashed var(--brand);outline-offset:-2px}
+/* ===== 숙제 체크리스트(오늘의 숙제 — 학생·강사 공용) ===== */
+.hwc{display:flex;flex-direction:column;gap:7px}
+.hwc-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hwc-text{font-size:var(--t-sm);color:var(--ink);font-weight:600;flex:1;min-width:90px}
+.hwc-seg{display:inline-flex;gap:4px;flex:none}
+.hwc-st{border:1px solid var(--line2);background:var(--card);border-radius:var(--r-full);padding:4px 10px;font-size:var(--t-cap);font-weight:700;color:var(--ink3);cursor:pointer;transition:.12s}
+.hwc-st:hover:not(:disabled){border-color:var(--brand-line)}
+.hwc-st:disabled{cursor:default;opacity:.6}
+.hwc-st.on.stu{background:var(--ok-soft,#E7F4EA);border-color:#bbe3c4;color:var(--ok)}
+.hwc-st.on.tea{background:var(--warn-soft,#FCEFD8);border-color:#f3d49a;color:#C5651E}
+.hwc-by{font-size:10px;font-weight:700;border-radius:var(--r-full);padding:2px 8px;white-space:nowrap;flex:none}
+.hwc-by.stu{color:var(--ok);background:var(--ok-soft,#E7F4EA)}
+.hwc-by.tea{color:#C5651E;background:var(--warn-soft,#FCEFD8)}
+.hwc-x{flex:none;border:none;background:transparent;color:var(--ink4);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px}
+.hwc-x:hover{color:var(--bad)}
+.hwc-add{display:flex;gap:6px;margin-top:2px}
+.hwc-add .input{flex:1}
+.hwc-empty{font-size:var(--t-cap);color:var(--ink4)}

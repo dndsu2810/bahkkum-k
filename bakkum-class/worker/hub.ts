@@ -722,12 +722,18 @@ async function removeDailyGoal(env: Env, studentId: string, date: string, text: 
   if (next.length === goals.length) return;
   await env.DB.prepare("UPDATE class_eng_daily SET goals=?, updated_at=? WHERE student_id=? AND date=?").bind(JSON.stringify(next), Date.now(), studentId, date).run();
 }
-// 내신모드 자유 숙제 JSON — {assign:[내줄 숙제], check:[{text,status} 검사할 숙제]}
-interface HwItems { assign: string[]; check: { text: string; status: string }[] }
+// 오늘의 숙제(assign): {text,status,by,byName} / 숙제 검사(check): {text,status}
+type HwAssignItem = { text: string; status: string; by?: string; byName?: string };
+interface HwItems { assign: HwAssignItem[]; check: { text: string; status: string }[] }
 function parseHwItems(v: unknown): HwItems {
   try {
     const o = JSON.parse(String(v ?? "{}")) as Record<string, unknown>;
-    const assign = Array.isArray(o?.assign) ? (o.assign as unknown[]).map((x) => String(x)) : [];
+    const assign: HwAssignItem[] = Array.isArray(o?.assign)
+      ? (o.assign as unknown[]).map((x) => (typeof x === "string"
+          ? { text: String(x).trim(), status: "" }
+          : { text: String((x as Record<string, unknown>)?.text ?? "").trim(), status: String((x as Record<string, unknown>)?.status ?? ""), by: (x as Record<string, unknown>)?.by as string | undefined, byName: (x as Record<string, unknown>)?.byName as string | undefined })
+        ).filter((i) => i.text)
+      : [];
     const check = Array.isArray(o?.check)
       ? (o.check as Record<string, unknown>[]).map((x) => ({ text: String(x?.text ?? ""), status: String(x?.status ?? "") })).filter((x) => x.text)
       : [];
@@ -747,15 +753,15 @@ async function writeHwItems(env: Env, studentId: string, date: string, hi: HwIte
 async function addDailyHwAssign(env: Env, studentId: string, date: string, text: string): Promise<void> {
   const row = await env.DB.prepare("SELECT hw_items FROM class_eng_daily WHERE student_id=? AND date=?").bind(studentId, date).first<{ hw_items: string }>();
   const hi = parseHwItems(row?.hw_items);
-  if (hi.assign.includes(text)) return; // 중복 방지
-  hi.assign.push(text);
+  if (hi.assign.some((i) => i.text === text)) return; // 중복 방지
+  hi.assign.push({ text, status: "", by: "teacher", byName: "자료 배부" });
   await writeHwItems(env, studentId, date, hi, !!row);
 }
 async function removeDailyHwAssign(env: Env, studentId: string, date: string, text: string): Promise<void> {
   const row = await env.DB.prepare("SELECT hw_items FROM class_eng_daily WHERE student_id=? AND date=?").bind(studentId, date).first<{ hw_items: string }>();
   if (!row) return;
   const hi = parseHwItems(row.hw_items);
-  const next = hi.assign.filter((x) => x !== text);
+  const next = hi.assign.filter((x) => x.text !== text);
   if (next.length === hi.assign.length) return;
   hi.assign = next;
   await writeHwItems(env, studentId, date, hi, true);

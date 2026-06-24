@@ -25,6 +25,30 @@ export type AttStatus = "" | "출석" | "지각" | "결석" | "조퇴" | "무단
 // 중고등영어 숙제 분류 상태(노션 과제기록과 동일): 완료/미흡/안함/없음.
 export type HwStatus = "" | "완료" | "미흡" | "안함" | "없음";
 export const HW_STATUSES: HwStatus[] = ["완료", "미흡", "안함", "없음"];
+
+/** 숙제 항목 — 텍스트 + 상태(완료/미흡/안함/없음) + 누가 마지막으로 정했는지(학생/강사 + 이름). */
+export interface HwItem { text: string; status: HwStatus; by?: "student" | "teacher"; byName?: string }
+
+/** 옛 string[] 또는 신규 HwItem[]를 안전하게 HwItem[]로. (마이그레이션 없이 읽기 때 변환) */
+export function coerceAssign(raw: unknown): HwItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: HwItem[] = [];
+  for (const r of raw) {
+    if (typeof r === "string") {
+      const t = r.trim();
+      if (t) out.push({ text: t, status: "" });
+    } else if (r && typeof r === "object") {
+      const o = r as Record<string, unknown>;
+      const text = String(o.text ?? "").trim();
+      if (!text) continue;
+      const status = (HW_STATUSES as string[]).includes(String(o.status)) ? (String(o.status) as HwStatus) : "";
+      const by = o.by === "student" || o.by === "teacher" ? o.by : undefined;
+      const byName = o.byName ? String(o.byName).slice(0, 30) : undefined;
+      out.push({ text: text.slice(0, 200), status, by, byName });
+    }
+  }
+  return out.slice(0, 60);
+}
 /** 숙제 진행률(%) — 완료 100·미흡 50·안함 0, '없음'/미입력은 제외. */
 export function hwProgress(d: { hwWord: HwStatus; hwReading: HwStatus; hwGrammar: HwStatus }): number | null {
   const vals = [d.hwWord, d.hwReading, d.hwGrammar].filter((s) => s && s !== "없음");
@@ -65,7 +89,7 @@ export interface EngDaily {
   studentNote: string; // 학생이 '선생님께' 남기는 메모(강사는 읽기)
   materials: string;
   // 내신모드 자유 숙제 — 내줄 숙제(다음 시간) + 숙제 검사(지난 것: 항목+상태). 숙제 자료 배부 시 자동 편입.
-  hwAssign: string[];
+  hwAssign: HwItem[];
   hwCheck: { text: string; status: HwStatus }[];
   // 내신모드 빠른 '없음' — 숙제/시험이 아예 없던 회차를 한 번에 기록(텍스트 입력 없이).
   hwNone: boolean;

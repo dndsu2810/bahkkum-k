@@ -16,6 +16,8 @@ import { HexAvatar, CombGauge, Bee, SoezLogo } from "../soez";
 import { Scoreboard } from "../components/Scoreboard";
 import { baseballApi } from "../lib/baseballApi";
 import type { MathBoard, BaseballRule, BaseballConfig } from "../lib/baseball";
+import { HwChecklist } from "../components/HwChecklist";
+import { coerceAssign, type HwItem } from "../lib/engApi";
 
 /** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
  *  - 학생 본인: studentId 생략(본인). 일지 입력 가능, 커리큘럼 조회.
@@ -303,17 +305,20 @@ function addMin(hm: string, min: number): string {
 const hwTagCls = (v: string) => (v === "완료" ? "sp-tag-done" : v === "미흡" ? "sp-tag-warn" : v === "안함" ? "sp-tag-bad" : "");
 
 function LogEditor({ studentId, tid, existing, slots, options, band, progressBooks = [], examMode = false, onSaved }: { studentId?: string; tid: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; options?: string[]; band: string; progressBooks?: string[]; examMode?: boolean; onSaved: () => void }) {
+  const { user } = useAuth();
   const items = options && options.length ? options : STUDENT_LOG_ITEMS;
   const isMid = band === "mid" || band === "bridge"; // 중고등(Bridge 포함) — 숙제 3분류·교재 진도
+  // 숙제 체크리스트 작성자 — 학생 본인이면 학생, 강사/원장이 보는 중이면 강사.
+  const hwBy: "student" | "teacher" = user?.role === "student" ? "student" : "teacher";
+  const hwByName = user?.name || "";
   const [date, setDate] = useState(todayStr());
   const [goals, setGoals] = useState<StudentGoal[]>([]);
   const [goalText, setGoalText] = useState("");
   const [bookNo, setBookNo] = useState("");
   // 숙제 검사(지난 수업 숙제) — 강사가 낸 지난 숙제. 학생이 '했다' 체크하면 줄긋기(강사와 양방향).
   const [hwCheck, setHwCheck] = useState<{ text: string; status: string }[]>([]);
-  // 오늘의 숙제 — 선생님이 낸 숙제·배부 자료 + 학생도 직접 추가(강사와 양방향).
-  const [hwAssign, setHwAssign] = useState<string[]>([]);
-  const [hwText, setHwText] = useState("");
+  // 오늘의 숙제 — 선생님이 낸 숙제·배부 자료 + 학생도 직접 추가(강사와 양방향). 항목별 상태·작성자.
+  const [hwAssign, setHwAssign] = useState<HwItem[]>([]);
   const [doneItems, setDoneItems] = useState<string[]>([]);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
@@ -336,7 +341,7 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
     const row = existing.find((r) => r.date === date);
     setGoals(row?.goals || []);
     setHwCheck(row?.hwCheck || []);
-    setHwAssign(row?.hwAssign || []);
+    setHwAssign(coerceAssign(row?.hwAssign));
     setBookNo(row?.bookNo || "");
     setDoneItems(row?.doneItems || []);
     setStartTime(row?.startTime || "");
@@ -373,19 +378,6 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
     setGoals([...goals, { text: t, done: false }]);
     setGoalText("");
   }
-  // 받은 숙제 추가/삭제 — 강사 '내줄 숙제'와 같은 칸을 공유(양방향).
-  function addHw() {
-    const t = hwText.trim();
-    if (!t || hwAssign.includes(t)) return;
-    dirtyRef.current = true;
-    setHwAssign([...hwAssign, t]);
-    setHwText("");
-  }
-  function removeHw(idx: number) {
-    dirtyRef.current = true;
-    setHwAssign(hwAssign.filter((_, i) => i !== idx));
-  }
-
   async function save() {
     dirtyRef.current = false; // 저장 시작 시점 — 저장 도중 새로 입력하면 다시 dirty가 되어 보존됨
     setSaving(true);
@@ -516,23 +508,11 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
         </div>
       )}
 
-      {/* 오늘의 숙제 입력 — 선생님이 낸 숙제·배부 자료 + 내가 받은 숙제를 직접 추가. 선생님 화면과 공유돼요. */}
-      {isMid && (
-        <div className="sp-f">
-          <span>오늘의 숙제 입력</span>
-          {hwAssign.length > 0 && (
-            <div className="sp-hw">
-              {hwAssign.map((t, i) => (
-                <span className="sp-hw-chip" key={i}>{t}<button type="button" className="sp-hw-x" onClick={() => removeHw(i)} aria-label="삭제">×</button></span>
-              ))}
-            </div>
-          )}
-          <div className="sp-self-row" style={{ marginTop: 6 }}>
-            <input className="input" value={hwText} onChange={(e) => setHwText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) addHw(); }} placeholder="오늘 받은 숙제 추가 (예: 단어 3과 외우기)" />
-            <button type="button" className="btn ghost sm" onClick={addHw} disabled={!hwText.trim()}><Icon name="plus" /> 추가</button>
-          </div>
-        </div>
-      )}
+      {/* 오늘의 숙제 — 항목마다 완료/미흡/안함/없음 + 작성자(학생 초록 / 강사 주황). 선생님 화면과 양방향 공유. */}
+      <div className="sp-f">
+        <span>오늘의 숙제</span>
+        <HwChecklist items={hwAssign} onChange={(next) => { dirtyRef.current = true; setHwAssign(next); }} currentBy={hwBy} currentByName={hwByName} placeholder="오늘 받은 숙제 추가 (예: 단어 3과 외우기)" />
+      </div>
 
       {/* 숙제 코멘트 — 선생님이 숙제에 대해 남긴 글(읽기 전용). */}
       {isMid && teacherHwComment.trim() && (

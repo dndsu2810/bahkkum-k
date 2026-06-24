@@ -18,6 +18,29 @@ function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}${(seq++).toString(36)}`;
 }
 
+// 오늘의 숙제(assign) 정규화 — 옛 string[] / 신규 {text,status,by,byName}[] 모두 안전하게.
+type HwAssignItem = { text: string; status: string; by?: string; byName?: string };
+function coerceHwAssign(raw: unknown): HwAssignItem[] {
+  if (!Array.isArray(raw)) return [];
+  const ok = ["완료", "미흡", "안함", "없음"];
+  const out: HwAssignItem[] = [];
+  for (const r of raw) {
+    if (typeof r === "string") {
+      const t = r.trim();
+      if (t) out.push({ text: t.slice(0, 200), status: "" });
+    } else if (r && typeof r === "object") {
+      const o = r as Record<string, unknown>;
+      const text = String(o.text ?? "").trim();
+      if (!text) continue;
+      const item: HwAssignItem = { text: text.slice(0, 200), status: ok.includes(String(o.status)) ? String(o.status) : "" };
+      if (o.by === "student" || o.by === "teacher") item.by = String(o.by);
+      if (o.byName) item.byName = String(o.byName).slice(0, 30);
+      out.push(item);
+    }
+  }
+  return out.slice(0, 60);
+}
+
 // '오늘 한 것' 기본 항목(초등 수업일지). 전체공통은 class_config, 학생별은 class_eng_done_items.
 const DEFAULT_DONE_ITEMS = ["준비", "Practice Book", "영문법", "자판연습", "core phonics", "아카데미 주니어 프린트", "판다라이팅"];
 function parseStrArr(s: unknown): string[] {
@@ -297,7 +320,7 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     }
     const doneItems = Array.isArray(b.doneItems) ? (b.doneItems as unknown[]).map((x) => String(x)) : [];
     // 내신모드 자유 숙제 — 내줄 숙제(문자열 목록) + 숙제 검사(항목+상태). 점수에는 영향 없음(출결·3분류만 적립).
-    const hwAssign = Array.isArray(b.hwAssign) ? (b.hwAssign as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 60) : [];
+    const hwAssign = coerceHwAssign(b.hwAssign);
     const hwCheck = Array.isArray(b.hwCheck)
       ? (b.hwCheck as { text?: unknown; status?: unknown }[])
           .map((x) => ({ text: String(x?.text ?? "").trim(), status: hwSt(x?.status) }))
@@ -746,15 +769,15 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
     // 숙제 — 오늘의 숙제(assign)·숙제 검사(check)를 학생도 편집(강사와 양방향). 보낸 항목만 갱신, 안 보낸 건 보존.
     if (Array.isArray(b.hwAssign) || Array.isArray(b.hwCheck)) {
       const row = await env.DB.prepare("SELECT hw_items FROM class_eng_daily WHERE student_id=? AND date=?").bind(sid, date).first<{ hw_items: string }>();
-      let curAssign: string[] = [];
+      let curAssign: HwAssignItem[] = [];
       let curCheck: { text: string; status: string }[] = [];
       try {
         const o = JSON.parse(String(row?.hw_items ?? "{}")) as Record<string, unknown>;
-        if (Array.isArray(o?.assign)) curAssign = (o.assign as unknown[]).map((x) => String(x));
+        curAssign = coerceHwAssign(o?.assign);
         if (Array.isArray(o?.check)) curCheck = (o.check as Record<string, unknown>[]).map((x) => ({ text: String(x?.text ?? ""), status: String(x?.status ?? "") })).filter((x) => x.text);
       } catch { /* ignore */ }
       const hwSt = (v: unknown) => (["완료", "미흡", "안함", "없음"].includes(String(v)) ? String(v) : "");
-      const assign = Array.isArray(b.hwAssign) ? (b.hwAssign as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 60) : curAssign;
+      const assign = Array.isArray(b.hwAssign) ? coerceHwAssign(b.hwAssign) : curAssign;
       const check = Array.isArray(b.hwCheck)
         ? (b.hwCheck as { text?: unknown; status?: unknown }[]).map((x) => ({ text: String(x?.text ?? "").trim(), status: hwSt(x?.status) })).filter((x) => x.text).slice(0, 60)
         : curCheck;
@@ -844,14 +867,14 @@ function dailyRow(r: Record<string, unknown>) {
   } catch {
     /* ignore */
   }
-  let hwAssign: string[] = [];
+  let hwAssign: HwAssignItem[] = [];
   let hwCheck: { text: string; status: string }[] = [];
   let hwNone = false;
   let testNone = false;
   try {
     const hi = JSON.parse(String(r.hw_items ?? "{}"));
     if (hi && typeof hi === "object") {
-      if (Array.isArray(hi.assign)) hwAssign = hi.assign.map((x: unknown) => String(x));
+      hwAssign = coerceHwAssign(hi.assign);
       if (Array.isArray(hi.check)) hwCheck = hi.check.map((x: Record<string, unknown>) => ({ text: String(x?.text ?? ""), status: String(x?.status ?? "") })).filter((x: { text: string }) => x.text);
       hwNone = !!hi.hwNone;
       testNone = !!hi.testNone;

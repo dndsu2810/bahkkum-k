@@ -3,6 +3,7 @@
 // 강사/원장: 임의 학생(student_id) 페이지 + 커리큘럼 편집.
 
 import type { MathBoard } from "./baseball";
+import type { HwItem } from "./engApi";
 
 async function jget<T>(url: string): Promise<T> {
   const r = await fetch(url, { cache: "no-store" });
@@ -47,7 +48,7 @@ export interface StudentLogRow {
   date: string;
   attStatus: string;
   goals: StudentGoal[];
-  hwAssign: string[];
+  hwAssign: HwItem[];
   hwCheck: { text: string; status: string }[];
   bookNo: string;
   bookNext: string; // 중고등영어 '다음에 할 것'(진도 예고)
@@ -87,7 +88,7 @@ export const studentApi = {
   /** 페이지 데이터. 강사는 sid 지정, 학생은 생략(본인). */
   page: (sid?: string) => jget<StudentPageData>("/api/student/page" + (sid ? "?student_id=" + encodeURIComponent(sid) : "")),
   /** 일지 입력. 학생은 본인(studentId 무시), 강사는 studentId 지정. */
-  saveLog: (d: { studentId?: string; date: string; bookNo?: string; wordTest?: string; doneItems?: string[]; startTime?: string; endTime?: string; studentNote?: string; goals?: StudentGoal[]; hwAssign?: string[]; hwCheck?: { text: string; status: string }[] }) =>
+  saveLog: (d: { studentId?: string; date: string; bookNo?: string; wordTest?: string; doneItems?: string[]; startTime?: string; endTime?: string; studentNote?: string; goals?: StudentGoal[]; hwAssign?: HwItem[]; hwCheck?: { text: string; status: string }[] }) =>
     jpost("/api/student/log", d),
   /** 커리큘럼 저장(초등영어 권한자·원장). */
   saveCurriculum: (studentId: string, cur: Curriculum) => jpost("/api/student/curriculum", { studentId, note: cur.note, sections: cur.sections }),

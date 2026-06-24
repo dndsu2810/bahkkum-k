@@ -9,6 +9,7 @@ import { holidayName } from "../lib/holidays";
 import { loadCheckout, saveCheckout, pruneCheckout } from "../lib/checkoutState";
 import { useDashOrder, isInteractiveTarget } from "../lib/dashOrder";
 import { Select, Empty } from "../components/ui";
+import { HwChecklist } from "../components/HwChecklist";
 import { CopyMsgBtn, parentMakeupMsg, studentMakeupMsg } from "../components/MakeupList";
 import { useStore } from "../store";
 import { Icon } from "../icons";
@@ -820,7 +821,8 @@ const ENG_STATUS6: { v: AttStatus; on: string; att: boolean }[] = [
 
 /* ---------------- 일일 학습일지 편집 ---------------- */
 function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, onAddDoneItem, onAddNextGoal, examMode, compact, autoSave, planNextDate, ingBooks = [] }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void; doneItemsAll: string[]; reasonsAll: { name: string; value: number }[]; onAddDoneItem: (label: string, scope?: "all" | "student") => void; onAddNextGoal?: (sid: string, text: string) => void; examMode?: boolean; compact?: boolean; autoSave?: boolean; planNextDate?: string; ingBooks?: string[] }) {
-  const showHw = band !== "elem"; // 초등영어는 숙제 없음
+  const showHw = band !== "elem"; // 초등영어는 단어/리딩/문법 3분류 숙제는 없음(오늘의 숙제 체크리스트는 모두 표시)
+  const { user: hwUser } = useAuth();
   const [d, setD] = useState<EngDaily>(value);
   const dirty = JSON.stringify(d) !== JSON.stringify(value);
   // 자동 저장(대시보드) — 입력이 멈추면 0.7초 뒤 저장. 별도 '저장' 버튼 없이 반영.
@@ -837,7 +839,6 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
 
   // 내신모드 자유 숙제 — 지난 회차 '내줄 숙제'를 이번 '숙제 검사'로 이어 보여주기 + 배부 자료 기준 숙제.
   const [hist, setHist] = useState<EngDaily[]>([]);
-  const [newAssign, setNewAssign] = useState("");
   const [newCheck, setNewCheck] = useState("");
   useEffect(() => {
     if (!examMode) return;
@@ -849,7 +850,7 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
   // 지난(가장 가까운 이전 날짜) '내줄 숙제' — 이번 '숙제 검사'로 이어진다.
   const carried = useMemo(() => {
     const prior = hist.filter((x) => x.date < d.date && x.hwAssign && x.hwAssign.length).sort((a, b) => (a.date < b.date ? 1 : -1));
-    return prior[0]?.hwAssign || [];
+    return (prior[0]?.hwAssign || []).map((i) => i.text);
   }, [hist, d.date]);
   // 화면에 보일 '숙제 검사' 행 = (지난 내줄숙제 ∪ 이미 기록된 검사). 상태는 d.hwCheck에서.
   const checkStatusOf = (text: string): HwStatus => (d.hwCheck.find((c) => c.text === text)?.status || "") as HwStatus;
@@ -867,10 +868,8 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
   function removeCheck(text: string) { setD({ ...d, hwCheck: d.hwCheck.filter((c) => c.text !== text) }); }
   // 검사할 숙제 직접 추가 — 상태는 비워둔다. 당일 추가해도 '검사 완료'로 잡히지 않고, 교사가 완료/미흡/안함을 눌러야 검사로 인정.
   function addCheck(text: string) { const v = text.trim(); if (!v || d.hwCheck.some((c) => c.text === v) || carried.includes(v)) return; setD({ ...d, hwCheck: [...d.hwCheck, { text: v, status: "" }] }); }
-  function addAssign(text: string) { const v = text.trim(); if (!v || d.hwAssign.includes(v)) return; setD({ ...d, hwAssign: [...d.hwAssign, v] }); }
-  function removeAssign(text: string) { setD({ ...d, hwAssign: d.hwAssign.filter((x) => x !== text) }); }
   // 내신모드 자유 숙제 칸 — 내신 기간이거나, 숙제 자료가 배부되어 검사/내줄 항목이 생기면 평소에도 표시.
-  const showFreeHw = showHw && (examMode || d.hwAssign.length > 0 || d.hwCheck.length > 0);
+  const showFreeHw = showHw && (examMode || d.hwCheck.length > 0); // 숙제 검사(지난) — 오늘의 숙제는 아래 별도 체크리스트
 
   // 학생/다른 강사가 입력해 value(서버값)가 바뀌면, 교사가 편집 중이 아닐 때만 반영(편집분 보존).
   const prevValue = useRef(value);
@@ -1038,21 +1037,14 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
             </>
             )}
           </div>
-
-          <div className="eng-field">
-            <div className="eng-label">내줄 숙제 <span className="eng-mk-tag soft">다음 시간</span></div>
-            {d.hwAssign.length > 0 && (
-              <div className="eng-hwchips">
-                {d.hwAssign.map((t) => <span className="eng-hwchip" key={t}>{t}<button className="eng-hwchip-x" onClick={() => removeAssign(t)} aria-label="삭제">×</button></span>)}
-              </div>
-            )}
-            <div className="eng-add-row" style={{ marginTop: 8 }}>
-              <input className="sm-input" value={newAssign} onChange={(e) => setNewAssign(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { addAssign(newAssign); setNewAssign(""); } }} placeholder="다음 시간 낼 숙제 (예: 4과 그래머빌드업)" />
-              <button className="btn ghost sm" onClick={() => { addAssign(newAssign); setNewAssign(""); }} disabled={!newAssign.trim()}>추가</button>
-            </div>
-          </div>
         </>
       )}
+
+      {/* 오늘의 숙제 — 학생 '오늘의 숙제'와 같은 목록(양방향). 항목별 완료/미흡/안함/없음 + 작성자(학생 초록 / 강사 주황). 초등·중고등 모두. */}
+      <div className="eng-field">
+        <div className="eng-label">오늘의 숙제 <span className="eng-mk-tag soft">학생과 공유 · 다음 시간 낼 것</span></div>
+        <HwChecklist items={d.hwAssign} onChange={(next) => setD({ ...d, hwAssign: next })} currentBy="teacher" currentByName={hwUser?.name || ""} placeholder="오늘 낼 숙제 (예: 4과 그래머빌드업)" />
+      </div>
 
 
       {/* 숙제 코멘트 — 숙제 검사 아래. 수업 코멘트(맨 아래)와 별도. 학생도 읽음. */}
@@ -2477,7 +2469,7 @@ function StudentMonthlyModal({ studentId, name, naesin }: { studentId: string; n
                 const byDate: Record<string, EngTest[]> = {};
                 for (const t of mTests) (byDate[t.date] ||= []).push(t);
                 const flow = [...mDaily].sort((a, b) => (a.date < b.date ? 1 : -1)).filter((d) => {
-                  const hw = d.hwAssign?.length ? d.hwAssign.join(", ") : d.homework;
+                  const hw = d.hwAssign?.length ? d.hwAssign.map((i) => i.text).join(", ") : d.homework;
                   return d.bookNo || (d.doneItems?.length) || d.materials || hw || (d.goals?.length) || (d.hwCheck?.length) || (byDate[d.date]?.length);
                 });
                 if (flow.length === 0) return <div className="hub-muted">기록 없음</div>;
@@ -2488,7 +2480,7 @@ function StudentMonthlyModal({ studentId, name, naesin }: { studentId: string; n
                       const goals = (d.goals || []).map((g) => g.text).filter(Boolean).join(", ");
                       // 검사한 숙제(내신모드) — 항목+상태. '숙제 뭐였는지' 확인용.
                       const checked = (d.hwCheck || []).filter((c) => c.text).map((c) => c.text + (c.status ? ` (${c.status})` : "")).join(", ");
-                      const hw = d.hwAssign?.length ? d.hwAssign.join(", ") : d.homework;
+                      const hw = d.hwAssign?.length ? d.hwAssign.map((i) => i.text).join(", ") : d.homework;
                       const ts = byDate[d.date] || [];
                       return (
                         <div className="smm-flow-it" key={d.date}>
