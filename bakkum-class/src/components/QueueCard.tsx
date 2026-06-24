@@ -1,8 +1,11 @@
 // 학생 번호표 — 과목별 뽑기·내 순번·손들기. 강사가 호출하면 '당신 차례' 강조.
 import { useEffect, useRef, useState } from "react";
 import { queueApi, SUBJECT_LABEL, type MineResp, type QueueSubject } from "../lib/queueApi";
+import { useAuth } from "../auth";
+import { Icon } from "../icons";
 
 export function QueueCard() {
+  const { user } = useAuth();
   const [data, setData] = useState<MineResp | null>(null);
   const [busy, setBusy] = useState(false);
   const alive = useRef(true);
@@ -26,7 +29,9 @@ export function QueueCard() {
   if (!data || data.subjects.length === 0) return null;
 
   return (
-    <div className="qc">
+    <section className="sp-card qc-card">
+      <h3 className="sp-card-h">번호표</h3>
+      <div className="qc">
       {data.subjects.map((s) => {
         const t = data.tickets[s] || null;
         const called = t?.status === "called";
@@ -38,20 +43,21 @@ export function QueueCard() {
             ) : called ? (
               <div className="qc-called">
                 <b className="qc-num">{t.number}번</b>
-                <span className="qc-called-txt">🙋 당신 차례예요! 들어오세요</span>
+                <span className="qc-called-txt"><span className="qc-called-ic"><Icon name="bell" /></span>{user?.name ? user.name + " " : ""}차례입니다.</span>
                 <button className="btn ghost sm" disabled={busy} onClick={() => act(() => queueApi.cancel(s))}>취소</button>
               </div>
             ) : (
               <div className="qc-active">
                 <b className="qc-num">{t.number}번</b>
                 <span className="qc-ahead">{t.ahead === 0 ? "곧 내 차례!" : `앞에 ${t.ahead}명`}</span>
-                <button className={"btn sm" + (t.raised ? " primary" : " ghost")} disabled={busy || t.raised} onClick={() => act(() => queueApi.raise(s))}>{t.raised ? "손든 중 ✋" : "손들기"}</button>
+                <button className={"btn sm" + (t.raised ? " primary" : " ghost")} disabled={busy || t.raised} onClick={() => act(() => queueApi.raise(s))}>{t.raised ? "손든 중" : "손들기"}</button>
                 <button className="btn ghost sm" disabled={busy} onClick={() => act(() => queueApi.cancel(s))}>취소</button>
               </div>
             )}
           </div>
         );
       })}
-    </div>
+      </div>
+    </section>
   );
 }

@@ -94,6 +94,9 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
           <Timetable slots={data.engSlots} />
         </section>
 
+        {/* 번호표 — 시간표 옆 빈 칸에. 본인 화면에서만(강사가 볼 땐 자동으로 숨김). */}
+        {!studentId && <QueueCard />}
+
         {/* 오늘 뭐해요? (구 '커리큘럼') — 초등영어 전용. 중고등은 숨김. */}
         {!isMidBand && (
           <section className="sp-card">
@@ -691,11 +694,10 @@ export function StudentHome() {
       <main className="sp-shell-body">
         {checkoutNotice && (
           <div className="sp-checkout-banner" role="status">
-            <span className="sp-checkout-ic">👋</span>
+            <span className="sp-checkout-ic"><Icon name="check" /></span>
             <span className="sp-checkout-txt">{checkoutNotice}</span>
           </div>
         )}
-        <QueueCard />
         <NoticeBanner />
         <StudentPage />
       </main>
