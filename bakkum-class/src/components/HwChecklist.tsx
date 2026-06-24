@@ -15,8 +15,9 @@ export function HwChecklist({ items, onChange, currentBy, currentByName, placeho
   const [text, setText] = useState("");
 
   const stamp = <T extends HwItem>(it: T): T => ({ ...it, by: currentBy, byName: currentByName });
+  // 누르면 한 번에 그 상태로 설정 + 작성자 갱신(같은 상태를 눌러도 토글로 꺼지지 않음).
   const setStatus = (i: number, s: HwStatus) =>
-    onChange(items.map((x, j) => (j === i ? stamp({ ...x, status: x.status === s ? "" : s }) : x)));
+    onChange(items.map((x, j) => (j === i ? stamp({ ...x, status: s }) : x)));
   const remove = (i: number) => onChange(items.filter((_, j) => j !== i));
   const add = () => {
     const t = text.trim();
