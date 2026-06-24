@@ -14,6 +14,7 @@ import { DailyTests } from "./English";
 import { Icon } from "../icons";
 import { HexAvatar, CombGauge, Bee, SoezLogo } from "../soez";
 import { Scoreboard } from "../components/Scoreboard";
+import { QueueCard } from "../components/QueueCard";
 import { baseballApi } from "../lib/baseballApi";
 import type { MathBoard, BaseballRule, BaseballConfig } from "../lib/baseball";
 import { HwChecklist } from "../components/HwChecklist";
@@ -694,6 +695,7 @@ export function StudentHome() {
             <span className="sp-checkout-txt">{checkoutNotice}</span>
           </div>
         )}
+        <QueueCard />
         <NoticeBanner />
         <StudentPage />
       </main>

@@ -67,6 +67,7 @@ import {
 import { handleHub, ensureHubTables } from "./hub";
 import { handleEng, handleStudent, ensureEngTables } from "./eng";
 import { handleBaseball } from "./baseball";
+import { handleQueue } from "./queue";
 import { handleFeedback } from "./feedback";
 import { handleMessages } from "./message";
 import { handleCheckin } from "./checkin";
@@ -124,6 +125,11 @@ export default {
         // 수학 야구(전광판) — 권한은 핸들러 내부에서 확인(학생은 본인 board만).
         if (p.startsWith("/api/baseball")) {
           const res = await handleBaseball(env, request, p, await readSession(env, request));
+          if (res) return res;
+        }
+        // 번호표(대기순번)·호출 — 권한은 핸들러 내부(학생/강사 구분).
+        if (p.startsWith("/api/queue")) {
+          const res = await handleQueue(env, request, p, await readSession(env, request));
           if (res) return res;
         }
 

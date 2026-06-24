@@ -15,6 +15,7 @@ import { Icon } from "../icons";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { useApprovedChanges, arrivalOf, findSlotConflicts } from "../lib/changeReqLive";
 import { ConflictPopup, ApprovedBanner } from "../components/ChangeReqLive";
+import { QueuePanel } from "../components/QueuePanel";
 
 interface LessonOnDate {
   student: Student;
@@ -554,6 +555,9 @@ export function TodayDashboard() {
 
       <ApprovedBanner changes={approvedChanges} subject="math" date={day} />
       <ConflictPopup conflicts={conflicts} date={day} />
+
+      {/* 번호표 대기열 (수학) */}
+      <QueuePanel subject="math" />
 
       {/* 오늘 등원 학생 — 학생별 카드 */}
       <div className="card sec-gap">

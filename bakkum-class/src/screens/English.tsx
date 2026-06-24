@@ -10,6 +10,7 @@ import { loadCheckout, saveCheckout, pruneCheckout, notifyCheckoutOnce } from ".
 import { useDashOrder, isInteractiveTarget } from "../lib/dashOrder";
 import { Select, Empty } from "../components/ui";
 import { HwChecklist } from "../components/HwChecklist";
+import { QueuePanel } from "../components/QueuePanel";
 import { CopyMsgBtn, parentMakeupMsg, studentMakeupMsg } from "../components/MakeupList";
 import { useStore } from "../store";
 import { Icon } from "../icons";
@@ -2149,6 +2150,8 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
   const markOut = (sid: string) => { void saveDaily({ ...getDaily(sid), attStatus: "", attended: false, lateMin: 0 }); const next = new Set(outIds); next.delete(sid); setOutIds(next); saveCheckout(outScope, date, next); };
   return (
     <div className="eng-dash">
+      {/* 번호표 대기열 (영어) */}
+      <QueuePanel subject="english" />
       <div className="eng-dash-sec">
         <div className="eng-in-head">
           <h3>오늘 등원 <span className="eng-in-cnt">{attended.length}명</span></h3>

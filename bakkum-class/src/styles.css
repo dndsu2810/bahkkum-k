@@ -3633,3 +3633,27 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
   color:var(--brand-d,#C5851E);border-radius:var(--r-md);padding:12px 16px;margin-bottom:10px;font-weight:800;font-size:var(--t-md)}
 .sp-checkout-ic{font-size:20px;line-height:1}
 .sp-checkout-txt{flex:1}
+/* ===== 번호표(학생 QueueCard) ===== */
+.qc{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.qc-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:11px 14px}
+.qc-row.called{background:var(--brand-soft,#FDEFD3);border-color:var(--brand,#F4A93C)}
+.qc-subj{font-weight:800;color:var(--ink);font-size:var(--t-base)}
+.qc-draw{margin-left:auto}
+.qc-active,.qc-called{display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap}
+.qc-num{font-size:var(--t-lg);font-weight:800;color:var(--brand-d,#C5851E)}
+.qc-ahead{font-size:var(--t-sm);color:var(--ink2)}
+.qc-called-txt{font-size:var(--t-base);font-weight:800;color:var(--brand-d,#C5851E)}
+
+/* ===== 번호표 대기열(강사 QueuePanel) ===== */
+.qp-subj{font-size:var(--t-cap);font-weight:700;color:var(--brand-d,#C5851E);background:var(--brand-soft,#FDEFD3);border-radius:var(--r-full);padding:2px 9px;margin-left:6px}
+.qp-raised-badge{font-size:var(--t-cap);font-weight:800;color:var(--bad);background:#FBE3E0;border-radius:var(--r-full);padding:4px 11px;white-space:nowrap}
+.qp-empty{color:var(--ink3);font-size:var(--t-sm);padding:8px 2px}
+.qp-list{display:flex;flex-direction:column;gap:7px}
+.qp-row{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);padding:9px 12px}
+.qp-row.called{background:var(--brand-soft,#FDEFD3);border-color:var(--brand-line,#F3DDB0)}
+.qp-row.raised{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad) inset}
+.qp-num{font-size:var(--t-lg);font-weight:800;color:var(--brand-d,#C5851E);min-width:30px;text-align:center}
+.qp-name{font-weight:700;color:var(--ink);font-size:var(--t-base)}
+.qp-raised{font-size:11px;font-weight:800;color:var(--bad);background:#FBE3E0;border-radius:var(--r-full);padding:2px 8px}
+.qp-called{font-size:11px;font-weight:700;color:var(--brand-d,#C5851E);background:#fff;border:1px solid var(--brand-line,#F3DDB0);border-radius:var(--r-full);padding:2px 8px}
+.qp-btns{margin-left:auto;display:flex;gap:6px}
