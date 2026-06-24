@@ -672,13 +672,16 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
     let progressBooks: string[] = [];
     try {
       const pr = await env.DB.prepare("SELECT book, level FROM class_eng_progress WHERE student_id=? AND status='진행' AND book!='' ORDER BY updated_at DESC").bind(String(sid)).all<{ book: string; level: string }>();
-      const seenBook = new Set<string>();
+      // 대시보드와 동일하게 '교재+레벨' 라벨 기준으로 중복 제거(같은 교재의 다른 레벨도 각각 표시).
+      const seen = new Set<string>();
       for (const r of pr.results || []) {
         const book = String(r.book ?? "").trim();
-        if (!book || seenBook.has(book)) continue;
-        seenBook.add(book);
+        if (!book) continue;
         const lv = String(r.level ?? "").trim();
-        progressBooks.push(lv ? `${book} ${lv}` : book);
+        const label = lv ? `${book} ${lv}` : book;
+        if (seen.has(label)) continue;
+        seen.add(label);
+        progressBooks.push(label);
       }
     } catch {
       /* 진도 테이블 없거나 조회 실패는 무시 */
