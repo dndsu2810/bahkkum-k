@@ -264,10 +264,36 @@ export function Settings({
       </div>
 
       <NoticeSetting />
+      <CheckoutNoticeSetting />
       <KakaoWebhookSetting />
       <LogoSetting />
       <EngImportSetting />
     </section>
+  );
+}
+
+/* 하원 안내 문구 — 강사가 '하원' 누르면 학생 화면 상단 배너에 뜨는 문구(원장만 수정). */
+function CheckoutNoticeSetting() {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  useEffect(() => { getConfig().then((c) => setText(c.checkout_notice || "")).catch(() => {}); }, []);
+  async function save() {
+    setBusy(true);
+    try { await setConfig({ checkout_notice: text.trim() }); setMsg("저장했어요. 다음 하원부터 적용돼요."); }
+    catch { setMsg("저장하지 못했어요."); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div className="card-title" style={{ marginBottom: 6 }}>하원 안내 문구</div>
+      <div className="page-desc" style={{ marginBottom: 12 }}>강사가 ‘하원’을 누르면 학생 화면 상단에 뜨는 문구예요. 비우면 기본값(하원하세요! Good Bye!).</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <input className="input" style={{ flex: 1, minWidth: 220 }} value={text} maxLength={100} onChange={(e) => setText(e.target.value)} placeholder="하원하세요! Good Bye!" onKeyDown={(e) => e.key === "Enter" && save()} />
+        <button className="btn primary" onClick={save} disabled={busy}>저장</button>
+      </div>
+      {msg && <div className="page-desc" style={{ marginTop: 8 }}>{msg}</div>}
+    </div>
   );
 }
 

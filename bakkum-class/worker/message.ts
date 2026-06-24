@@ -84,9 +84,16 @@ export async function handleMessages(env: Env, request: Request, p: string, me: 
     const b = (await request.json().catch(() => ({}))) as { studentId?: string; studentName?: string };
     const sid = String(b.studentId || "").trim();
     if (!sid) return json({ error: "student_required" }, 400);
+    // 문구는 원장 설정(class_config.checkout_notice)에서 가져오고, 없으면 기본값.
+    let text = "하원하세요! Good Bye!";
+    try {
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_config (k TEXT PRIMARY KEY, v TEXT NOT NULL DEFAULT '')").run();
+      const c = await env.DB.prepare("SELECT v FROM class_config WHERE k='checkout_notice'").first<{ v: string }>();
+      if (c?.v && c.v.trim()) text = c.v.trim();
+    } catch { /* 기본값 사용 */ }
     await env.DB.prepare(
       "INSERT INTO class_message(id,batch_id,sender_sub,sender_name,sender_role,recipient_id,recipient_name,body,created_at,read_at,reply_body,reply_at,kind) VALUES(?,?,?,?,?,?,?,?,?,0,'',0,'checkout')"
-    ).bind(newId("msg"), newId("bat"), me.sub, me.name, me.role, sid, String(b.studentName || ""), "하원하세요! Good Bye!", Date.now()).run();
+    ).bind(newId("msg"), newId("bat"), me.sub, me.name, me.role, sid, String(b.studentName || ""), text, Date.now()).run();
     return json({ ok: true });
   }
 
