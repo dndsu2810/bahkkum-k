@@ -143,19 +143,19 @@
 
   /* the dragon canvas */
   #dragonWrap{
-    position:absolute; left:50%; bottom:-6vh; transform:translateX(-50%);
-    width:min(112vh,128vw); max-width:1180px; aspect-ratio:1/1;
+    position:absolute; left:50%; bottom:2vh; transform:translateX(-50%);
+    width:min(96vh,120vw); max-width:1040px; aspect-ratio:1/1;
     pointer-events:none;
   }
   #dragon{ width:100%; height:100%; display:block; }
 
   /* big clock */
   .clock{
-    position:absolute; left:0; right:0; top:38%; transform:translateY(-50%);
+    position:absolute; left:0; right:0; top:30%; transform:translateY(-50%);
     text-align:center; z-index:5; pointer-events:none;
   }
   .time{
-    font-size:clamp(90px,23vw,340px);
+    font-size:clamp(56px,13vw,176px);
     font-weight:900; letter-spacing:.01em; line-height:.9;
     font-variant-numeric:tabular-nums; font-feature-settings:"tnum";
     color:var(--ink);
@@ -253,7 +253,7 @@
 
   /* level-driven atmosphere */
   #timer{ --wake:0; }
-  #dragonBody{ opacity:var(--wake,0); transition:opacity .85s ease; }
+  #dragonBody{ opacity:calc(.18 + .82*var(--wake,0)); transition:opacity .85s ease; }
   #eyeL, #eyeR{
     transform-box:fill-box; transform-origin:center;
     transition:transform .55s cubic-bezier(.3,1.2,.4,1), opacity .55s;
@@ -431,14 +431,14 @@
 
         <!-- EYES (group scaleY controls how open they are) -->
         <g id="eyeL">
-          <ellipse class="eyehalo" cx="252" cy="350" rx="52" ry="42" fill="url(#eyeGlow)"/>
+          <ellipse class="eyehalo" cx="252" cy="350" rx="66" ry="54" fill="url(#eyeGlow)"/>
           <ellipse cx="252" cy="350" rx="28" ry="21" fill="#0c0a12"/>
           <ellipse class="iris" cx="252" cy="350" rx="23" ry="17"/>
           <ellipse cx="252" cy="350" rx="7.5" ry="16" fill="#0c0a12"/>
           <circle cx="244" cy="343" r="3.4" fill="#fff" opacity=".75"/>
         </g>
         <g id="eyeR">
-          <ellipse class="eyehalo" cx="348" cy="350" rx="52" ry="42" fill="url(#eyeGlow)"/>
+          <ellipse class="eyehalo" cx="348" cy="350" rx="66" ry="54" fill="url(#eyeGlow)"/>
           <ellipse cx="348" cy="350" rx="28" ry="21" fill="#0c0a12"/>
           <ellipse class="iris" cx="348" cy="350" rx="23" ry="17"/>
           <ellipse cx="348" cy="350" rx="7.5" ry="16" fill="#0c0a12"/>
@@ -611,8 +611,8 @@
     displayLevel=L;
     body.dataset.level=L;
     const wake=[0,0.05,0.35,0.62,0.85,1][L];
-    const openL=[0,0.55,1,1,1.06,1.12][L];
-    const openR=[0,0,1,1,1.06,1.12][L]; // right eye joins at level 2
+    const openL=[0.78,0.88,1,1,1.06,1.12][L];
+    const openR=[0.78,0.88,1,1,1.06,1.12][L]; // 두 눈 모두 고요 상태부터 항상 보이게
     const d=$("#dragon"); const T=$("#timer");
     T.style.setProperty("--wake",wake);
     d.style.setProperty("--wake",wake);
