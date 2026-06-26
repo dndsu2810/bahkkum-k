@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>시험 타이머</title>
+<style>
+  :root{
+    --bg:#f7f5f0;
+    --bg2:#ffffff;
+    --ink:#1a1f26;
+    --ink-dim:#8a909a;
+    --line:rgba(26,31,38,.12);
+    --track:rgba(26,31,38,.08);
+    --calm:#2f9e87;
+    --warn:#d98328;
+    --urgent:#dc3b34;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    background:var(--bg); color:var(--ink); overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ===== SETUP ===== */
+  #setup{
+    position:fixed; inset:0; z-index:20;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:32px 24px; overflow-y:auto;
+    background:radial-gradient(120% 80% at 50% 0%, var(--bg2), var(--bg) 70%);
+  }
+  .head{ text-align:center; margin-bottom:36px; }
+  .head .kick{ font-size:12px; letter-spacing:.42em; color:var(--calm); margin-bottom:14px; font-weight:700; }
+  .head h1{ font-size:clamp(30px,6vw,46px); font-weight:800; letter-spacing:.04em; }
+  .head p{ margin-top:12px; color:var(--ink-dim); font-size:14px; letter-spacing:.04em; }
+
+  .panel{ width:100%; max-width:520px; }
+  .label{ font-size:12px; letter-spacing:.22em; color:var(--ink-dim); margin-bottom:13px; display:flex; align-items:center; gap:10px; }
+  .label::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  .chips{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:22px; }
+  .chip{
+    flex:1; min-width:78px; padding:16px 4px; cursor:pointer;
+    border:1px solid var(--line); border-radius:14px; background:rgba(255,255,255,.02);
+    color:var(--ink); font-size:20px; font-weight:800; letter-spacing:.02em;
+    font-variant-numeric:tabular-nums; transition:.16s; font-family:inherit;
+  }
+  .chip small{ display:block; font-size:11px; font-weight:600; color:var(--ink-dim); margin-top:4px; letter-spacing:.05em; }
+  .chip:hover{ border-color:rgba(87,201,176,.5) }
+  .chip.on{ border-color:var(--calm); background:rgba(87,201,176,.1); box-shadow:0 0 0 1px rgba(87,201,176,.3) inset; }
+  .chip.on small{ color:var(--calm) }
+
+  .custom{ display:flex; align-items:center; gap:12px; margin-bottom:30px; }
+  .custom span{ color:var(--ink-dim); font-size:14px }
+  .custom input{
+    width:110px; padding:14px; border-radius:12px; border:1px solid var(--line);
+    background:rgba(0,0,0,.25); color:var(--ink); font-size:20px; font-weight:800; text-align:center;
+    font-family:inherit;
+  }
+  .custom input:focus{ outline:none; border-color:var(--calm) }
+
+  .start{
+    width:100%; padding:18px; border:0; border-radius:15px; cursor:pointer;
+    background:linear-gradient(180deg,#5ccdb3,#3a9b86); color:#06120f;
+    font-size:18px; font-weight:900; letter-spacing:.12em; font-family:inherit;
+    box-shadow:0 10px 28px rgba(58,155,134,.28); transition:.16s;
+  }
+  .start:hover{ transform:translateY(-2px) }
+  .start:active{ transform:translateY(0) }
+
+  /* ===== RUN ===== */
+  #run{ position:fixed; inset:0; display:none; z-index:10; }
+  #run.show{ display:flex; align-items:center; justify-content:center; }
+  .ring-wrap{ position:relative; width:min(78vmin,560px); aspect-ratio:1/1; }
+  svg.ring{ width:100%; height:100%; transform:rotate(-90deg); }
+  .ring .track{ fill:none; stroke:var(--track); stroke-width:6; }
+  .ring .prog{
+    fill:none; stroke:var(--calm); stroke-width:6; stroke-linecap:round;
+    transition:stroke-dashoffset .95s linear, stroke .6s;
+  }
+  .center{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center;
+  }
+  .time{
+    font-size:clamp(64px,16vmin,150px); font-weight:800; line-height:.92;
+    font-variant-numeric:tabular-nums; font-feature-settings:"tnum";
+    letter-spacing:.01em; transition:color .5s;
+  }
+  .meta{ margin-top:14px; font-size:clamp(12px,2.4vw,16px); letter-spacing:.3em; color:var(--ink-dim); transition:color .5s; }
+  .pulse{ animation:pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.45} }
+
+  .toast{
+    position:absolute; top:11%; left:50%; transform:translate(-50%,-12px);
+    padding:11px 22px; border-radius:99px; font-size:15px; font-weight:700; letter-spacing:.08em;
+    background:var(--bg2); border:1px solid var(--line); color:var(--ink);
+    box-shadow:0 8px 24px rgba(26,31,38,.12);
+    opacity:0; transition:.4s; pointer-events:none;
+  }
+  .toast.show{ opacity:1; transform:translate(-50%,0); }
+
+  .controls{ position:absolute; top:22px; right:24px; display:flex; gap:10px; z-index:5; }
+  .controls button{
+    width:48px; height:48px; border-radius:13px; cursor:pointer;
+    border:1px solid var(--line); background:var(--bg2); color:var(--ink-dim);
+    display:flex; align-items:center; justify-content:center; transition:.16s;
+    box-shadow:0 2px 8px rgba(26,31,38,.06);
+  }
+  .controls button:hover{ color:var(--ink); border-color:rgba(87,201,176,.45) }
+  .controls svg{ width:21px; height:21px }
+
+  /* warning states */
+  #run[data-phase="warn"] .prog{ stroke:var(--warn) }
+  #run[data-phase="warn"] .time{ color:var(--warn) }
+  #run[data-phase="urgent"] .prog{ stroke:var(--urgent) }
+  #run[data-phase="urgent"] .time{ color:var(--urgent) }
+  #run[data-phase="urgent"] .ring-wrap{ animation:nudge 1s ease-in-out infinite }
+  @keyframes nudge{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.012)} }
+
+  /* ===== DONE ===== */
+  #done{
+    position:fixed; inset:0; z-index:30; display:none;
+    flex-direction:column; align-items:center; justify-content:center;
+    background:radial-gradient(120% 90% at 50% 40%, var(--bg2), var(--bg) 75%);
+    animation:fade 1s ease both;
+  }
+  #done.show{ display:flex }
+  @keyframes fade{ from{opacity:0} to{opacity:1} }
+  #done h2{ font-size:clamp(34px,7vw,62px); font-weight:900; letter-spacing:.14em; color:var(--ink); }
+  #done .line{ width:60px; height:3px; background:var(--calm); border-radius:2px; margin:26px 0; }
+  #done p{ color:var(--ink-dim); font-size:clamp(14px,2.6vw,18px); letter-spacing:.1em; }
+  #done button{
+    margin-top:38px; padding:15px 40px; border:1px solid var(--calm); border-radius:14px;
+    background:transparent; color:var(--calm); font-size:16px; font-weight:800; letter-spacing:.1em;
+    cursor:pointer; transition:.16s; font-family:inherit;
+  }
+  #done button:hover{ background:rgba(87,201,176,.1) }
+
+  @media (prefers-reduced-motion: reduce){
+    .pulse,#run[data-phase="urgent"] .ring-wrap{ animation:none!important }
+  }
+  @media (max-width:540px){ .controls{ top:14px; right:14px } }
+</style>
+</head>
+<body>
+
+  <!-- SETUP -->
+  <div id="setup">
+    <div class="head">
+      <div class="kick">EXAM TIMER</div>
+      <h1>시험 타이머</h1>
+      <p>시간을 정하고 시작하세요.</p>
+    </div>
+    <div class="panel">
+      <div class="label">시간 선택</div>
+      <div class="chips" id="chips"></div>
+      <div class="custom">
+        <span>직접 입력</span>
+        <input id="customMin" type="number" min="1" max="300" inputmode="numeric" placeholder="분">
+        <span>분</span>
+      </div>
+      <button class="start" id="startBtn">시작</button>
+    </div>
+  </div>
+
+  <!-- RUN -->
+  <div id="run" data-phase="calm">
+    <div class="ring-wrap">
+      <svg class="ring" viewBox="0 0 360 360">
+        <circle class="track" cx="180" cy="180" r="168"/>
+        <circle class="prog" id="prog" cx="180" cy="180" r="168"/>
+      </svg>
+      <div class="center">
+        <div class="time" id="timeText">00:00</div>
+        <div class="meta" id="metaText">남은 시간</div>
+      </div>
+    </div>
+    <div class="toast" id="toast"></div>
+    <div class="controls">
+      <button id="fsBtn" title="전체화면">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+      </button>
+      <button id="pauseBtn" title="잠시 멈춤">
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+      </button>
+      <button id="stopBtn" title="끝내기">
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- DONE -->
+  <div id="done">
+    <h2>시험 종료</h2>
+    <div class="line"></div>
+    <p>연필을 내려놓고 답안을 제출해 주세요.</p>
+    <button id="againBtn">새 타이머</button>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+  const $=s=>document.querySelector(s);
+  const PRESETS=[{m:45,l:"내신"},{m:50,l:"기본"},{m:70,l:"긴 시험"},{m:80,l:"모의 1교시"},{m:100,l:"모의고사"}];
+  const R=168, CIRC=2*Math.PI*R;
+  let chosenMin=50, customActive=false;
+  let totalSec=0,leftSec=0,tickId=null,paused=false, audioCtx=null;
+  const prog=$("#prog");
+  prog.style.strokeDasharray=CIRC;
+  prog.style.strokeDashoffset=0;
+
+  /* chips */
+  function renderChips(){
+    const w=$("#chips"); w.innerHTML="";
+    PRESETS.forEach(p=>{
+      const b=document.createElement("button");
+      b.className="chip"+(!customActive&&p.m===chosenMin?" on":"");
+      b.innerHTML=p.m+"<small>"+p.l+"</small>";
+      b.onclick=()=>{ chosenMin=p.m; customActive=false; $("#customMin").value=""; renderChips(); };
+      w.appendChild(b);
+    });
+  }
+  renderChips();
+  $("#customMin").addEventListener("input",e=>{
+    const v=parseInt(e.target.value,10);
+    if(v>0){ customActive=true; chosenMin=Math.min(v,300); [...$("#chips").children].forEach(x=>x.classList.remove("on")); }
+    else { customActive=false; renderChips(); }
+  });
+
+  function fmt(s){
+    s=Math.max(0,Math.round(s));
+    const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+    const p=n=>String(n).padStart(2,"0");
+    return h>0? h+":"+p(m)+":"+p(sec) : p(m)+":"+p(sec);
+  }
+
+  let toastTimer=null;
+  function toast(msg){
+    const t=$("#toast"); t.textContent=msg; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),3200);
+  }
+
+  function chime(){
+    try{
+      const ctx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+      const now=ctx.currentTime;
+      [0,0.18,0.36].forEach((t,i)=>{
+        const o=ctx.createOscillator(),g=ctx.createGain();
+        o.type="sine"; o.frequency.value=[523.25,659.25,783.99][i];
+        g.gain.setValueAtTime(0,now+t);
+        g.gain.linearRampToValueAtTime(0.22,now+t+0.04);
+        g.gain.exponentialRampToValueAtTime(0.0001,now+t+1.6);
+        o.connect(g).connect(ctx.destination); o.start(now+t); o.stop(now+t+1.7);
+      });
+    }catch(e){}
+  }
+
+  function paint(){
+    $("#timeText").textContent=fmt(leftSec);
+    const frac = totalSec>0 ? leftSec/totalSec : 0;
+    prog.style.strokeDashoffset = CIRC*(1-frac);
+    const run=$("#run");
+    let phase = leftSec<=60 ? "urgent" : leftSec<=300 ? "warn" : "calm";
+    run.dataset.phase=phase;
+  }
+
+  function tick(){
+    leftSec--;
+    if(leftSec===300){ toast("5분 남았습니다"); }
+    if(leftSec===60){ toast("1분 남았습니다"); $("#metaText").classList.add("pulse"); }
+    paint();
+    if(leftSec<=0){ finish(); }
+  }
+
+  function start(){
+    totalSec=leftSec=chosenMin*60;
+    $("#setup").style.display="none";
+    $("#run").classList.add("show");
+    $("#done").classList.remove("show");
+    $("#metaText").textContent="남은 시간"; $("#metaText").classList.remove("pulse");
+    paused=false;
+    try{ audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+    paint();
+    clearInterval(tickId); tickId=setInterval(tick,1000);
+  }
+
+  function finish(){
+    clearInterval(tickId);
+    $("#run").classList.remove("show");
+    $("#done").classList.add("show");
+    chime();
+  }
+
+  $("#startBtn").addEventListener("click",start);
+  $("#pauseBtn").addEventListener("click",()=>{
+    paused=!paused;
+    if(paused){ clearInterval(tickId); $("#metaText").textContent="잠시 멈춤";
+      $("#pauseBtn").innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'; }
+    else{ tickId=setInterval(tick,1000); $("#metaText").textContent="남은 시간";
+      $("#pauseBtn").innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>'; }
+  });
+  $("#stopBtn").addEventListener("click",()=>{
+    clearInterval(tickId);
+    $("#run").classList.remove("show");
+    $("#setup").style.display="flex";
+  });
+  $("#againBtn").addEventListener("click",()=>{
+    $("#done").classList.remove("show");
+    $("#setup").style.display="flex";
+  });
+  $("#fsBtn").addEventListener("click",()=>{
+    if(!document.fullscreenElement){ document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen(); }
+    else{ document.exitFullscreen&&document.exitFullscreen(); }
+  });
+  document.addEventListener("keydown",e=>{
+    if(!$("#run").classList.contains("show")) return;
+    if(e.code==="Space"){ e.preventDefault(); $("#pauseBtn").click(); }
+  });
+})();
+</script>
+</body>
+</html>

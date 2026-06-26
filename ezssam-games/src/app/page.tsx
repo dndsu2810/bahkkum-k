@@ -10,7 +10,7 @@ import GameCard from "@/components/GameCard";
 import CategoryFilter from "@/components/CategoryFilter";
 import MobileNotice from "@/components/MobileNotice";
 
-const CATEGORIES = ["전체", "5학년", "6학년", "신작", "인기", "미니게임"];
+const CATEGORIES = ["전체", "5학년", "6학년", "신작", "인기", "미니게임", "학습도구"];
 
 export default function HubPage() {
   const router = useRouter();

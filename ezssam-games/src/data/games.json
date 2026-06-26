@@ -146,5 +146,31 @@
     "route": "https://dndsu2810.github.io/bahkkum-k/%EC%97%AD%EC%82%AC%EB%8B%A4%EB%8B%A4/",
     "tags": ["미니게임", "신작"],
     "external": true
+  },
+  {
+    "id": "silence-eye-timer",
+    "name": "침묵의 눈 타이머",
+    "shortDesc": "떠들면 잠든 용이 깨어나는 시험·수업 타이머",
+    "grades": [],
+    "units": ["학습도구"],
+    "scoreType": "타이머",
+    "emoji": "🐉",
+    "gradient": "from-slate-700 to-indigo-900",
+    "route": "https://dndsu2810.github.io/bahkkum-k/%ED%83%80%EC%9D%B4%EB%A8%B8/%EC%B9%A8%EB%AC%B5%EC%9D%98%EB%88%88_%ED%83%80%EC%9D%B4%EB%A8%B8.html",
+    "tags": ["학습도구", "신작"],
+    "external": true
+  },
+  {
+    "id": "simple-exam-timer",
+    "name": "심플 시험 타이머",
+    "shortDesc": "군더더기 없는 흰 배경 시험용 타이머",
+    "grades": [],
+    "units": ["학습도구"],
+    "scoreType": "타이머",
+    "emoji": "⏱️",
+    "gradient": "from-gray-200 to-slate-400",
+    "route": "https://dndsu2810.github.io/bahkkum-k/%ED%83%80%EC%9D%B4%EB%A8%B8/%EC%8B%AC%ED%94%8C_%EC%8B%9C%ED%97%98%ED%83%80%EC%9D%B4%EB%A8%B8.html",
+    "tags": ["학습도구"],
+    "external": true
   }
 ]
