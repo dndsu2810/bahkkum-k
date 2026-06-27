@@ -260,8 +260,33 @@
   }
   #eyeL{ transform:scaleY(var(--openL,0)); opacity:var(--openL,0); }
   #eyeR{ transform:scaleY(var(--openR,0)); opacity:var(--openR,0); }
-  .iris{ fill:var(--eyec,#ffd84d); transition:fill .5s; }
-  .eyehalo{ fill:var(--eyec,#ffd84d); transition:fill .5s; }
+
+  /* glossy living iris */
+  .iris{ fill:url(#irisGrad); transition:fill .5s; }
+  .eyehalo{
+    fill:var(--eyec,#ffd84d); transition:fill .5s;
+    transform-box:fill-box; transform-origin:center;
+    animation:eyeGlow 3.4s ease-in-out infinite;
+  }
+  #eyeR .eyehalo{ animation-delay:.7s; }
+  @keyframes eyeGlow{ 0%,100%{opacity:.68; transform:scale(1)} 50%{opacity:1; transform:scale(1.1)} }
+
+  /* slit pupil gently dilates — feels alive */
+  .pupil{ transform-box:fill-box; transform-origin:center; animation:pupilBreathe 4.2s ease-in-out infinite; }
+  #eyeR .pupil{ animation-delay:.5s; }
+  @keyframes pupilBreathe{ 0%,100%{transform:scaleX(1)} 50%{transform:scaleX(1.22)} }
+
+  /* anime sparkle highlights twinkle */
+  .spark{ fill:#fff; }
+  .spark-a{ transform-box:fill-box; transform-origin:center; animation:twinkle 3s ease-in-out infinite; }
+  #eyeR .spark-a{ animation-delay:.9s; }
+  @keyframes twinkle{ 0%,100%{opacity:.9; transform:scale(1)} 50%{opacity:.45; transform:scale(.78)} }
+
+  /* upper-lid blink */
+  .lid{ transform-box:fill-box; transform-origin:center top; transform:scaleY(0);
+        animation:blink 6.5s ease-in-out infinite; }
+  #eyeR .lid{ animation-delay:.22s; }
+  @keyframes blink{ 0%,90%,100%{transform:scaleY(0)} 93%{transform:scaleY(1)} 96.5%{transform:scaleY(0)} }
   .rage-veil{
     position:absolute; inset:0; z-index:2; pointer-events:none;
     background:radial-gradient(120% 90% at 50% 75%, rgba(255,40,30,.22), transparent 60%);
@@ -304,6 +329,8 @@
 
   @media (prefers-reduced-motion: reduce){
     .candle.lit .flame,.candle.lit .halo,body[data-level="5"] #dragonWrap{animation:none!important}
+    .eyehalo,.pupil,.spark-a,.lid{animation:none!important}
+    .lid{transform:scaleY(0)!important}
   }
   @media (max-width:540px){
     #gauge{bottom:120px}
@@ -385,6 +412,13 @@
             <stop offset="35%" stop-color="var(--eyec, #ffd84d)"/>
             <stop offset="100%" stop-color="rgba(255,160,40,0)"/>
           </radialGradient>
+          <radialGradient id="irisGrad" cx="40%" cy="34%" r="72%">
+            <stop offset="0%" stop-color="#fffbe9"/>
+            <stop offset="20%" stop-color="#fff2c0"/>
+            <stop offset="46%" stop-color="var(--eyec, #ffd84d)"/>
+            <stop offset="82%" stop-color="var(--eyec, #ffd84d)"/>
+            <stop offset="100%" stop-color="#1a1207"/>
+          </radialGradient>
           <linearGradient id="scaleGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="var(--scaleA, #16302a)"/>
             <stop offset="100%" stop-color="var(--scaleB, #0c211c)"/>
@@ -432,17 +466,23 @@
         <!-- EYES (group scaleY controls how open they are) -->
         <g id="eyeL">
           <ellipse class="eyehalo" cx="252" cy="350" rx="66" ry="54" fill="url(#eyeGlow)"/>
-          <ellipse cx="252" cy="350" rx="28" ry="21" fill="#0c0a12"/>
-          <ellipse class="iris" cx="252" cy="350" rx="23" ry="17"/>
-          <ellipse cx="252" cy="350" rx="7.5" ry="16" fill="#0c0a12"/>
-          <circle cx="244" cy="343" r="3.4" fill="#fff" opacity=".75"/>
+          <ellipse class="sclera" cx="252" cy="350" rx="29" ry="22" fill="#0c0a12"/>
+          <ellipse class="iris" cx="252" cy="350" rx="24" ry="18.5"/>
+          <ellipse class="limbal" cx="252" cy="350" rx="24" ry="18.5" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="2.4"/>
+          <ellipse class="pupil" cx="252" cy="350" rx="6.8" ry="15" fill="#080610"/>
+          <circle class="spark spark-a" cx="243" cy="342" r="4.6"/>
+          <circle class="spark spark-b" cx="259" cy="357" r="1.9" opacity=".8"/>
+          <ellipse class="lid" cx="252" cy="349" rx="30" ry="23" fill="#0b0818"/>
         </g>
         <g id="eyeR">
           <ellipse class="eyehalo" cx="348" cy="350" rx="66" ry="54" fill="url(#eyeGlow)"/>
-          <ellipse cx="348" cy="350" rx="28" ry="21" fill="#0c0a12"/>
-          <ellipse class="iris" cx="348" cy="350" rx="23" ry="17"/>
-          <ellipse cx="348" cy="350" rx="7.5" ry="16" fill="#0c0a12"/>
-          <circle cx="340" cy="343" r="3.4" fill="#fff" opacity=".75"/>
+          <ellipse class="sclera" cx="348" cy="350" rx="29" ry="22" fill="#0c0a12"/>
+          <ellipse class="iris" cx="348" cy="350" rx="24" ry="18.5"/>
+          <ellipse class="limbal" cx="348" cy="350" rx="24" ry="18.5" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="2.4"/>
+          <ellipse class="pupil" cx="348" cy="350" rx="6.8" ry="15" fill="#080610"/>
+          <circle class="spark spark-a" cx="339" cy="342" r="4.6"/>
+          <circle class="spark spark-b" cx="355" cy="357" r="1.9" opacity=".8"/>
+          <ellipse class="lid" cx="348" cy="349" rx="30" ry="23" fill="#0b0818"/>
         </g>
       </svg>
     </div>
