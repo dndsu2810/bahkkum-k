@@ -698,6 +698,65 @@
     addFibers(document.querySelector("#fibersR"),348,349,34,27);
   })();
 
+  /* ---------- 살아있는 눈: 잠 · 주기적 둘러보기 · 반만 깸 · 소음 반응 ---------- */
+  const dragonEl=$("#dragon");
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const eyeEls=[
+    {pupil:document.querySelector("#eyeL .pupil"), sheen:document.querySelector("#eyeL .pupil-sheen"), px:252, py:350, sx:250, sy:343},
+    {pupil:document.querySelector("#eyeR .pupil"), sheen:document.querySelector("#eyeR .pupil-sheen"), px:348, py:350, sx:346, sy:343}
+  ];
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+  let stirOpen=0, stirTarget=0, eyePhase="sleep", phaseT=0, glanceNext=0;
+  let gx=0, gy=0, gtx=0, gty=0;           // 눈동자 시선(현재/목표) 오프셋
+  function pickGaze(){ gtx=rnd(-11,11); gty=rnd(-5,5); }
+  function resetEyeLife(){
+    stirOpen=0; stirTarget=0; eyePhase="sleep";
+    phaseT=(performance.now())+rnd(2500,6000); gx=gy=gtx=gty=0;
+    dragonEl.style.setProperty("--openL","0"); dragonEl.style.setProperty("--openR","0");
+  }
+  function updateEyeLife(energy){
+    const now=performance.now();
+    // 소음은 항상 눈을 뜨게 한다(시끄러울수록 더 크게)
+    const noiseOpen=Math.min(1.12, energy*1.6);
+    if(reduceMotion){
+      dragonEl.style.setProperty("--openL",noiseOpen.toFixed(3));
+      dragonEl.style.setProperty("--openR",noiseOpen.toFixed(3));
+      return;
+    }
+    // 자율 뒤척임 상태기계: 잠 → (가끔) 깨어남/반만깸 → 둘러봄 → 다시 잠
+    switch(eyePhase){
+      case "sleep":
+        stirTarget=0;
+        if(now>=phaseT){
+          const half=Math.random()<0.45;                 // 어떤 땐 반만 깬다
+          stirTarget=half?0.5:1.0;
+          eyePhase="awake";
+          phaseT=now+(half?rnd(900,1700):rnd(2000,3600)); // 깨어 있는 시간
+        }
+        break;
+      case "awake":
+        if(now>=phaseT){ eyePhase="closing"; stirTarget=0; }
+        break;
+      case "closing":
+        if(stirOpen<0.03){ eyePhase="sleep"; phaseT=now+rnd(5000,12000); } // 다음 뒤척임까지
+        break;
+    }
+    stirOpen += (stirTarget - stirOpen)*0.06;             // 부드럽게 뜨고 감음
+    const open=Math.max(stirOpen, noiseOpen);
+    // 눈이 충분히 떠 있으면 주변을 두리번거린다
+    if(open>0.25){
+      if(now>=glanceNext){ pickGaze(); glanceNext=now+rnd(650,1500); }
+    }else{ gtx=0; gty=0; }                                // 잠들면 시선은 정면으로
+    gx += (gtx-gx)*0.08; gy += (gty-gy)*0.08;
+    dragonEl.style.setProperty("--openL", open.toFixed(3));
+    dragonEl.style.setProperty("--openR", (open*0.985).toFixed(3));
+    eyeEls.forEach(e=>{ if(!e.pupil) return;
+      e.pupil.setAttribute("cx",(e.px+gx).toFixed(1));
+      e.pupil.setAttribute("cy",(e.py+gy).toFixed(1));
+      if(e.sheen){ e.sheen.setAttribute("cx",(e.sx+gx).toFixed(1)); e.sheen.setAttribute("cy",(e.sy+gy).toFixed(1)); }
+    });
+  }
+
   /* ---------- audio / mic ---------- */
   let audioCtx=null, analyser=null, micStream=null, micData=null, micOK=false;
   async function initMic(){
@@ -758,13 +817,10 @@
     displayLevel=L;
     body.dataset.level=L;
     const wake=[0,0.05,0.35,0.62,0.85,1][L];
-    const openL=[0.92,0.96,1.0,1.04,1.08,1.12][L];
-    const openR=[0.92,0.96,1.0,1.04,1.08,1.12][L]; // 항상 두 눈을 뜨고 있고, 시끄러울수록 더 부릅뜬다
     const d=$("#dragon"); const T=$("#timer");
     T.style.setProperty("--wake",wake);
     d.style.setProperty("--wake",wake);
-    d.style.setProperty("--openL", openL);
-    d.style.setProperty("--openR", openR);
+    // 눈 열림(--openL/--openR)은 updateEyeLife()가 매 프레임 제어한다(자율 뒤척임 + 소음 반응)
     d.style.setProperty("--eyec", EYE_COLOR[L]);
     d.style.setProperty("--scaleStroke", L>=4? "#7fcf9e" : "#2f8f6a");
     d.style.setProperty("--scaleA", L>=4? "#1d4f3e":"#16302a");
@@ -801,6 +857,7 @@
     else L=5;
     level=L;
     applyLevel(L);
+    updateEyeLife(energy);
     // gauge + dB readout
     if(dbMode && micOK){
       const inst=rmsToDb(vol);
@@ -828,6 +885,7 @@
     $("#done").classList.remove("show");
     energy=0; level=0; displayLevel=-1; paused=false;
     applyLevel(0);
+    resetEyeLife();
     // mic state badge
     const ms=$("#micState");
     dbShown=35;
