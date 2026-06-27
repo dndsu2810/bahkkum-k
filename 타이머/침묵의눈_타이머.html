@@ -470,42 +470,9 @@
           <clipPath id="apR"><path d="M386 350 C386 332 369 324 348 324 C327 324 310 334 310 350 C310 367 327 378 348 378 C369 378 386 366 386 350 Z"/></clipPath>
         </defs>
 
-        <!-- BODY: fades in with --wake -->
-        <g id="dragonBody">
-          <!-- whiskers: a few flowing strands from the snout (not radial legs) -->
-          <g stroke="var(--scaleStroke,#2f8f6a)" stroke-width="3" fill="none" stroke-linecap="round" opacity=".85">
-            <path d="M218 392 C168 398 120 408 78 396" filter="url(#soft)"/>
-            <path d="M220 408 C176 424 130 442 92 446" filter="url(#soft)" opacity=".55"/>
-            <path d="M382 392 C432 398 480 408 522 396" filter="url(#soft)"/>
-            <path d="M380 408 C424 424 470 442 508 446" filter="url(#soft)" opacity=".55"/>
-          </g>
-          <!-- horns -->
-          <g fill="url(#hornGrad)" stroke="var(--scaleStroke,#2f8f6a)" stroke-width="2">
-            <path d="M250 230 C232 168 206 138 184 104 C210 132 250 168 270 222 Z"/>
-            <path d="M350 230 C368 168 394 138 416 104 C390 132 350 168 330 222 Z"/>
-          </g>
-          <!-- head -->
-          <path fill="url(#scaleGrad)" stroke="var(--scaleStroke,#2f8f6a)" stroke-width="2.5"
-            d="M300 244 C232 244 192 284 192 338 C192 388 224 424 270 442
-               C284 452 316 452 330 442 C376 424 408 388 408 338 C408 284 368 244 300 244 Z"/>
-          <!-- cheek scale ridges -->
-          <g stroke="var(--scaleStroke,#2f8f6a)" stroke-width="2" fill="none" stroke-linecap="round" opacity=".5">
-            <path d="M210 372 C224 384 236 388 248 386"/>
-            <path d="M390 372 C376 384 364 388 352 386"/>
-            <path d="M214 398 C228 408 240 410 250 408"/>
-            <path d="M386 398 C372 408 360 410 350 408"/>
-          </g>
-          <!-- nostrils + snout -->
-          <ellipse cx="282" cy="408" rx="6" ry="9" fill="#0a1714"/>
-          <ellipse cx="318" cy="408" rx="6" ry="9" fill="#0a1714"/>
-          <path d="M268 430 C290 444 310 444 332 430" fill="none" stroke="var(--scaleStroke,#2f8f6a)" stroke-width="2.4" stroke-linecap="round"/>
-        </g>
-
-        <!-- breath puffs (level 4-5, JS controlled) -->
-        <g id="breath" opacity="0">
-          <ellipse cx="270" cy="434" rx="22" ry="12" fill="rgba(255,180,120,.2)"/>
-          <ellipse cx="330" cy="434" rx="22" ry="12" fill="rgba(255,180,120,.2)"/>
-        </g>
+        <!-- 얼굴형(머리 윤곽)·수염·뿔·콧김 제거 — 어둠 속 '두 눈'만 남긴다 -->
+        <g id="dragonBody"></g>
+        <g id="breath" opacity="0"></g>
 
         <!-- EYES: eyeball scales/fades with --open (closed when quiet, open when loud) -->
         <g id="eyeL">
@@ -525,10 +492,6 @@
         </g>
         <!-- static lids + closed-eye crease (stay put while the eyeball opens) -->
         <g id="lidsL">
-          <path class="lidUpper" filter="url(#lidblur)" fill="#070510"
-            d="M194 298 C214 326 240 333 252 334 C270 333 290 326 308 302 C304 336 280 349 252 349 C226 349 204 340 194 316 Z"/>
-          <path class="lidLower" filter="url(#lidblur)" fill="#070510"
-            d="M214 366 C230 382 274 382 290 366 C288 396 216 396 214 366 Z"/>
           <path class="lidLine" d="M214 350 C214 332 231 324 252 324 C273 324 290 334 290 350" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="2"/>
           <path class="shutLine" d="M216 349 C234 361 270 361 288 349" fill="none" stroke="#7a8c80" stroke-width="3.4" stroke-linecap="round"/>
           <path class="shutLash" d="M225 357 l-5 5 M252 360 l0 6 M279 357 l5 5" fill="none" stroke="#7a8c80" stroke-width="2.4" stroke-linecap="round"/>
@@ -549,10 +512,6 @@
           </g>
         </g>
         <g id="lidsR">
-          <path class="lidUpper" filter="url(#lidblur)" fill="#070510"
-            d="M406 298 C386 326 360 333 348 334 C330 333 310 326 292 302 C296 336 320 349 348 349 C374 349 396 340 406 316 Z"/>
-          <path class="lidLower" filter="url(#lidblur)" fill="#070510"
-            d="M386 366 C370 382 326 382 310 366 C312 396 384 396 386 366 Z"/>
           <path class="lidLine" d="M386 350 C386 332 369 324 348 324 C327 324 310 334 310 350" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="2"/>
           <path class="shutLine" d="M384 349 C366 361 330 361 312 349" fill="none" stroke="#7a8c80" stroke-width="3.4" stroke-linecap="round"/>
           <path class="shutLash" d="M375 357 l5 5 M348 360 l0 6 M321 357 l-5 5" fill="none" stroke="#7a8c80" stroke-width="2.4" stroke-linecap="round"/>
@@ -799,8 +758,8 @@
     displayLevel=L;
     body.dataset.level=L;
     const wake=[0,0.05,0.35,0.62,0.85,1][L];
-    const openL=[0,0.32,0.62,0.85,1.04,1.12][L];
-    const openR=[0,0.30,0.60,0.85,1.04,1.12][L]; // 조용하면 눈을 감고, 소리가 커지면 뜨다
+    const openL=[0.92,0.96,1.0,1.04,1.08,1.12][L];
+    const openR=[0.92,0.96,1.0,1.04,1.08,1.12][L]; // 항상 두 눈을 뜨고 있고, 시끄러울수록 더 부릅뜬다
     const d=$("#dragon"); const T=$("#timer");
     T.style.setProperty("--wake",wake);
     d.style.setProperty("--wake",wake);
