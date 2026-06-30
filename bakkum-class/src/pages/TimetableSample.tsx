@@ -277,6 +277,10 @@ export function TimetableSample() {
         // 영어 보기 — 영어 블록. 영어 예산(급별)도 차감.
         const s = byId.get(d.studentId);
         if (s && remainingOf(s) > 0) addPlacement(s.id, day, slot, undefined, "eng");
+      } else if (subjectFilter === "all") {
+        // 전체 보기 — 학생 소속으로 과목 결정(영어전용=영어, 그 외 수학). 예산 게이트 없이 배치.
+        const s = byId.get(d.studentId);
+        if (s) addPlacement(s.id, day, slot, undefined, engIds.has(s.id) && !mathIds.has(s.id) ? "eng" : undefined);
       } else {
         const s = byId.get(d.studentId);
         if (s && remainingOf(s) > 0) addPlacement(s.id, day, slot);
@@ -489,61 +493,39 @@ export function TimetableSample() {
           }}
         >
           <div className="tts-students-head">학생 목록 {students.length > 0 && <span>{students.length}</span>}</div>
+          {mode === "teacher" && !loading && (
+            <input className="input" value={pickQ} onChange={(e) => setPickQ(e.target.value)} placeholder="학생 이름 검색" style={{ width: "100%", marginBottom: 8 }} />
+          )}
           {loading ? (
             <p className="tts-hint">불러오는 중…</p>
-          ) : mode === "teacher" && subjectFilter === "eng" ? (
-            // 영어 보기 — 영어 학생을 끌어 영어 칸에 놓아요. 급별 예산(초9/중10/고12) 차감.
-            students.filter((s) => engIds.has(s.id)).map((s) => {
-              const rem = remainingOf(s);
-              const full = rem <= 0;
-              return (
-                <div
-                  key={s.id}
-                  className={"tts-scard tts-eng" + (full ? " full" : "")}
-                  draggable={!full}
-                  onDragStart={() => { if (!full) drag.current = { kind: "new", studentId: s.id }; }}
-                  onDragEnd={() => { drag.current = null; }}
-                  title={full ? "남은 블록을 다 채웠어요" : "끌어서 영어 칸에 놓아요"}
-                >
-                  <div className="tts-scard-main">
-                    <b>{s.name}</b>
-                    <span className="tts-level">{LEVEL_LABEL[s.band as Level]}</span>
-                  </div>
-                  {full ? <span className="tts-rem done">다 채웠어요</span> : <span className="tts-rem">남은 블록 <b>{rem}</b></span>}
-                </div>
-              );
-            })
           ) : mode === "teacher" ? (
-            students.filter((s) => mathIds.has(s.id)).map((s) => {
-              const rem = remainingOf(s);
-              const full = rem <= 0;
-              return (
-                <div
-                  key={s.id}
-                  className={"tts-scard tts-math" + (full ? " full" : "")}
-                  draggable={!full}
-                  onDragStart={() => {
-                    if (!full) drag.current = { kind: "new", studentId: s.id };
-                  }}
-                  onDragEnd={() => {
-                    drag.current = null;
-                  }}
-                  title={full ? "남은 블록을 다 채웠어요" : "끌어서 시간표 칸에 놓아요"}
-                >
-                  <div className="tts-scard-main">
-                    <b>{s.name}</b>
-                    <span className="tts-level">{LEVEL_LABEL[s.band as Level]}</span>
+            // 교사 — 과목 보기에 따라 학생 목록. '전체'면 모든 학생(영수 통합) + 이름 검색.
+            students
+              .filter((s) => (subjectFilter === "all" ? true : subjectFilter === "eng" ? engIds.has(s.id) : mathIds.has(s.id)))
+              .filter((s) => !pickQ.trim() || s.name.includes(pickQ.trim()))
+              .map((s) => {
+                const sj: "math" | "eng" = subjectFilter === "eng" ? "eng" : subjectFilter === "math" ? "math" : engIds.has(s.id) && !mathIds.has(s.id) ? "eng" : "math";
+                const showBudget = subjectFilter !== "all"; // '전체'는 과목 예산이 모호해 표시 안 함
+                const rem = remainingOf(s);
+                const full = showBudget && rem <= 0;
+                return (
+                  <div
+                    key={s.id}
+                    className={"tts-scard " + (sj === "eng" ? "tts-eng" : "tts-math") + (full ? " full" : "")}
+                    draggable={!full}
+                    onDragStart={() => { if (!full) drag.current = { kind: "new", studentId: s.id }; }}
+                    onDragEnd={() => { drag.current = null; }}
+                    title={full ? "남은 블록을 다 채웠어요" : "끌어서 시간표 칸에 놓아요"}
+                  >
+                    <div className="tts-scard-main">
+                      <b>{s.name}</b>
+                      <span className="tts-level">{LEVEL_LABEL[s.band as Level]}</span>
+                      {subjectFilter === "all" && <span className="tts-level">{sj === "eng" ? "영어" : "수학"}</span>}
+                    </div>
+                    {showBudget && (full ? <span className="tts-rem done">다 채웠어요</span> : <span className="tts-rem">남은 블록 <b>{rem}</b></span>)}
                   </div>
-                  {full ? (
-                    <span className="tts-rem done">다 채웠어요</span>
-                  ) : (
-                    <span className="tts-rem">
-                      남은 블록 <b>{rem}</b>
-                    </span>
-                  )}
-                </div>
-              );
-            })
+                );
+              })
           ) : (
             // 학생 보기 — 한 명을 골라요.
             <div className="tts-pickwrap">
