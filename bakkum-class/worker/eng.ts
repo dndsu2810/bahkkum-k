@@ -1044,6 +1044,13 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
   }
 
   /* ---- 커리큘럼 저장(초등영어 권한자·원장) ---- */
+  // 커리큘럼 단독 조회 — 대시보드 카드에서 학생별 '오늘 뭐해요'를 가볍게 불러올 때(전체 페이지 로드 회피).
+  if (p === "/api/student/curriculum" && m === "GET") {
+    const sid = String(url.searchParams.get("student_id") || "").trim();
+    if (!sid) return json({ error: "student_required" }, 400);
+    const row = await env.DB.prepare("SELECT items FROM class_eng_curriculum WHERE student_id=?").bind(sid).first<{ items: string }>();
+    return json({ curriculum: parseCurriculum(row?.items) });
+  }
   if (p === "/api/student/curriculum" && m === "POST") {
     if (!canEditCurriculum(me)) return json({ error: "forbidden" }, 403);
     const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;

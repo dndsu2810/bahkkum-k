@@ -2127,6 +2127,11 @@ function DashCard({
     engApi.progress(s.id).then((list) => { if (alive) setProgBooks([...new Set(list.filter((p) => p.status === "진행" && p.book.trim()).map((p) => engBookLabel(p.book, p.level)))]); }).catch(() => {});
     return () => { alive = false; };
   }, [s.id]);
+  // 초등 — '오늘 뭐해요'(커리큘럼)를 대시보드 카드에서 바로 편집. 펼칠 때 그 학생 것만 가볍게 불러옴(전용 메뉴 안 가도 됨).
+  const [curOpen, setCurOpen] = useState(false);
+  const [cur, setCur] = useState<Curriculum | null>(null);
+  const loadCur = () => { studentApi.getCurriculum(s.id).then(setCur).catch(() => setCur({ note: "", sections: [] })); };
+  const toggleCur = () => { setCurOpen((o) => { const n = !o; if (n && !cur) loadCur(); return n; }); };
   return (
     <div id={"engcard-" + s.id} className={"eng-dash-card" + (open ? " open" : "") + (out ? " out" : "")}
       onDragOver={onDropOn ? (e) => e.preventDefault() : undefined}
@@ -2153,6 +2158,19 @@ function DashCard({
       <button className="eng-dash-more" onClick={onToggleOpen} aria-expanded={open}>
         {open ? "접기" : "자세히 보기 / 입력하기"}
       </button>
+      {/* 초등 — '오늘 뭐해요'(커리큘럼) 바로 편집. 순서는 끌어서 바꾸면 학생 화면에도 그대로 반영. */}
+      {band === "elem" && (
+        <div className="eng-dash-cur">
+          <button className="eng-dash-curbtn" onClick={toggleCur} aria-expanded={curOpen}>
+            <Icon name="clipboard" /> 오늘 뭐해요? {curOpen ? "접기" : "보기 / 편집"}
+          </button>
+          {curOpen && (cur ? (
+            <CurriculumEditor studentId={s.id} cur={cur} onSaved={loadCur} />
+          ) : (
+            <div className="sp-muted" style={{ padding: "6px 2px" }}>불러오는 중…</div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

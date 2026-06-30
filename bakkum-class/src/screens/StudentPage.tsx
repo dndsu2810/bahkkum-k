@@ -552,6 +552,17 @@ export function CurriculumEditor({ studentId, cur, onSaved }: { studentId: strin
   const setSec = (si: number, patch: Partial<CurriculumSection>) => setDraft((d) => ({ ...d, sections: d.sections.map((s, i) => (i === si ? { ...s, ...patch } : s)) }));
   const setRow = (si: number, ri: number, patch: Partial<CurriculumRow>) =>
     setSec(si, { rows: draft.sections[si].rows.map((r, i) => (i === ri ? { ...r, ...patch } : r)) });
+  // 항목 순서를 끌어서 바꾸기(같은 섹션 안에서). 학생 화면에도 이 순서대로 보여요.
+  const drag = useRef<{ si: number; ri: number } | null>(null);
+  const moveRow = (si: number, from: number, to: number) => {
+    if (from === to) return;
+    setDraft((d) => {
+      const rows = [...d.sections[si].rows];
+      const [m] = rows.splice(from, 1);
+      rows.splice(to, 0, m);
+      return { ...d, sections: d.sections.map((s, i) => (i === si ? { ...s, rows } : s)) };
+    });
+  };
 
   async function save() {
     setSaving(true);
@@ -587,8 +598,14 @@ export function CurriculumEditor({ studentId, cur, onSaved }: { studentId: strin
             <button className="sp-x" title="섹션 삭제" onClick={() => setDraft({ ...draft, sections: draft.sections.filter((_, i) => i !== si) })}>×</button>
           </div>
           {sec.rows.map((r, ri) => (
-            <div className="sp-cur-erow" key={ri}>
-              <span className="sp-cur-num">{ri + 1}</span>
+            <div
+              className="sp-cur-erow"
+              key={ri}
+              onDragOver={(e) => { if (drag.current?.si === si) e.preventDefault(); }}
+              onDrop={(e) => { e.preventDefault(); if (drag.current?.si === si) moveRow(si, drag.current.ri, ri); drag.current = null; }}
+            >
+              <span className="sp-cur-num" draggable title="끌어서 순서 바꾸기" style={{ cursor: "grab" }}
+                onDragStart={() => { drag.current = { si, ri }; }} onDragEnd={() => { drag.current = null; }}>⠿{ri + 1}</span>
               <input className="input sp-cur-name-i" value={r.name} placeholder="학습 (예: 단어시험)" onChange={(e) => setRow(si, ri, { name: e.target.value })} />
               <input className="input sp-cur-amt-i" value={r.amount} placeholder="내용 (예: 10개씩)" onChange={(e) => setRow(si, ri, { amount: e.target.value })} />
               <button className="sp-x" title="삭제" onClick={() => setSec(si, { rows: sec.rows.filter((_, i) => i !== ri) })}>×</button>

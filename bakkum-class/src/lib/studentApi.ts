@@ -130,6 +130,7 @@ export const studentApi = {
   /** 내 변경 신청 목록(상태 확인). */
   myChangeReqs: () => jget<{ reqs: StudentChangeReq[] }>("/api/student/change-reqs").then((j) => j.reqs),
   /** 커리큘럼 저장(초등영어 권한자·원장). */
+  getCurriculum: (studentId: string) => jget<{ curriculum: Curriculum }>("/api/student/curriculum?student_id=" + encodeURIComponent(studentId)).then((j) => j.curriculum),
   saveCurriculum: (studentId: string, cur: Curriculum) => jpost("/api/student/curriculum", { studentId, note: cur.note, sections: cur.sections }),
   /** '내가 추가한 학습' 저장(학생 본인은 studentId 생략, 강사는 지정). */
   saveSelfCurriculum: (items: CurriculumRow[], studentId?: string) => jpost("/api/student/curriculum-self", { studentId, items }),
