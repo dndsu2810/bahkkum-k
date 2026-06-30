@@ -12,7 +12,7 @@ import {
   studentById,
   cmpMathStart,
 } from "../lib/logic";
-import { fmtMD, parseD } from "../lib/dates";
+import { fmtMD, parseD, pad } from "../lib/dates";
 import { buildReport, copyText } from "../lib/report";
 import { parseGrade } from "../lib/grade";
 import { WeekdayBars } from "../components/charts";
@@ -70,6 +70,12 @@ export function Dashboard() {
   // 인센티브 정산은 '정산 제외' 학생을 빼고 계산
   const billableEnrolled = enrolled.filter((s) => !s.excluded);
   const overThis = Math.max(0, billableEnrolled.length - BASE); // 이번 달 인센티브 지급 인원
+  // 지난달 정산 — 월급은 보통 달이 바뀐 뒤 지급해서, 드롭다운을 바꾸지 않고도 지난달 인센티브를 함께 본다.
+  const prevMonth = (() => { const [y, m] = curMonth.split("-").map(Number); const d = new Date(y, m - 2, 1); return d.getFullYear() + "-" + pad(d.getMonth() + 1); })();
+  const prevBillable = enrolledStudents(calcStudents, prevMonth).filter((s) => !s.excluded);
+  const overPrev = Math.max(0, prevBillable.length - BASE); // 지난달 인센티브 지급 인원
+  const curMonthN = Number(curMonth.split("-")[1]); // 이번 달(숫자)
+  const prevMonthN = Number(prevMonth.split("-")[1]); // 지난달(숫자)
   const nextEnrolled = billableEnrolled.length + fresh.length; // 다음 달 예상 정산 재적
   const overNext = Math.max(0, nextEnrolled - BASE);
 
@@ -82,10 +88,13 @@ export function Dashboard() {
       <div className="page-head">
         <div>
           <h1 className="page-title">수학 월별 현황</h1>
-          <div className="page-desc">{monthLabelFull(curMonth)} 기준 재적 현황 및 월말 정산</div>
+          <div className="page-desc">
+            {monthLabelFull(curMonth)} 기준 재적 현황 및 월말 정산
+            {curMonth > curMonthStr() && <span className="badge b-blue" style={{ marginLeft: 8 }}>미리보기</span>}
+          </div>
         </div>
         <div className="head-actions">
-          <Select value={curMonth} onChange={setCurMonth} options={monthOptions()} />
+          <Select value={curMonth} onChange={setCurMonth} options={monthOptions(true)} />
           <button className="btn primary" onClick={onCopy}>
             <Icon name="copy" />
             리포트 복사
@@ -120,7 +129,7 @@ export function Dashboard() {
         <div className="card-head">
           <div>
             <div className="card-title">인센티브 정산</div>
-            <div className="card-sub">{monthLabelFull(curMonth)} · {BASE}명 초과 시 {BASE + 1}번째부터 1인당 지급</div>
+            <div className="card-sub">지난달·이번 달 함께 보기 · {BASE}명 초과 시 {BASE + 1}번째부터 1인당 지급</div>
           </div>
         </div>
         <div className="inc-grid">
@@ -138,12 +147,16 @@ export function Dashboard() {
             </div>
           )}
           <div className="inc-sep" />
+          <div className="inc-row inc-pay inc-prev">
+            <span className="inc-l">지난달({prevMonthN}월) 인센티브 <em>(재적 {prevBillable.length}명)</em></span>
+            <span className="inc-v">{overPrev}<i>명분</i></span>
+          </div>
           <div className="inc-row">
-            <span className="inc-l">이번 달 재적 <em>(첫주 기준 · 정산 대상)</em></span>
+            <span className="inc-l">이번 달({curMonthN}월) 재적 <em>(첫주 기준 · 정산 대상)</em></span>
             <span className="inc-v">{billableEnrolled.length}<i>명</i></span>
           </div>
           <div className="inc-row inc-pay">
-            <span className="inc-l">이번 달 인센티브 <em>(기본 {BASE}명 초과분)</em></span>
+            <span className="inc-l">이번 달({curMonthN}월) 인센티브 <em>(기본 {BASE}명 초과분)</em></span>
             <span className="inc-v">{overThis}<i>명분</i></span>
           </div>
           {fresh.length > 0 && (

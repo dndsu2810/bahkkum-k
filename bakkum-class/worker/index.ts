@@ -600,8 +600,13 @@ export default {
   async scheduled(event: ScheduledController, env: Env): Promise<void> {
     // 일일 브리핑은 지정된 크론에서만(매분 크론과 구분).
     if (event.cron === "0 4 * * *" || event.cron === "0 12 * * *") {
-      // 영어 시간표 적용일 승격 — 그 날(예: 7/1)이 되면 라이브로 안정 교체.
+      // 영어·수학 시간표 적용일 승격 — 그 날(예: 7/1)이 되면 라이브로 안정 교체.
       try { await promoteEngSchedules(env); } catch (e) { console.error("promoteEngSchedules failed", String(e)); }
+      try { await promoteMathSchedules(env); } catch (e) { console.error("promoteMathSchedules failed", String(e)); }
+      // 매달 1일: 그 달 수학 반복 시험 자동 예약(주 단위 멱등 — 이미 있으면 0건). 4am 크론에서 1일만.
+      if (event.cron === "0 4 * * *" && kstToday().date.endsWith("-01")) {
+        try { await generateMonthlyTests(env); } catch (e) { console.error("generateMonthlyTests failed", String(e)); }
+      }
       const slot: "noon" | "night" = event.cron === "0 4 * * *" ? "noon" : "night";
       try { await runBriefing(env, slot, true); } catch (e) { console.error("scheduled briefing failed", String(e)); }
       try { await flushKioskOutbox(env); } catch (e) { console.error("flushKioskOutbox failed", String(e)); }
@@ -770,8 +775,10 @@ interface RosterStudent {
   mathStart: string; // 수학 첫 등원일
   engStart: string; // 영어 첫 등원일
   mathClass: string; // 수학 반: "" 자동(학년 기준) | "low" 초등 저학년 | "high" 초등 고학년
-  mathSlots: Slot[]; // 수학 수업 요일·시간 (class_lessons 공유 — 수학 앱과 양방향)
+  mathSlots: Slot[]; // 수학 수업 요일·시간 (class_lessons 공유 — 수학 앱과 양방향) — 오늘 유효 버전(승격 반영)
   engSlots: Slot[]; // 영어 수업 요일·시간 (class_eng_lessons)
+  mathUpcoming?: string; // 아직 적용 전 '예정된' 수학 시간표 변경일(가장 가까운 미래). 없으면 생략.
+  engUpcoming?: string; // 영어 예정 변경일
 }
 interface Slot {
   day: string;
@@ -801,6 +808,7 @@ async function readRoster(env: Env): Promise<RosterStudent[]> {
   await ensureEngLessons(env);
   await ensureSchedulesTable(env);
   await promoteEngSchedules(env); // 적용일이 된 영어 시간표를 라이브로 승격(7/1 등). 라이브가 항상 '오늘 유효'.
+  await promoteMathSchedules(env); // 수학도 동일 — 적용일 전 미래 시간표가 명단·표에 미리 안 보이게.
   const mathSlotMap: Record<string, Slot[]> = {};
   const engSlotMap: Record<string, Slot[]> = {};
   try {
@@ -815,6 +823,16 @@ async function readRoster(env: Env): Promise<RosterStudent[]> {
   } catch {
     /* ignore */
   }
+
+  // 예정된(아직 적용 전) 시간표 변경일 — 명단 표에 '○/○ 변경 예정' 배지로 안내(승격 후에도 미래 버전은 보존됨).
+  const today = kstToday().date;
+  const upcomingFrom = (versions: string): string => {
+    try { const v = JSON.parse(versions || "[]") as { from: string }[]; const fut = (Array.isArray(v) ? v : []).map((x) => String(x.from)).filter((f) => f > today).sort(); return fut[0] || ""; } catch { return ""; }
+  };
+  const mathUpcomingMap: Record<string, string> = {};
+  const engUpcomingMap: Record<string, string> = {};
+  try { const sr = await env.DB.prepare("SELECT student_id, versions FROM class_schedules").all<{ student_id: string; versions: string }>(); for (const r of sr.results || []) { const u = upcomingFrom(String(r.versions)); if (u) mathUpcomingMap[String(r.student_id)] = u; } } catch { /* ignore */ }
+  try { const er = await env.DB.prepare("SELECT student_id, versions FROM class_eng_schedules").all<{ student_id: string; versions: string }>(); for (const r of er.results || []) { const u = upcomingFrom(String(r.versions)); if (u) engUpcomingMap[String(r.student_id)] = u; } } catch { /* ignore */ }
 
   return (rosterRes.results || []).map((r) => {
     const id = String(r.id);
@@ -850,6 +868,8 @@ async function readRoster(env: Env): Promise<RosterStudent[]> {
       mathClass: meta?.math_class || "",
       mathSlots: mathSlotMap[id] || [],
       engSlots: engSlotMap[id] || [],
+      ...(mathUpcomingMap[id] ? { mathUpcoming: mathUpcomingMap[id] } : {}),
+      ...(engUpcomingMap[id] ? { engUpcoming: engUpcomingMap[id] } : {}),
     };
   });
 }
@@ -2298,6 +2318,166 @@ async function promoteEngSchedules(env: Env): Promise<void> {
     }
   } catch {
     /* 승격 실패는 무시 — 라이브는 그대로(안전) */
+  }
+}
+
+/** 수학판 승격 — 적용일이 된 수학 시간표를 라이브(class_lessons)로 올려 '오늘 유효'로 맞춘다.
+ *  영어(promoteEngSchedules)와 동일 패턴: 미래 버전은 그대로 보존하고, 변경이 있을 때만 쓴다.
+ *  이게 없으면 class_lessons에 미래 버전이 남아 명단·표가 적용일 전인데도 새 시간표를 미리 보여준다. */
+async function promoteMathSchedules(env: Env): Promise<void> {
+  try {
+    const today = kstToday().date;
+    const rows = await env.DB.prepare("SELECT student_id, versions FROM class_schedules").all<{ student_id: string; versions: string }>();
+    for (const row of rows.results || []) {
+      const sid = String(row.student_id);
+      let versions: { from: string; lessons: Slot[] }[] = [];
+      try { const v = JSON.parse(String(row.versions || "[]")); if (Array.isArray(v)) versions = v; } catch { versions = []; }
+      if (!versions.length) { await env.DB.prepare("DELETE FROM class_schedules WHERE student_id=?").bind(sid).run().catch(() => {}); continue; }
+      const eff = effectiveVerLessons(versions, today); // 오늘 유효 시간표
+      const curRes = await env.DB.prepare("SELECT day,time,duration FROM class_lessons WHERE student_id=? ORDER BY sort_order").bind(sid).all<{ day: string; time: string; duration: number }>();
+      const cur: Slot[] = (curRes.results || []).map((r) => ({ day: String(r.day), time: String(r.time), duration: Number(r.duration) }));
+      // 라이브가 이미 오늘 유효본과 같으면 쓰지 않음.
+      if (JSON.stringify(cur) === JSON.stringify(eff)) {
+        if (!versions.some((v) => v.from > today)) await env.DB.prepare("DELETE FROM class_schedules WHERE student_id=?").bind(sid).run().catch(() => {});
+        continue;
+      }
+      // 라이브를 오늘 유효본으로 교체(승격) — sort_order 유지.
+      const stmts: D1PreparedStatement[] = [env.DB.prepare("DELETE FROM class_lessons WHERE student_id=?").bind(sid)];
+      eff.forEach((l, i) => stmts.push(env.DB.prepare("INSERT INTO class_lessons(id,student_id,day,time,duration,sort_order) VALUES(?,?,?,?,?,?)").bind(`${sid}-${i}`, sid, l.day, l.time, l.duration, i)));
+      const future = versions.filter((v) => v.from > today);
+      if (future.length) {
+        const baseline = { from: today, lessons: eff };
+        stmts.push(env.DB.prepare("UPDATE class_schedules SET versions=? WHERE student_id=?").bind(JSON.stringify([baseline, ...future]), sid));
+      } else {
+        stmts.push(env.DB.prepare("DELETE FROM class_schedules WHERE student_id=?").bind(sid));
+      }
+      await env.DB.batch(stmts).catch(() => {});
+    }
+  } catch {
+    /* 승격 실패는 무시 — 라이브는 그대로(안전) */
+  }
+}
+
+/* ── 수학 반복 시험: 매달 1일 그 달치 자동 예약(서버) ───────────────────────────
+   프론트(ktcSchedule.ts planFromRules)와 같은 규칙을 worker로 포팅 — 아무도 페이지를 안 열어도 1일에 자동 생성.
+   멱등은 '주 단위'(학생|그 주 월요일|종류) + 이번 달만 → 중복/되살아남 없음. KTC 표는 프론트와 동일. */
+const KTC_G_W = ["초1", "초2", "초3", "초4", "초5", "초6", "중1", "중2", "중3"];
+const ktcRow = (vals: string[]): Record<string, string> => Object.fromEntries(KTC_G_W.map((g, i) => [g, vals[i]]));
+const ktcElemAll = (e: string, m1: string, m2: string, m3: string): string[] => [e, e, e, e, e, e, m1, m2, m3];
+const KTC_TABLE_W: Record<number, Record<string, string>> = {
+  1: ktcRow(ktcElemAll("2학기 6단원", "2학기 8단원", "2학기 8단원", "2학기 5~7단원")),
+  2: ktcRow(ktcElemAll("2학기 1~6단원", "2학기 5~8단원", "2학기 5~8단원", "1,2학기 전 단원")),
+  3: ktcRow(["-", "초1학년 1,2학기 전 단원", "초2학년 1,2학기 전 단원", "초3학년 1,2학기 전 단원", "초4학년 1,2학기 전 단원", "초5학년 1,2학기 전 단원", "초6학년 1,2학기 전 단원", "중1학년 1,2학기 전 단원", "중2학년 1,2학기 전 단원"]),
+  4: ktcRow(ktcElemAll("1학기 1~2단원", "1학기 1단원", "1학기 1단원", "1학기 1단원")),
+  5: ktcRow(ktcElemAll("1학기 3단원", "1학기 2단원", "1학기 2단원", "1학기 2단원")),
+  6: ktcRow(ktcElemAll("1학기 1~3단원", "1학기 1~2단원", "1학기 1~2단원", "1학기 1~2단원")),
+  7: ktcRow(["1학기 4단원", "1학기 4~5단원", "1학기 4~5단원", "1학기 4~5단원", "1학기 4~5단원", "1학기 4~5단원", "1학기 3단원", "1학기 3단원", "1학기 3단원"]),
+  8: ktcRow(["1학기 5단원", "1학기 6단원", "1학기 6단원", "1학기 6단원", "1학기 6단원", "1학기 6단원", "1학기 4단원", "1학기 4단원", "1학기 4단원"]),
+  9: ktcRow(["1학기 1~5단원", "1학기 1~6단원", "1학기 1~6단원", "1학기 1~6단원", "1학기 1~6단원", "1학기 1~6단원", "1학기 3~4단원", "1학기 3~4단원", "1학기 3~4단원"]),
+  10: ktcRow(ktcElemAll("2학기 1단원", "2학기 5단원", "2학기 5단원", "2학기 5단원")),
+  11: ktcRow(ktcElemAll("2학기 2~3단원", "2학기 6단원", "2학기 6단원", "2학기 6단원")),
+  12: ktcRow(ktcElemAll("2학기 4~5단원", "2학기 7단원", "2학기 7단원", "2학기 7단원")),
+};
+function ktcGradeKeyW(grade: string): string | null {
+  const p = parseGradeW(grade);
+  if (!p || p.n < 1) return null;
+  if (p.div === "초" && p.n <= 6) return `초${p.n}`;
+  if (p.div === "중" && p.n <= 3) return `중${p.n}`;
+  return null;
+}
+function ktcRangeW(grade: string, dateStr: string): string {
+  const gk = ktcGradeKeyW(grade);
+  if (!gk) return "";
+  const month = parseYmdU(dateStr).getUTCMonth() + 1;
+  const r = KTC_TABLE_W[month]?.[gk] ?? "";
+  return r === "-" ? "" : r;
+}
+// 날짜 헬퍼(UTC 정오 기준 — 타임존 흔들림 방지). 요일: 0=일..6=토.
+function parseYmdU(s: string): Date { const [y, m, d] = s.split("-").map(Number); return new Date(Date.UTC(y, (m || 1) - 1, d || 1, 12, 0, 0)); }
+function ymdU(d: Date): string { return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`; }
+function addDaysU(d: Date, n: number): Date { const x = new Date(d.getTime()); x.setUTCDate(x.getUTCDate() + n); return x; }
+function mondayOfU(d: Date): Date { const wd = (d.getUTCDay() + 6) % 7; return addDaysU(d, -wd); }
+function nthOfWeekdayU(dateStr: string): number { return Math.floor((parseYmdU(dateStr).getUTCDate() - 1) / 7) + 1; }
+function womLabelW(s: string): string {
+  const d = parseYmdU(s);
+  const first = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 12));
+  const week = Math.floor((d.getUTCDate() - 1 + ((first.getUTCDay() + 6) % 7)) / 7) + 1;
+  return `${d.getUTCMonth() + 1}월 ${week}주차`;
+}
+const DOW_KO_W = ["일", "월", "화", "수", "목", "금", "토"];
+
+async function generateMonthlyTests(env: Env): Promise<void> {
+  try {
+    const today = kstToday().date;
+    const rr = await env.DB.prepare("SELECT name,kind,student_ids,day,def_range,until_date,wom FROM class_test_rule WHERE active=1").all<Record<string, unknown>>();
+    const rules = (rr.results || []).map((x) => ({
+      name: String(x.name || ""), kind: String(x.kind || "weekly"), day: String(x.day || "auto"),
+      range: String(x.def_range || ""), until: String(x.until_date || ""), wom: String(x.wom || "every"),
+      studentIds: (() => { try { const a = JSON.parse(String(x.student_ids ?? "[]")); return Array.isArray(a) ? a.map(String) : []; } catch { return []; } })(),
+    }));
+    if (!rules.length) return;
+    // 학생 학년
+    const gradeOf: Record<string, string> = {};
+    const sres = await env.DB.prepare("SELECT id, grade FROM students").all<{ id: string; grade: string }>();
+    for (const s of sres.results || []) gradeOf[String(s.id)] = String(s.grade || "");
+    // 수학 라이브 시간표(오늘 유효) + 미래 버전 — 주별로 그 주에 유효한 수/목을 본다.
+    const lessonsOf: Record<string, Slot[]> = {};
+    const ml = await env.DB.prepare("SELECT student_id,day,time,duration FROM class_lessons").all<{ student_id: string; day: string; time: string; duration: number }>();
+    for (const r of ml.results || []) (lessonsOf[String(r.student_id)] ||= []).push({ day: String(r.day), time: String(r.time), duration: Number(r.duration) });
+    const versionsOf: Record<string, { from: string; lessons: Slot[] }[]> = {};
+    try { const sc = await env.DB.prepare("SELECT student_id,versions FROM class_schedules").all<{ student_id: string; versions: string }>(); for (const r of sc.results || []) { try { const v = JSON.parse(String(r.versions || "[]")); if (Array.isArray(v) && v.length) versionsOf[String(r.student_id)] = v; } catch { /* skip */ } } } catch { /* no table */ }
+    const lessonsAt = (sid: string, date: string): Slot[] => { const v = versionsOf[sid]; return v ? effectiveVerLessons(v, date) : (lessonsOf[sid] || []); };
+    // 이번 달 범위
+    const td = parseYmdU(today);
+    const monthEnd = ymdU(new Date(Date.UTC(td.getUTCFullYear(), td.getUTCMonth() + 1, 0, 12)));
+    // 기존 예약(이번 달) — 주 단위 멱등
+    const ex = await env.DB.prepare("SELECT student_id,date,type FROM class_tests WHERE date>=? AND date<=?").bind(today, monthEnd).all<{ student_id: string; date: string; type: string }>();
+    const wkKey = (sid: string, date: string, type: string) => `${sid}|${ymdU(mondayOfU(parseYmdU(date)))}|${type}`;
+    const seen = new Set((ex.results || []).map((r) => wkKey(String(r.student_id), String(r.date), String(r.type))));
+    const toInsert: { sid: string; date: string; type: string; range: string }[] = [];
+    const addRec = (sid: string, date: string, type: string, range: string) => { const k = wkKey(sid, date, type); if (!seen.has(k)) { seen.add(k); toInsert.push({ sid, date, type, range }); } };
+    const baseMon = mondayOfU(td);
+    for (const rule of rules) {
+      for (const sid of rule.studentIds) {
+        if (gradeOf[sid] === undefined) continue;
+        const grade = gradeOf[sid];
+        for (let w = 0; w < 6; w++) {
+          const weekMon = addDaysU(baseMon, w * 7);
+          const weekMonStr = ymdU(weekMon);
+          if (weekMonStr > monthEnd) break;
+          const ls = lessonsAt(sid, weekMonStr);
+          const hasWed = ls.some((l) => l.day === "수");
+          const hasThu = ls.some((l) => l.day === "목");
+          if (rule.kind === "ktc") {
+            const day = hasWed ? "수" : hasThu ? "목" : null;
+            if (!day) continue;
+            const testDate = ymdU(addDaysU(weekMon, day === "수" ? 2 : 3));
+            if (testDate < today || testDate > monthEnd) continue;
+            if (nthOfWeekdayU(testDate) === 2) addRec(sid, testDate, "KTC수학경시대회", ktcRangeW(grade, testDate));
+          } else {
+            const day = rule.day && rule.day !== "auto" ? rule.day : hasWed ? "수" : hasThu ? "목" : null;
+            if (!day) continue;
+            const idx = DOW_KO_W.indexOf(day);
+            if (idx < 0) continue;
+            const testDate = ymdU(addDaysU(weekMon, (idx + 6) % 7));
+            if (rule.day && rule.day !== "auto" && !ls.some((l) => l.day === day)) continue; // 고정 요일이면 그 요일 등원자만
+            if (testDate < today || testDate > monthEnd) continue;
+            if (rule.until && testDate > rule.until) continue;
+            if (rule.wom && rule.wom !== "every" && nthOfWeekdayU(testDate) !== Number(rule.wom)) continue;
+            if (nthOfWeekdayU(testDate) !== 2) addRec(sid, testDate, rule.name.trim() || "주간test", (rule.range || "").trim()); // 경시 주는 KTC가 대신
+          }
+        }
+      }
+    }
+    if (!toInsert.length) return;
+    const now = Date.now();
+    const stmts = toInsert.map((t, i) =>
+      env.DB.prepare("INSERT INTO class_tests(id,student_id,date,type,round,range_,score,status,memo,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)")
+        .bind(`tr${now}_${i}`, t.sid, t.date, t.type, womLabelW(t.date), t.range, 0, "예정", "", now)
+    );
+    await env.DB.batch(stmts);
+  } catch (e) {
+    console.error("generateMonthlyTests failed", String(e));
   }
 }
 

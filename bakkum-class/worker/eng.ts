@@ -389,8 +389,9 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
       } catch {
         /* 보강 자동생성 실패해도 출결 저장은 유지 */
       }
-    } else if (status) {
-      // 결석을 출석/지각/조퇴 등으로 정정하면, 자동 생성됐던 '보강 대기'(미예약 예정)를 같이 지운다.
+    } else {
+      // 결석이 아니면(출석/지각/조퇴로 정정하거나, 결석을 그냥 '취소'해 상태를 비운 경우 모두)
+      // 자동 생성됐던 '보강 대기'(미예약 예정)를 같이 지운다.
       // 직접 날짜를 잡았거나 완료/취소된 보강은 건드리지 않는다.
       try {
         await env.DB

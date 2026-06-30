@@ -271,7 +271,10 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
                   <td className="sm-dim">{r.school || "—"}</td>
                   <td className="sm-dim">{subjLabel(r)}</td>
                   <td className="sm-dim">{r.subjects.includes("english") && r.englishBand ? BAND_LABEL[r.englishBand] : "—"}</td>
-                  <td className="sm-dim">{effAttendDays(r).length ? effAttendDays(r).join("·") : "—"}</td>
+                  <td className="sm-dim">
+                    {effAttendDays(r).length ? effAttendDays(r).join("·") : "—"}
+                    {(() => { const u = r.mathUpcoming || r.engUpcoming; return u ? <span className="badge b-orange sm-sched-soon" title={`${u}부터 새 시간표로 바뀌어요(지금은 현재 시간표)`}>{Number(u.slice(5, 7))}/{Number(u.slice(8, 10))} 변경 예정</span> : null; })()}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -350,6 +353,25 @@ export function ProfileModal({
   // 등원요일 = 수업시간(요일) + 수동 추가 요일의 합집합. 수업을 추가하면 그 요일이 자동 포함된다.
   const slotDays = DOW.filter((dd) => f.mathSlots.some((s) => s.day === dd) || f.engSlots.some((s) => s.day === dd));
   const effectiveDays = DOW.filter((dd) => slotDays.includes(dd) || f.attendDays.includes(dd));
+
+  // 시간표 변경 안내 — 슬롯을 바꿨을 때만, '예정(미래 적용일)'인지 '바로 적용'인지 + 지금→바뀜 내용을 보여줘요.
+  const dowIdx = (d: string) => { const i = DOW.indexOf(d); return i < 0 ? 99 : i; };
+  const slotLine = (arr: Slot[]) => (arr && arr.length ? [...arr].sort((a, b) => dowIdx(a.day) - dowIdx(b.day) || a.time.localeCompare(b.time)).map((s) => `${s.day} ${s.time}~${s.duration}분`).join(" · ") : "수업 없음");
+  const fmtD = (s: string) => { const p = s.split("-"); return p.length === 3 ? `${Number(p[1])}월 ${Number(p[2])}일` : s; };
+  const schedNotice = (orig: Slot[], next: Slot[], effFrom: string) => {
+    if (slotLine(orig) === slotLine(next)) return null; // 시간표가 안 바뀌었으면 안내 없음
+    const future = effFrom > todayStr();
+    return (
+      <div className={"sched-notice " + (future ? "is-future" : "is-now")}>
+        <div className="sched-notice-h">{future ? `시간표 변경 예정 · ${fmtD(effFrom)}부터 적용` : "저장하면 바로 적용돼요"}</div>
+        <div className="sched-notice-diff">
+          <span className="snd-row"><em>지금</em>{slotLine(orig)}</span>
+          <span className="snd-row snd-new"><em>{future ? `${fmtD(effFrom)}부터` : "변경"}</em>{slotLine(next)}</span>
+        </div>
+        {future && <div className="sched-notice-hint">그 전까지는 지금 시간표가 그대로 보여요.</div>}
+      </div>
+    );
+  };
 
   const set = <K extends keyof RosterStudent>(k: K, v: RosterStudent[K]) => setF((c) => ({ ...c, [k]: v }));
   function toggleSubject(s: Subject) {
@@ -588,6 +610,7 @@ export function ProfileModal({
                     <span className="prof-efffrom-h">이 날짜부터 새 시간표로 보여요. 시간표를 바꿨을 때만 적용되고, 이전 날짜는 기존 시간표가 유지돼요.</span>
                   </div>
                 )}
+                {!ro && !isNew && schedNotice(student.mathSlots || [], f.mathSlots, mathEffFrom)}
               </div>
             )}
             {hasEng && (
@@ -601,6 +624,7 @@ export function ProfileModal({
                     <span className="prof-efffrom-h">이 날짜부터 새 시간표로 보여요. 시간표를 바꿨을 때만 적용되고, 이전 날짜는 기존 시간표가 유지돼요.</span>
                   </div>
                 )}
+                {!ro && !isNew && schedNotice(student.engSlots || [], f.engSlots, engEffFrom)}
               </div>
             )}
           </Section>
@@ -788,16 +812,19 @@ function SlotEditor({ ro, slots, onChange }: { ro: boolean; slots: Slot[]; onCha
   const update = (i: number, patch: Partial<Slot>) => onChange(slots.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const add = () => onChange([...slots, { day: "월", time: "16:00", duration: 70 }]);
   const remove = (i: number) => onChange(slots.filter((_, j) => j !== i));
+  // 표시는 월화수목금 순으로(저장 순서와 무관). 편집·삭제는 원본 인덱스로 동작하게 원본 i를 함께 들고 간다.
+  const dowIdx = (d: string) => { const i = DOW.indexOf(d); return i < 0 ? 99 : i; };
+  const view = slots.map((s, i) => ({ s, i })).sort((a, b) => dowIdx(a.s.day) - dowIdx(b.s.day));
   if (ro) {
     return (
       <div className="prof-slot-ro">
-        {slots.length ? slots.map((s, i) => <span key={i} className="prof-slot-chip">{s.day} {s.time}~{s.duration}분</span>) : <span className="prof-val">—</span>}
+        {view.length ? view.map(({ s, i }) => <span key={i} className="prof-slot-chip">{s.day} {s.time}~{s.duration}분</span>) : <span className="prof-val">—</span>}
       </div>
     );
   }
   return (
     <div className="prof-slots">
-      {slots.map((s, i) => (
+      {view.map(({ s, i }) => (
         <div className="slot" key={i}>
           <select value={s.day} onChange={(e) => update(i, { day: e.target.value })}>
             {DOW.map((d) => <option key={d}>{d}</option>)}

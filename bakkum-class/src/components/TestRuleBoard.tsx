@@ -45,21 +45,27 @@ export function TestRuleBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [students.length]);
 
-  // 규칙이 준비되면 다가오는 8주 예약을 자동으로 채움(중복 없이).
+  // 자동 예약은 '이번 달이 비어 있을 때만'(매달 처음 = 사실상 1일) 그 달치를 채운다.
+  //  → 페이지 열 때마다 다시 채워 지운 예약이 되살아나거나, 요일 변경으로 중복되던 문제를 막는다.
   const ensured = useRef(false);
   useEffect(() => {
     if (!rules || ensured.current) return;
     ensured.current = true;
-    const created = planFromRules(rules, studentsById, data.testLog, 8);
-    if (created.length) { mutate((d) => { d.testLog.push(...created); }); toast(`테스트 ${created.length}건 자동 예약했어요`); }
+    const ym = todayStr().slice(0, 7); // 이번 달
+    const ruleTypes = new Set(rules.filter((r) => r.active).map((r) => (r.kind === "ktc" ? KTC_TYPE : r.name.trim() || WEEKLY_TYPE)));
+    // 이번 달에 이 규칙들의 예약이 하나라도 있으면 자동 생성 안 함(이미 그 달은 예약된 것으로 봄).
+    const monthHas = data.testLog.some((t) => t.status === "예정" && t.date.slice(0, 7) === ym && ruleTypes.has(t.type));
+    if (monthHas) return;
+    const created = planFromRules(rules, studentsById, data.testLog); // 이번 달치
+    if (created.length) { mutate((d) => { d.testLog.push(...created); }); toast(`${Number(ym.slice(5))}월 테스트 ${created.length}건 자동 예약했어요`); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rules]);
 
   function fillNow() {
     if (!rules) return;
-    const created = planFromRules(rules, studentsById, data.testLog, 8);
+    const created = planFromRules(rules, studentsById, data.testLog); // 이번 달치(주 단위 멱등)
     if (created.length) { mutate((d) => { d.testLog.push(...created); }); toast(`테스트 ${created.length}건 예약했어요`); }
-    else toast("이미 다 예약돼 있어요");
+    else toast("이번 달은 이미 다 예약돼 있어요");
   }
 
   async function saveRule(r: TestRule) {
@@ -77,13 +83,14 @@ export function TestRuleBoard() {
     const names = new Set([oldRule?.name.trim(), next.name].filter(Boolean) as string[]); // 이름 바꿨어도 옛 이름까지 정리
     const sids = new Set<string>([...(oldRule?.studentIds || []), ...next.studentIds]); // 대상에서 빠진 학생의 옛 예약도 정리
     const today = todayStr();
-    const want = next.active ? planFromRules([next], studentsById, [], 8) : []; // 이 규칙이 지금 만들어야 할 미래 예약 전체
+    const ym = today.slice(0, 7); // 이번 달만 재정렬(다른 달 예약은 그대로)
+    const want = next.active ? planFromRules([next], studentsById, []) : []; // 이 규칙이 이번 달 만들어야 할 예약
     const wantKeys = new Set(want.map((t) => `${t.studentId}|${t.date}|${t.type}`));
     mutate((d) => {
       if (next.active) {
-        // 이 규칙에서 나온 미래·예정 예약 중 새 조건에 안 맞는 건 제거(완료·과거·다른 규칙은 보존).
+        // 이 규칙에서 나온 이번 달 미래·예정 예약 중 새 조건에 안 맞는 건 제거(완료·과거·다른 달·다른 규칙은 보존).
         d.testLog = d.testLog.filter((t) => {
-          const fromThisRule = t.status === "예정" && t.date >= today && names.has(t.type) && sids.has(t.studentId);
+          const fromThisRule = t.status === "예정" && t.date >= today && t.date.slice(0, 7) === ym && names.has(t.type) && sids.has(t.studentId);
           return fromThisRule ? wantKeys.has(`${t.studentId}|${t.date}|${t.type}`) : true;
         });
       }

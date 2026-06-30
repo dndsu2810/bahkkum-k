@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth";
 import { getRoster, inEngBand, type RosterStudent } from "../lib/rosterApi";
-import { engApi, hwProgress, naesinActiveOn, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, ELEM_LOG_ITEMS, type AttStatus, type EngDaily, type EngMakeup, type EngNaesin, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
+import { engApi, hwProgress, naesinActiveOn, HW_STATUSES, POINT_REASONS, ENG_ATTITUDES, type AttStatus, type EngDaily, type EngMakeup, type EngNaesin, type EngProgress, type EngTest, type Goal, type HwStatus } from "../lib/engApi";
 import { eventsApi, type EventItem } from "../lib/hubApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtDayBand, fmtMD, fmtMDDow, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
@@ -119,18 +119,8 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
-  // '오늘 한 것' 항목 — 선택한 학생 기준(기본+전체공통+학생별). 학생 바꾸면 다시 로드.
-  const [doneOptions, setDoneOptions] = useState<string[]>(ELEM_LOG_ITEMS);
-  const loadDoneOptions = (sid: string) => { if (sid) engApi.doneItems(sid).then((c) => setDoneOptions(c.merged)).catch(() => {}); };
-  useEffect(() => { if (band === "elem" && sel) loadDoneOptions(sel); else setDoneOptions(ELEM_LOG_ITEMS); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [sel, band]);
-  // '오늘 한 것' 항목 추가 — 전체(모든 학생) 또는 개별(이 학생만). 입력 화면에서 바로 선택.
-  async function addDoneItemForStudent(label: string, scope: "all" | "student" = "student") {
-    const v = label.trim();
-    if (!v) return;
-    if (scope === "all") await engApi.saveDoneItem({ scope: "all", add: v }).catch(() => {});
-    else { if (!sel) return; await engApi.saveDoneItem({ scope: "student", studentId: sel, add: v }).catch(() => {}); }
-    loadDoneOptions(sel);
-  }
+  // '오늘 뭐해요' 항목은 학생별 커리큘럼(오늘 뭐해요?)으로 통일됨 — DailyEditor가 학생별로 직접 불러와요.
+  // (옛 '오늘 한 것 항목 관리'는 '항목' 탭의 DoneItemsManager에 그대로 남아 있어요.)
 
   // 내신기간 모드 — 학생별 ON/기간. 중고등만. 켜진 기간엔 '오늘' 숙제가 자유입력+배부자료 기준으로 바뀐다.
   const [naesinMap, setNaesinMap] = useState<Record<string, EngNaesin>>({});
@@ -357,9 +347,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
           setStatus={setStatus}
           getDaily={getDaily}
           saveDaily={saveDaily}
-          doneOptions={doneOptions}
           reasonsAll={reasonsAll}
-          onAddDoneItem={addDoneItemForStudent}
           onAddNextGoal={addNextGoal}
           examModeOf={(sid) => band === "mid" && naesinActiveOn(naesinMap[sid], date)}
         />
@@ -437,7 +425,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                       : "왼쪽에서 학생을 선택하면 테스트 점수를 기록할 수 있어요."}
               </div>
             ) : tab === "today" ? (
-              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={addDoneItemForStudent} onAddNextGoal={addNextGoal} examMode={band === "mid" && naesinActiveOn(naesinMap[sel], date)} planNextDate={nextEngDate(students.find((s) => s.id === sel)?.engSlots || [], date)} ingBooks={ingBooksOf(sel)} autoSave />
+              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} reasonsAll={reasonsAll} onAddNextGoal={addNextGoal} examMode={band === "mid" && naesinActiveOn(naesinMap[sel], date)} planNextDate={nextEngDate(students.find((s) => s.id === sel)?.engSlots || [], date)} ingBooks={ingBooksOf(sel)} autoSave />
             ) : tab === "progress" ? (
               <ProgressPanel studentId={sel} name={nameOf[sel] || ""} onChanged={loadProg} />
             ) : tab === "cur" ? (
@@ -826,11 +814,31 @@ const ENG_STATUS6: { v: AttStatus; on: string; att: boolean }[] = [
 ];
 
 /* ---------------- 일일 학습일지 편집 ---------------- */
-function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, onAddDoneItem, onAddNextGoal, examMode, compact, autoSave, planNextDate, ingBooks = [] }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void; doneItemsAll: string[]; reasonsAll: { name: string; value: number }[]; onAddDoneItem: (label: string, scope?: "all" | "student") => void; onAddNextGoal?: (sid: string, text: string) => void; examMode?: boolean; compact?: boolean; autoSave?: boolean; planNextDate?: string; ingBooks?: string[] }) {
+function DailyEditor({ student, band, value, onSave, reasonsAll, onAddNextGoal, examMode, compact, autoSave, planNextDate, ingBooks = [] }: { student: string; band: Band; value: EngDaily; onSave: (d: EngDaily) => void; reasonsAll: { name: string; value: number }[]; onAddNextGoal?: (sid: string, text: string) => void; examMode?: boolean; compact?: boolean; autoSave?: boolean; planNextDate?: string; ingBooks?: string[] }) {
   const showHw = band !== "elem"; // 초등영어는 단어/리딩/문법 3분류 숙제는 없음(오늘의 숙제 체크리스트는 모두 표시)
   const { user: hwUser } = useAuth();
   const [d, setD] = useState<EngDaily>(value);
   const dirty = JSON.stringify(d) !== JSON.stringify(value);
+  // 초등 '오늘 뭐해요' = 그 학생의 커리큘럼(오늘 뭐해요?) 항목. 학생 화면과 같은 목록이라, 학생이 체크·범위로 적은 내용이 그대로 보여요.
+  const [cur, setCur] = useState<Curriculum | null>(null);
+  useEffect(() => {
+    if (band !== "elem") return;
+    let alive = true;
+    studentApi.getCurriculum(value.studentId).then((c) => { if (alive) setCur(c); }).catch(() => {});
+    return () => { alive = false; };
+  }, [value.studentId, band]);
+  const curSecs = cur?.sections || [];
+  const curItems = useMemo(() => curSecs.flatMap((s) => s.rows.map((r) => r.name)).filter((n) => n.trim()), [cur]);
+  // 항목 추가 — 커리큘럼 마지막 섹션에 학습을 더해요(학생 화면에도 그대로 반영).
+  async function addCurItem() {
+    const v = window.prompt("추가할 '오늘 뭐해요' 학습 이름");
+    if (!v || !v.trim()) return;
+    const base: Curriculum = cur || { note: "", sections: [] };
+    const secs = base.sections.length ? base.sections : [{ title: "", rows: [] }];
+    const next: Curriculum = { ...base, sections: secs.map((s, i) => (i === secs.length - 1 ? { ...s, rows: [...s.rows, { name: v.trim(), amount: "" }] } : s)) };
+    setCur(next);
+    await studentApi.saveCurriculum(value.studentId, next).catch(() => {});
+  }
   // 자동 저장(대시보드) — 입력이 멈추면 0.7초 뒤 저장. 별도 '저장' 버튼 없이 반영.
   const saveRef = useRef(onSave);
   saveRef.current = onSave;
@@ -861,9 +869,9 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
   const lastRangeOf = useMemo(() => {
     const map: Record<string, string> = {};
     const past = hist.filter((x) => x.date < d.date).sort((a, b) => (a.date < b.date ? 1 : -1));
-    for (const it of doneItemsAll) { for (const r of past) { const v = r.curRanges?.[it]; if (v && String(v).trim()) { map[it] = String(v).trim(); break; } } }
+    for (const it of curItems) { for (const r of past) { const v = r.curRanges?.[it]; if (v && String(v).trim()) { map[it] = String(v).trim(); break; } } }
     return map;
-  }, [hist, d.date, doneItemsAll]);
+  }, [hist, d.date, curItems]);
   // 지난(가장 가까운 이전 날짜) '내줄 숙제' — 이번 '숙제 검사'로 이어진다.
   const carried = useMemo(() => {
     const prior = hist.filter((x) => x.date < d.date && x.hwAssign && x.hwAssign.length).sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -1123,34 +1131,35 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
             <input className="input" value={d.bookNo} onChange={(e) => setD({ ...d, bookNo: e.target.value })} placeholder="예: 145" />
           </div>
           <div className="eng-field">
-            <div className="eng-label">오늘뭐해요 (한 것 체크 + 범위)</div>
-            <div className="eng-curlist">
-              {doneItemsAll.map((it) => {
-                const on = d.doneItems.includes(it);
-                const ranges = d.curRanges || {};
-                return (
-                  <div key={it} className={"eng-curitem" + (on ? " on" : "")}>
-                    <button type="button" className={"eng-pt" + (on ? " on" : "")} onClick={() => setD({ ...d, doneItems: on ? d.doneItems.filter((x) => x !== it) : [...d.doneItems, it] })}>{it}</button>
-                    <input className="input eng-currange" value={ranges[it] || ""} onChange={(e) => setD({ ...d, curRanges: { ...ranges, [it]: e.target.value } })} placeholder={lastRangeOf[it] ? `지난번 ${lastRangeOf[it]} — 이어서` : "범위 (예: p.20~25)"} />
-                    {!ranges[it] && lastRangeOf[it] && (
-                      <button type="button" className="eng-curlast" title="지난 기록 이어쓰기" onClick={() => setD({ ...d, curRanges: { ...ranges, [it]: lastRangeOf[it] } })}>지난번 {lastRangeOf[it]} →</button>
-                    )}
+            <div className="eng-label">오늘 뭐해요 (학생이 한 것 체크 + 범위 · 지난번 진도 함께)</div>
+            {curItems.length === 0 ? (
+              <div className="sp-muted" style={{ padding: "4px 2px" }}>아직 ‘오늘 뭐해요?’ 학습이 없어요. 아래 ‘+ 항목 추가’나 카드의 ‘오늘 뭐해요? 보기/편집’에서 넣어요.</div>
+            ) : (
+              <div className="eng-curlist">
+                {curSecs.map((sec, si) => (
+                  <div key={si}>
+                    {sec.title && <div className="sp-cur-sectitle" style={{ marginTop: si ? 6 : 0 }}>{sec.title}</div>}
+                    {sec.rows.filter((r) => r.name.trim()).map((r) => {
+                      const it = r.name;
+                      const on = d.doneItems.includes(it);
+                      const ranges = d.curRanges || {};
+                      return (
+                        <div key={it} className={"eng-curitem" + (on ? " on" : "")}>
+                          <button type="button" className={"eng-pt" + (on ? " on" : "")} onClick={() => setD({ ...d, doneItems: on ? d.doneItems.filter((x) => x !== it) : [...d.doneItems, it] })}>{it}{r.amount ? ` · ${r.amount}` : ""}</button>
+                          <input className="input eng-currange" value={ranges[it] || ""} onChange={(e) => setD({ ...d, curRanges: { ...ranges, [it]: e.target.value } })} placeholder={lastRangeOf[it] ? `지난번 ${lastRangeOf[it]} — 이어서` : "범위 (예: p.20~25)"} />
+                          {lastRangeOf[it] && (
+                            ranges[it]
+                              ? <span className="sp-curprev" title="지난 시간에 여기까지 했어요">지난번 {lastRangeOf[it]}</span>
+                              : <button type="button" className="eng-curlast" title="지난 기록 이어쓰기" onClick={() => setD({ ...d, curRanges: { ...ranges, [it]: lastRangeOf[it] } })}>지난번 {lastRangeOf[it]} →</button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-              <button
-                type="button"
-                className="eng-pt eng-pt-add"
-                onClick={() => {
-                  const v = window.prompt("추가할 '오늘뭐해요' 항목 이름");
-                  if (!v || !v.trim()) return;
-                  const all = window.confirm("모든 학생에게 추가할까요?\n[확인] 모두에게  ·  [취소] 이 학생만");
-                  onAddDoneItem(v.trim(), all ? "all" : "student");
-                }}
-              >
-                + 항목 추가
-              </button>
-            </div>
+                ))}
+                <button type="button" className="eng-pt eng-pt-add" onClick={addCurItem}>+ 항목 추가</button>
+              </div>
+            )}
           </div>
           <div className="eng-field">
             <div className="eng-label">단어시험</div>
@@ -2097,10 +2106,10 @@ export function EngMakeupModal({ students, initial, onSaved }: { students: Roste
 
 /* 관제탑 카드 — 접으면 현황 요약, '자세히'로 펼치면 컴팩트 입력 편집기. */
 function attTone(st: string): string {
-  return st === "출석" ? "b-green" : st === "지각" || st === "조퇴" ? "b-orange" : st === "보강" ? "b-blue" : "b-gray";
+  return st === "출석" ? "b-green" : st === "지각" || st === "조퇴" ? "b-orange" : st === "보강" ? "b-blue" : st === "결석" || st === "무단결석" ? "b-red" : "b-gray";
 }
 function DashCard({
-  s, daily, band, date, getDaily, saveDaily, doneOptions, reasonsAll, onAddDoneItem, onAddNextGoal, examMode, open, onToggleOpen, out, onToggleOut, onDragStart, onDropOn,
+  s, daily, band, date, getDaily, saveDaily, reasonsAll, onAddNextGoal, examMode, open, onToggleOpen, out, onToggleOut, onDragStart, onDropOn,
 }: {
   s: RosterStudent;
   daily: Record<string, EngDaily>;
@@ -2108,9 +2117,7 @@ function DashCard({
   date: string;
   getDaily: (sid: string) => EngDaily;
   saveDaily: (d: EngDaily) => void;
-  doneOptions: string[];
   reasonsAll: { name: string; value: number }[];
-  onAddDoneItem: (label: string, scope?: "all" | "student") => void;
   onAddNextGoal?: (sid: string, text: string) => void;
   examMode: boolean;
   open: boolean;
@@ -2170,7 +2177,7 @@ function DashCard({
       </div>
       {/* 아래 — 접혀 있을 땐 블러로 살짝 보이고, 펼치면 입력(자동 저장) */}
       <div className={"eng-dash-peek" + (open ? " open" : "")}>
-        <DailyEditor student={s.name} band={band} value={getDaily(s.id)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examMode} compact autoSave key={s.id} planNextDate={nextEngDate(s.engSlots, date)} ingBooks={progBooks} />
+        <DailyEditor student={s.name} band={band} value={getDaily(s.id)} onSave={saveDaily} reasonsAll={reasonsAll} onAddNextGoal={onAddNextGoal} examMode={examMode} compact autoSave key={s.id} planNextDate={nextEngDate(s.engSlots, date)} ingBooks={progBooks} />
       </div>
       <button className="eng-dash-more" onClick={onToggleOpen} aria-expanded={open}>
         {open ? "접기" : "자세히 보기 / 입력하기"}
@@ -2199,12 +2206,12 @@ function hasInput(d?: EngDaily): boolean {
 }
 
 /* 중고등 — '오늘 등원' 선택 + 등원한 학생만 카드로 입력. */
-function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, getDaily, saveDaily, doneOptions, reasonsAll, onAddDoneItem, onAddNextGoal, examModeOf }: {
+function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, getDaily, saveDaily, reasonsAll, onAddNextGoal, examModeOf }: {
   students: RosterStudent[]; daily: Record<string, EngDaily>; band: Band; date: string;
   scheduledIds: Set<string>; setStatus: (sid: string, status: AttStatus) => void;
   getDaily: (sid: string) => EngDaily; saveDaily: (d: EngDaily) => void;
-  doneOptions: string[]; reasonsAll: { name: string; value: number }[];
-  onAddDoneItem: (label: string, scope?: "all" | "student") => void; onAddNextGoal?: (sid: string, text: string) => void; examModeOf?: (sid: string) => boolean;
+  reasonsAll: { name: string; value: number }[];
+  onAddNextGoal?: (sid: string, text: string) => void; examModeOf?: (sid: string) => boolean;
 }) {
   const [q, setQ] = useState("");
   // 카드 펼침(자세히 보기) 제어 — 칩을 누르면 그 학생 카드를 펼치고 그 위치로 스크롤한다.
@@ -2263,12 +2270,19 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
         <div className="eng-in-head">
           <h3>오늘 등원 <span className="eng-in-cnt">{attended.length}명</span></h3>
         </div>
-        {attended.length > 0 && (
+        {(attended.length > 0 || absent.length > 0) && (
           <div className="eng-chiprow" style={{ marginBottom: 10 }}>
             {ordered.map((s) => (
               <span className={"eng-in-chip" + (outIds.has(s.id) ? " out" : "")} key={s.id}>
                 <button type="button" className="eng-in-nm" onClick={() => focusCard(s.id)} title="이 학생 입력란으로 이동">{s.name}</button>
                 <button className="eng-in-x" onClick={() => markOut(s.id)} aria-label="등원 취소" title="등원 취소 (실수로 등원 처리했을 때)">×</button>
+              </span>
+            ))}
+            {/* 결석생 — 하원 학생과 같은 최하단에, 빨간 칩으로(눈에 띄게). 누르면 사유 입력란으로 이동. */}
+            {absent.map((s) => (
+              <span className="eng-in-chip absent" key={s.id}>
+                <button type="button" className="eng-in-nm" onClick={() => focusCard(s.id)} title="결석 — 사유 입력란으로 이동">{s.name}</button>
+                <button className="eng-in-x" onClick={() => markOut(s.id)} aria-label="결석 취소" title="결석 취소">×</button>
               </span>
             ))}
           </div>
@@ -2289,7 +2303,7 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
       {attended.length > 0 && (
         <div className="eng-dash-cards">
           {ordered.map((s) => (
-            <DashCard key={s.id} s={s} daily={daily} band={band} date={date} getDaily={getDaily} saveDaily={saveDaily} doneOptions={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examModeOf ? examModeOf(s.id) : false} open={openIds.has(s.id)} onToggleOpen={() => toggleOpen(s.id)} out={outIds.has(s.id)} onToggleOut={() => toggleOut(s.id, s.name)}
+            <DashCard key={s.id} s={s} daily={daily} band={band} date={date} getDaily={getDaily} saveDaily={saveDaily} reasonsAll={reasonsAll} onAddNextGoal={onAddNextGoal} examMode={examModeOf ? examModeOf(s.id) : false} open={openIds.has(s.id)} onToggleOpen={() => toggleOpen(s.id)} out={outIds.has(s.id)} onToggleOut={() => toggleOut(s.id, s.name)}
               onDragStart={() => setDragId(s.id)} onDropOn={() => { if (dragId) move(dragId, s.id, orderedIds); setDragId(null); }} />
           ))}
         </div>
@@ -2300,7 +2314,7 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
           <h3>결석 <span className="eng-in-cnt">{absent.length}명</span></h3>
           <div className="eng-dash-cards">
             {absent.map((s) => (
-              <DashCard key={s.id} s={s} daily={daily} band={band} date={date} getDaily={getDaily} saveDaily={saveDaily} doneOptions={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examModeOf ? examModeOf(s.id) : false} open={openIds.has(s.id)} onToggleOpen={() => toggleOpen(s.id)} out={false} onToggleOut={() => {}} />
+              <DashCard key={s.id} s={s} daily={daily} band={band} date={date} getDaily={getDaily} saveDaily={saveDaily} reasonsAll={reasonsAll} onAddNextGoal={onAddNextGoal} examMode={examModeOf ? examModeOf(s.id) : false} open={openIds.has(s.id)} onToggleOpen={() => toggleOpen(s.id)} out={false} onToggleOut={() => {}} />
             ))}
           </div>
         </div>
@@ -2320,9 +2334,7 @@ function EngDashboard({
   setStatus,
   getDaily,
   saveDaily,
-  doneOptions,
   reasonsAll,
-  onAddDoneItem,
   onAddNextGoal,
   examModeOf,
 }: {
@@ -2335,9 +2347,7 @@ function EngDashboard({
   setStatus?: (sid: string, status: AttStatus) => void;
   getDaily?: (sid: string) => EngDaily;
   saveDaily?: (d: EngDaily) => void;
-  doneOptions?: string[];
   reasonsAll?: { name: string; value: number }[];
-  onAddDoneItem?: (s: string) => void;
   onAddNextGoal?: (sid: string, text: string) => void;
   examModeOf?: (sid: string) => boolean;
 }) {
@@ -2376,9 +2386,7 @@ function EngDashboard({
         setStatus={setStatus!}
         getDaily={getDaily!}
         saveDaily={saveDaily!}
-        doneOptions={doneOptions || []}
         reasonsAll={reasonsAll || []}
-        onAddDoneItem={onAddDoneItem || (() => {})}
         onAddNextGoal={onAddNextGoal}
         examModeOf={examModeOf}
       />

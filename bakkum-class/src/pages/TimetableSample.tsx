@@ -57,18 +57,25 @@ const WEEKS = [
   { v: 1, l: "다음주" },
   { v: 2, l: "2주 후" },
 ];
+// 기본(고정) 시간표 = 가상 주 BASE. 기본을 고치면 (그 주만 따로 손대지 않은) 모든 주에 반영,
+// 특정 주에서 고치면 그 주 전용본(오버라이드)이 생겨 그 주만 1회성으로 바뀐다.
+const BASE = 1000;
+const WEEK_SEQ = [BASE, -1, 0, 1, 2]; // ‹ › 이동 순서: 기본 → 지난주 → 이번주 → 다음주 → 2주 후
+const weekLabelOf = (w: number) => (w === BASE ? "기본 시간표" : WEEKS.find((x) => x.v === w)?.l || "");
+/** 급(band) → 학년 구분(초/중/고). 초등 저학년·고학년은 모두 '초'. */
+const divOf = (band?: string): "초" | "중" | "고" => (band === "mid" ? "중" : band === "high" ? "고" : "초");
 
 // 특강 색 팔레트 — 일반 수업(꿀/인포)과 한눈에 구분되는 색들.
 const SPECIAL_PALETTE = ["#7c3aed", "#be3f72", "#0d9488", "#2563eb", "#dc2626", "#db2777"];
 
 // 명단을 못 불러올 때 쓰는 더미 학생(초등 3 / 중등 2 / 고등 1).
 const SEED_STUDENTS: SampleStudent[] = [
-  { id: "e1", name: "김초롱", band: "elemLow" },
-  { id: "e2", name: "박하늘", band: "elemLow" },
-  { id: "e3", name: "이서준", band: "elemHigh" },
-  { id: "m1", name: "정유나", band: "mid" },
-  { id: "m2", name: "최민재", band: "mid" },
-  { id: "h1", name: "한지우", band: "high" },
+  { id: "e1", name: "김초롱", band: "elemLow", grade: "초2" },
+  { id: "e2", name: "박하늘", band: "elemLow", grade: "초3" },
+  { id: "e3", name: "이서준", band: "elemHigh", grade: "초5" },
+  { id: "m1", name: "정유나", band: "mid", grade: "중1" },
+  { id: "m2", name: "최민재", band: "mid", grade: "중2" },
+  { id: "h1", name: "한지우", band: "high", grade: "고1" },
 ];
 
 /** 오늘 날짜 yyyy-mm-dd (기간제 특강 종료 판단용). */
@@ -78,6 +85,187 @@ function todayStr(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/* ── 이미지 저장용 깔끔한 시간표 카드 ──────────────────────────────────────────
+ * 화면의 편집 보드(이름표·분할칸)와 별개로, 한 학생의 영어·수학 일정을 '병합 블록'
+ * (예: 영어 정규 4:00~6:00)으로 그려요. html2canvas가 정확히 캡처하도록 인라인 hex 색만 써요. */
+const ACADEMY_NAME = "바꿈영수학원";
+interface ExportBlock { day: number; start: number; end: number; label: string; color: string; bg: string; kind: string }
+/** "HH:MM" 짧은 표기(오전/오후 없이) — 4:00, 5:30. */
+function fmtShort(min: number): string {
+  const h = Math.floor(min / 60), m = min % 60;
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")}`;
+}
+/** 한 학생의 30분 배치들을 같은 요일·같은 수업끼리 이어서 하나의 블록으로 합쳐요. */
+function exportBlocks(pls: Placement[], specById: Map<string, Special>): ExportBlock[] {
+  const groups = new Map<string, Placement[]>();
+  for (const p of pls) {
+    const kind = p.specialId ? "sp:" + p.specialId : p.subject === "eng" ? "eng" : "math";
+    const key = p.day + "|" + kind;
+    const g = groups.get(key) || [];
+    g.push(p);
+    groups.set(key, g);
+  }
+  const out: ExportBlock[] = [];
+  for (const arr of groups.values()) {
+    arr.sort((a, b) => a.slot - b.slot);
+    const p0 = arr[0];
+    const sp = p0.specialId ? specById.get(p0.specialId) : undefined;
+    const label = sp ? sp.name : p0.subject === "eng" ? "영어 정규" : "수학 정규";
+    const color = sp ? sp.color : p0.subject === "eng" ? "#2563eb" : "#c2772a";
+    const bg = sp ? sp.color + "22" : p0.subject === "eng" ? "#dbe8fb" : "#fbe6cf";
+    const kind = p0.specialId ? "sp:" + p0.specialId : p0.subject === "eng" ? "eng" : "math";
+    let runStart = p0.slot, prev = p0.slot;
+    const flush = () => out.push({ day: p0.day, start: runStart, end: prev + SLOT_MIN, label, color, bg, kind });
+    for (let i = 1; i < arr.length; i++) {
+      if (arr[i].slot === prev + SLOT_MIN) prev = arr[i].slot;
+      else { flush(); runStart = arr[i].slot; prev = arr[i].slot; }
+    }
+    flush();
+  }
+  return out;
+}
+// 절대위치 레이아웃(ett 방식) — html2canvas가 정확히 그려요. CSS Grid는 캡처 시 어긋날 수 있어 피해요.
+const DAY_W = 150, TIME_W = 88, GAP = 8, HEAD_H = 48, PX = 1.18;
+function ExportTimetable({ studentName, blocks, days, weekLabel }: { studentName: string; blocks: ExportBlock[]; days: number[]; weekLabel: string }) {
+  const has = blocks.length > 0;
+  const minStart = has ? Math.min(...blocks.map((b) => b.start)) : START_MIN;
+  const maxEnd = has ? Math.max(...blocks.map((b) => b.end)) : START_MIN + 240;
+  const bset = new Set<number>([minStart, maxEnd]);
+  for (const b of blocks) { bset.add(b.start); bset.add(b.end); }
+  const bounds = [...bset].sort((a, b) => a - b);
+  const base = bounds[0];
+  const bodyH = Math.max(160, (bounds[bounds.length - 1] - base) * PX);
+  // 범례 — 등장한 수업 종류(영어 정규 → 수학 정규 → 특강 순).
+  const legend: { label: string; color: string; bg: string }[] = [];
+  const order = ["eng", "math"];
+  for (const b of [...blocks].sort((a, b2) => (order.indexOf(a.kind) + 1 || 9) - (order.indexOf(b2.kind) + 1 || 9))) {
+    if (!legend.some((l) => l.label === b.label)) legend.push({ label: b.label, color: b.color, bg: b.bg });
+  }
+  const gridW = TIME_W + days.length * (DAY_W + GAP);
+  return (
+    <div style={{ width: gridW + 56, background: "#fff", borderRadius: 22, padding: "26px 28px 22px", fontFamily: "'Pretendard', system-ui, sans-serif", color: "#1f2937", boxSizing: "border-box" }}>
+      {/* 헤더 */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.01em" }}>영어 · 수학 시간표</div>
+          <div style={{ fontSize: 14, color: "#9ca3af", marginTop: 3 }}>{ACADEMY_NAME}{weekLabel ? ` · ${weekLabel}` : ""}</div>
+        </div>
+        {studentName && <div style={{ background: "#1f2937", color: "#fff", fontSize: 17, fontWeight: 700, borderRadius: 999, padding: "9px 22px" }}>{studentName}</div>}
+      </div>
+      <div style={{ borderBottom: "3px solid #1f2937", margin: "12px 0 18px" }} />
+      {/* 시간표 — 시간 열 + 요일 열(절대위치 블록) */}
+      <div style={{ display: "flex", gap: GAP }}>
+        {/* 시간 열 */}
+        <div style={{ width: TIME_W, flex: "none" }}>
+          <div style={{ ...thCell, height: HEAD_H }}>시간</div>
+          <div style={{ position: "relative", height: bodyH, marginTop: GAP }}>
+            {/* 경계(수업 시작·끝)마다 시간 하나씩 — 요일 칸의 구분선과 같은 위치에 맞춰요(중복·겹침 방지). */}
+            {bounds.map((t) => (
+              <div key={t} style={{ position: "absolute", right: 6, top: (t - base) * PX - 11, height: 22, display: "flex", alignItems: "center", justifyContent: "flex-end", fontSize: 15, fontWeight: 700, color: "#6b7280", whiteSpace: "nowrap" }}>
+                {fmtShort(t)}
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* 요일 열 */}
+        {days.map((d) => {
+          const dayBlocks = blocks.filter((b) => b.day === d);
+          return (
+            <div key={d} style={{ width: DAY_W, flex: "none" }}>
+              <div style={{ ...thCell, height: HEAD_H }}>{DOW[d]}</div>
+              <div style={{ position: "relative", height: bodyH, marginTop: GAP, background: "#fafafa", borderRadius: 12 }}>
+                {/* 경계 줄 */}
+                {bounds.slice(1, -1).map((t) => (
+                  <div key={t} style={{ position: "absolute", left: 0, right: 0, top: (t - base) * PX, borderTop: "1px solid #eef0f3" }} />
+                ))}
+                {dayBlocks.length === 0 ? (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#b6bcc6", fontSize: 16, fontWeight: 600 }}>미등원</div>
+                ) : dayBlocks.map((b, i) => (
+                  <div key={i} style={{ position: "absolute", left: 4, right: 4, top: (b.start - base) * PX + 2, height: (b.end - b.start) * PX - 6, background: b.bg, border: `1.5px solid ${b.color}33`, borderRadius: 12, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5, boxSizing: "border-box", padding: 6 }}>
+                    <span style={{ fontSize: 17, fontWeight: 800, color: b.color }}>{b.label}</span>
+                    <span style={{ fontSize: 13, color: b.color, opacity: 0.85 }}>{fmtShort(b.start)} ~ {fmtShort(b.end)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {/* 범례 + 워터마크 */}
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 18, marginTop: 18, paddingTop: 14, borderTop: "1px solid #eef0f3" }}>
+        {legend.map((l) => (
+          <span key={l.label} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, color: "#4b5563" }}>
+            <span style={{ width: 16, height: 16, borderRadius: 5, background: l.bg, border: `1.5px solid ${l.color}55` }} />
+            {l.label}
+          </span>
+        ))}
+        <span style={{ marginLeft: "auto", fontSize: 13, color: "#c4c9d1", fontWeight: 600 }}>{ACADEMY_NAME}</span>
+      </div>
+    </div>
+  );
+}
+const thCell: React.CSSProperties = { background: "#eef0f3", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: "#374151" };
+
+/* 체크박스 그리드 편집기 — 학생 한 명의 영어/수학 수업을 30분 칸 체크로 켜고 끈다.
+ * 드래그 보드와 같은 placements를 고치므로 양방향 연동. 칸 형식: 행=시간, 열=요일×(영어|수학). */
+function CheckGridEditor({ student, days, slots, cells, enrolledEng, enrolledMath, remEng, remMath, onToggle }: {
+  student: SampleStudent; days: number[]; slots: number[]; cells: Set<string>;
+  enrolledEng: boolean; enrolledMath: boolean; remEng: number; remMath: number;
+  onToggle: (day: number, slot: number, subj: "math" | "eng", checked: boolean) => void;
+}) {
+  const subjCols: ("eng" | "math")[] = [];
+  if (enrolledEng) subjCols.push("eng");
+  if (enrolledMath) subjCols.push("math");
+  const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  if (!subjCols.length) return <div className="tts-hint tts-cg-empty">이 학생의 영어·수학 수강 정보가 없어요. 학생 명단에서 과목을 지정해 주세요.</div>;
+  return (
+    <div className="tts-cg">
+      <div className="tts-cg-budget">
+        <span className="tts-cg-name"><b>{student.name}</b> — 칸을 체크해 수업을 켜고 꺼요</span>
+        {enrolledEng && <span className={"tts-cg-rem eng" + (remEng < 0 ? " over" : "")}>영어 남은 블록 <b>{remEng}</b></span>}
+        {enrolledMath && <span className={"tts-cg-rem math" + (remMath < 0 ? " over" : "")}>수학 남은 블록 <b>{remMath}</b></span>}
+      </div>
+      <div className="tts-cg-scroll">
+        <table className="tts-cg-table">
+          <colgroup>
+            <col className="tts-cg-col-time" />
+            {days.map((d) => subjCols.map((sj) => <col key={"c-" + d + "-" + sj} />))}
+          </colgroup>
+          <thead>
+            <tr>
+              <th rowSpan={2} className="tts-cg-th tts-cg-thtime">시간</th>
+              {days.map((d) => <th key={d} colSpan={subjCols.length} className="tts-cg-th">{DOW[d]}</th>)}
+            </tr>
+            <tr>
+              {days.map((d) => subjCols.map((sj) => (
+                <th key={d + "-" + sj} className={"tts-cg-sub " + sj}>{sj === "eng" ? "영어" : "수학"}</th>
+              )))}
+            </tr>
+          </thead>
+          <tbody>
+            {slots.map((m) => (
+              <tr key={m}>
+                <td className="tts-cg-time">{fmt(m)}</td>
+                {days.map((d) => subjCols.map((sj) => {
+                  const checked = cells.has(`${d}|${m}|${sj}`);
+                  const rem = sj === "eng" ? remEng : remMath;
+                  const disabled = !checked && rem <= 0;
+                  return (
+                    <td key={d + "-" + sj} className={"tts-cg-cell " + sj + (checked ? " on" : "")}>
+                      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onToggle(d, m, sj, e.target.checked)} aria-label={`${DOW[d]} ${fmt(m)} ${sj === "eng" ? "영어" : "수학"}`} />
+                    </td>
+                  );
+                }))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function TimetableSample() {
   const { user } = useAuth();
   const canEdit = !!user && user.role !== "student";
@@ -85,8 +273,10 @@ export function TimetableSample() {
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [specials, setSpecials] = useState<Special[]>([]);
   const [mode, setMode] = useState<"teacher" | "student">("teacher");
-  const [curWeek, setCurWeek] = useState(0);
+  const [curWeek, setCurWeek] = useState(BASE); // 기본(고정) 시간표가 기본값
   const [subjectFilter, setSubjectFilter] = useState<"all" | "math" | "eng">("math"); // 보이는 과목(기본=수학, 영수 안 섞이게)
+  const [dayFilter, setDayFilter] = useState<number | "all">("all"); // 요일별 보기(전체 또는 한 요일만)
+  const [gradeFilter, setGradeFilter] = useState<"all" | "초" | "중" | "고">("all"); // 학년별 보기(초/중/고)
   const [mathIds, setMathIds] = useState<Set<string>>(new Set()); // 수학 듣는 학생(선생님 편집·예산 대상)
   const [engIds, setEngIds] = useState<Set<string>>(new Set()); // 영어 듣는 학생
   const [focusStudent, setFocusStudent] = useState<string>("");
@@ -99,6 +289,7 @@ export function TimetableSample() {
   // 학생 이름을 누르면 띄우는 상세 프로필 — 명단 원본을 들고 있어야 해요.
   const [roster, setRoster] = useState<RosterStudent[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [editCheck, setEditCheck] = useState(false); // 학생 보기 '수정하기' — 체크박스 그리드 편집기 토글
 
   // 드래그 중 옮기는 대상(이름표 새로 놓기 / 칸 이동).
   const drag = useRef<DragData | null>(null);
@@ -122,7 +313,7 @@ export function TimetableSample() {
         const stuMap = new Map<string, SampleStudent>();
         const rosMap = new Map<string, RosterStudent>();
         for (const r of [...math, ...eng]) {
-          if (!stuMap.has(r.id)) stuMap.set(r.id, { id: r.id, name: r.name, band: levelOf(r.grade) });
+          if (!stuMap.has(r.id)) stuMap.set(r.id, { id: r.id, name: r.name, band: levelOf(r.grade), grade: r.grade });
           if (!rosMap.has(r.id)) rosMap.set(r.id, r);
         }
         const list = [...stuMap.values()];
@@ -136,9 +327,8 @@ export function TimetableSample() {
             if (day < 0) continue;
             const start = timeToMin(sl.time);
             const blocks = Math.max(1, Math.round((sl.duration || 30) / SLOT_MIN));
-            for (const wk of WEEKS) {
-              for (let b = 0; b < blocks; b++) init.push({ id: `i${++k}`, studentId: r.id, week: wk.v, day, slot: start + b * SLOT_MIN, subject });
-            }
+            // 명단 시간표는 '기본(BASE)'에만 깔아 둬요 — 각 주는 기본에서 파생되고, 그 주를 직접 고칠 때만 전용본이 생겨요.
+            for (let b = 0; b < blocks; b++) init.push({ id: `i${++k}`, studentId: r.id, week: BASE, day, slot: start + b * SLOT_MIN, subject });
           }
         };
         for (const r of math) lay(r, r.mathSlots, undefined);
@@ -157,7 +347,22 @@ export function TimetableSample() {
           .then((r) => (r.ok ? r.json() : null))
           .then((j: { data?: { placements?: Placement[]; specials?: Special[] } } | null) => {
             if (!alive || !j?.data) return;
-            if (Array.isArray(j.data.placements)) setPlacements(j.data.placements);
+            if (Array.isArray(j.data.placements)) {
+              let pls = j.data.placements;
+              // 구버전 초안(주별 복사본, BASE 없음) → 중복 제거하며 기본(BASE)으로 병합.
+              if (pls.length && !pls.some((p) => p.week === BASE)) {
+                const seen = new Set<string>();
+                const merged: Placement[] = [];
+                for (const p of pls) {
+                  const key = `${p.studentId}|${p.day}|${p.slot}|${p.subject || ""}|${p.specialId || ""}`;
+                  if (seen.has(key)) continue;
+                  seen.add(key);
+                  merged.push({ ...p, week: BASE });
+                }
+                pls = merged;
+              }
+              setPlacements(pls);
+            }
             if (Array.isArray(j.data.specials)) setSpecials(j.data.specials);
             setDraftLoaded(true);
           })
@@ -188,11 +393,15 @@ export function TimetableSample() {
     return sp.count > 0 && placedOf(sp.id) >= sp.count;
   }
 
+  // 지금 보는 주의 '실제로 읽을' week — 기본이거나, 그 주 전용본이 있으면 그 주, 없으면 기본에서 파생.
+  const curIsCustom = curWeek !== BASE && placements.some((p) => p.week === curWeek);
+  const effWeek = curWeek === BASE ? BASE : curIsCustom ? curWeek : BASE;
+
   // 지금 보고 있는 주의 배치만(끝난 특강은 숨김 — 데이터는 남겨 둬 횟수 안정).
   const weekVisible = useMemo(
-    () => placements.filter((p) => p.week === curWeek && (!p.specialId || !isEnded(specById.get(p.specialId)!))),
+    () => placements.filter((p) => p.week === effWeek && (!p.specialId || !isEnded(specById.get(p.specialId)!))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [placements, specials, today, curWeek],
+    [placements, specials, today, effWeek],
   );
 
   // 이름표마다 "그 학생의 몇 번째 블록"인지 — 그 주 안에서 요일·시간 순서로 번호. 일반/특강 따로 셈.
@@ -216,6 +425,10 @@ export function TimetableSample() {
     for (const p of placements) set.add(p.day);
     return [...set].sort((a, b) => a - b);
   }, [placements]);
+  // 요일별 보기 — 한 요일만 고르면 그 요일만 그려요.
+  const daysShown = dayFilter === "all" ? days : days.filter((d) => d === dayFilter);
+  // 학년별 보기 — 초/중/고 고르면 그 학년 학생 블록만 그려요(번호는 전체 기준 유지).
+  const gridPlacements = gradeFilter === "all" ? weekVisible : weekVisible.filter((p) => divOf(byId.get(p.studentId)?.band) === gradeFilter);
 
   // 그릴 시간 범위 — 기본 14:00~22:00, 데이터가 더 이르거나 늦으면 늘려요(주 전환에도 모양 유지).
   const slots = useMemo(() => {
@@ -231,60 +444,86 @@ export function TimetableSample() {
 
   // 주간 예산은 급별·과목별로 따로 차감(특강 제외). 영어 보기면 영어 배치, 그 외엔 수학 배치를 셈.
   //  → 한 학생이 영수 둘 다면 영어 9 + 수학 9 식으로 과목별 예산이 각각.
-  const usedOf = (sid: string) =>
-    placements.filter((p) => p.studentId === sid && !p.specialId && p.week === curWeek && (subjectFilter === "eng" ? p.subject === "eng" : !p.subject)).length;
-  const remainingOf = (s: SampleStudent) => BUDGET[s.band as Level] - usedOf(s.id);
+  const usedOf = (sid: string, subj: "math" | "eng") =>
+    placements.filter((p) => p.studentId === sid && !p.specialId && p.week === effWeek && (subj === "eng" ? p.subject === "eng" : !p.subject)).length;
+  const remainingOf = (s: SampleStudent, subj: "math" | "eng") => BUDGET[s.band as Level] - usedOf(s.id, subj);
 
-  // 보이는 과목으로 거른 배치(격자 표시용). 영어=명단에서 가져온 보기 전용.
-  const shown = useMemo(
-    () => (subjectFilter === "all" ? weekVisible : subjectFilter === "eng" ? weekVisible.filter((p) => p.subject === "eng") : weekVisible.filter((p) => !p.subject)),
-    [weekVisible, subjectFilter],
-  );
+  // 체크박스 그리드(학생 보기 '수정하기') — 지금 학생의 배치 칸 집합 "day|slot|subj".
+  // 드래그 보드와 같은 placements를 고치므로 두 방식이 양방향으로 연동돼요.
+  const focusCells = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of weekVisible) if (p.studentId === focusStudent && !p.specialId) set.add(`${p.day}|${p.slot}|${p.subject === "eng" ? "eng" : "math"}`);
+    return set;
+  }, [weekVisible, focusStudent]);
+  function toggleCheck(day: number, slot: number, subj: "math" | "eng", checked: boolean) {
+    if (checked) {
+      const s = byId.get(focusStudent);
+      if (s && remainingOf(s, subj) > 0) addPlacement(focusStudent, day, slot, undefined, subj === "eng" ? "eng" : undefined);
+    } else {
+      const p = weekVisible.find((x) => x.studentId === focusStudent && !x.specialId && x.day === day && x.slot === slot && (subj === "eng" ? x.subject === "eng" : !x.subject));
+      if (p) removePlacement(p.id);
+    }
+  }
+
+
+  // 편집 대상 week — 기본 보기면 BASE, 특정 주 보기면 그 주.
+  const target = curWeek;
+  // 특정 주를 처음 고칠 때, 기본을 그 주로 복제(이후 그 주만 1회성 수정). 결정적 id로 복제해 이동/삭제 대응이 쉽게.
+  const materialize = (cur: Placement[]): Placement[] =>
+    target !== BASE && !cur.some((p) => p.week === target)
+      ? [...cur, ...cur.filter((p) => p.week === BASE).map((p) => ({ ...p, id: p.id + "@" + target, week: target }))]
+      : cur;
 
   function addPlacement(studentId: string, day: number, slot: number, specialId?: string, subject?: "eng") {
     if (specialId) {
       const sp = specById.get(specialId);
       if (!sp || isEnded(sp)) return;
     }
-    setPlacements((cur) => {
+    setPlacements((c0) => {
+      const cur = materialize(c0);
       // 같은 학생·요일·시간·주에 같은 과목이 이미 있으면 중복 안 만듦(과목이 다르면 따로 둠).
-      if (cur.some((p) => p.studentId === studentId && p.day === day && p.slot === slot && p.week === curWeek && (p.subject || "") === (subject || ""))) return cur;
-      return [...cur, { id: newId(), studentId, week: curWeek, day, slot, specialId, subject }];
+      if (cur.some((p) => p.studentId === studentId && p.day === day && p.slot === slot && p.week === target && (p.subject || "") === (subject || ""))) return cur;
+      return [...cur, { id: newId(), studentId, week: target, day, slot, specialId, subject }];
     });
   }
   function movePlacement(placementId: string, day: number, slot: number) {
-    setPlacements((cur) => {
-      const p = cur.find((x) => x.id === placementId);
-      if (!p) return cur;
-      if (p.day === day && p.slot === slot) return cur;
-      // 같은 과목끼리만 자리 충돌 검사(영어는 수학 칸 위로 옮겨도 됨).
-      if (cur.some((x) => x.id !== placementId && x.studentId === p.studentId && x.day === day && x.slot === slot && x.week === p.week && (x.subject || "") === (p.subject || ""))) return cur;
-      return cur.map((x) => (x.id === placementId ? { ...x, day, slot } : x));
+    setPlacements((c0) => {
+      const src = c0.find((x) => x.id === placementId);
+      if (!src) return c0;
+      const cur = materialize(c0);
+      // 비커스텀 주에서 기본 이름표를 옮기면, 방금 복제된 그 주 전용본을 옮긴다.
+      const moveId = target !== BASE && src.week === BASE ? placementId + "@" + target : placementId;
+      const mp = cur.find((x) => x.id === moveId);
+      if (!mp || (mp.day === day && mp.slot === slot)) return cur;
+      if (cur.some((x) => x.id !== moveId && x.studentId === mp.studentId && x.day === day && x.slot === slot && x.week === mp.week && (x.subject || "") === (mp.subject || ""))) return cur;
+      return cur.map((x) => (x.id === moveId ? { ...x, day, slot } : x));
     });
   }
   function removePlacement(placementId: string) {
-    setPlacements((cur) => cur.filter((p) => p.id !== placementId));
+    setPlacements((c0) => {
+      const src = c0.find((x) => x.id === placementId);
+      if (!src) return c0;
+      if (target === BASE || src.week === target) return c0.filter((x) => x.id !== placementId);
+      // 비커스텀 주에서 빼기 = 그 주만(1회성) — 복제 후 대응본 제거.
+      const cur = materialize(c0);
+      return cur.filter((x) => x.id !== placementId + "@" + target);
+    });
   }
 
-  function onCellDrop(day: number, slot: number) {
+  function onCellDrop(day: number, slot: number, cellSubject?: "math" | "eng") {
     const d = drag.current;
     drag.current = null;
     if (!d) return;
     if (d.kind === "new") {
       if (d.specialId) {
         addPlacement(d.studentId, day, slot, d.specialId);
-      } else if (subjectFilter === "eng") {
-        // 영어 보기 — 영어 블록. 영어 예산(급별)도 차감.
-        const s = byId.get(d.studentId);
-        if (s && remainingOf(s) > 0) addPlacement(s.id, day, slot, undefined, "eng");
-      } else if (subjectFilter === "all") {
-        // 전체 보기 — 학생 소속으로 과목 결정(영어전용=영어, 그 외 수학). 예산 게이트 없이 배치.
-        const s = byId.get(d.studentId);
-        if (s) addPlacement(s.id, day, slot, undefined, engIds.has(s.id) && !mathIds.has(s.id) ? "eng" : undefined);
-      } else {
-        const s = byId.get(d.studentId);
-        if (s && remainingOf(s) > 0) addPlacement(s.id, day, slot);
+        return;
       }
+      const s = byId.get(d.studentId);
+      if (!s) return;
+      // 분할 칸이면 그 칸의 과목으로, 아니면 학생 소속(영어전용=영어, 그 외 수학)으로.
+      const subj: "math" | "eng" = cellSubject || (engIds.has(s.id) && !mathIds.has(s.id) ? "eng" : "math");
+      if (remainingOf(s, subj) > 0) addPlacement(s.id, day, slot, undefined, subj === "eng" ? "eng" : undefined);
     } else {
       movePlacement(d.placementId, day, slot);
     }
@@ -327,7 +566,7 @@ export function TimetableSample() {
   }
   function applyLocalRoster(next: RosterStudent) {
     setRoster((cur) => cur.map((r) => (r.id === next.id ? next : r)));
-    setStudents((cur) => cur.map((s) => (s.id === next.id ? { ...s, name: next.name, band: levelOf(next.grade) } : s)));
+    setStudents((cur) => cur.map((s) => (s.id === next.id ? { ...s, name: next.name, band: levelOf(next.grade), grade: next.grade } : s)));
   }
 
   // 배치 초안 저장 — 실제 시간표는 안 건드리고 설계만 보관(새로고침해도 이어가기).
@@ -359,12 +598,12 @@ export function TimetableSample() {
   // 학생 기본 시간표 이미지 저장(영수 포함) — 그 학생 보기 화면을 PNG로 내려받아요.
   const [imgBusy, setImgBusy] = useState(false);
   async function saveStudentImage() {
-    const el = document.getElementById("tts-sv-capture");
+    const el = document.getElementById("tts-export");
     if (!el || imgBusy) return;
     setImgBusy(true);
     try {
       const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff" });
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: null });
       const a = document.createElement("a");
       a.href = canvas.toDataURL("image/png");
       a.download = `${byId.get(focusStudent)?.name || "학생"}_기본시간표.png`;
@@ -376,11 +615,17 @@ export function TimetableSample() {
     }
   }
 
-  // 지금 보는 주의 날짜 범위(월~일).
-  const mon = mondayOf(TODAY, curWeek);
+  // 지금 보는 주의 날짜 범위(월~일). 기본(BASE)이면 날짜 없음.
+  const mon = mondayOf(TODAY, curWeek === BASE ? 0 : curWeek);
   const sun = new Date(mon);
   sun.setDate(mon.getDate() + 6);
-  const weekRange = `${fmtMD(mon)} ~ ${fmtMD(sun)}`;
+  const weekRange = curWeek === BASE ? "매주 반복(고정)" : `${fmtMD(mon)} ~ ${fmtMD(sun)}`;
+  // ‹ › 주 이동(기본 ↔ 주차).
+  const moveWeek = (dir: number) => {
+    const i = WEEK_SEQ.indexOf(curWeek);
+    const ni = Math.max(0, Math.min(WEEK_SEQ.length - 1, (i < 0 ? 0 : i) + dir));
+    setCurWeek(WEEK_SEQ[ni]);
+  };
 
   return (
     <div className="tts">
@@ -418,25 +663,33 @@ export function TimetableSample() {
         </div>
       </div>
 
-      {/* 주간 선택 — 선생님·학생 보기 공통. 주마다 시간표가 달라요. */}
+      {/* 기본 시간표(고정) ↔ 주차 네비. 기본을 고치면 모든 주에 반영, 주차에서 고치면 그 주만 1회성. */}
       <div className="tts-weekbar">
-        <div className="tts-weeks">
-          {WEEKS.map((w) => (
-            <button
-              key={w.v}
-              className={"tts-seg" + (curWeek === w.v ? " on" : "")}
-              onClick={() => setCurWeek(w.v)}
-            >
-              {w.l}
-            </button>
-          ))}
+        <div className="tts-weeknav">
+          <button className={"tts-seg" + (curWeek === BASE ? " on" : "")} onClick={() => setCurWeek(BASE)} title="매주 반복되는 고정 시간표">기본 시간표</button>
+          <div className="tts-weekstep">
+            <button className="tts-weekstep-arr" onClick={() => moveWeek(-1)} disabled={WEEK_SEQ.indexOf(curWeek) <= 0} aria-label="이전">‹</button>
+            <span className="tts-weekstep-lbl">{weekLabelOf(curWeek)}</span>
+            <button className="tts-weekstep-arr" onClick={() => moveWeek(1)} disabled={WEEK_SEQ.indexOf(curWeek) >= WEEK_SEQ.length - 1} aria-label="다음">›</button>
+          </div>
         </div>
         <span className="tts-weekrange">
-          <Icon name="cal" /> {weekRange}
+          <Icon name="cal" /> {weekRange}{curWeek !== BASE && curIsCustom ? " · 이 주만 수정됨" : ""}
         </span>
         <div className="tts-subjseg">
           {([["all", "전체"], ["math", "수학"], ["eng", "영어"]] as const).map(([v, l]) => (
             <button key={v} className={"tts-seg" + (subjectFilter === v ? " on" : "")} onClick={() => setSubjectFilter(v)}>{l}</button>
+          ))}
+        </div>
+        <div className="tts-subjseg" title="학년별 보기">
+          {(["all", "초", "중", "고"] as const).map((g) => (
+            <button key={g} className={"tts-seg" + (gradeFilter === g ? " on" : "")} onClick={() => setGradeFilter(g)}>{g === "all" ? "전체" : g}</button>
+          ))}
+        </div>
+        <div className="tts-subjseg" title="요일별 보기">
+          <button className={"tts-seg" + (dayFilter === "all" ? " on" : "")} onClick={() => setDayFilter("all")}>전체</button>
+          {days.map((d) => (
+            <button key={d} className={"tts-seg" + (dayFilter === d ? " on" : "")} onClick={() => setDayFilter(d)}>{DOW[d]}</button>
           ))}
         </div>
       </div>
@@ -475,91 +728,88 @@ export function TimetableSample() {
         </div>
       )}
 
-      <div className="tts-layout">
-        {/* 학생 목록 패널 — 칸 밖으로 끌면 배치가 취소되는 영역이기도 해요. */}
-        <aside
-          className="tts-students"
-          onDragOver={(e) => {
-            if (drag.current?.kind === "move") {
-              e.preventDefault();
-              e.currentTarget.classList.add("tts-drop-cancel");
-            }
-          }}
+      {/* 선생님 보기 — 학생 목록을 특강 아래 가로 칩으로. 칩을 끌어 칸에 놓고, 칩 영역으로 끌면 배치 취소. */}
+      {mode === "teacher" && !loading && (
+        <div
+          className="tts-chiprow-wrap"
+          onDragOver={(e) => { if (drag.current?.kind === "move") { e.preventDefault(); e.currentTarget.classList.add("tts-drop-cancel"); } }}
           onDragLeave={(e) => e.currentTarget.classList.remove("tts-drop-cancel")}
-          onDrop={(e) => {
-            e.preventDefault();
-            e.currentTarget.classList.remove("tts-drop-cancel");
-            onUnplaceDrop();
-          }}
+          onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("tts-drop-cancel"); onUnplaceDrop(); }}
         >
-          <div className="tts-students-head">학생 목록 {students.length > 0 && <span>{students.length}</span>}</div>
-          {mode === "teacher" && !loading && (
-            <input className="input" value={pickQ} onChange={(e) => setPickQ(e.target.value)} placeholder="학생 이름 검색" style={{ width: "100%", marginBottom: 8 }} />
-          )}
-          {loading ? (
-            <p className="tts-hint">불러오는 중…</p>
-          ) : mode === "teacher" ? (
-            // 교사 — 과목 보기에 따라 학생 목록. '전체'면 모든 학생(영수 통합) + 이름 검색.
-            students
+          <div className="tts-chiprow-head">
+            <span className="tts-chiprow-ttl">학생 목록 {students.length > 0 && <b>{students.length}</b>}</span>
+            <input className="input tts-chip-search" value={pickQ} onChange={(e) => setPickQ(e.target.value)} placeholder="학생 이름 검색" />
+            <span className="tts-chiprow-hint">칩을 끌어 칸에 놓아요 · 칩 영역으로 끌면 배치 취소</span>
+          </div>
+          <div className="tts-chips">
+            {students
               .filter((s) => (subjectFilter === "all" ? true : subjectFilter === "eng" ? engIds.has(s.id) : mathIds.has(s.id)))
+              .filter((s) => gradeFilter === "all" || divOf(s.band) === gradeFilter)
               .filter((s) => !pickQ.trim() || s.name.includes(pickQ.trim()))
               .map((s) => {
                 const sj: "math" | "eng" = subjectFilter === "eng" ? "eng" : subjectFilter === "math" ? "math" : engIds.has(s.id) && !mathIds.has(s.id) ? "eng" : "math";
-                const showBudget = subjectFilter !== "all"; // '전체'는 과목 예산이 모호해 표시 안 함
-                const rem = remainingOf(s);
+                const showBudget = subjectFilter !== "all";
+                const rem = remainingOf(s, sj);
                 const full = showBudget && rem <= 0;
                 return (
-                  <div
+                  <span
                     key={s.id}
-                    className={"tts-scard " + (sj === "eng" ? "tts-eng" : "tts-math") + (full ? " full" : "")}
+                    className={"tts-chip tts-" + s.band + (full ? " full" : "")}
                     draggable={!full}
                     onDragStart={() => { if (!full) drag.current = { kind: "new", studentId: s.id }; }}
                     onDragEnd={() => { drag.current = null; }}
                     title={full ? "남은 블록을 다 채웠어요" : "끌어서 시간표 칸에 놓아요"}
                   >
-                    <div className="tts-scard-main">
-                      <b>{s.name}</b>
-                      <span className="tts-level">{LEVEL_LABEL[s.band as Level]}</span>
-                      {subjectFilter === "all" && <span className="tts-level">{sj === "eng" ? "영어" : "수학"}</span>}
-                    </div>
-                    {showBudget && (full ? <span className="tts-rem done">다 채웠어요</span> : <span className="tts-rem">남은 블록 <b>{rem}</b></span>)}
-                  </div>
-                );
-              })
-          ) : (
-            // 학생 보기 — 한 명을 골라요.
-            <div className="tts-pickwrap">
-              <div className="tts-pick-label">볼 학생</div>
-              <input className="input tts-pick-search" value={pickQ} onChange={(e) => setPickQ(e.target.value)} placeholder="학생 이름 검색" style={{ minWidth: 130, maxWidth: 180 }} />
-              {students.filter((s) => (subjectFilter === "eng" ? engIds.has(s.id) : subjectFilter === "math" ? mathIds.has(s.id) : true)).filter((s) => !pickQ.trim() || s.name.includes(pickQ.trim())).map((s) => {
-                const picked = focusStudent === s.id;
-                const drabble = canEdit && picked && (subjectFilter === "eng" ? engIds.has(s.id) : mathIds.has(s.id));
-                return (
-                  <button
-                    key={s.id}
-                    className={"tts-pick" + (picked ? " on" : "")}
-                    onClick={() => setFocusStudent(s.id)}
-                    draggable={drabble}
-                    onDragStart={drabble ? () => { drag.current = { kind: "new", studentId: s.id }; } : undefined}
-                    onDragEnd={() => { drag.current = null; }}
-                    title={drabble ? "끌어서 시간표 칸에 놓으면 수업이 추가돼요" : undefined}
-                  >
-                    <b>{s.name}</b>
-                    <span className="tts-level">{LEVEL_LABEL[s.band as Level]}</span>
-                  </button>
+                    <button type="button" className="tts-chip-nm" onClick={() => openProfile(s.id)} title="학생 상세 보기">{s.name}</button>
+                    <span className="tts-chip-lv">{LEVEL_LABEL[s.band as Level]}{subjectFilter === "all" ? ` · ${sj === "eng" ? "영" : "수"}` : ""}</span>
+                    {showBudget && <span className={"tts-chip-rem" + (full ? " done" : "")} title="남은 블록">{full ? "꽉참" : rem}</span>}
+                  </span>
                 );
               })}
+            {students.filter((s) => (subjectFilter === "all" ? true : subjectFilter === "eng" ? engIds.has(s.id) : mathIds.has(s.id))).filter((s) => gradeFilter === "all" || divOf(s.band) === gradeFilter).filter((s) => !pickQ.trim() || s.name.includes(pickQ.trim())).length === 0 && (
+              <span className="tts-hint">학생이 없어요.</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 학생 보기 — 시간표 위에서 학생을 검색해 선택. */}
+      {mode === "student" && !loading && (
+        <div className="tts-studentpick">
+          <span className="tts-studentpick-l">볼 학생</span>
+          <input className="input tts-studentpick-search" value={pickQ} onChange={(e) => setPickQ(e.target.value)} placeholder="학생 이름 검색" />
+          {pickQ.trim() && (
+            <div className="tts-studentpick-results">
+              {(() => {
+                const res = students
+                  .filter((s) => (subjectFilter === "eng" ? engIds.has(s.id) : subjectFilter === "math" ? mathIds.has(s.id) : true))
+                  .filter((s) => s.name.includes(pickQ.trim()))
+                  .slice(0, 16);
+                if (!res.length) return <span className="tts-hint">검색 결과가 없어요.</span>;
+                return res.map((s) => (
+                  <button key={s.id} className={"tts-pick tts-pick-" + s.band + (focusStudent === s.id ? " on" : "")} onClick={() => { setFocusStudent(s.id); setPickQ(""); }}>
+                    <b>{s.name}</b> <span className="tts-level">{LEVEL_LABEL[s.band as Level]}</span>
+                  </button>
+                ));
+              })()}
             </div>
           )}
-        </aside>
+          {focusStudent && byId.get(focusStudent) && (
+            <span className="tts-studentpick-cur">선택됨 · <b>{byId.get(focusStudent)!.name}</b> <span className="tts-level">{LEVEL_LABEL[byId.get(focusStudent)!.band as Level]}</span></span>
+          )}
+        </div>
+      )}
 
+      <div className="tts-layout tts-layout-full">
         {/* 시간표 영역 */}
         <section className="tts-gridwrap">
-          {mode === "teacher" ? (
+          {loading ? (
+            <p className="tts-hint">불러오는 중…</p>
+          ) : mode === "teacher" ? (
             <Board
-              days={days}
+              days={daysShown}
               slots={slots}
-              placements={shown}
+              placements={gridPlacements}
               byId={byId}
               specById={specById}
               blockNo={blockNo}
@@ -568,23 +818,47 @@ export function TimetableSample() {
               drag={drag}
               onCellDrop={onCellDrop}
               onRemove={removePlacement}
+              splitSubject
             />
           ) : focusStudent && byId.get(focusStudent) ? (
             <div className="tts-studentview">
               <div className="tts-sv-head tts-sv-head-row">
-                <span>
+                <span className="tts-sv-cap">
                   <b>{byId.get(focusStudent)!.name}</b>{" "}
-                  <span className="tts-level">{LEVEL_LABEL[byId.get(focusStudent)!.band as Level]}</span> 학생의 <b>기본 시간표</b>예요(수학·영어 함께, 매주 반복되는 고정 시간표).
-                  {canEdit && " 왼쪽에서 이 학생을 끌어다 칸에 놓으면 추가, 이름표 옆 ×로 빼요."}
+                  <span className="tts-level">{LEVEL_LABEL[byId.get(focusStudent)!.band as Level]}</span> 학생의{" "}
+                  {curWeek === BASE
+                    ? <><b>기본 시간표</b>예요(수학·영어 함께, 매주 반복되는 고정 시간표). 여기서 고치면 모든 주에 반영돼요.</>
+                    : <><b>{weekLabelOf(curWeek)}</b> 시간표예요(기본 + 그 주 변경). 여기서 고치면 <b>그 주만</b> 바뀌어요.</>}
+                  {canEdit && " ‘수정하기’로 칸을 체크하거나, 이름표 옆 ×로 빼요."}
                 </span>
-                <button className="btn ghost sm" onClick={saveStudentImage} disabled={imgBusy} title="이 학생 기본 시간표를 이미지로 저장(영수 포함)">
-                  <Icon name="copy" /> {imgBusy ? "저장 중…" : "이미지 저장"}
-                </button>
+                <span className="tts-sv-actions">
+                  {canEdit && (
+                    <button className={"btn ghost sm" + (editCheck ? " on" : "")} onClick={() => setEditCheck((v) => !v)} title="체크박스로 수업을 켜고 끄며 편집">
+                      <Icon name="edit" /> {editCheck ? "수정 닫기" : "수정하기"}
+                    </button>
+                  )}
+                  <button className="btn ghost sm" onClick={saveStudentImage} disabled={imgBusy} title="이 학생 기본 시간표를 이미지로 저장(영수 포함)">
+                    <Icon name="copy" /> {imgBusy ? "저장 중…" : "이미지 저장"}
+                  </button>
+                </span>
               </div>
+              {canEdit && editCheck && (
+                <CheckGridEditor
+                  student={byId.get(focusStudent)!}
+                  days={daysShown}
+                  slots={slots}
+                  cells={focusCells}
+                  enrolledEng={engIds.has(focusStudent)}
+                  enrolledMath={mathIds.has(focusStudent)}
+                  remEng={remainingOf(byId.get(focusStudent)!, "eng")}
+                  remMath={remainingOf(byId.get(focusStudent)!, "math")}
+                  onToggle={toggleCheck}
+                />
+              )}
               <div id="tts-sv-capture" className="tts-sv-capture">
-                <div className="tts-sv-cap-title">{byId.get(focusStudent)!.name} · 기본 시간표</div>
+                <div className="tts-sv-cap-title">{byId.get(focusStudent)!.name} · {curWeek === BASE ? "기본 시간표" : weekLabelOf(curWeek)}</div>
                 <Board
-                  days={days}
+                  days={daysShown}
                   slots={slots}
                   placements={weekVisible.filter((p) => p.studentId === focusStudent)}
                   byId={byId}
@@ -595,11 +869,23 @@ export function TimetableSample() {
                   drag={drag}
                   onCellDrop={onCellDrop}
                   onRemove={removePlacement}
+                  splitSubject
                 />
+              </div>
+              {/* 이미지 저장 전용(화면 밖) — 깔끔한 병합 블록 카드. '이미지 저장'이 이 요소를 캡처해요. */}
+              <div style={{ position: "absolute", left: -99999, top: 0, pointerEvents: "none" }} aria-hidden="true">
+                <div id="tts-export" style={{ display: "inline-block", background: "#fbf3e2", padding: 18 }}>
+                  <ExportTimetable
+                    studentName={byId.get(focusStudent)!.name}
+                    blocks={exportBlocks(weekVisible.filter((p) => p.studentId === focusStudent), specById)}
+                    days={daysShown}
+                    weekLabel={curWeek === BASE ? "기본 시간표" : weekLabelOf(curWeek)}
+                  />
+                </div>
               </div>
             </div>
           ) : (
-            <div className="empty">학생을 골라 주세요.</div>
+            <div className="empty">위에서 학생을 검색해 선택해 주세요.</div>
           )}
         </section>
       </div>

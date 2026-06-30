@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth";
-import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type Curriculum, type CurriculumSection, type CurriculumRow, type StudentLogRow, type StudentGoal, type StudentLink } from "../lib/studentApi";
+import { studentApi, type StudentPageData, type Curriculum, type CurriculumSection, type CurriculumRow, type StudentLogRow, type StudentGoal, type StudentLink } from "../lib/studentApi";
 import { messageApi, type Message } from "../lib/messageApi";
 import { DOW, TODAY, fmtFull, fmtMD, fmtMDDow, fmtWhen, mondayOf, parseD, todayStr } from "../lib/dates";
 import { NoticeBanner } from "../components/NoticeBanner";
@@ -140,17 +140,12 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
           <WeekTimetable math={data.mathSlots} eng={data.engSlots} />
         </section>
 
-        {/* 오늘 뭐해요? — 선생님이 정한 학습 순서·내용(초등영어 전용). 학생은 읽기 전용, 권한자는 편집.
-            아래 '내가 추가한 학습'은 학생이 스스로 반복할 학습(강사 커리큘럼과 별개). */}
-        {!isMidBand && (
+        {/* 오늘 뭐해요? — 학생이 적는 '오늘 뭐해요'(체크+범위)와 '내가 추가한 학습'은 아래 '오늘 수업 일지'로 합쳐졌어요.
+            여기엔 선생님(권한자)이 커리큘럼 항목을 편집하는 카드만 둬요. */}
+        {!isMidBand && canEditCur && (
           <section className="sp-card">
-            <h3 className="sp-card-h">오늘 뭐해요?</h3>
-            {canEditCur ? (
-              <CurriculumEditor studentId={s.id} cur={data.curriculum} onSaved={reloadSilent} />
-            ) : (
-              <CurriculumView cur={data.curriculum} onSaved={reloadSilent} />
-            )}
-            <SelfLearning items={data.selfCurriculum} studentId={canEditCur ? s.id : undefined} onSaved={reloadSilent} />
+            <h3 className="sp-card-h">오늘 뭐해요? <span className="sp-card-hsub">선생님 편집 · 학생이 체크할 항목</span></h3>
+            <CurriculumEditor studentId={s.id} cur={data.curriculum} onSaved={reloadSilent} />
           </section>
         )}
       </div>
@@ -167,7 +162,7 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
             {data.progressBooks.map((b) => <span className="sp-hw-chip" key={b}>{b}</span>)}
           </div>
         )}
-        <LogEditor studentId={canEditCur ? s.id : undefined} tid={s.id} existing={data.daily} slots={data.engSlots} options={data.doneItemOptions} band={s.band} progressBooks={data.progressBooks || []} examMode={data.examMode || false} onSaved={reloadSilent} />
+        <LogEditor studentId={canEditCur ? s.id : undefined} tid={s.id} existing={data.daily} slots={data.engSlots} curriculum={data.curriculum} selfItems={data.selfCurriculum} band={s.band} progressBooks={data.progressBooks || []} examMode={data.examMode || false} onSaved={reloadSilent} />
       </section>
 
       {/* 일지 이력 */}
@@ -519,61 +514,8 @@ function SelfLearning({ items, studentId, onSaved }: { items: CurriculumRow[]; s
   );
 }
 
-/* ---------------- 오늘 뭐해요?(읽기 전용) — 선생님이 정한 순서·내용을 학생에게 보여줘요. ---------------- */
-function CurriculumView({ cur, onSaved }: { cur: Curriculum; onSaved?: () => void }) {
-  // 학생도 순서를 끌어 바꿀 수 있어요(섹션 안에서). 내용은 못 바꾸고 순서만 — 서버가 검증.
-  const [secs, setSecs] = useState<CurriculumSection[]>(cur.sections);
-  useEffect(() => setSecs(cur.sections), [cur.sections]);
-  const drag = useRef<{ si: number; ri: number } | null>(null);
-  const total = secs.reduce((n, s) => n + s.rows.length, 0);
-  const step = total ? Math.min(cur.step || 0, total - 1) : 0;
-  const advance = async () => { try { await studentApi.setCurriculumStep(total ? (step + 1) % total : 0); onSaved?.(); } catch { /* 무시 */ } };
-  const moveRow = (si: number, from: number, to: number) => {
-    if (from === to) return;
-    const next = secs.map((s, i) => {
-      if (i !== si) return s;
-      const rows = [...s.rows];
-      const [m] = rows.splice(from, 1);
-      rows.splice(to, 0, m);
-      return { ...s, rows };
-    });
-    setSecs(next);
-    studentApi.reorderCurriculum(next).then(() => onSaved?.()).catch(() => {});
-  };
-  if (!secs.length) return <div className="sp-muted">아직 등록된 학습이 없어요.</div>;
-  let idx = -1; // 섹션을 가로지르는 평탄 인덱스
-  return (
-    <div className="sp-cur">
-      {cur.note && <div className="sp-cur-note"><Icon name="info" /> {cur.note}</div>}
-      {secs.map((sec, si) => (
-        <div className="sp-cur-sec" key={si}>
-          {sec.title && <div className="sp-cur-sectitle">{sec.title}</div>}
-          <ol className="sp-cur-rows">
-            {sec.rows.map((r, ri) => {
-              idx++;
-              const isNow = idx === step;
-              return (
-                <li
-                  className={"sp-cur-row" + (isNow ? " now" : "")}
-                  key={ri}
-                  onDragOver={(e) => { if (drag.current?.si === si) e.preventDefault(); }}
-                  onDrop={(e) => { e.preventDefault(); if (drag.current?.si === si) moveRow(si, drag.current.ri, ri); drag.current = null; }}
-                >
-                  {isNow && <span className="sp-cur-dot" title="지금 할 차례" />}
-                  <span className="sp-cur-grip" draggable title="끌어서 순서 바꾸기" style={{ cursor: "grab" }}
-                    onDragStart={() => { drag.current = { si, ri }; }} onDragEnd={() => { drag.current = null; }}>⠿</span>
-                  <span className="sp-cur-name">{r.name}</span>
-                  {r.amount && <span className="sp-cur-amt">{r.amount}</span>}
-                  {isNow && <button type="button" className="sp-cur-done" onClick={advance}>완료 → 다음</button>}
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-      ))}
-    </div>
-  );
-}
+/* 오늘 뭐해요? — 선생님이 정한 학습은 일지의 '오늘 뭐해요' 체크리스트(LogEditor)에서 항목별 체크+범위로 적어요.
+   읽기 전용 순서보기 카드(CurriculumView)는 일지로 합쳐지면서 제거됨. */
 
 /* ---------------- 커리큘럼(편집, 초등영어 권한자) ---------------- */
 export function CurriculumEditor({ studentId, cur, onSaved }: { studentId: string; cur: Curriculum; onSaved: () => void }) {
@@ -641,7 +583,7 @@ export function CurriculumEditor({ studentId, cur, onSaved }: { studentId: strin
               onDrop={(e) => { e.preventDefault(); if (drag.current?.si === si) moveRow(si, drag.current.ri, ri); drag.current = null; }}
             >
               <span className="sp-cur-num" draggable title="끌어서 순서 바꾸기" style={{ cursor: "grab" }}
-                onDragStart={() => { drag.current = { si, ri }; }} onDragEnd={() => { drag.current = null; }}>⠿{ri + 1}</span>
+                onDragStart={() => { drag.current = { si, ri }; }} onDragEnd={() => { drag.current = null; }}>{ri + 1}</span>
               <input className="input sp-cur-name-i" value={r.name} placeholder="학습 (예: 단어시험)" onChange={(e) => setRow(si, ri, { name: e.target.value })} />
               <input className="input sp-cur-amt-i" value={r.amount} placeholder="내용 (예: 10개씩)" onChange={(e) => setRow(si, ri, { amount: e.target.value })} />
               <button type="button" className={"sp-cur-now-btn" + (isNow ? " on" : "")} title="지금 할 차례로 지정(초록불)" onClick={() => setDraft((d) => ({ ...d, step: fi }))}>{isNow ? "지금 ●" : "여기부터"}</button>
@@ -679,9 +621,20 @@ function addMin(hm: string, min: number): string {
 /* 지난 일지 이력의 숙제 3분류 태그 색상. */
 const hwTagCls = (v: string) => (v === "완료" ? "sp-tag-done" : v === "미흡" ? "sp-tag-warn" : v === "안함" ? "sp-tag-bad" : "");
 
-function LogEditor({ studentId, tid, existing, slots, options, band, progressBooks = [], examMode = false, onSaved }: { studentId?: string; tid: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; options?: string[]; band: string; progressBooks?: string[]; examMode?: boolean; onSaved: () => void }) {
+function LogEditor({ studentId, tid, existing, slots, curriculum, selfItems = [], band, progressBooks = [], examMode = false, onSaved }: { studentId?: string; tid: string; existing: StudentLogRow[]; slots: { day: string; time: string; duration: number }[]; curriculum?: Curriculum; selfItems?: CurriculumRow[]; band: string; progressBooks?: string[]; examMode?: boolean; onSaved: () => void }) {
   const { user } = useAuth();
-  const items = options && options.length ? options : STUDENT_LOG_ITEMS;
+  // '오늘 뭐해요' 항목 = 선생님이 '오늘 뭐해요?'(커리큘럼)에 넣은 학습. 섹션(매일 반복·이어서 학습)별로 보여주고, 항목마다 체크+범위.
+  // 순서 끌어 바꾸기·'지금 할 차례'(초록불)는 커리큘럼 전용 저장경로로 — 일지의 체크/범위와 별개로 저장돼요.
+  const [curSecs, setCurSecs] = useState<CurriculumSection[]>(curriculum?.sections || []);
+  useEffect(() => setCurSecs(curriculum?.sections || []), [curriculum]);
+  const curDrag = useRef<{ si: number; ri: number } | null>(null);
+  const items = useMemo(() => curSecs.flatMap((s) => s.rows.map((r) => r.name)).filter((n) => n.trim()), [curSecs]);
+  const moveCurRow = (si: number, from: number, to: number) => {
+    if (from === to) return;
+    const next = curSecs.map((s, i) => { if (i !== si) return s; const rows = [...s.rows]; const [m] = rows.splice(from, 1); rows.splice(to, 0, m); return { ...s, rows }; });
+    setCurSecs(next);
+    studentApi.reorderCurriculum(next, studentId).then(() => onSaved()).catch(() => {});
+  };
   const isMid = band === "mid" || band === "bridge"; // 중고등(Bridge 포함) — 숙제 3분류·교재 진도
   // 숙제 체크리스트 작성자 — 학생 본인이면 학생, 강사/원장이 보는 중이면 강사.
   const hwBy: "student" | "teacher" = user?.role === "student" ? "student" : "teacher";
@@ -749,6 +702,8 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
     }
     return map;
   }, [existing, date, items]);
+  // '지금 할 차례'(초록불) = 아직 체크 안 한 첫 항목. 체크하면 다음으로 자동 이동, 체크를 풀면 되돌아와요.
+  const nowName = items.find((it) => !doneItems.includes(it)) || null;
 
   function fillScheduled() {
     if (!scheduled) return;
@@ -873,40 +828,81 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
           )}
         </div>
       ) : (
-        /* 오늘뭐해요 — 항목별로 '완료' 체크 + 범위(분량) 입력. 항목은 '오늘 한 것 수정' 버튼으로 관리. */
+        /* 오늘 뭐해요 — 선생님이 '오늘 뭐해요?'에 넣은 학습을 섹션별로. 왼쪽=한 것 체크, 오른쪽=어디까지 했는지(범위). 아래에 '내가 추가한 학습'(자율)도 함께. */
+        <>
         <div className="sp-f">
-          <span>오늘뭐해요 (한 것에 체크하고, 어디까지 했는지 적어요)</span>
-          <div className="sp-curlist">
-            {items.map((it) => {
-              const on = doneItems.includes(it);
-              return (
-                <div key={it} className={"sp-curitem" + (on ? " on" : "")}>
-                  <label className={"sp-check" + (on ? " on" : "")}>
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() => { dirtyRef.current = true; setDoneItems(on ? doneItems.filter((x) => x !== it) : [...doneItems, it]); }}
-                    />
-                    <span className="sp-check-box" aria-hidden="true" />
-                    <span className="sp-check-label">{it}</span>
-                  </label>
-                  <input
-                    className="sp-currange"
-                    value={curRanges[it] || ""}
-                    onChange={(e) => { dirtyRef.current = true; setCurRanges({ ...curRanges, [it]: e.target.value }); }}
-                    placeholder={lastRangeOf[it] ? `지난번 ${lastRangeOf[it]} — 이어서` : "범위 (예: p.20~25)"}
-                  />
-                  {!curRanges[it] && lastRangeOf[it] && (
-                    <button type="button" className="sp-curlast" title="지난 기록 이어쓰기"
-                      onClick={() => { dirtyRef.current = true; setCurRanges({ ...curRanges, [it]: lastRangeOf[it] }); }}>
-                      지난번 {lastRangeOf[it]} →
-                    </button>
-                  )}
+          <span>오늘 뭐해요 (한 것에 체크하고, 어디까지 했는지 적어요)</span>
+          {curriculum?.note && curriculum.note.trim() && (
+            <div className="sp-cur-note"><Icon name="info" /> {curriculum.note}</div>
+          )}
+          {items.length === 0 ? (
+            <div className="sp-muted">아직 등록된 학습이 없어요. 선생님이 ‘오늘 뭐해요?’에 학습을 넣어 주세요.</div>
+          ) : (
+            <div className="sp-curlist">
+              {curSecs.map((sec, si) => (
+                <div className="sp-cur-sec" key={si}>
+                  {sec.title && <div className="sp-cur-sectitle">{sec.title}</div>}
+                  {sec.rows.map((r, ri) => {
+                    const it = r.name;
+                    if (!it.trim()) return null;
+                    const on = doneItems.includes(it);
+                    const isNow = it === nowName; // 지금 할 차례(초록불) = 아직 체크 안 한 첫 항목
+                    return (
+                      <div
+                        key={ri}
+                        className={"sp-curitem" + (on ? " on" : "") + (isNow ? " now" : "")}
+                        onDragOver={(e) => { if (curDrag.current?.si === si) e.preventDefault(); }}
+                        onDrop={(e) => { e.preventDefault(); if (curDrag.current?.si === si) moveCurRow(si, curDrag.current.ri, ri); curDrag.current = null; }}
+                      >
+                        <label
+                          className={"sp-check" + (on ? " on" : "")}
+                          draggable
+                          title="끌어서 순서 바꾸기"
+                          onDragStart={(e) => { if ((e.target as HTMLElement).tagName === "INPUT") { e.preventDefault(); return; } curDrag.current = { si, ri }; }}
+                          onDragEnd={() => { curDrag.current = null; }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() => { dirtyRef.current = true; setDoneItems(on ? doneItems.filter((x) => x !== it) : [...doneItems, it]); }}
+                          />
+                          <span className="sp-check-box" aria-hidden="true" />
+                          <span className="sp-check-label">{isNow && <span className="sp-cur-dot" title="지금 할 차례" />}{it}{r.amount && <span className="sp-cur-amt"> {r.amount}</span>}</span>
+                        </label>
+                        <div className="sp-curitem-r">
+                          <input
+                            className="sp-currange"
+                            value={curRanges[it] || ""}
+                            onChange={(e) => { dirtyRef.current = true; setCurRanges({ ...curRanges, [it]: e.target.value }); }}
+                            placeholder={lastRangeOf[it] ? `지난번 ${lastRangeOf[it]} — 이어서` : "범위 (예: p.20~25)"}
+                          />
+                          {(isNow || lastRangeOf[it]) && (
+                            <div className="sp-curitem-acts">
+                              {lastRangeOf[it] && (
+                                curRanges[it]
+                                  ? <span className="sp-curprev" title="지난 시간에 여기까지 했어요">지난번 {lastRangeOf[it]}</span>
+                                  : <button type="button" className="sp-curlast" title="지난 기록 이어쓰기"
+                                      onClick={() => { dirtyRef.current = true; setCurRanges({ ...curRanges, [it]: lastRangeOf[it] }); }}>
+                                      지난번 {lastRangeOf[it]} →
+                                    </button>
+                              )}
+                              {isNow && <button type="button" className="sp-cur-done" onClick={() => { dirtyRef.current = true; setDoneItems([...doneItems, it]); }}>완료 → 다음</button>}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
+        {/* 내가 추가한 학습 — '오늘 뭐해요' 바로 아래로 함께 이동(학생이 스스로 반복할 학습). */}
+        <div className="sp-f">
+          <SelfLearning items={selfItems} studentId={studentId} onSaved={onSaved} />
+        </div>
+        </>
       )}
 
       {/* 오늘의 숙제 — 항목마다 완료/미흡/안함/없음 + 작성자(학생 초록 / 강사 주황). 선생님 화면과 양방향 공유. */}

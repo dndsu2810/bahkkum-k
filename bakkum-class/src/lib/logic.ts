@@ -72,8 +72,18 @@ export function statusTone(st: StudentStatus): string {
 export function gradeColor(g: string): Tone {
   return toneOf(g);
 }
+/** 오늘 유효한 시간표(적용일 버전 반영). 표·요약은 raw lessons 대신 이걸 써야 미래 예약 시간표가 미리 안 보인다. */
+export function liveLessons(s: Student): Lesson[] {
+  return effectiveLessons(s, ymd(TODAY));
+}
+/** 아직 적용 전인 '예정된' 시간표 변경의 적용일(가장 가까운 미래 버전). 없으면 "". */
+export function upcomingScheduleFrom(s: Student): string {
+  const today = ymd(TODAY);
+  const fut = (s.schedule || []).map((v) => v.from).filter((f) => f > today).sort();
+  return fut[0] || "";
+}
 export function weekCount(st: Student): number {
-  return st.lessons ? st.lessons.length : 0;
+  return liveLessons(st).length;
 }
 export function freqLabel(st: Student): string {
   return "주" + weekCount(st) + "회";
@@ -83,7 +93,7 @@ export function avatarText(name: string): string {
 }
 export function durTotal(s: Student): number {
   let t = 0;
-  (s.lessons || []).forEach((l) => {
+  liveLessons(s).forEach((l) => {
     t += +l.duration || 0;
   });
   return t;
@@ -185,9 +195,12 @@ export function curMonthStr(): string {
 }
 
 /* ---------- month options ---------- */
-export function monthOptions(): { v: string; l: string }[] {
+/** 월 선택 목록(최신→과거 14개월). includeNext=true면 '다음 달'을 맨 위에 추가해
+ *  아직 안 온 달을 미리 볼 수 있게 한다(수학 월별 현황 미리보기용). */
+export function monthOptions(includeNext = false): { v: string; l: string }[] {
   const opts: { v: string; l: string }[] = [];
   const d = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
+  if (includeNext) d.setMonth(d.getMonth() + 1); // 다음 달부터 시작 → 미리보기
   for (let i = 0; i < 14; i++) {
     const ym = d.getFullYear() + "-" + pad(d.getMonth() + 1);
     opts.push({ v: ym, l: d.getFullYear() + "년 " + (d.getMonth() + 1) + "월" });
@@ -198,7 +211,7 @@ export function monthOptions(): { v: string; l: string }[] {
 
 /** sorted day chips for a student (unique, timetable order) */
 export function lessonDays(s: Student): string[] {
-  const days = (s.lessons || []).map((l) => l.day);
+  const days = liveLessons(s).map((l) => l.day);
   const uniq: string[] = [];
   days.forEach((d) => {
     if (uniq.indexOf(d) < 0) uniq.push(d);

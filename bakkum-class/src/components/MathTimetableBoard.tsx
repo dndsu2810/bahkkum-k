@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { type MathBand } from "../lib/grade";
 
 /* 수학 시간표 보드 — 전체 시간표처럼 요일별 칸, 시간 줄·구분선, 그 밑에 이름표(이름 + 몇 번째 블록 숫자).
@@ -8,7 +9,8 @@ import { type MathBand } from "../lib/grade";
 export interface SampleStudent {
   id: string;
   name: string;
-  band: string; // 색 구분용 급/반 키 — 통합시간표 샘플은 elem/mid/high(초/중/고), 학생 수학화면은 low/high/mid. CSS .tts-{band}.
+  band: string; // 색 구분용 급 키 — 통합시간표 샘플은 elemLow/elemHigh/mid/high(초저/초고/중/고), 학생 수학화면은 low/high/mid. CSS .tts-{band}.
+  grade?: string; // 학년 표기용(예: "초4","중2"). 이름 옆에 보여줌. 없으면 생략.
 }
 
 export interface Placement {
@@ -71,6 +73,7 @@ export function Board({
   drag,
   onCellDrop,
   onRemove,
+  splitSubject,
 }: {
   days: number[];
   slots: number[];
@@ -81,100 +84,95 @@ export function Board({
   onPick: (studentId: string) => void;
   editable: boolean;
   drag?: React.MutableRefObject<DragData | null>;
-  onCellDrop?: (day: number, slot: number) => void;
+  onCellDrop?: (day: number, slot: number, subject?: "math" | "eng") => void;
   onRemove?: (placementId: string) => void;
+  splitSubject?: boolean; // 요일마다 영어 칸 / 수학 칸으로 나눠 보여줘요(통합 시간표용).
 }) {
+  // 이름표 1개 렌더(공용).
+  const renderTag = (p: Placement) => {
+    const s = byId.get(p.studentId);
+    if (!s) return null;
+    const sp = p.specialId ? specById.get(p.specialId) : undefined;
+    const canDrag = editable;
+    return (
+      <span
+        key={p.id}
+        className={"tts-tag" + (sp ? " special" : " tts-" + s.band)}
+        style={sp ? specialStyle(sp.color) : undefined}
+        draggable={canDrag}
+        onDragStart={canDrag && drag ? (e) => { drag.current = { kind: "move", placementId: p.id }; e.dataTransfer.effectAllowed = "move"; } : undefined}
+        onDragEnd={canDrag && drag ? () => { drag.current = null; } : undefined}
+        title={editable ? "끌어서 옮기거나, 옆 ×로 빼요. 이름을 누르면 정보를 봐요" : "이름을 누르면 정보를 봐요"}
+      >
+        <span
+          className="tts-tag-name as-link"
+          role="button"
+          tabIndex={0}
+          onClick={() => onPick(p.studentId)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(p.studentId); } }}
+          title="학생 정보 보기"
+        >
+          {sp ? `${s.name} ${sp.name}` : s.name}
+        </span>
+        {!sp && s.grade && <span className="tts-tag-grade">{s.grade}</span>}
+        <span className="tts-tag-n">{blockNo.get(p.id) ?? ""}</span>
+        {editable && onRemove && (
+          <button type="button" className="tts-tag-x" draggable={false} onClick={(e) => { e.stopPropagation(); onRemove(p.id); }} onDragStart={(e) => e.preventDefault()} title="이 블록 빼기" aria-label="이 블록 빼기">×</button>
+        )}
+      </span>
+    );
+  };
+  // 칸 1개 렌더. sub: "eng"=영어칸 / "math"=수학칸(특강 포함) / undefined=합친 칸.
+  const cell = (day: number, slot: number, sub?: "math" | "eng", showTime = false) => {
+    const here = placements.filter((p) => p.day === day && p.slot === slot && (sub === undefined ? true : sub === "eng" ? p.subject === "eng" : p.subject !== "eng"));
+    return (
+      <div
+        className={"tts-slot" + (here.length ? " has" : "")}
+        onDragOver={editable ? (e) => { e.preventDefault(); e.currentTarget.classList.add("over"); } : undefined}
+        onDragLeave={editable ? (e) => e.currentTarget.classList.remove("over") : undefined}
+        onDrop={editable ? (e) => { e.preventDefault(); e.currentTarget.classList.remove("over"); onCellDrop?.(day, slot, sub); } : undefined}
+      >
+        {showTime && <span className="tts-slot-time">{fmtTime(slot)}</span>}
+        <div className="tts-slot-names">{here.map(renderTag)}</div>
+      </div>
+    );
+  };
+
+  // 분할 모드 — 요일마다 영어·수학 두 칸. 왼쪽 시간 열 + CSS Grid로 행을 맞춰요.
+  if (splitSubject) {
+    return (
+      <div className="tts-board split" style={{ gridTemplateColumns: `64px repeat(${days.length}, 1fr 1fr)` }}>
+        <div className="tts-gh tts-gh-time">시간</div>
+        {days.map((day) => <div className="tts-gh tts-gh-day" key={"h" + day} style={{ gridColumn: "span 2" }}>{DOW[day]}</div>)}
+        <div className="tts-gsub" />
+        {days.map((day) => (
+          <Fragment key={"s" + day}>
+            <div className="tts-gsub eng">영어</div>
+            <div className="tts-gsub math">수학</div>
+          </Fragment>
+        ))}
+        {slots.map((slot) => (
+          <Fragment key={slot}>
+            <div className="tts-gtime">{fmtTime(slot)}</div>
+            {days.map((day) => (
+              <Fragment key={day + "-" + slot}>
+                {cell(day, slot, "eng")}
+                {cell(day, slot, "math")}
+              </Fragment>
+            ))}
+          </Fragment>
+        ))}
+      </div>
+    );
+  }
+
+  // 합친 모드(기존) — 요일별 한 칸.
   return (
     <div className="tts-board">
       {days.map((day) => (
         <div className="tts-daycol" key={day}>
           <div className="tts-daycol-h">{DOW[day]}</div>
-          {slots.map((slot) => {
-            const here = placements.filter((p) => p.day === day && p.slot === slot);
-            return (
-              <div
-                key={slot}
-                className={"tts-slot" + (here.length ? " has" : "")}
-                onDragOver={
-                  editable
-                    ? (e) => {
-                        e.preventDefault();
-                        e.currentTarget.classList.add("over");
-                      }
-                    : undefined
-                }
-                onDragLeave={editable ? (e) => e.currentTarget.classList.remove("over") : undefined}
-                onDrop={
-                  editable
-                    ? (e) => {
-                        e.preventDefault();
-                        e.currentTarget.classList.remove("over");
-                        onCellDrop?.(day, slot);
-                      }
-                    : undefined
-                }
-              >
-                <span className="tts-slot-time">{fmtTime(slot)}</span>
-                <div className="tts-slot-names">
-                  {here.map((p) => {
-                    const s = byId.get(p.studentId);
-                    if (!s) return null;
-                    const sp = p.specialId ? specById.get(p.specialId) : undefined;
-                    const isEng = p.subject === "eng";
-                    const canDrag = editable; // 영어·수학 모두 끌어서 옮길 수 있어요
-                    return (
-                      <span
-                        key={p.id}
-                        className={"tts-tag" + (sp ? " special" : isEng ? " tts-eng" : " tts-math")}
-                        style={sp ? specialStyle(sp.color) : undefined}
-                        draggable={canDrag}
-                        onDragStart={
-                          canDrag && drag
-                            ? (e) => {
-                                drag.current = { kind: "move", placementId: p.id };
-                                e.dataTransfer.effectAllowed = "move";
-                              }
-                            : undefined
-                        }
-                        onDragEnd={canDrag && drag ? () => { drag.current = null; } : undefined}
-                        title={editable ? "끌어서 옮기거나, 옆 ×로 빼요. 이름을 누르면 정보를 봐요" : "이름을 누르면 정보를 봐요"}
-                      >
-                        <span
-                          className="tts-tag-name as-link"
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => onPick(p.studentId)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              onPick(p.studentId);
-                            }
-                          }}
-                          title="학생 정보 보기"
-                        >
-                          {sp ? `${s.name} ${sp.name}` : s.name}
-                        </span>
-                        <span className="tts-tag-n">{sp ? blockNo.get(p.id) : (isEng ? "영" : "수") + (blockNo.get(p.id) ?? "")}</span>
-                        {editable && onRemove && (
-                          <button
-                            type="button"
-                            className="tts-tag-x"
-                            draggable={false}
-                            onClick={(e) => { e.stopPropagation(); onRemove(p.id); }}
-                            onDragStart={(e) => e.preventDefault()}
-                            title="이 블록 빼기"
-                            aria-label="이 블록 빼기"
-                          >
-                            ×
-                          </button>
-                        )}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+          {slots.map((slot) => <Fragment key={slot}>{cell(day, slot, undefined, true)}</Fragment>)}
         </div>
       ))}
     </div>

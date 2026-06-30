@@ -38,8 +38,10 @@ export interface RosterStudent {
   checkinNo: string; // 등하원 출석번호(학원이 부여)
   mathStart: string; // 수학 첫 등원일
   engStart: string; // 영어 첫 등원일
-  mathSlots: Slot[]; // 수학 수업 요일·시간(수학 앱과 공유)
+  mathSlots: Slot[]; // 수학 수업 요일·시간(수학 앱과 공유) — 오늘 유효 버전
   engSlots: Slot[]; // 영어 수업 요일·시간
+  mathUpcoming?: string; // 아직 적용 전 '예정된' 수학 시간표 변경일(YYYY-MM-DD)
+  engUpcoming?: string; // 영어 예정 변경일
 }
 
 /** 전체 로스터(수학·영어 공유). 백엔드 없으면 throw "no_backend".

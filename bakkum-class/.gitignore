@@ -7,3 +7,4 @@ dist
 *.local
 .DS_Store
 docs/가이드-이미지/
+.mcp.json

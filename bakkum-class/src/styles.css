@@ -1516,6 +1516,21 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .prof-efffrom{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:8px}
 .prof-efffrom-l{font-size:var(--t-cap);font-weight:700;color:var(--ink2)}
 .prof-efffrom-h{flex:1 1 100%;font-size:var(--t-cap);color:var(--ink3);line-height:1.4}
+/* 시간표 변경 안내 — 예정(미래 적용일) / 바로 적용 */
+.sched-notice{margin-top:8px;padding:10px 12px;border-radius:10px;font-size:var(--t-cap);line-height:1.5}
+.sched-notice.is-future{background:#fff7ed;border:1px solid #fed7aa}
+.sched-notice.is-now{background:#eff6ff;border:1px solid #bfdbfe}
+.sched-notice-h{font-weight:800;color:#9a3412}
+.sched-notice.is-now .sched-notice-h{color:#1d4ed8}
+.sched-notice-diff{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.snd-row{color:var(--ink2)}
+.snd-row em{display:inline-block;min-width:62px;font-style:normal;font-weight:700;color:var(--ink3);margin-right:6px}
+.snd-row.snd-new{color:var(--ink1);font-weight:600}
+.snd-row.snd-new em{color:#9a3412}
+.sched-notice.is-now .snd-row.snd-new em{color:#1d4ed8}
+.sched-notice-hint{margin-top:6px;color:var(--ink3)}
+.sm-sched-soon{margin-left:8px}
+.dchips .badge{margin-left:4px}
 .prof-slots{display:flex;flex-direction:column;gap:8px}
 .prof-slot-tag{font-size:10px;font-weight:700;border-radius:var(--r-full);padding:1px 7px;margin-left:4px;vertical-align:middle}
 .prof-slot-tag.math{color:var(--brand-d);background:var(--brand-soft)}
@@ -2414,6 +2429,7 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .eng-in-x{border:none;background:rgba(0,0,0,.08);color:inherit;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:13px;line-height:1}
 .eng-in-pick{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}
 .eng-in-chip.out{background:var(--card2);color:var(--ink3);opacity:.7}
+.eng-in-chip.absent{background:var(--bad-soft,#fdeaea);color:var(--bad)}
 /* 하원 버튼 — 요약 줄 오른쪽. 누르면 카드를 맨 아래로 접음. */
 .eng-dash-out{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink3);border-radius:var(--r-full);padding:3px 11px;font-size:var(--t-cap);font-weight:700;cursor:pointer}
 .eng-dash-out:hover{border-color:var(--brand);color:var(--brand-d);background:var(--brand-soft)}
@@ -2593,10 +2609,13 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .sp-sub{font-size:var(--t-sm);color:var(--ink3);margin-top:2px}
 
 .sp-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);align-items:start}
+/* 카드가 하나만 있을 땐(예: 학생 화면의 시간표) 두 칸을 다 써서 잘리지 않게 */
+.sp-grid > .sp-card:only-child{grid-column:1 / -1}
 @media(max-width:680px){.sp-grid{grid-template-columns:1fr}}
 .sp-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
   box-shadow:var(--sh-sm);padding:var(--s5)}
 .sp-card-h{font-size:var(--t-md);margin:0 0 var(--s3);color:var(--ink)}
+.sp-card-hsub{font-size:var(--t-cap);font-weight:500;color:var(--ink3);margin-left:6px}
 
 /* 학생 화면 바로가기 버튼 — 링크 이름이 버튼 글자, 누르면 새 탭. */
 .sp-links{display:flex;flex-wrap:wrap;gap:10px}
@@ -2664,7 +2683,6 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 /* 진행 순서 초록불(현재 할 차례) */
 .sp-cur-row.now{background:var(--ok-soft,#e7f6ec);border-radius:var(--r-sm);padding-left:6px;padding-right:6px}
 .sp-cur-dot{flex:none;width:9px;height:9px;border-radius:50%;background:var(--ok,#2ecc71);box-shadow:0 0 0 3px var(--ok-soft,#e7f6ec);align-self:center}
-.sp-cur-grip{flex:none;color:var(--ink4);font-size:13px;line-height:1;user-select:none}
 .sp-cur-done{margin-left:auto;flex:none;background:var(--ok,#2ecc71);border:none;color:#fff;border-radius:999px;padding:3px 11px;font-size:var(--t-cap);font-weight:700;cursor:pointer}
 .sp-cur-done:hover{filter:brightness(.96)}
 .sp-cur-erow.now{background:var(--ok-soft,#e7f6ec);border-radius:var(--r-sm)}
@@ -2749,8 +2767,17 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 /* ===== 학생 일지: 오늘 한 것 체크박스 ===== */
 .sp-checks{display:flex;flex-direction:column;gap:2px}
 .sp-curlist{display:flex;flex-direction:column;gap:6px}
-.sp-curitem{display:flex;flex-direction:column;align-items:stretch;gap:6px}
-.sp-curitem .sp-check{align-self:flex-start}
+.sp-cur-sec + .sp-cur-sec{margin-top:8px}
+/* 한 줄을 반으로 — 왼쪽: 한 것 체크+이름(끌어서 순서 바꾸기), 오른쪽: 범위 입력 */
+.sp-curitem{display:flex;align-items:center;gap:8px;border-radius:var(--r-sm);transition:background .12s}
+.sp-curitem.now{background:var(--ok-soft,#e7f6ec)}
+.sp-curitem .sp-check{flex:1 1 0;min-width:0;padding:7px 8px;gap:8px;cursor:grab}
+.sp-curitem .sp-check:active{cursor:grabbing}
+.sp-curitem .sp-check .sp-check-label{min-width:0;overflow-wrap:anywhere;display:inline-flex;align-items:center;gap:6px}
+.sp-curitem-r{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:3px}
+.sp-curitem-r .sp-currange{width:100%}
+.sp-curitem-acts{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.sp-curprev{font-size:var(--t-cap);color:var(--ink3);background:var(--card2);border-radius:999px;padding:2px 9px;white-space:nowrap}
 .sp-currange{width:100%;min-width:0;padding:5px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--ink);font-size:var(--t-sm)}
 .sp-curlast,.eng-curlast{align-self:flex-start;margin-top:3px;background:var(--brand-soft);border:1px solid var(--brand-line);color:var(--brand-d);border-radius:999px;padding:2px 9px;font-size:var(--t-cap);font-weight:600;cursor:pointer;white-space:nowrap}
 .sp-curlast:hover,.eng-curlast:hover{filter:brightness(.97)}
@@ -3937,6 +3964,12 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 
 .tts-weekbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:4px 0 16px}
 .tts-weeks{display:inline-flex;gap:4px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-full);padding:4px}
+.tts-weeknav{display:inline-flex;align-items:center;gap:8px}
+.tts-weekstep{display:inline-flex;align-items:center;gap:4px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-full);padding:3px 6px}
+.tts-weekstep-arr{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;background:transparent;color:var(--ink2);font-size:18px;font-weight:800;cursor:pointer;border-radius:var(--r-full)}
+.tts-weekstep-arr:hover:not(:disabled){background:var(--brand-soft);color:var(--brand-d)}
+.tts-weekstep-arr:disabled{opacity:.3;cursor:default}
+.tts-weekstep-lbl{min-width:64px;text-align:center;font-size:var(--t-sm);font-weight:700;color:var(--ink)}
 .tts-weekrange{display:inline-flex;align-items:center;gap:6px;font-size:var(--t-sm);font-weight:700;color:var(--ink2)}
 .tts-weekrange svg{width:16px;height:16px;stroke-width:2}
 .tts-subjseg{display:inline-flex;gap:4px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-full);padding:4px;margin-left:auto}
@@ -4022,6 +4055,16 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 
 /* 전체 시간표 같은 레이아웃 — 요일별 칸, 시간 줄·구분선, 그 밑에 학생 이름표. */
 .tts-board{display:flex;gap:10px;align-items:flex-start;min-width:min-content}
+/* 분할 모드 — 요일×(영어|수학) CSS 그리드. 시간 열 + 요일 헤더 + 과목 서브헤더 + 칸. */
+.tts-board.split{display:grid;gap:0;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:var(--card)}
+.tts-board.split .tts-gh{position:sticky;top:0;z-index:1;text-align:center;font-weight:800;color:var(--ink);font-size:var(--t-sm);padding:10px 0;background:var(--brand-soft);border-bottom:1px solid var(--line);border-left:1px solid var(--line)}
+.tts-board.split .tts-gh-time{border-left:none;color:var(--ink2)}
+.tts-board.split .tts-gsub{text-align:center;font-weight:700;font-size:var(--t-cap);padding:5px 0;border-bottom:1px solid var(--line);border-left:1px solid var(--line);background:var(--card2);color:var(--ink2)}
+.tts-board.split .tts-gsub.eng{background:#eef0ff;color:#4f46e5}
+.tts-board.split .tts-gsub.math{background:var(--ok-soft);color:var(--ok)}
+[data-theme="dark"] .tts-board.split .tts-gsub.eng{background:#23244a;color:#aab2ff}
+.tts-board.split .tts-gtime{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--ink3);padding:6px 2px;border-bottom:1px dashed var(--line);background:var(--card2);white-space:nowrap}
+.tts-board.split .tts-slot{border-left:1px solid var(--line);border-bottom:1px dashed var(--line);min-height:34px}
 .tts-daycol{flex:1 1 160px;min-width:150px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card2);overflow:hidden}
 .tts-daycol-h{position:sticky;top:0;text-align:center;font-weight:800;color:var(--ink2);font-size:var(--t-sm);padding:8px 0;background:var(--brand-soft);border-bottom:1px solid var(--line)}
 .tts-slot{display:flex;flex-direction:column;gap:4px;padding:6px 8px;border-bottom:1px dashed var(--line);min-height:20px}
@@ -4058,6 +4101,68 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .tts-sv-capture{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px}
 .tts-sv-cap-title{font-size:var(--t-md);font-weight:800;color:var(--ink);margin:0 0 10px}
 .tts-sv-head b{color:var(--ink)}
+/* === 통합 시간표 리뉴얼 — 전체폭 + 칩 목록 + 검색 + 체크박스 편집기 === */
+.tts-layout-full{display:block}
+/* 캡션 여백 — 글씨가 선·버튼에 딱 붙지 않게(답답함 해소) */
+.tts-sv-head-row{padding:10px 4px 12px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.tts-sv-cap{line-height:1.7;padding-right:8px;max-width:760px}
+.tts-sv-actions{display:flex;gap:8px;flex:none}
+.tts-sv-actions .btn.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand-d)}
+/* 선생님 보기 — 특강 아래 가로 칩 목록 */
+.tts-chiprow-wrap{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 14px;box-shadow:var(--sh-sm);margin-bottom:14px}
+.tts-chiprow-wrap.tts-drop-cancel{background:var(--bad-soft);box-shadow:0 0 0 2px var(--bad) inset}
+.tts-chiprow-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.tts-chiprow-ttl{font-weight:800;color:var(--ink);font-size:var(--t-sm)}
+.tts-chiprow-ttl b{margin-left:5px;font-size:var(--t-cap);font-weight:700;color:var(--ink3);background:var(--card2);border:1px solid var(--line);border-radius:var(--r-full);padding:1px 8px}
+.tts-chip-search{max-width:200px}
+.tts-chiprow-hint{margin-left:auto;font-size:var(--t-cap);color:var(--ink3)}
+.tts-chips{display:flex;flex-wrap:wrap;gap:8px}
+.tts-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line);border-left-width:4px;border-radius:var(--r-full);background:var(--card2);cursor:grab;user-select:none}
+.tts-chip:active{cursor:grabbing}
+.tts-chip.full{opacity:.5;cursor:default}
+.tts-chip-nm{border:none;background:none;padding:0;margin:0;font:inherit;font-weight:800;color:var(--ink);cursor:pointer}
+.tts-chip-nm:hover{text-decoration:underline}
+.tts-chip-lv{font-size:var(--t-cap);font-weight:700;color:var(--ink3)}
+.tts-chip-rem{font-size:var(--t-cap);font-weight:800;color:var(--brand-d);background:var(--brand-soft);border-radius:var(--r-full);padding:0 7px;min-width:18px;text-align:center}
+.tts-chip-rem.done{color:var(--ink3);background:var(--card)}
+.tts-chip.tts-elemLow,.tts-chip.tts-elem,.tts-chip.tts-low,.tts-chip.tts-math{border-left-color:var(--brand)}
+.tts-chip.tts-elemHigh{border-left-color:var(--ok)}
+.tts-chip.tts-mid{border-left-color:var(--info)}
+.tts-chip.tts-high{border-left-color:#7c3aed}
+.tts-chip.tts-eng{border-left-color:#4f46e5}
+/* 학생 보기 — 시간표 위 검색 */
+.tts-studentpick{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 14px;box-shadow:var(--sh-sm);margin-bottom:14px}
+.tts-studentpick-l{font-weight:800;color:var(--ink);font-size:var(--t-sm)}
+.tts-studentpick-search{max-width:240px}
+.tts-studentpick-results{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 100%}
+.tts-studentpick-cur{font-size:var(--t-sm);color:var(--ink2)}
+.tts-studentpick-cur b{color:var(--ink)}
+/* 체크박스 그리드 편집기 (수정하기) */
+.tts-cg{border:1px solid var(--brand-line);border-radius:var(--r-lg);background:var(--card);padding:12px;margin-bottom:14px;box-shadow:var(--sh-sm)}
+.tts-cg-budget{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px}
+.tts-cg-name{font-size:var(--t-sm);color:var(--ink2)}
+.tts-cg-name b{color:var(--ink)}
+.tts-cg-rem{font-size:var(--t-cap);font-weight:800;border-radius:var(--r-full);padding:3px 10px}
+.tts-cg-rem.eng{color:#4f46e5;background:#eef0fe}
+.tts-cg-rem.math{color:var(--brand-d);background:var(--brand-soft)}
+.tts-cg-rem.over{color:#fff;background:var(--bad)}
+.tts-cg-rem b{font-size:var(--t-base)}
+.tts-cg-scroll{overflow:auto;max-height:60vh}
+.tts-cg-table{border-collapse:collapse;width:100%;table-layout:fixed;min-width:560px}
+.tts-cg-col-time{width:84px}
+.tts-cg-table th,.tts-cg-table td{border:1px solid var(--line);text-align:center}
+.tts-cg-th{background:var(--card2);font-weight:800;color:var(--ink2);font-size:var(--t-sm);padding:6px 8px;position:sticky;top:0;z-index:2}
+.tts-cg-thtime{left:0;z-index:3}
+.tts-cg-sub{font-size:var(--t-cap);font-weight:700;padding:3px 6px;position:sticky;top:30px;z-index:2}
+.tts-cg-sub.eng{color:#4f46e5;background:#eef0fe}
+.tts-cg-sub.math{color:var(--brand-d);background:var(--brand-soft)}
+.tts-cg-time{font-size:var(--t-cap);font-weight:700;color:var(--ink3);background:var(--card2);padding:3px 8px;white-space:nowrap;position:sticky;left:0;z-index:1}
+.tts-cg-cell{padding:2px}
+.tts-cg-cell input{width:17px;height:17px;cursor:pointer;accent-color:var(--brand)}
+.tts-cg-cell.eng input{accent-color:#4f46e5}
+.tts-cg-cell.on.eng{background:#eef0fe}
+.tts-cg-cell.on.math{background:var(--brand-soft)}
+.tts-cg-empty{padding:14px}
 .tts-sv-empty{font-size:var(--t-cap);color:var(--ink4);text-align:center;padding:10px 6px}
 .tts-sv-block{display:flex;flex-direction:column;gap:2px;padding:8px 10px;margin:6px;border-radius:var(--r-md)}
 .tts-sv-block b{font-size:var(--t-sm)}

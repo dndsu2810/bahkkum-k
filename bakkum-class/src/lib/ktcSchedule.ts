@@ -98,18 +98,30 @@ const resv = (studentId: string, date: string, type: string, range: string): Tes
   score: 0, status: "예정", memo: "", scoreMode: "score", scoreNum: 0, scoreDen: 100,
 });
 
+/** 그 날짜가 속한 주(월요일) 키 — 멱등 비교용. */
+function weekKey(studentId: string, date: string, type: string): string {
+  return `${studentId}|${ymd(mondayOfWeek(date))}|${type}`;
+}
+/** 그 달 말일(yyyy-mm-dd) — 기본 생성 범위는 '이번 달'까지. */
+function endOfMonthStr(dateStr: string): string {
+  const d = parseD(dateStr);
+  return ymd(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+}
+
 /**
- * 규칙대로 다가오는 weeksAhead 주의 테스트 예약(예정)을 계산. 학생은 등원 수/목 중 먼저 오는 날에 본다.
+ * 규칙대로 '이번 달(또는 throughDate)'까지의 테스트 예약(예정)을 계산. 학생은 등원 수/목 중 먼저 오는 날에 본다.
  *  - weekly 규칙: 매주 그 학생 시험요일에 규칙 이름으로 예약(경시 주에는 건너뜀 — 그 주는 KTC가 대신).
  *  - ktc 규칙: 그 달 2번째 수/목에만 'KTC수학경시대회'로 예약, 단원은 학년·월 표에서 자동.
- * 이미 같은 학생·날짜·종류가 있으면 건너뜀(중복 방지·멱등).
+ * 멱등은 **주 단위**(학생|그 주 월요일|종류) — 요일을 바꿔 날짜가 달라져도 한 주에 한 건만(중복 방지).
  */
-export function planFromRules(rules: TestRuleLite[], studentsById: Map<string, Student>, existing: TestLog[], weeksAhead = 8): TestLog[] {
+export function planFromRules(rules: TestRuleLite[], studentsById: Map<string, Student>, existing: TestLog[], throughDate?: string): TestLog[] {
   const today = todayStr();
-  const seen = new Set(existing.map((t) => `${t.studentId}|${t.date}|${t.type}`));
+  const cutoff = throughDate || endOfMonthStr(today); // 기본: 이번 달 말일까지
+  const weeksAhead = 6; // 한 달이면 충분
+  const seen = new Set(existing.map((t) => weekKey(t.studentId, t.date, t.type)));
   const created: TestLog[] = [];
   const baseMon = mondayOfWeek(today);
-  const add = (rec: TestLog) => { const k = `${rec.studentId}|${rec.date}|${rec.type}`; if (!seen.has(k)) { seen.add(k); created.push(rec); } };
+  const add = (rec: TestLog) => { const k = weekKey(rec.studentId, rec.date, rec.type); if (!seen.has(k)) { seen.add(k); created.push(rec); } };
   for (const rule of rules) {
     if (!rule.active) continue;
     for (const sid of rule.studentIds) {
@@ -122,11 +134,11 @@ export function planFromRules(rules: TestRuleLite[], studentsById: Map<string, S
           const day = testDayOf(s, ymd(weekMon));
           if (!day) continue;
           const testDate = ymd(addDays(weekMon, day === "수" ? 2 : 3));
-          if (testDate < today) continue;
+          if (testDate < today || testDate > cutoff) continue;
           if (isCompetitionDate(testDate)) add(resv(sid, testDate, KTC_TYPE, ktcRange(s.grade, testDate)));
         } else {
           const testDate = ruleDateOf(s, weekMon, rule);
-          if (!testDate || testDate < today) continue;
+          if (!testDate || testDate < today || testDate > cutoff) continue;
           if (rule.until && testDate > rule.until) continue; // 반복 마감일 지나면 중단
           if (rule.wom && rule.wom !== "every" && nthOfWeekday(testDate) !== Number(rule.wom)) continue; // 특정 주차만
           if (!isCompetitionDate(testDate)) add(resv(sid, testDate, rule.name.trim() || WEEKLY_TYPE, (rule.range || "").trim())); // 경시 주는 KTC가 대신

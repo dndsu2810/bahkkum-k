@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Student, StudentStatus } from "../types";
-import { durTotal, freqLabel, lessonDays, weekCount } from "../lib/logic";
+import { durTotal, freqLabel, lessonDays, weekCount, upcomingScheduleFrom } from "../lib/logic";
 import { GRADE_OPTIONS } from "../lib/grade";
 import { GradeBadge, StatusBadge, Empty } from "./ui";
 import { Icon } from "../icons";
@@ -234,6 +234,7 @@ export function StudentTable({
                   {chips.map((d) => (
                     <span className="dchip" key={d}>{d}</span>
                   ))}
+                  {(() => { const u = upcomingScheduleFrom(s); return u ? <span className="badge b-orange" title={`${u}부터 새 시간표로 바뀌어요(지금은 현재 시간표)`}>{Number(u.slice(5, 7))}/{Number(u.slice(8, 10))} 변경 예정</span> : null; })()}
                 </div>
               </td>
               {withActions ? (
