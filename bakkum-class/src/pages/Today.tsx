@@ -30,6 +30,8 @@ interface DayEntry {
   time: string;
   lesson?: LessonOnDate;
   makeups: Makeup[];
+  /** 예정에 없던 학생을 검색해 직접 추가한 카드(이 화면에서만). */
+  extra?: boolean;
 }
 
 // 출결 선택지 — 출결 기록 페이지와 동일(출석·지각·결석 + 조퇴·무단결석). 영어 '오늘'과도 통일.
@@ -76,6 +78,9 @@ export function Today() {
   const [editDue, setEditDue] = useState("");
   const [editTags, setEditTags] = useState<string[]>([]);
   const [gradeTab, setGradeTab] = useState<"all" | "cho" | "jung">("all");
+  // 예정에 없어도 검색해서 추가하는 등원 학생(이 화면에서만) — 대시보드·영어 '오늘 등원'과 동일.
+  const [extraIds, setExtraIds] = useState<Set<string>>(new Set());
+  const [addQ, setAddQ] = useState("");
   // 영어식 마스터-디테일: 왼쪽에서 고른 학생을 오른쪽 상세에 표시.
   const [sel, setSel] = useState<string>("");
   // 시간표 변경요청 — 그 날짜 승인된 변경(수학) 표시 + 수학↔영어 겹침 자동 감지.
@@ -543,11 +548,24 @@ export function Today() {
     if (!s) continue;
     entries.push({ key: "mk_" + sid, student: s, time: mkBySid[sid][0].makeupTime || "", makeups: mkBySid[sid] });
   }
+  // 예정에 없어도 검색해 추가한 학생 — 출결을 위해 합성 수업(시간 빈값)으로 카드를 만든다.
+  for (const sid of extraIds) {
+    if (entries.some((e) => e.student.id === sid)) continue;
+    const s = studentById(data.students, sid);
+    if (!s) continue;
+    const synth: LessonOnDate = { student: s, time: "", duration: lessonDurationFor(s) };
+    entries.push({ key: keyOf(synth), student: s, time: "", lesson: synth, makeups: [], extra: true });
+  }
   entries.sort((a, b) => timeToMin(a.time || "99:99") - timeToMin(b.time || "99:99"));
   const entryIsCho = (e: DayEntry) => (e.student.grade || "").startsWith("초");
   const choEntries = entries.filter(entryIsCho).length;
   const shownEntries = gradeTab === "all" ? entries : entries.filter((e) => (gradeTab === "cho" ? entryIsCho(e) : !entryIsCho(e)));
   const todayCount = new Set(entries.map((e) => e.student.id)).size;
+  // 등원 학생 추가 검색 — 이미 카드에 있는 학생은 제외.
+  const addExtra = (sid: string) => { setExtraIds((p) => new Set(p).add(sid)); setAddQ(""); };
+  const addHits = addQ.trim()
+    ? activeStudents(data.students).filter((s) => s.name.includes(addQ.trim()) && !entries.some((e) => e.student.id === s.id)).slice(0, 12)
+    : [];
   // 선택된 학생(없거나 필터에서 빠지면 첫 학생). 오른쪽 상세에 표시.
   // 학생은 직접 선택해야 상세가 뜬다(자동으로 첫 학생을 고르지 않음 — '민서준 디폴트' 방지).
   const activeEntry = sel ? shownEntries.find((e) => e.key === sel) ?? null : null;
@@ -637,6 +655,24 @@ export function Today() {
           </div>
         )}
 
+        {/* 등원 학생 추가 — 예정에 없어도 검색해서 넣을 수 있어요 (대시보드·중고등영어 '오늘 등원'과 동일) */}
+        {!holiday && (
+          <div className="today-addrow">
+            <input className="input today-addsearch" value={addQ} onChange={(e) => setAddQ(e.target.value)} placeholder="등원 학생 추가 — 예정에 없어도 이름으로 검색해서 넣어요" />
+            {addQ.trim() && (
+              <div className="today-addhits">
+                {addHits.length === 0 ? (
+                  <span className="hub-muted">검색 결과가 없어요.</span>
+                ) : (
+                  addHits.map((s) => (
+                    <button key={s.id} type="button" className="today-pt" onClick={() => addExtra(s.id)}>{s.name} <span className="muted">{s.grade}</span> +</button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {holiday ? (
           <Empty>{isToday ? "오늘은" : "이 날은"} {holiday} (공휴일) — 휴원입니다.</Empty>
         ) : entries.length === 0 ? (
@@ -664,6 +700,7 @@ export function Today() {
                     <button className="eng-stu-name" onClick={() => setSel(e.key)}>
                       <span className="today-side-nm">{s.name}</span>
                       {e.time && <span className="eng-stu-time">{e.time}</span>}
+                      {e.extra && <span className="eng-stu-chg" title="예정에 없던 추가 등원">추가</span>}
                       {(() => { const ch = arrivalOf(approvedChanges, s.id, "math", day); return ch && ch.fromDate && ch.fromDate !== day ? <span className="eng-stu-chg" title="다른 날에서 옮겨온 수업">이동</span> : null; })()}
                       {lesson && st && <span className={"today-side-st " + stCls}>{st}{st === "지각" && lateMin ? ` ${lateMin}분` : ""}</span>}
                       {!lesson && <span className="today-side-st blue">보강{mkAllDone ? " 완료" : ""}</span>}

@@ -90,6 +90,7 @@ export function TimetableSample() {
   const [mathIds, setMathIds] = useState<Set<string>>(new Set()); // 수학 듣는 학생(선생님 편집·예산 대상)
   const [engIds, setEngIds] = useState<Set<string>>(new Set()); // 영어 듣는 학생
   const [focusStudent, setFocusStudent] = useState<string>("");
+  const [pickQ, setPickQ] = useState(""); // 학생 검색(이름)
   const [loading, setLoading] = useState(true);
   const [fromRoster, setFromRoster] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false); // 저장된 초안을 불러왔는지
@@ -547,7 +548,8 @@ export function TimetableSample() {
             // 학생 보기 — 한 명을 골라요.
             <div className="tts-pickwrap">
               <div className="tts-pick-label">볼 학생</div>
-              {students.filter((s) => (subjectFilter === "eng" ? engIds.has(s.id) : subjectFilter === "math" ? mathIds.has(s.id) : true)).map((s) => {
+              <input className="input tts-pick-search" value={pickQ} onChange={(e) => setPickQ(e.target.value)} placeholder="학생 이름 검색" style={{ minWidth: 130, maxWidth: 180 }} />
+              {students.filter((s) => (subjectFilter === "eng" ? engIds.has(s.id) : subjectFilter === "math" ? mathIds.has(s.id) : true)).filter((s) => !pickQ.trim() || s.name.includes(pickQ.trim())).map((s) => {
                 const picked = focusStudent === s.id;
                 const drabble = canEdit && picked && (subjectFilter === "eng" ? engIds.has(s.id) : mathIds.has(s.id));
                 return (
