@@ -368,7 +368,10 @@ export default {
         if (p === "/api/timetable" && request.method === "GET") {
           const me = await readSession(env, request);
           if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
-          return json({ lessons: await readTimetable(env) });
+          // ?date=YYYY-MM-DD 가 오면 그 날(특정 주) 유효 시간표를 버전 이력에서 골라 보여준다(없으면 라이브).
+          const dq = new URL(request.url).searchParams.get("date") || "";
+          const asOf = /^\d{4}-\d{2}-\d{2}$/.test(dq) ? dq : undefined;
+          return json({ lessons: await readTimetable(env, asOf) });
         }
         if (p === "/api/sync/timetable" && request.method === "POST") {
           const me = await readSession(env, request);
@@ -1557,22 +1560,46 @@ interface TtLesson {
   time: string;
   duration: number;
 }
-async function readTimetable(env: Env): Promise<TtLesson[]> {
+async function readTimetable(env: Env, asOf?: string): Promise<TtLesson[]> {
   await ensureEngLessons(env);
   // 재원생만 — 휴원·퇴원생은 시간표에서 제외(상태를 재원으로 되돌리면 다시 보임).
   const nameRows = await env.DB.prepare("SELECT id, name FROM students WHERE (hidden IS NULL OR hidden = 0) AND (status='재원' OR status IS NULL OR status='')").all<{ id: number; name: string }>();
   const nameOf: Record<string, string> = {};
   for (const r of nameRows.results || []) nameOf[String(r.id)] = String(r.name);
-  const out: TtLesson[] = [];
+
+  // 라이브(오늘 유효) 시간표 — 학생별로 모은다.
+  const liveMath: Record<string, Slot[]> = {};
+  const liveEng: Record<string, Slot[]> = {};
   const m = await env.DB.prepare("SELECT student_id, day, time, duration FROM class_lessons").all<{ student_id: string; day: string; time: string; duration: number }>();
-  for (const r of m.results || [])
-    if (nameOf[String(r.student_id)]) out.push({ studentId: String(r.student_id), name: nameOf[String(r.student_id)], subject: "math", day: String(r.day), time: String(r.time), duration: Number(r.duration) });
+  for (const r of m.results || []) (liveMath[String(r.student_id)] ||= []).push({ day: String(r.day), time: String(r.time), duration: Number(r.duration) });
   try {
     const e = await env.DB.prepare("SELECT student_id, day, time, duration FROM class_eng_lessons").all<{ student_id: string; day: string; time: string; duration: number }>();
-    for (const r of e.results || [])
-      if (nameOf[String(r.student_id)]) out.push({ studentId: String(r.student_id), name: nameOf[String(r.student_id)], subject: "english", day: String(r.day), time: String(r.time), duration: Number(r.duration) });
+    for (const r of e.results || []) (liveEng[String(r.student_id)] ||= []).push({ day: String(r.day), time: String(r.time), duration: Number(r.duration) });
   } catch {
     /* eng_lessons 없으면 수학만 */
+  }
+
+  // asOf(특정 주)가 오면 버전 이력에서 그 날 유효 시간표를 우선 사용. 이력이 없거나 빈 버전이면 라이브로 폴백(안전).
+  const mathVer: Record<string, Slot[]> = {};
+  const engVer: Record<string, Slot[]> = {};
+  if (asOf) {
+    try {
+      const sr = await env.DB.prepare("SELECT student_id, versions FROM class_schedules").all<{ student_id: string; versions: string }>();
+      for (const r of sr.results || []) { const eff = effectiveVerLessons(JSON.parse(String(r.versions || "[]")), asOf); if (eff.length) mathVer[String(r.student_id)] = eff; }
+    } catch { /* class_schedules 없으면 라이브 사용 */ }
+    try {
+      const er = await env.DB.prepare("SELECT student_id, versions FROM class_eng_schedules").all<{ student_id: string; versions: string }>();
+      for (const r of er.results || []) { const eff = effectiveVerLessons(JSON.parse(String(r.versions || "[]")), asOf); if (eff.length) engVer[String(r.student_id)] = eff; }
+    } catch { /* class_eng_schedules 없으면 라이브 사용 */ }
+  }
+
+  const out: TtLesson[] = [];
+  for (const sid of Object.keys(nameOf)) {
+    const name = nameOf[sid];
+    const ms = asOf && mathVer[sid] ? mathVer[sid] : (liveMath[sid] || []);
+    for (const l of ms) out.push({ studentId: sid, name, subject: "math", day: l.day, time: l.time, duration: Number(l.duration) });
+    const es = asOf && engVer[sid] ? engVer[sid] : (liveEng[sid] || []);
+    for (const l of es) out.push({ studentId: sid, name, subject: "english", day: l.day, time: l.time, duration: Number(l.duration) });
   }
   return out;
 }
