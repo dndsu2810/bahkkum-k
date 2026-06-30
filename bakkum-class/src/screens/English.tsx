@@ -1101,8 +1101,8 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
       {/* 숙제 코멘트 — 검사한 숙제 바로 아래(새 숙제 위). 선생님 메모용(학생 비공개). */}
       {showHw && (
         <div className="eng-field">
-          <div className="eng-label">숙제 코멘트 <span className="eng-mk-tag soft">선생님 메모 · 학생 비공개</span></div>
-          <textarea className="input" rows={2} value={d.hwComment} onChange={(e) => setD({ ...d, hwComment: e.target.value })} placeholder="검사한 숙제에 대한 메모 (학생에겐 안 보여요)" />
+          <div className="eng-label">숙제 코멘트 <span className="eng-mk-tag soft">학생에게 보여요</span></div>
+          <textarea className="input" rows={2} value={d.hwComment} onChange={(e) => setD({ ...d, hwComment: e.target.value })} placeholder="숙제에 대한 코멘트 (학생이 읽어요)" />
         </div>
       )}
 
@@ -1181,8 +1181,8 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
       )}
 
       <div className="eng-field">
-        <div className="eng-label">수업 코멘트 <span className="eng-mk-tag soft">선생님 메모 · 학생 비공개</span></div>
-        <textarea className="input" rows={2} value={d.comment} onChange={(e) => setD({ ...d, comment: e.target.value })} placeholder="수업에 대한 메모 (학생에겐 안 보여요)" />
+        <div className="eng-label">수업 코멘트 <span className="eng-mk-tag soft">학생에게 보여요 (접속 링크 등)</span></div>
+        <textarea className="input" rows={2} value={d.comment} onChange={(e) => setD({ ...d, comment: e.target.value })} placeholder="수업에 대한 코멘트 · 학생에게 보낼 링크 (학생이 읽어요)" />
       </div>
 
       {autoSave ? (

@@ -893,7 +893,7 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
       </div>
 
       {/* 숙제 코멘트 — 선생님 메모용. 학생에게는 숨기고(교사가 학생 페이지 열람 시에만 보임). */}
-      {!isStudent && isMid && teacherHwComment.trim() && (
+      {isMid && teacherHwComment.trim() && (
         <div className="sp-f">
           <span>숙제 코멘트</span>
           <div className="sp-teacher-comment">{teacherHwComment}</div>
@@ -908,8 +908,8 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
         <textarea className="input" rows={3} value={studentNote} onChange={(e) => setStudentNote(e.target.value)} placeholder="오늘 배운 내용, 느낀 점, 선생님께 남길 말을 적어요." />
       </div>
 
-      {/* 수업 코멘트 — 선생님 메모용. 학생에게는 숨기고(교사가 학생 페이지 열람 시에만 보임). */}
-      {!isStudent && teacherComment.trim() && (
+      {/* 수업 코멘트 — 선생님이 남긴 글(학생도 읽음). 접속 링크 등 학생 전달용으로도 쓰여요. */}
+      {teacherComment.trim() && (
         <div className="sp-f">
           <span>수업 코멘트</span>
           <div className="sp-teacher-comment">{teacherComment}</div>
@@ -931,8 +931,6 @@ function fmtMonth(ym: string): string {
   return `${y}년 ${Number(m)}월`;
 }
 function LogHistory({ rows, band }: { rows: StudentLogRow[]; band: string }) {
-  const { user } = useAuth();
-  const isStudent = user?.role === "student"; // 학생에겐 선생님 코멘트 숨김
   const isMid = band === "mid" || band === "bridge";
   // 데이터에 있는 월 목록(최신순).
   const months = Array.from(new Set(rows.map((r) => r.date.slice(0, 7)))).sort().reverse();
@@ -982,7 +980,7 @@ function LogHistory({ rows, band }: { rows: StudentLogRow[]; band: string }) {
                 ))
               )}
             </div>
-            {!isStudent && r.comment && <div className="sp-hist-note">{r.comment}</div>}
+            {r.comment && <div className="sp-hist-note">{r.comment}</div>}
             {r.links && r.links.length > 0 && (
               <div className="sp-hist-links">
                 {r.links.filter((l) => safeUrl(l.url)).map((l, i) => (
