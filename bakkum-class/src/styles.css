@@ -2705,6 +2705,9 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .sp-hw-x:hover{opacity:1}
 .sp-teacher-comment{background:var(--brand-soft);border:1px solid var(--brand-line,var(--brand));border-radius:var(--r-md);padding:10px 12px;font-size:var(--t-base);color:var(--brand-d);white-space:pre-wrap;line-height:1.6}
 .eng-studentnote{background:var(--card2);border:1px solid var(--line2);border-radius:var(--r-md);padding:8px 10px;font-size:var(--t-sm);color:var(--ink2);white-space:pre-wrap;line-height:1.5}
+.eng-prevnote{display:flex;flex-direction:column;gap:3px;background:var(--brand-soft);border:1px solid var(--brand-line);border-radius:var(--r-md);padding:8px 11px;margin-bottom:10px}
+.eng-prevnote-tag{font-size:var(--t-cap);font-weight:700;color:var(--brand-d)}
+.eng-prevnote-txt{font-size:var(--t-sm);color:var(--ink);line-height:1.5;white-space:pre-wrap}
 .sp-progbooks{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px}
 .sp-progbooks-l{font-size:var(--t-cap);font-weight:700;color:var(--ink3)}
 .sp-hw-chip.ok{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-d)}

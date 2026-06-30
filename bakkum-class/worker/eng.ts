@@ -170,6 +170,8 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "ALTER TABLE class_eng_daily ADD COLUMN student_note TEXT NOT NULL DEFAULT ''",
     // 중고등영어 숙제 코멘트 — '수업 코멘트'(comment)와 별도로 숙제에 대한 코멘트.
     "ALTER TABLE class_eng_daily ADD COLUMN hw_comment TEXT NOT NULL DEFAULT ''",
+    // '다음 시간에 이어서 할 것' — 교사 메모. 다음 수업 시작 시 교사에게 노출(이어보기). 특이사항(note=원장 전달)과 분리.
+    "ALTER TABLE class_eng_daily ADD COLUMN next_note TEXT NOT NULL DEFAULT ''",
     // 내신모드 학년 — 학생 명단에서 자동 매칭(학교와 함께).
     "ALTER TABLE class_eng_naesin ADD COLUMN grade TEXT NOT NULL DEFAULT ''",
     // 교재 완료일 — 수학 진도·교재관리와 동일. status='완료'로 바뀐 날.
@@ -361,9 +363,9 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     const hwItems = JSON.stringify({ assign: hwAssign, check: hwCheck, carryHidden, hwNone: !!b.hwNone, testNone: !!b.testNone });
     await env.DB
       .prepare(
-        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,makeup,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,book_no,book_next,word_test,done_items,comment,hw_comment,materials,hw_items,cur_ranges,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, makeup=excluded.makeup, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, book_no=excluded.book_no, book_next=excluded.book_next, word_test=excluded.word_test, done_items=excluded.done_items, comment=excluded.comment, hw_comment=excluded.hw_comment, materials=excluded.materials, hw_items=excluded.hw_items, cur_ranges=excluded.cur_ranges, updated_at=excluded.updated_at"
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,makeup,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,book_no,book_next,word_test,done_items,comment,hw_comment,next_note,materials,hw_items,cur_ranges,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, makeup=excluded.makeup, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, book_no=excluded.book_no, book_next=excluded.book_next, word_test=excluded.word_test, done_items=excluded.done_items, comment=excluded.comment, hw_comment=excluded.hw_comment, next_note=excluded.next_note, materials=excluded.materials, hw_items=excluded.hw_items, cur_ranges=excluded.cur_ranges, updated_at=excluded.updated_at"
       )
-      .bind(sid, date, attended, status, lateMin, reason, makeup, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwW, hwR, hwG, b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(autoReasons), points, String(b.note || ""), String(b.bookNo || ""), String(b.bookNext || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.comment || ""), String(b.hwComment || ""), String(b.materials || ""), hwItems, JSON.stringify(b.curRanges && typeof b.curRanges === "object" ? b.curRanges : {}), Date.now())
+      .bind(sid, date, attended, status, lateMin, reason, makeup, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwW, hwR, hwG, b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(autoReasons), points, String(b.note || ""), String(b.bookNo || ""), String(b.bookNext || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.comment || ""), String(b.hwComment || ""), String(b.nextNote || ""), String(b.materials || ""), hwItems, JSON.stringify(b.curRanges && typeof b.curRanges === "object" ? b.curRanges : {}), Date.now())
       .run();
     // 그날 일지 바로가기 링크 — 별도 테이블에 (학생,날짜)별로 저장. b.links가 올 때만 갱신(다른 저장에서 안 건드림).
     if (b.links !== undefined) {
@@ -1158,6 +1160,7 @@ function dailyRow(r: Record<string, unknown>) {
     pointReasons: (() => { try { const a = JSON.parse(String(r.point_reasons ?? "[]")); return Array.isArray(a) ? a.map(String) : []; } catch { return []; } })(),
     points: Number(r.points ?? 0),
     note: String(r.note ?? ""),
+    nextNote: String(r.next_note ?? ""),
     bookNo: String(r.book_no ?? ""),
     bookNext: String(r.book_next ?? ""),
     wordTest: String(r.word_test ?? ""),

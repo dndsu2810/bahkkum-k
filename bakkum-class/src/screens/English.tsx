@@ -71,6 +71,7 @@ const blankDaily = (studentId: string, date: string): EngDaily => ({
   doneItems: [],
   comment: "",
   hwComment: "",
+  nextNote: "",
   studentNote: "",
   materials: "",
   hwAssign: [],
@@ -846,12 +847,16 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
   const [hist, setHist] = useState<EngDaily[]>([]);
   const [newCheck, setNewCheck] = useState("");
   useEffect(() => {
-    if (!examMode) return;
     let alive = true;
-    // 지난 '내줄 숙제' 이어보기(내신모드). 배부 자료는 서버가 학습목표·공유 숙제 목록에 자동 편입하므로 여기선 따로 불러오지 않음.
+    // 지난 기록 — '내줄 숙제 이어보기'(내신)와 '지난 시간 메모(다음에 이어서 할 것)' 노출에 사용.
     engApi.dailyByStudent(value.studentId).then((l) => { if (alive) setHist(l); }).catch(() => {});
     return () => { alive = false; };
-  }, [examMode, value.studentId]);
+  }, [value.studentId]);
+  // 지난 수업에 적어둔 '다음 시간에 이어서 할 것' — 오늘 수업 시작 시 교사에게 노출(이어보기).
+  const prevNextNote = useMemo(() => {
+    const prior = hist.filter((x) => x.date < d.date && x.nextNote && x.nextNote.trim()).sort((a, b) => (a.date < b.date ? 1 : -1));
+    return prior[0] ? { date: prior[0].date, text: prior[0].nextNote.trim() } : null;
+  }, [hist, d.date]);
   // 지난(가장 가까운 이전 날짜) '내줄 숙제' — 이번 '숙제 검사'로 이어진다.
   const carried = useMemo(() => {
     const prior = hist.filter((x) => x.date < d.date && x.hwAssign && x.hwAssign.length).sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -923,6 +928,14 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
       {!compact && (
         <div className="eng-daily-h">
           <h2>{student} · {d.date}</h2>
+        </div>
+      )}
+
+      {/* 지난 시간 메모 — 지난 수업에 적어둔 '다음 시간에 이어서 할 것'. 오늘 수업 시작 시 이어보기. */}
+      {prevNextNote && (
+        <div className="eng-prevnote">
+          <span className="eng-prevnote-tag">지난 시간 메모 · {fmtMDDow(prevNextNote.date)}</span>
+          <span className="eng-prevnote-txt">{prevNextNote.text}</span>
         </div>
       )}
 
@@ -1141,8 +1154,13 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
       <DailyTests studentId={d.studentId} date={d.date} planNextDate={showHw ? planNextDate : undefined} testNone={d.testNone} onTestNone={(v) => setD({ ...d, testNone: v })} />
 
       <div className="eng-field">
-        <div className="eng-label">특이사항</div>
-        <input className="input" value={d.note} onChange={(e) => setD({ ...d, note: e.target.value })} placeholder="특이사항 (예: 컨디션·전달사항)" />
+        <div className="eng-label">다음 시간에 이어서 할 것 <span className="eng-mk-tag soft">다음 수업에 이어보기로 떠요</span></div>
+        <input className="input" value={d.nextNote} onChange={(e) => setD({ ...d, nextNote: e.target.value })} placeholder="예: 판다라이팅부터 / 원서 이어 읽기" />
+      </div>
+
+      <div className="eng-field">
+        <div className="eng-label">원장님께 전합니다 <span className="eng-mk-tag soft">원장 대시보드 최근 특이사항</span></div>
+        <input className="input" value={d.note} onChange={(e) => setD({ ...d, note: e.target.value })} placeholder="원장님께 전할 내용 (예: 컨디션·상담 필요)" />
       </div>
 
       {d.studentNote.trim() && (

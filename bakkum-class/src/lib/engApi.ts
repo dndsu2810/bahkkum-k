@@ -85,8 +85,9 @@ export interface EngDaily {
   wordTest: string;
   doneItems: string[];
   curRanges?: Record<string, string>; // '오늘뭐해요' 항목별 범위/분량
-  comment: string; // 수업 코멘트(학생은 읽기 전용)
-  hwComment: string; // 숙제 코멘트(중고등영어 — 숙제에 대한 코멘트, 학생 읽기)
+  comment: string; // 수업 코멘트(선생님 메모 — 학생 비공개)
+  hwComment: string; // 숙제 코멘트(선생님 메모 — 학생 비공개)
+  nextNote: string; // '다음 시간에 이어서 할 것' — 교사 메모, 다음 수업에 이어보기로 노출
   studentNote: string; // 학생이 '선생님께' 남기는 메모(강사는 읽기)
   materials: string;
   // 내신모드 자유 숙제 — 내줄 숙제(다음 시간) + 숙제 검사(지난 것: 항목+상태). 숙제 자료 배부 시 자동 편입.
