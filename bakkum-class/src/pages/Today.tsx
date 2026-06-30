@@ -783,6 +783,22 @@ export function Today() {
                           />
                         );
                       })()}
+                      {/* 추가 등원 사유 — 예정에 없던 학생을 추가했을 때(출결 찍은 뒤, 결석이 아니면) 왜 왔는지 기록. */}
+                      {e.extra && !!st && st !== "결석" && st !== "무단결석" && (() => {
+                        const k = keyOf(lesson);
+                        const v = noteDraft[k] ?? (data.attendance[k]?.note ?? "");
+                        return (
+                          <input
+                            className="input today-absent-note"
+                            style={{ marginTop: 8 }}
+                            placeholder="추가 등원 사유 (예: 보강·자습 등)"
+                            value={v}
+                            onChange={(ev) => setNoteDraft((m) => ({ ...m, [k]: ev.target.value }))}
+                            onBlur={() => commitNote(lesson)}
+                            onKeyDown={(ev) => { if (ev.key === "Enter") (ev.target as HTMLInputElement).blur(); }}
+                          />
+                        );
+                      })()}
                     </div>
                   )}
 

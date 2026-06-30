@@ -770,6 +770,18 @@ export function TodayDashboard() {
                           />
                         );
                       })()}
+                      {/* 추가 등원 사유 — 예정에 없던 학생을 추가했을 때(출결 찍은 뒤, 결석이 아니면) 왜 왔는지 기록. */}
+                      {e.extra && !!st && st !== "결석" && st !== "무단결석" && (
+                        <input
+                          key={keyOf(lesson) + "-x"}
+                          className="input today-absent-note"
+                          style={{ marginTop: 8 }}
+                          placeholder="추가 등원 사유 (예: 보강·자습 등)"
+                          defaultValue={data.attendance[keyOf(lesson)]?.note ?? ""}
+                          onBlur={(ev) => commitNote(lesson, ev.target.value)}
+                          onKeyDown={(ev) => { if (ev.key === "Enter") (ev.target as HTMLInputElement).blur(); }}
+                        />
+                      )}
                     </div>
                   )}
 
