@@ -16,6 +16,15 @@ function speak(text: string) {
   } catch { /* 음성 미지원은 무시 */ }
 }
 
+// 이미 안내한 호출 시각을 기억(과목별) — 새로고침해도 같은 호출을 다시 읽지 않게 localStorage에 보관.
+const SPOKEN_KEY = "bk_queue_spoken";
+function loadSpoken(): Record<string, number> {
+  try { const v = JSON.parse(localStorage.getItem(SPOKEN_KEY) || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; }
+}
+function saveSpoken(m: Record<string, number>) {
+  try { localStorage.setItem(SPOKEN_KEY, JSON.stringify(m)); } catch { /* 저장 실패 무시 */ }
+}
+
 export function QueueCard({ compact }: { compact?: boolean } = {}) {
   const { user } = useAuth();
   const name = user?.name || "";
@@ -24,15 +33,18 @@ export function QueueCard({ compact }: { compact?: boolean } = {}) {
   const [alertSub, setAlertSub] = useState<QueueSubject | null>(null); // 큰 '차례' 배너
   const alive = useRef(true);
   const lastCalledAt = useRef<Record<string, number>>({}); // 과목별 마지막 호출 시각(중복 음성 방지)
+  const spokenInit = useRef(false);
+  if (!spokenInit.current) { spokenInit.current = true; lastCalledAt.current = loadSpoken(); } // 새로고침해도 직전 안내 기억
 
   const load = () =>
     queueApi.mine().then((d) => {
       if (!alive.current) return;
-      // 새 호출(또는 다시 호출) 감지 → 음성 + 큰 배너.
+      // 새 호출(또는 다시 호출) 감지 → 음성 + 큰 배너. 같은 호출(calledAt)은 새로고침해도 다시 안 읽음.
       for (const s of d.subjects) {
         const t = d.tickets[s];
         if (t && t.status === "called" && t.calledAt && t.calledAt !== lastCalledAt.current[s]) {
           lastCalledAt.current[s] = t.calledAt;
+          saveSpoken(lastCalledAt.current);
           speak(`${name} 학생 차례입니다`);
           setAlertSub(s);
         }

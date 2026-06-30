@@ -2193,11 +2193,14 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
   const [dragId, setDragId] = useState<string | null>(null);
   const attended = students.filter((s) => daily[s.id]?.attended);
   const attSet = new Set(attended.map((s) => s.id));
+  // 결석/무단결석 학생 — 카드로 남겨 사유를 입력·확인할 수 있게(수학 대시보드와 동일). 등원이 아니므로 별도 '결석' 섹션.
+  const absent = students.filter((s) => { const st = daily[s.id]?.attStatus; return st === "결석" || st === "무단결석"; });
+  const absentSet = new Set(absent.map((s) => s.id));
   // 저장된 순서로 정렬한 뒤, 하원 학생만 맨 아래로(안정 정렬).
   const ordered = sortItems(attended, (s) => s.id).sort((a, b) => (outIds.has(a.id) ? 1 : 0) - (outIds.has(b.id) ? 1 : 0));
   const orderedIds = ordered.map((s) => s.id);
-  const candidates = students.filter((s) => scheduledIds.has(s.id) && !attSet.has(s.id));
-  const hits = q.trim() ? students.filter((s) => !attSet.has(s.id) && s.name.includes(q.trim())).slice(0, 24) : [];
+  const candidates = students.filter((s) => scheduledIds.has(s.id) && !attSet.has(s.id) && !absentSet.has(s.id));
+  const hits = q.trim() ? students.filter((s) => !attSet.has(s.id) && !absentSet.has(s.id) && s.name.includes(q.trim())).slice(0, 24) : [];
   const markIn = (sid: string) => { setStatus(sid, "출석"); setQ(""); pushOrder(sid); };
   const markOut = (sid: string) => { void saveDaily({ ...getDaily(sid), attStatus: "", attended: false, lateMin: 0 }); const next = new Set(outIds); next.delete(sid); setOutIds(next); saveCheckout(outScope, date, next); void setCheckout(outScope, date, next); };
   return (
@@ -2237,6 +2240,17 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
             <DashCard key={s.id} s={s} daily={daily} band={band} date={date} getDaily={getDaily} saveDaily={saveDaily} doneOptions={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examModeOf ? examModeOf(s.id) : false} open={openIds.has(s.id)} onToggleOpen={() => toggleOpen(s.id)} out={outIds.has(s.id)} onToggleOut={() => toggleOut(s.id, s.name)}
               onDragStart={() => setDragId(s.id)} onDropOn={() => { if (dragId) move(dragId, s.id, orderedIds); setDragId(null); }} />
           ))}
+        </div>
+      )}
+      {/* 결석 — 카드를 남겨 결석 사유를 입력·확인. '자세히 보기'로 펼치면 사유 칸이 있어요. */}
+      {absent.length > 0 && (
+        <div className="eng-dash-sec">
+          <h3>결석 <span className="eng-in-cnt">{absent.length}명</span></h3>
+          <div className="eng-dash-cards">
+            {absent.map((s) => (
+              <DashCard key={s.id} s={s} daily={daily} band={band} date={date} getDaily={getDaily} saveDaily={saveDaily} doneOptions={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={onAddDoneItem} onAddNextGoal={onAddNextGoal} examMode={examModeOf ? examModeOf(s.id) : false} open={openIds.has(s.id)} onToggleOpen={() => toggleOpen(s.id)} out={false} onToggleOut={() => {}} />
+            ))}
+          </div>
         </div>
       )}
     </div>
