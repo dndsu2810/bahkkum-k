@@ -1078,20 +1078,19 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
         </>
       )}
 
+      {/* 숙제 코멘트 — 검사한 숙제 바로 아래(새 숙제 위). 선생님 메모용(학생 비공개). */}
+      {showHw && (
+        <div className="eng-field">
+          <div className="eng-label">숙제 코멘트 <span className="eng-mk-tag soft">선생님 메모 · 학생 비공개</span></div>
+          <textarea className="input" rows={2} value={d.hwComment} onChange={(e) => setD({ ...d, hwComment: e.target.value })} placeholder="검사한 숙제에 대한 메모 (학생에겐 안 보여요)" />
+        </div>
+      )}
+
       {/* 오늘의 숙제 — 학생 '오늘의 숙제'와 같은 목록(양방향). 항목별 완료/미흡/안함/없음 + 작성자(학생 초록 / 강사 주황). 초등·중고등 모두. */}
       <div className="eng-field">
         <div className="eng-label">오늘의 숙제 <span className="eng-mk-tag soft">학생과 공유 · 다음 시간 낼 것</span></div>
         <HwChecklist items={d.hwAssign} onChange={(next) => setD({ ...d, hwAssign: next })} currentBy="teacher" currentByName={hwUser?.name || ""} placeholder="오늘 낼 숙제 (예: 4과 그래머빌드업)" />
       </div>
-
-
-      {/* 숙제 코멘트 — 숙제 검사 아래. 수업 코멘트(맨 아래)와 별도. 학생도 읽음. */}
-      {showHw && (
-        <div className="eng-field">
-          <div className="eng-label">숙제 코멘트 <span className="eng-mk-tag soft">학생에게 보여요</span></div>
-          <textarea className="input" rows={2} value={d.hwComment} onChange={(e) => setD({ ...d, hwComment: e.target.value })} placeholder="숙제에 대한 코멘트 (학생이 읽어요)" />
-        </div>
-      )}
 
       {/* 중고등영어 진도 체크는 학습 목표와 중복이라 제거됨(오늘 한 것·다음에 할 것·단어시험).
           진도·교재는 '진도 기록' 탭, 단어 점수는 아래 '오늘 시험 기록'에서 입력해요. */}
@@ -1154,8 +1153,8 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
       )}
 
       <div className="eng-field">
-        <div className="eng-label">수업 코멘트 <span className="eng-mk-tag soft">학생에게 보여요</span></div>
-        <textarea className="input" rows={2} value={d.comment} onChange={(e) => setD({ ...d, comment: e.target.value })} placeholder="수업에 대한 코멘트 (선생님 작성 → 학생이 읽어요)" />
+        <div className="eng-label">수업 코멘트 <span className="eng-mk-tag soft">선생님 메모 · 학생 비공개</span></div>
+        <textarea className="input" rows={2} value={d.comment} onChange={(e) => setD({ ...d, comment: e.target.value })} placeholder="수업에 대한 메모 (학생에겐 안 보여요)" />
       </div>
 
       {autoSave ? (
