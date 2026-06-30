@@ -69,7 +69,6 @@ export function Today() {
   const [dueDraft, setDueDraft] = useState<Record<string, string>>({});
   const [tagDraft, setTagDraft] = useState<Record<string, string[]>>({});
   const [pctDraft, setPctDraft] = useState<Record<string, string>>({});
-  const [noteDraft, setNoteDraft] = useState<Record<string, string>>({}); // 결석 사유 입력 임시값(blur 시 저장)
   const [schedDraft, setSchedDraft] = useState<Record<string, string>>({}); // 숙제별 '다시 검사할 날' 임시값
   const [schedOpen, setSchedOpen] = useState<string | null>(null); // 검사일 패널이 열린 숙제 id
   // 내준 숙제 인라인 수정 — 한 번에 한 건만 편집(내용·마감일·영역).
@@ -325,17 +324,16 @@ export function Today() {
   }
 
   // 결석 사유(특이사항) 저장 — 결석/무단결석 학생. blur 시 attendance.note에 저장 → 월말리포트 특이사항에 '결석 — 사유'로 반영.
-  function commitNote(it: LessonOnDate) {
+  function commitNote(it: LessonOnDate, value: string) {
     const key = keyOf(it);
-    const v = noteDraft[key];
-    if (v === undefined) return;
+    const prev = data.attendance[key]?.note ?? "";
+    if (value === prev) return; // 바뀐 게 없으면 저장 안 함
     let synced: AttRecord | null = null;
     mutate((d) => {
       const r = d.attendance[key];
-      if (r) r.note = v;
+      if (r) r.note = value;
       synced = d.attendance[key] ? { ...d.attendance[key] } : null;
     });
-    setNoteDraft((m) => { const n = { ...m }; delete n[key]; return n; });
     if (synced) {
       const r: AttRecord = synced;
       pushAttendanceNotion(it.student.id, { date: day, status: r.status, attitude: r.attitude || "", lateMinutes: r.lateMinutes || 0, note: r.note || "" });
@@ -770,15 +768,15 @@ export function Today() {
                       )}
                       {(st === "결석" || st === "무단결석") && (() => {
                         const k = keyOf(lesson);
-                        const v = noteDraft[k] ?? (data.attendance[k]?.note ?? "");
+                        // uncontrolled — 리렌더가 입력 DOM 값을 다시 안 써서 한글 조합이 안 깨짐(글자 중복 방지). 저장은 blur 때만.
                         return (
                           <input
+                            key={k}
                             className="input today-absent-note"
                             style={{ marginTop: 8 }}
                             placeholder="결석 사유 (월말리포트 특이사항에 반영)"
-                            value={v}
-                            onChange={(ev) => setNoteDraft((m) => ({ ...m, [k]: ev.target.value }))}
-                            onBlur={() => commitNote(lesson)}
+                            defaultValue={data.attendance[k]?.note ?? ""}
+                            onBlur={(ev) => commitNote(lesson, ev.target.value)}
                             onKeyDown={(ev) => { if (ev.key === "Enter") (ev.target as HTMLInputElement).blur(); }}
                           />
                         );
@@ -786,15 +784,14 @@ export function Today() {
                       {/* 추가 등원 사유 — 예정에 없던 학생을 추가했을 때(출결 찍은 뒤, 결석이 아니면) 왜 왔는지 기록. */}
                       {e.extra && !!st && st !== "결석" && st !== "무단결석" && (() => {
                         const k = keyOf(lesson);
-                        const v = noteDraft[k] ?? (data.attendance[k]?.note ?? "");
                         return (
                           <input
+                            key={k + "-x"}
                             className="input today-absent-note"
                             style={{ marginTop: 8 }}
                             placeholder="추가 등원 사유 (예: 보강·자습 등)"
-                            value={v}
-                            onChange={(ev) => setNoteDraft((m) => ({ ...m, [k]: ev.target.value }))}
-                            onBlur={() => commitNote(lesson)}
+                            defaultValue={data.attendance[k]?.note ?? ""}
+                            onBlur={(ev) => commitNote(lesson, ev.target.value)}
                             onKeyDown={(ev) => { if (ev.key === "Enter") (ev.target as HTMLInputElement).blur(); }}
                           />
                         );
