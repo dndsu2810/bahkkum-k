@@ -627,6 +627,7 @@ interface CurriculumSection {
 interface Curriculum {
   note: string;
   sections: CurriculumSection[];
+  step?: number; // 현재 진행 단계(섹션을 가로질러 평탄화한 행 인덱스). 초록불 위치 — 영구 저장, 다음 수업에 이어감.
 }
 
 /** 신규/빈 학생 기본 양식(노션 초등 진도표 표준 구성). */
@@ -717,7 +718,7 @@ function parseCurriculum(s: unknown): Curriculum {
       const sections = Array.isArray(o.sections)
         ? (o.sections as unknown[]).map((sec) => ({ title: String((sec as Record<string, unknown>)?.title ?? "").trim(), rows: cleanRows((sec as Record<string, unknown>)?.rows) })).filter((sec) => sec.title || sec.rows.length).slice(0, 12)
         : [];
-      return { note: String(o.note ?? ""), sections };
+      return { note: String(o.note ?? ""), sections, step: Math.max(0, Number(o.step) || 0) };
     }
   } catch {
     /* ignore */
@@ -1059,10 +1060,26 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
     const sections = Array.isArray(b.sections)
       ? (b.sections as unknown[]).map((sec) => ({ title: String((sec as Record<string, unknown>)?.title ?? "").trim(), rows: cleanRows((sec as Record<string, unknown>)?.rows) })).filter((sec) => sec.title || sec.rows.length).slice(0, 12)
       : [];
-    const payload: Curriculum = { note: String(b.note || ""), sections };
+    const payload: Curriculum = { note: String(b.note || ""), sections, step: Math.max(0, Number(b.step) || 0) };
     await env.DB
       .prepare("INSERT INTO class_eng_curriculum(student_id,items,updated_at) VALUES(?,?,?) ON CONFLICT(student_id) DO UPDATE SET items=excluded.items, updated_at=excluded.updated_at")
       .bind(sid, JSON.stringify(payload), Date.now())
+      .run();
+    return json({ ok: true });
+  }
+
+  // 진행 단계만 갱신(초록불 이동) — 학생 본인도 '완료→다음'으로 전진 가능(커리큘럼 편집권 없이). 교사는 student_id 지정.
+  if (p === "/api/student/curriculum-step" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const sid = targetId(b.studentId as string);
+    if (!sid) return json({ error: "student_required" }, 400);
+    const step = Math.max(0, Number(b.step) || 0);
+    const row = await env.DB.prepare("SELECT items FROM class_eng_curriculum WHERE student_id=?").bind(sid).first<{ items: string }>();
+    const cur = parseCurriculum(row?.items);
+    cur.step = step;
+    await env.DB
+      .prepare("INSERT INTO class_eng_curriculum(student_id,items,updated_at) VALUES(?,?,?) ON CONFLICT(student_id) DO UPDATE SET items=excluded.items, updated_at=excluded.updated_at")
+      .bind(sid, JSON.stringify(cur), Date.now())
       .run();
     return json({ ok: true });
   }

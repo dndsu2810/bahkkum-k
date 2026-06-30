@@ -148,7 +148,7 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
             {canEditCur ? (
               <CurriculumEditor studentId={s.id} cur={data.curriculum} onSaved={reloadSilent} />
             ) : (
-              <CurriculumView cur={data.curriculum} />
+              <CurriculumView cur={data.curriculum} onSaved={reloadSilent} />
             )}
             <SelfLearning items={data.selfCurriculum} studentId={canEditCur ? s.id : undefined} onSaved={reloadSilent} />
           </section>
@@ -520,8 +520,12 @@ function SelfLearning({ items, studentId, onSaved }: { items: CurriculumRow[]; s
 }
 
 /* ---------------- 오늘 뭐해요?(읽기 전용) — 선생님이 정한 순서·내용을 학생에게 보여줘요. ---------------- */
-function CurriculumView({ cur }: { cur: Curriculum }) {
+function CurriculumView({ cur, onSaved }: { cur: Curriculum; onSaved?: () => void }) {
   if (!cur.sections.length) return <div className="sp-muted">아직 등록된 학습이 없어요.</div>;
+  const total = cur.sections.reduce((n, s) => n + s.rows.length, 0);
+  const step = total ? Math.min(cur.step || 0, total - 1) : 0;
+  const advance = async () => { try { await studentApi.setCurriculumStep(total ? (step + 1) % total : 0); onSaved?.(); } catch { /* 무시 */ } };
+  let idx = -1; // 섹션을 가로지르는 평탄 인덱스
   return (
     <div className="sp-cur">
       {cur.note && <div className="sp-cur-note"><Icon name="info" /> {cur.note}</div>}
@@ -529,12 +533,18 @@ function CurriculumView({ cur }: { cur: Curriculum }) {
         <div className="sp-cur-sec" key={si}>
           {sec.title && <div className="sp-cur-sectitle">{sec.title}</div>}
           <ol className="sp-cur-rows">
-            {sec.rows.map((r, ri) => (
-              <li className="sp-cur-row" key={ri}>
-                <span className="sp-cur-name">{r.name}</span>
-                {r.amount && <span className="sp-cur-amt">{r.amount}</span>}
-              </li>
-            ))}
+            {sec.rows.map((r, ri) => {
+              idx++;
+              const isNow = idx === step;
+              return (
+                <li className={"sp-cur-row" + (isNow ? " now" : "")} key={ri}>
+                  {isNow && <span className="sp-cur-dot" title="지금 할 차례" />}
+                  <span className="sp-cur-name">{r.name}</span>
+                  {r.amount && <span className="sp-cur-amt">{r.amount}</span>}
+                  {isNow && <button type="button" className="sp-cur-done" onClick={advance}>완료 → 다음</button>}
+                </li>
+              );
+            })}
           </ol>
         </div>
       ))}
@@ -597,9 +607,12 @@ export function CurriculumEditor({ studentId, cur, onSaved }: { studentId: strin
             />
             <button className="sp-x" title="섹션 삭제" onClick={() => setDraft({ ...draft, sections: draft.sections.filter((_, i) => i !== si) })}>×</button>
           </div>
-          {sec.rows.map((r, ri) => (
+          {sec.rows.map((r, ri) => {
+            const fi = draft.sections.slice(0, si).reduce((n, s) => n + s.rows.length, 0) + ri; // 평탄 인덱스
+            const isNow = fi === (draft.step || 0);
+            return (
             <div
-              className="sp-cur-erow"
+              className={"sp-cur-erow" + (isNow ? " now" : "")}
               key={ri}
               onDragOver={(e) => { if (drag.current?.si === si) e.preventDefault(); }}
               onDrop={(e) => { e.preventDefault(); if (drag.current?.si === si) moveRow(si, drag.current.ri, ri); drag.current = null; }}
@@ -608,9 +621,11 @@ export function CurriculumEditor({ studentId, cur, onSaved }: { studentId: strin
                 onDragStart={() => { drag.current = { si, ri }; }} onDragEnd={() => { drag.current = null; }}>⠿{ri + 1}</span>
               <input className="input sp-cur-name-i" value={r.name} placeholder="학습 (예: 단어시험)" onChange={(e) => setRow(si, ri, { name: e.target.value })} />
               <input className="input sp-cur-amt-i" value={r.amount} placeholder="내용 (예: 10개씩)" onChange={(e) => setRow(si, ri, { amount: e.target.value })} />
+              <button type="button" className={"sp-cur-now-btn" + (isNow ? " on" : "")} title="지금 할 차례로 지정(초록불)" onClick={() => setDraft((d) => ({ ...d, step: fi }))}>{isNow ? "지금 ●" : "여기부터"}</button>
               <button className="sp-x" title="삭제" onClick={() => setSec(si, { rows: sec.rows.filter((_, i) => i !== ri) })}>×</button>
             </div>
-          ))}
+            );
+          })}
           <button className="btn ghost sm" onClick={() => setSec(si, { rows: [...sec.rows, { name: "", amount: "" }] })}>+ 항목</button>
         </div>
       ))}

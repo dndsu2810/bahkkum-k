@@ -2659,6 +2659,14 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .sp-cur-esec-head{display:flex;gap:6px;align-items:center}
 .sp-cur-sectinput{flex:1;font-weight:600}
 .sp-cur-erow{display:flex;gap:6px;align-items:center}
+/* 진행 순서 초록불(현재 할 차례) */
+.sp-cur-row.now{background:var(--ok-soft,#e7f6ec);border-radius:var(--r-sm);padding-left:6px;padding-right:6px}
+.sp-cur-dot{flex:none;width:9px;height:9px;border-radius:50%;background:var(--ok,#2ecc71);box-shadow:0 0 0 3px var(--ok-soft,#e7f6ec);align-self:center}
+.sp-cur-done{margin-left:auto;flex:none;background:var(--ok,#2ecc71);border:none;color:#fff;border-radius:999px;padding:3px 11px;font-size:var(--t-cap);font-weight:700;cursor:pointer}
+.sp-cur-done:hover{filter:brightness(.96)}
+.sp-cur-erow.now{background:var(--ok-soft,#e7f6ec);border-radius:var(--r-sm)}
+.sp-cur-now-btn{flex:none;border:1px solid var(--line2);background:var(--card);color:var(--ink3);border-radius:999px;padding:3px 9px;font-size:var(--t-cap);font-weight:700;cursor:pointer;white-space:nowrap}
+.sp-cur-now-btn.on{background:var(--ok,#2ecc71);border-color:transparent;color:#fff}
 .sp-cur-num{flex:none;width:18px;text-align:center;color:var(--ink3);font-size:var(--t-cap)}
 .sp-cur-name-i{flex:none;width:42%}
 .sp-cur-amt-i{flex:1}

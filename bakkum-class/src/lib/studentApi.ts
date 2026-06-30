@@ -38,6 +38,7 @@ export interface CurriculumSection {
 export interface Curriculum {
   note: string;
   sections: CurriculumSection[];
+  step?: number; // 현재 진행 단계(평탄화된 행 인덱스) — 초록불 위치. 영구 저장.
 }
 /** 학습 목표 — 강사가 만들고 학생도 'done' 체크 가능(양방향, 같은 일지 row 공유). */
 export interface StudentGoal {
@@ -131,7 +132,9 @@ export const studentApi = {
   myChangeReqs: () => jget<{ reqs: StudentChangeReq[] }>("/api/student/change-reqs").then((j) => j.reqs),
   /** 커리큘럼 저장(초등영어 권한자·원장). */
   getCurriculum: (studentId: string) => jget<{ curriculum: Curriculum }>("/api/student/curriculum?student_id=" + encodeURIComponent(studentId)).then((j) => j.curriculum),
-  saveCurriculum: (studentId: string, cur: Curriculum) => jpost("/api/student/curriculum", { studentId, note: cur.note, sections: cur.sections }),
+  saveCurriculum: (studentId: string, cur: Curriculum) => jpost("/api/student/curriculum", { studentId, note: cur.note, sections: cur.sections, step: cur.step || 0 }),
+  /** 진행 단계만 갱신(초록불 이동). 학생 본인은 studentId 생략, 교사는 지정. */
+  setCurriculumStep: (step: number, studentId?: string) => jpost("/api/student/curriculum-step", { studentId, step }),
   /** '내가 추가한 학습' 저장(학생 본인은 studentId 생략, 강사는 지정). */
   saveSelfCurriculum: (items: CurriculumRow[], studentId?: string) => jpost("/api/student/curriculum-self", { studentId, items }),
   /** 기본 커리큘럼 양식. */
