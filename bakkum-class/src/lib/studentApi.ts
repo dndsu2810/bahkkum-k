@@ -135,6 +135,8 @@ export const studentApi = {
   saveCurriculum: (studentId: string, cur: Curriculum) => jpost("/api/student/curriculum", { studentId, note: cur.note, sections: cur.sections, step: cur.step || 0 }),
   /** 진행 단계만 갱신(초록불 이동). 학생 본인은 studentId 생략, 교사는 지정. */
   setCurriculumStep: (step: number, studentId?: string) => jpost("/api/student/curriculum-step", { studentId, step }),
+  /** 커리큘럼 순서만 변경(학생 본인도 가능). 내용은 그대로 — 서버가 항목 집합 동일할 때만 저장. */
+  reorderCurriculum: (sections: CurriculumSection[], studentId?: string) => jpost("/api/student/curriculum-reorder", { studentId, sections }),
   /** '내가 추가한 학습' 저장(학생 본인은 studentId 생략, 강사는 지정). */
   saveSelfCurriculum: (items: CurriculumRow[], studentId?: string) => jpost("/api/student/curriculum-self", { studentId, items }),
   /** 기본 커리큘럼 양식. */

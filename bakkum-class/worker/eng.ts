@@ -1084,6 +1084,27 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
     return json({ ok: true });
   }
 
+  // 커리큘럼 순서 변경(학생 본인도 가능) — 내용은 그대로, 순서만. 항목 집합이 기존과 같을 때만 저장(학생이 내용 편집은 못 함).
+  if (p === "/api/student/curriculum-reorder" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const sid = targetId(b.studentId as string);
+    if (!sid) return json({ error: "student_required" }, 400);
+    const row = await env.DB.prepare("SELECT items FROM class_eng_curriculum WHERE student_id=?").bind(sid).first<{ items: string }>();
+    const cur = parseCurriculum(row?.items);
+    const incoming = Array.isArray(b.sections)
+      ? (b.sections as unknown[]).map((sec) => ({ title: String((sec as Record<string, unknown>)?.title ?? "").trim(), rows: cleanRows((sec as Record<string, unknown>)?.rows) }))
+      : [];
+    const sig = (secs: { title: string; rows: { name: string; amount: string }[] }[]) =>
+      secs.flatMap((s) => s.rows.map((r) => s.title + "" + r.name + "" + r.amount)).sort().join("");
+    if (sig(incoming) !== sig(cur.sections)) return json({ error: "reorder_only" }, 400); // 순서만 허용
+    cur.sections = incoming;
+    await env.DB
+      .prepare("INSERT INTO class_eng_curriculum(student_id,items,updated_at) VALUES(?,?,?) ON CONFLICT(student_id) DO UPDATE SET items=excluded.items, updated_at=excluded.updated_at")
+      .bind(sid, JSON.stringify(cur), Date.now())
+      .run();
+    return json({ ok: true });
+  }
+
   /* ---- '내가 추가한 학습' 저장(학생 본인·강사) — 강사 커리큘럼과 분리 ---- */
   if (p === "/api/student/curriculum-self" && m === "POST") {
     const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;

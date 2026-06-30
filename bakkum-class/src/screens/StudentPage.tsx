@@ -521,15 +521,31 @@ function SelfLearning({ items, studentId, onSaved }: { items: CurriculumRow[]; s
 
 /* ---------------- 오늘 뭐해요?(읽기 전용) — 선생님이 정한 순서·내용을 학생에게 보여줘요. ---------------- */
 function CurriculumView({ cur, onSaved }: { cur: Curriculum; onSaved?: () => void }) {
-  if (!cur.sections.length) return <div className="sp-muted">아직 등록된 학습이 없어요.</div>;
-  const total = cur.sections.reduce((n, s) => n + s.rows.length, 0);
+  // 학생도 순서를 끌어 바꿀 수 있어요(섹션 안에서). 내용은 못 바꾸고 순서만 — 서버가 검증.
+  const [secs, setSecs] = useState<CurriculumSection[]>(cur.sections);
+  useEffect(() => setSecs(cur.sections), [cur.sections]);
+  const drag = useRef<{ si: number; ri: number } | null>(null);
+  const total = secs.reduce((n, s) => n + s.rows.length, 0);
   const step = total ? Math.min(cur.step || 0, total - 1) : 0;
   const advance = async () => { try { await studentApi.setCurriculumStep(total ? (step + 1) % total : 0); onSaved?.(); } catch { /* 무시 */ } };
+  const moveRow = (si: number, from: number, to: number) => {
+    if (from === to) return;
+    const next = secs.map((s, i) => {
+      if (i !== si) return s;
+      const rows = [...s.rows];
+      const [m] = rows.splice(from, 1);
+      rows.splice(to, 0, m);
+      return { ...s, rows };
+    });
+    setSecs(next);
+    studentApi.reorderCurriculum(next).then(() => onSaved?.()).catch(() => {});
+  };
+  if (!secs.length) return <div className="sp-muted">아직 등록된 학습이 없어요.</div>;
   let idx = -1; // 섹션을 가로지르는 평탄 인덱스
   return (
     <div className="sp-cur">
       {cur.note && <div className="sp-cur-note"><Icon name="info" /> {cur.note}</div>}
-      {cur.sections.map((sec, si) => (
+      {secs.map((sec, si) => (
         <div className="sp-cur-sec" key={si}>
           {sec.title && <div className="sp-cur-sectitle">{sec.title}</div>}
           <ol className="sp-cur-rows">
@@ -537,8 +553,15 @@ function CurriculumView({ cur, onSaved }: { cur: Curriculum; onSaved?: () => voi
               idx++;
               const isNow = idx === step;
               return (
-                <li className={"sp-cur-row" + (isNow ? " now" : "")} key={ri}>
+                <li
+                  className={"sp-cur-row" + (isNow ? " now" : "")}
+                  key={ri}
+                  onDragOver={(e) => { if (drag.current?.si === si) e.preventDefault(); }}
+                  onDrop={(e) => { e.preventDefault(); if (drag.current?.si === si) moveRow(si, drag.current.ri, ri); drag.current = null; }}
+                >
                   {isNow && <span className="sp-cur-dot" title="지금 할 차례" />}
+                  <span className="sp-cur-grip" draggable title="끌어서 순서 바꾸기" style={{ cursor: "grab" }}
+                    onDragStart={() => { drag.current = { si, ri }; }} onDragEnd={() => { drag.current = null; }}>⠿</span>
                   <span className="sp-cur-name">{r.name}</span>
                   {r.amount && <span className="sp-cur-amt">{r.amount}</span>}
                   {isNow && <button type="button" className="sp-cur-done" onClick={advance}>완료 → 다음</button>}
