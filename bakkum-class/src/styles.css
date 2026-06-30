@@ -2402,6 +2402,8 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .eng-sum-chip{font-size:var(--t-cap);font-weight:600;border-radius:var(--r-full);padding:2px 8px;background:var(--card2);color:var(--ink3);white-space:nowrap}
 .eng-sum-chip.ok{background:var(--ok-soft);color:var(--ok)}
 .eng-sum-chip.todo{background:var(--warn-soft,#fff4e5);color:var(--warn,#b26a00)}
+.eng-sum-chip.gr{background:var(--brand-soft);color:var(--brand-d)}
+.eng-sum-chip.time{background:var(--card2);color:var(--ink2)}
 /* 오늘 등원 선택 */
 .eng-in-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .eng-in-head h3{margin:0}

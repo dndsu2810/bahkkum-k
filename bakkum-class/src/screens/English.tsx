@@ -2142,6 +2142,11 @@ function DashCard({
   const [cur, setCur] = useState<Curriculum | null>(null);
   const loadCur = () => { studentApi.getCurriculum(s.id).then(setCur).catch(() => setCur({ note: "", sections: [] })); };
   const toggleCur = () => { setCurOpen((o) => { const n = !o; if (n && !cur) loadCur(); return n; }); };
+  // 오늘 요일의 영어 수업 시간·분(수학 대시보드처럼 카드에 표시). 시간 변경 신청이 있으면 그 시각.
+  const dowK = DOW[parseD(date).getDay()];
+  const todaySlot = s.engSlots.find((sl) => sl.day === dowK);
+  const slotTime = todaySlot?.time || "";
+  const slotDur = todaySlot?.duration || 0;
   return (
     <div id={"engcard-" + s.id} className={"eng-dash-card" + (open ? " open" : "") + (out ? " out" : "")}
       onDragOver={onDropOn ? (e) => e.preventDefault() : undefined}
@@ -2152,6 +2157,8 @@ function DashCard({
         <span className="eng-dash-sum-name">{s.name}</span>
         <button className="eng-dash-rec" onClick={() => openModal(<StudentMonthlyModal studentId={s.id} name={s.name} />)} title="누적 기록 보기 (자료·진도·시험)" aria-label="누적 기록"><Icon name="chart" /></button>
         <span className="eng-dash-sum-tags">
+          {s.grade && <span className="eng-sum-chip gr">{s.grade}</span>}
+          {slotTime && <span className="eng-sum-chip time">{slotTime}{slotDur ? ` · ${slotDur}분` : ""}</span>}
           {out && <span className="badge b-gray">하원</span>}
           {st ? <span className={"badge " + attTone(st)}>{st}{st === "지각" && d?.lateMin ? ` ${d.lateMin}분` : ""}</span> : null}
           {progBooks.length > 0 && <span className="eng-sum-chip" title="진도·교재관리 진행중 교재">교재 {progBooks.join(", ")}</span>}

@@ -587,6 +587,17 @@ export function TodayDashboard() {
     const synth: LessonOnDate = { student: s, time: "", duration: lessonDurationFor(s) };
     entries.push({ key: keyOf(synth), student: s, time: "", lesson: synth, makeups: [], extra: true });
   }
+  // 저장된 출결로 복원 — 새로고침해도 추가 등원 학생이 유지(예정에 없는데 그날 출결 기록이 있으면 카드로 표시).
+  for (const k of Object.keys(data.attendance)) {
+    const parts = k.split("|");
+    if (parts[0] !== day) continue;
+    const sid = parts[1]; const time = parts[2] || "";
+    if (entries.some((e) => e.student.id === sid && (e.time || "") === time)) continue;
+    const s = studentById(data.students, sid);
+    if (!s) continue;
+    const synth: LessonOnDate = { student: s, time, duration: lessonDurationFor(s, time) };
+    entries.push({ key: keyOf(synth), student: s, time, lesson: synth, makeups: [], extra: true });
+  }
   entries.sort((a, b) => timeToMin(a.time || "99:99") - timeToMin(b.time || "99:99"));
   const entryIsCho = (e: DayEntry) => (e.student.grade || "").startsWith("초");
   const choEntries = entries.filter(entryIsCho).length;
