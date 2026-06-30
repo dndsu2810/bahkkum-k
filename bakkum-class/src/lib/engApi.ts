@@ -167,8 +167,10 @@ export interface EngTest {
   retakeOf?: string; // 이 시험이 어떤 시험의 '재시'로 자동 생성됐는지(빈값=일반 시험)
 }
 
-/* 월말리포트 — 8개 항목 등급(기존 영어 성적표 사양 그대로). */
-export const ENG_CRITERIA: { key: string; en: string; ko: string }[] = [
+/* 월말리포트 — 평가 항목 1개(영문·한글 라벨 + 점수 매칭용 key). */
+export type EngCriterion = { key: string; en: string; ko: string };
+/* 월말리포트 기본 8개 항목(기존 영어 성적표 사양 그대로). 학생별로 수정·삭제·추가 가능. */
+export const ENG_CRITERIA: EngCriterion[] = [
   { key: "Listening", en: "Listening", ko: "[듣기]" },
   { key: "Reading", en: "Reading", ko: "[읽기]" },
   { key: "Speaking", en: "Speaking", ko: "[회화·발표]" },
@@ -218,6 +220,9 @@ export const engApi = {
     jget<{ reports: EngReport[] }>("/api/eng/report?month=" + encodeURIComponent(month)).then((j) => j.reports),
   saveReport: (r: { studentId: string; month: string; teacher: string; scores: Record<string, string>; comments: string }) =>
     jpost("/api/eng/report", r),
+  /** 학생별 등급표 항목(없으면 기본 ENG_CRITERIA 사용). 월과 무관하게 그 학생에게 계속 적용. */
+  reportItems: () => jget<{ items: { studentId: string; items: EngCriterion[] }[] }>("/api/eng/report-items").then((j) => j.items),
+  saveReportItems: (d: { studentId: string; items: EngCriterion[] }) => jpost("/api/eng/report-items", d),
 
 
   dailyByDate: (date: string) => jget<{ daily: EngDaily[] }>("/api/eng/daily?date=" + encodeURIComponent(date)).then((j) => j.daily),

@@ -110,6 +110,8 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "CREATE TABLE IF NOT EXISTS class_eng_test (id TEXT PRIMARY KEY, student_id TEXT NOT NULL, date TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT '', score INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL DEFAULT 100, memo TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)",
     // 월말리포트 — 8개 항목 등급 + 코멘트(학생-평가월 1건). 성적표 일괄 이미지용.
     "CREATE TABLE IF NOT EXISTS class_eng_report (student_id TEXT NOT NULL, month TEXT NOT NULL, teacher TEXT NOT NULL DEFAULT '', scores TEXT NOT NULL DEFAULT '{}', comments TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(student_id, month))",
+    // 월말리포트 등급표 항목 — 학생별 맞춤(없으면 기본 8항목). items=[{key,en,ko}]. 월과 무관(그 학생 계속 적용).
+    "CREATE TABLE IF NOT EXISTS class_eng_report_items (student_id TEXT PRIMARY KEY, items TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL DEFAULT 0)",
     // 보강 — 결석/빠진 수업 → 보강 일정. 상태: 예정/완료/취소.
     "CREATE TABLE IF NOT EXISTS class_eng_makeup (id TEXT PRIMARY KEY, student_id TEXT NOT NULL, absent_date TEXT NOT NULL DEFAULT '', makeup_date TEXT NOT NULL DEFAULT '', makeup_time TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '예정', memo TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)",
     // 학생 개별 페이지 커리큘럼 — 학생-1건. 항목 배열 [{label,value}](단어시험·class5·Link교재·원서·기초영문법·필기체 등). 강사 편집.
@@ -537,6 +539,31 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
         "INSERT INTO class_eng_report(student_id,month,teacher,scores,comments,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(student_id,month) DO UPDATE SET teacher=excluded.teacher, scores=excluded.scores, comments=excluded.comments, updated_at=excluded.updated_at"
       )
       .bind(sid, month, String(b.teacher || ""), scores, String(b.comments || ""), Date.now())
+      .run();
+    return json({ ok: true });
+  }
+
+  /* ---------------- 월말리포트 등급표 항목(학생별 맞춤) ---------------- */
+  if (p === "/api/eng/report-items" && m === "GET") {
+    const r = await env.DB.prepare("SELECT student_id, items FROM class_eng_report_items").all<{ student_id: string; items: string }>();
+    const items = (r.results || []).map((x) => {
+      let arr: unknown = [];
+      try { arr = JSON.parse(String(x.items || "[]")); } catch { arr = []; }
+      const list = Array.isArray(arr) ? arr.map((it) => { const o = it as Record<string, unknown>; return { key: String(o.key || ""), en: String(o.en || ""), ko: String(o.ko || "") }; }).filter((it) => it.key) : [];
+      return { studentId: String(x.student_id), items: list };
+    });
+    return json({ items });
+  }
+  if (p === "/api/eng/report-items" && m === "POST") {
+    const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const sid = String(b.studentId || "");
+    if (!sid) return json({ error: "bad_input" }, 400);
+    const list = Array.isArray(b.items)
+      ? (b.items as unknown[]).slice(0, 30).map((it) => { const o = it as Record<string, unknown>; return { key: String(o.key || "").slice(0, 80), en: String(o.en || "").slice(0, 80), ko: String(o.ko || "").slice(0, 80) }; }).filter((it) => it.key)
+      : [];
+    await env.DB
+      .prepare("INSERT INTO class_eng_report_items(student_id, items, updated_at) VALUES(?,?,?) ON CONFLICT(student_id) DO UPDATE SET items=excluded.items, updated_at=excluded.updated_at")
+      .bind(sid, JSON.stringify(list), Date.now())
       .run();
     return json({ ok: true });
   }

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
-import { ENG_CRITERIA, ENG_GRADES, engApi, type EngReport as Rep } from "../lib/engApi";
+import { ENG_CRITERIA, ENG_GRADES, engApi, type EngReport as Rep, type EngCriterion } from "../lib/engApi";
 import { listUsers, type UserRow } from "../lib/authApi";
+import { uid } from "../lib/dates";
 import { EngReportCard, type EngReportCardData } from "../components/EngReportCard";
 
 function curMonth(): string {
@@ -40,11 +41,18 @@ export function EngReport() {
   const [progress, setProgress] = useState("");
   const [err, setErr] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
+  const [itemCfg, setItemCfg] = useState<Record<string, EngCriterion[]>>({}); // 학생별 등급표 항목(없으면 기본)
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const itemTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     getRoster().then(setRoster).catch(() => setErr("명단을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."));
     listUsers().then(setTeachers).catch(() => {});
+    engApi.reportItems().then((list) => {
+      const m: Record<string, EngCriterion[]> = {};
+      for (const r of list) m[r.studentId] = r.items;
+      setItemCfg(m);
+    }).catch(() => {});
   }, []);
   useEffect(() => {
     engApi
@@ -93,6 +101,29 @@ export function EngReport() {
   function setEngName(sid: string, v: string) {
     update(sid, { scores: { ...repOf(sid).scores, [NAME_KEY]: v } });
   }
+  // ── 등급표 항목(학생별) ──
+  function critsOf(sid: string): EngCriterion[] {
+    return itemCfg[sid]?.length ? itemCfg[sid] : ENG_CRITERIA; // 설정 없거나 모두 지우면 기본 8항목(카드와 동일 규칙).
+  }
+  function persistItems(sid: string, items: EngCriterion[]) {
+    if (itemTimers.current[sid]) clearTimeout(itemTimers.current[sid]);
+    itemTimers.current[sid] = setTimeout(() => {
+      engApi.saveReportItems({ studentId: sid, items }).catch(() => setErr("항목 저장에 실패했어요."));
+    }, 600);
+  }
+  function setItems(sid: string, items: EngCriterion[]) {
+    setItemCfg((cur) => ({ ...cur, [sid]: items }));
+    persistItems(sid, items);
+  }
+  function renameItem(sid: string, key: string, field: "en" | "ko", value: string) {
+    setItems(sid, critsOf(sid).map((c) => (c.key === key ? { ...c, [field]: value } : c)));
+  }
+  function deleteItem(sid: string, key: string) {
+    setItems(sid, critsOf(sid).filter((c) => c.key !== key));
+  }
+  function addItem(sid: string) {
+    setItems(sid, [...critsOf(sid), { key: "c_" + uid(), en: "", ko: "" }]);
+  }
   function setTeacherAll(name: string) {
     setReps((cur) => {
       const next = { ...cur };
@@ -107,11 +138,11 @@ export function EngReport() {
 
   function cardData(s: RosterStudent): EngReportCardData {
     const r = repOf(s.id);
-    return { name: s.name, englishName: r.scores[NAME_KEY] || "", grade: s.grade, teacher: r.teacher, month, scores: r.scores, comments: r.comments };
+    return { name: s.name, englishName: r.scores[NAME_KEY] || "", grade: s.grade, teacher: r.teacher, month, scores: r.scores, comments: r.comments, criteria: critsOf(s.id) };
   }
   function doneCount(sid: string): number {
     const sc = repOf(sid).scores;
-    return ENG_CRITERIA.filter((c) => sc[c.key]).length;
+    return critsOf(sid).filter((c) => sc[c.key]).length;
   }
 
   async function exportOne(s: RosterStudent) {
@@ -226,13 +257,17 @@ export function EngReport() {
                 </div>
 
                 <div className="eng-field">
-                  <div className="eng-label">항목별 등급</div>
+                  <div className="eng-label">항목별 등급 <span className="er-crit-hint">(항목 이름을 고치거나 ✕로 빼고, 아래에서 새 항목을 더할 수 있어요)</span></div>
                   <div className="er-crits">
-                    {ENG_CRITERIA.map((c) => {
+                    {critsOf(selStudent.id).map((c) => {
                       const g = rep.scores[c.key] || "";
                       return (
                         <div className="er-crit" key={c.key}>
-                          <div className="er-crit-name"><b>{c.en}</b> <span>{c.ko}</span></div>
+                          <div className="er-crit-name er-crit-edit">
+                            <input className="input er-crit-en" value={c.en} onChange={(e) => renameItem(selStudent.id, c.key, "en", e.target.value)} placeholder="영문 (예: Listening)" />
+                            <input className="input er-crit-ko" value={c.ko} onChange={(e) => renameItem(selStudent.id, c.key, "ko", e.target.value)} placeholder="한글 (예: [듣기])" />
+                            <button className="er-crit-del" title="이 항목 빼기" aria-label="이 항목 빼기" onClick={() => deleteItem(selStudent.id, c.key)}>✕</button>
+                          </div>
                           <div className="er-crit-grades">
                             {ENG_GRADES.map((gr) => (
                               <button
@@ -248,6 +283,7 @@ export function EngReport() {
                         </div>
                       );
                     })}
+                    <button className="btn ghost sm er-crit-add" onClick={() => addItem(selStudent.id)}>+ 항목 추가</button>
                   </div>
                 </div>
 
