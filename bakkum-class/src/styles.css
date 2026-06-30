@@ -2101,6 +2101,7 @@ button.eng-wnm.is-link:hover{text-decoration:underline;filter:brightness(.92)}
 .desk-tt-name.eng{color:var(--purple);background:var(--purple-bg)}
 button.desk-tt-name{border:none;cursor:pointer;font:inherit;line-height:inherit}
 button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.96)}
+.desk-tt-gr{margin-left:3px;font-size:.78em;opacity:.62;font-weight:600}
 .tt-dot{display:inline-block;width:8px;height:8px;border-radius:50%;vertical-align:middle;margin:0 2px 0 6px}
 .tt-dot.math{background:var(--brand)}
 .tt-dot.eng{background:var(--purple)}

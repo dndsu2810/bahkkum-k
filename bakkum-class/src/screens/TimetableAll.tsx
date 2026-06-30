@@ -21,6 +21,7 @@ export function TimetableAll() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [weekOffset, setWeekOffset] = useState(0); // 0=이번주. 미래 적용일(예: 7/1) 시간표 미리보기.
   const [filterId, setFilterId] = useState("all"); // "all" 또는 학생 id — 한 학생만 보기.
+  const [q, setQ] = useState(""); // 이름 검색
 
   // 주차 선택 시 그 주 월요일 기준으로 다시 조회. 이번주(0)는 날짜 없이=라이브와 동일.
   useEffect(() => {
@@ -43,7 +44,12 @@ export function TimetableAll() {
     for (const l of tt) map.set(l.studentId, l.name);
     return [...map.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [roster, tt]);
-  const shown = useMemo(() => (filterId === "all" ? tt : tt.filter((l) => l.studentId === filterId)), [tt, filterId]);
+  const shown = useMemo(() => {
+    const qq = q.trim();
+    return tt.filter((l) => (filterId === "all" || l.studentId === filterId) && (!qq || l.name.includes(qq)));
+  }, [tt, filterId, q]);
+  // 학년 표시용 — 학생 id → 학년(roster 기준). 초/중 섞임 구분.
+  const gradeById = useMemo(() => { const m: Record<string, string> = {}; for (const r of roster) m[r.id] = r.grade || ""; return m; }, [roster]);
   const mon = mondayOf(TODAY, weekOffset);
   const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
   const weekLabel = weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset === -1 ? "지난 주" : `${fmtMD(mon)}~${fmtMD(sun)}`;
@@ -58,7 +64,11 @@ export function TimetableAll() {
     }
     const out: Record<string, { time: string; people: TtPerson[] }[]> = {};
     for (const d of DOW_ORDER) {
-      out[d] = Object.keys(map[d] || {}).sort((a, b) => timeKey(a) - timeKey(b)).map((time) => ({ time, people: map[d][time] }));
+      out[d] = Object.keys(map[d] || {}).sort((a, b) => timeKey(a) - timeKey(b)).map((time) => ({
+        time,
+        // 같은 시간대 안에서는 과목(수학→영어)·이름순으로 고정 정렬(들어온 순서로 뒤죽박죽되지 않게).
+        people: map[d][time].slice().sort((a, b) => (a.subject === b.subject ? a.name.localeCompare(b.name) : a.subject === "english" ? 1 : -1)),
+      }));
     }
     return out;
   }, [shown]);
@@ -83,6 +93,7 @@ export function TimetableAll() {
           <span className="sp-week-lbl">{weekLabel}</span>
           <button className="sp-week-arr" onClick={() => setWeekOffset((w) => w + 1)} aria-label="다음 주">›</button>
         </div>
+        <input className="inline-select" style={{ minWidth: 140 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름 검색" aria-label="이름 검색" />
         <select className="inline-select" value={filterId} onChange={(e) => setFilterId(e.target.value)} aria-label="학생 선택">
           <option value="all">전체 학생</option>
           {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -104,10 +115,12 @@ export function TimetableAll() {
                   {slot.people.map((p, j) => {
                     const cls = "desk-tt-name " + (p.subject === "english" ? "eng" : "math");
                     const known = roster.some((r) => r.id === p.studentId);
+                    const gr = gradeById[p.studentId];
+                    const label = <>{p.name}{gr && <span className="desk-tt-gr">{gr}</span>}</>;
                     return known ? (
-                      <button type="button" className={cls + " is-link"} key={j} onClick={() => setOpenId(p.studentId)} title="학생 정보 보기">{p.name}</button>
+                      <button type="button" className={cls + " is-link"} key={j} onClick={() => setOpenId(p.studentId)} title="학생 정보 보기">{label}</button>
                     ) : (
-                      <span className={cls} key={j}>{p.name}</span>
+                      <span className={cls} key={j}>{label}</span>
                     );
                   })}
                 </span>
