@@ -2741,6 +2741,8 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .sp-curitem{display:flex;flex-direction:column;align-items:stretch;gap:6px}
 .sp-curitem .sp-check{align-self:flex-start}
 .sp-currange{width:100%;min-width:0;padding:5px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--ink);font-size:var(--t-sm)}
+.sp-curlast,.eng-curlast{align-self:flex-start;margin-top:3px;background:var(--brand-soft);border:1px solid var(--brand-line);color:var(--brand-d);border-radius:999px;padding:2px 9px;font-size:var(--t-cap);font-weight:600;cursor:pointer;white-space:nowrap}
+.sp-curlast:hover,.eng-curlast:hover{filter:brightness(.97)}
 .sp-check{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-md);
   cursor:pointer;user-select:none;transition:background .12s}
 .sp-check:hover{background:var(--card2)}

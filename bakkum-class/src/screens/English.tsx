@@ -857,6 +857,13 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
     const prior = hist.filter((x) => x.date < d.date && x.nextNote && x.nextNote.trim()).sort((a, b) => (a.date < b.date ? 1 : -1));
     return prior[0] ? { date: prior[0].date, text: prior[0].nextNote.trim() } : null;
   }, [hist, d.date]);
+  // 항목별 '지난번 범위'(이어쓰기 단서) — 선택 날짜 이전 가장 최근 입력. 그걸 보고 이어 적기.
+  const lastRangeOf = useMemo(() => {
+    const map: Record<string, string> = {};
+    const past = hist.filter((x) => x.date < d.date).sort((a, b) => (a.date < b.date ? 1 : -1));
+    for (const it of doneItemsAll) { for (const r of past) { const v = r.curRanges?.[it]; if (v && String(v).trim()) { map[it] = String(v).trim(); break; } } }
+    return map;
+  }, [hist, d.date, doneItemsAll]);
   // 지난(가장 가까운 이전 날짜) '내줄 숙제' — 이번 '숙제 검사'로 이어진다.
   const carried = useMemo(() => {
     const prior = hist.filter((x) => x.date < d.date && x.hwAssign && x.hwAssign.length).sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -1124,7 +1131,10 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
                 return (
                   <div key={it} className={"eng-curitem" + (on ? " on" : "")}>
                     <button type="button" className={"eng-pt" + (on ? " on" : "")} onClick={() => setD({ ...d, doneItems: on ? d.doneItems.filter((x) => x !== it) : [...d.doneItems, it] })}>{it}</button>
-                    <input className="input eng-currange" value={ranges[it] || ""} onChange={(e) => setD({ ...d, curRanges: { ...ranges, [it]: e.target.value } })} placeholder="범위 (예: p.20~25)" />
+                    <input className="input eng-currange" value={ranges[it] || ""} onChange={(e) => setD({ ...d, curRanges: { ...ranges, [it]: e.target.value } })} placeholder={lastRangeOf[it] ? `지난번 ${lastRangeOf[it]} — 이어서` : "범위 (예: p.20~25)"} />
+                    {!ranges[it] && lastRangeOf[it] && (
+                      <button type="button" className="eng-curlast" title="지난 기록 이어쓰기" onClick={() => setD({ ...d, curRanges: { ...ranges, [it]: lastRangeOf[it] } })}>지난번 {lastRangeOf[it]} →</button>
+                    )}
                   </div>
                 );
               })}

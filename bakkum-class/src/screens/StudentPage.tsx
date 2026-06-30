@@ -702,6 +702,15 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
   // 선택한 날짜의 요일에 잡힌 수업시간(자동입력용).
   const dow = DOW[parseD(date).getDay()];
   const scheduled = slots.find((s) => s.day === dow);
+  // 항목별 '지난번 기록'(이어쓰기 단서) — 선택 날짜 이전 가장 최근에 적은 범위/분량. 그걸 보고 이어서 쓰면 돼요.
+  const lastRangeOf = useMemo(() => {
+    const map: Record<string, string> = {};
+    const past = existing.filter((r) => r.date < date).sort((a, b) => (a.date < b.date ? 1 : -1));
+    for (const it of items) {
+      for (const r of past) { const v = r.curRanges?.[it]; if (v && v.trim()) { map[it] = v.trim(); break; } }
+    }
+    return map;
+  }, [existing, date, items]);
 
   function fillScheduled() {
     if (!scheduled) return;
@@ -847,8 +856,14 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
                     className="sp-currange"
                     value={curRanges[it] || ""}
                     onChange={(e) => { dirtyRef.current = true; setCurRanges({ ...curRanges, [it]: e.target.value }); }}
-                    placeholder="범위 (예: p.20~25)"
+                    placeholder={lastRangeOf[it] ? `지난번 ${lastRangeOf[it]} — 이어서` : "범위 (예: p.20~25)"}
                   />
+                  {!curRanges[it] && lastRangeOf[it] && (
+                    <button type="button" className="sp-curlast" title="지난 기록 이어쓰기"
+                      onClick={() => { dirtyRef.current = true; setCurRanges({ ...curRanges, [it]: lastRangeOf[it] }); }}>
+                      지난번 {lastRangeOf[it]} →
+                    </button>
+                  )}
                 </div>
               );
             })}
