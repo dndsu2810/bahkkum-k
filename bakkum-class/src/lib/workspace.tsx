@@ -37,6 +37,7 @@ const MATH: WsEntry[] = [
   { key: "makeup", label: "보강 관리", icon: "refresh", kind: "math", page: "makeup" },
   { key: "report", label: "수학 월말리포트", icon: "fileText", kind: "math", page: "report" },
   { key: "plan", label: "연간 수업 계획표", icon: "cal", kind: "math", page: "plan" },
+  { key: "timetable_sample", label: "통합 시간표(샘플)", icon: "calplus", kind: "math", page: "timetable_sample" },
 ];
 
 /* ---- 학생 메시지 보내기 (원장·수학 담당) ---- */
@@ -79,7 +80,6 @@ const SNS: WsEntry = { key: "sns", label: "SNS 관리", icon: "copy", kind: "hub
 const MASTER: WsEntry = { key: "master", label: "학생 명단", icon: "students", kind: "hub" };
 const RANKING: WsEntry = { key: "ranking", label: "포인트 랭킹", icon: "chart", kind: "hub" };
 const MATERIALS: WsEntry = { key: "materials", label: "자료 배부", icon: "copy", kind: "hub" };
-const POINT_CATALOG: WsEntry = { key: "point_catalog", label: "포인트 항목", icon: "chart", kind: "hub" };
 const ENGREPORT: WsEntry = { key: "engreport", label: "영어 월말리포트", icon: "fileText", kind: "hub" };
 const ISSUES: WsEntry = { key: "issues", label: "오류·개선 요청", icon: "clipboard", kind: "hub" };
 const CHECKIN: WsEntry = { key: "checkin", label: "등하원", icon: "today", kind: "hub" };
@@ -126,10 +126,9 @@ export function sidebarFor(user: AuthUser): WsGroup[] {
   if (areas.has("students")) common.push(MASTER);
   common.push(ALL_TT); // 전체 시간표(수학·영어 통합) — 모든 스태프 공통.
   common.push(TEACHER_GUIDE); // 강사 정보 안내 — 모든 스태프 공통(데스크 '강사 계정 리스트' 대체).
-  common.push(RANKING);
-  // 포인트 항목·자료 배부 — 강사·원장 공용(수학·영어 모두 같은 화면).
+  common.push(RANKING); // 포인트 랭킹 안에 '포인트 항목' 점수 편집이 들어있음(별도 메뉴 없앰).
+  // 자료 배부 — 강사·원장 공용(수학·영어 모두 같은 화면).
   const isTeacher = role === "admin" || areas.has("math") || role === "english_mid" || role === "english_elem";
-  if (isTeacher) common.push(POINT_CATALOG);
   if (isTeacher) common.push(MATERIALS);
   common.push(ORDERS); // 교재·비품 주문 관리 — 공통(모든 스태프).
   if (isTeacher) common.push(MAKEUP_ALL); // 통합 보강관리 — 수학·영어 보강 모아보기(강사·원장).

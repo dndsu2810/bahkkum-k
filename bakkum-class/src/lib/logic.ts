@@ -2,6 +2,7 @@ import type { Lesson, Makeup, MakeupDisplay, ScheduleVersion, Student, StudentSt
 import { DOW, DOW_ORDER, TODAY, pad, parseD, ymd } from "./dates";
 import { toneOf, type Tone } from "./categories";
 import { holidayName } from "./holidays";
+import { GRADE_OPTIONS } from "./grade";
 
 /** 주어진 날짜(YYYY-MM-DD)에 유효한 시간표를 반환.
  *  - schedule(버전 이력)이 있으면 from <= dateStr 중 가장 최근 버전의 lessons.
@@ -17,6 +18,14 @@ export function effectiveLessons(s: Student, dateStr: string): Lesson[] {
   return chosen ? chosen.lessons : [];
 }
 
+/** 학생의 수업 길이(분) — 1회성 이동·추가로 카드에 넣을 때 60분 하드코딩 대신 실제 길이를 쓰기 위함.
+ *  time이 주어지면 그 시간의 수업 길이, 없으면 첫 수업 길이. 못 찾으면 60. */
+export function lessonDurationFor(s: Student, time?: string): number {
+  const ls = s.lessons || [];
+  const m = (time ? ls.find((l) => l.time === time) : undefined) || ls[0];
+  return m?.duration || 60;
+}
+
 /** 해당 날짜가 학생의 첫 등원일(등록일) 이후인지 — 출결/시간표 표시 가드. */
 export function attendsOn(s: Student, dateStr: string): boolean {
   if (s.startDate && dateStr < s.startDate) return false;
@@ -29,6 +38,31 @@ export function isActive(s: Student): boolean {
 }
 export function activeStudents(students: Student[]): Student[] {
   return students.filter(isActive);
+}
+
+/* ---------- 학생 명단 정렬(여러 수학 화면 공통) ---------- */
+/** 가나다(한글 이름)순. */
+export function cmpName(a: { name: string }, b: { name: string }): number {
+  return (a.name || "").localeCompare(b.name || "", "ko");
+}
+/** 학년 순위(초1→고3). 모르는 학년은 맨 뒤. */
+export function gradeRank(grade: string): number {
+  const i = GRADE_OPTIONS.indexOf(grade);
+  return i < 0 ? GRADE_OPTIONS.length : i;
+}
+/** 학년순(같은 학년이면 가나다). */
+export function cmpGrade(a: { grade: string; name: string }, b: { grade: string; name: string }): number {
+  return gradeRank(a.grade) - gradeRank(b.grade) || cmpName(a, b);
+}
+/** 수학 첫 등원일(mathStart 우선, 없으면 등록일)순. 빠른 날짜 먼저, 같으면 가나다. */
+export function cmpMathStart(a: { mathStart?: string; startDate: string; name: string }, b: { mathStart?: string; startDate: string; name: string }): number {
+  const da = a.mathStart || a.startDate || "";
+  const db = b.mathStart || b.startDate || "";
+  return da.localeCompare(db) || cmpName(a, b);
+}
+/** 명단 정렬 — "name"(가나다) | "grade"(학년순). */
+export function sortStudents<T extends { name: string; grade: string }>(list: T[], by: "name" | "grade"): T[] {
+  return list.slice().sort(by === "grade" ? cmpGrade : cmpName);
 }
 export function statusTone(st: StudentStatus): string {
   return st === "재원" ? "green" : st === "대기" ? "blue" : st === "휴원" ? "orange" : "gray";

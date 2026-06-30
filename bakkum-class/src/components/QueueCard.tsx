@@ -16,7 +16,7 @@ function speak(text: string) {
   } catch { /* 음성 미지원은 무시 */ }
 }
 
-export function QueueCard() {
+export function QueueCard({ compact }: { compact?: boolean } = {}) {
   const { user } = useAuth();
   const name = user?.name || "";
   const [data, setData] = useState<MineResp | null>(null);
@@ -59,20 +59,58 @@ export function QueueCard() {
 
   if (!data || data.subjects.length === 0) return null;
 
+  // 큰 '차례' 배너(상단 고정) — 호출되면 눈에 띄게. 확인 누르면 닫힘(다시 호출 전까지). 컴팩트에서도 동일.
+  const turnBanner = alertSub && (
+    <div className="qc-turn" role="alert">
+      <span className="qc-turn-ic"><Icon name="bell" /></span>
+      <div className="qc-turn-txt">
+        <b>{name} 학생 차례입니다</b>
+        <span>{SUBJECT_LABEL[alertSub]}</span>
+      </div>
+      <button className="btn sm qc-turn-x" onClick={() => setAlertSub(null)}>확인</button>
+    </div>
+  );
+
+  // 컴팩트 — 프로필 헤더 빈 공간용. 카드 테두리 없이 작게, 한 과목씩 한 줄.
+  if (compact) {
+    return (
+      <>
+        {turnBanner}
+        <div className="qc-mini">
+          <span className="qc-mini-h"><Icon name="bell" /> 번호표</span>
+          {data.subjects.map((s) => {
+            const t = data.tickets[s] || null;
+            const called = t?.status === "called";
+            return (
+              <div key={s} className={"qc-mini-row" + (called ? " called" : "")}>
+                <span className="qc-mini-subj">{SUBJECT_LABEL[s as QueueSubject]}</span>
+                {!t ? (
+                  <button className="btn primary sm" disabled={busy} onClick={() => act(() => queueApi.draw(s))}>번호 뽑기</button>
+                ) : called ? (
+                  <>
+                    <b className="qc-num">{t.number}번</b>
+                    <span className="qc-mini-call"><Icon name="bell" /> 내 차례</span>
+                    <button className="btn ghost sm" disabled={busy} onClick={() => act(() => queueApi.cancel(s))}>취소</button>
+                  </>
+                ) : (
+                  <>
+                    <b className="qc-num">{t.number}번</b>
+                    <span className="qc-mini-ahead">{t.ahead === 0 ? "곧 차례" : `앞 ${t.ahead}명`}</span>
+                    <button className={"btn sm" + (t.raised ? " primary" : " ghost")} disabled={busy || t.raised} onClick={() => act(() => queueApi.raise(s))}>{t.raised ? "손든 중" : "손들기"}</button>
+                    <button className="btn ghost sm" disabled={busy} onClick={() => act(() => queueApi.cancel(s))}>취소</button>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
-      {/* 큰 '차례' 배너(상단 고정) — 호출되면 눈에 띄게. 확인 누르면 닫힘(다시 호출 전까지). */}
-      {alertSub && (
-        <div className="qc-turn" role="alert">
-          <span className="qc-turn-ic"><Icon name="bell" /></span>
-          <div className="qc-turn-txt">
-            <b>{name} 학생 차례입니다</b>
-            <span>{SUBJECT_LABEL[alertSub]} · 들어오세요</span>
-          </div>
-          <button className="btn sm qc-turn-x" onClick={() => setAlertSub(null)}>확인</button>
-        </div>
-      )}
-
+      {turnBanner}
       <section className="sp-card qc-card">
         <h3 className="sp-card-h">번호표</h3>
         <div className="qc">

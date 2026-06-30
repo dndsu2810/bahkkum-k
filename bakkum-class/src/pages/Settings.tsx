@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { TONES, type Category, type Tone } from "../lib/categories";
 import { getConfig, setConfig, getSecretSet, uploadImage } from "../lib/configApi";
-import { feedbackApi, type Notice } from "../lib/feedbackApi";
-import { NOTICE_AUDIENCES, audienceLabel, type NoticeAudience } from "../lib/notice";
+import { NoticeManager } from "../components/NoticeManager";
 import { syncAllFromNotion, type SyncStep } from "../lib/syncAll";
 import { Icon } from "../icons";
 
@@ -70,74 +69,6 @@ function LogoSetting() {
  * 남겨둬 필요 시 수동으로만 사용. 관련 백엔드: worker/index.ts importRecords. */
 
 /** 공지 배너 — 원장이 강사에게 띄우는 상단 띠. 있을 때만 노출. */
-function NoticeSetting() {
-  const [list, setList] = useState<Notice[]>([]);
-  const [text, setText] = useState("");
-  const [level, setLevel] = useState<"info" | "warn">("info");
-  const [audience, setAudience] = useState<NoticeAudience>("staff");
-  const [busy, setBusy] = useState(false);
-
-  async function reload() {
-    try {
-      setList(await feedbackApi.noticesAll());
-    } catch {
-      /* ignore */
-    }
-  }
-  useEffect(() => { void reload(); }, []);
-
-  async function post() {
-    if (!text.trim() || busy) return;
-    setBusy(true);
-    try {
-      await feedbackApi.saveNotice({ text: text.trim(), level, audience, active: true });
-      setText("");
-      await reload();
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function toggle(n: Notice) {
-    await feedbackApi.saveNotice({ id: n.id, text: n.text, level: n.level, audience: n.audience, active: !n.active });
-    await reload();
-  }
-  async function remove(n: Notice) {
-    await feedbackApi.removeNotice(n.id);
-    await reload();
-  }
-
-  return (
-    <div className="card sec-gap" style={{ padding: 16, marginTop: 14 }}>
-      <div className="card-title" style={{ marginBottom: 6 }}>공지 배너</div>
-      <div className="page-desc" style={{ marginBottom: 12 }}>대상을 골라 그 사람들 화면 상단에 한 줄로 띄워요(전체·강사만·학생 전체·초등영어·중고등영어). 끄거나 지우면 사라집니다.</div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <input className="input" style={{ flex: 1, minWidth: 200 }} value={text} onChange={(e) => setText(e.target.value)} placeholder="공지 문구 (예: 오늘 6시 회의 있어요)" onKeyDown={(e) => e.key === "Enter" && post()} />
-        <select className="input" style={{ width: 150 }} value={audience} onChange={(e) => setAudience(e.target.value as NoticeAudience)}>
-          {NOTICE_AUDIENCES.map((a) => <option key={a.v} value={a.v}>{a.label}</option>)}
-        </select>
-        <select className="input" style={{ width: 100 }} value={level} onChange={(e) => setLevel(e.target.value as "info" | "warn")}>
-          <option value="info">공지(파랑)</option>
-          <option value="warn">중요(주황)</option>
-        </select>
-        <button className="btn primary" onClick={post} disabled={!text.trim() || busy}>게시</button>
-      </div>
-      {list.length > 0 && (
-        <div className="rep-list" style={{ marginTop: 12 }}>
-          {list.map((n) => (
-            <div className="rep-itemrow" key={n.id}>
-              <span className={"notice-dot " + (n.level === "warn" ? "warn" : "info")} />
-              <span style={{ flex: 1, minWidth: 140, opacity: n.active ? 1 : 0.5 }}>{n.text}</span>
-              <span className={"badge " + (n.audience === "all" ? "b-blue" : n.audience === "staff" ? "b-gray" : "b-purple")}>{audienceLabel(n.audience)}</span>
-              <button className="btn ghost sm" onClick={() => toggle(n)}>{n.active ? "내리기" : "올리기"}</button>
-              <button className="rep-x" onClick={() => remove(n)} title="삭제"><Icon name="trash" /></button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** 오류 요청 알림용 카카오워크 웹훅 URL(노출 안 됨, 설정 여부만 표시). */
 function KakaoWebhookSetting() {
   const [set, setSet] = useState(false);
@@ -263,7 +194,7 @@ export function Settings({
         </div>
       </div>
 
-      <NoticeSetting />
+      <NoticeManager />
       <CheckoutNoticeSetting />
       <KakaoWebhookSetting />
       <LogoSetting />

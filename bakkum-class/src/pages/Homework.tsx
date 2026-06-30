@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import type { HwLog } from "../types";
 import { useStore } from "../store";
-import { activeStudents } from "../lib/logic";
+import { activeStudents, sortStudents } from "../lib/logic";
 import { TodayLink } from "../components/ui";
+import { StudentSortToggle, useStudentSort } from "../components/StudentSortToggle";
 import { Icon } from "../icons";
 
 const HW_STATUS_LABEL: Record<string, string> = { pending: "검사 전", done: "검사완료", late: "지연" };
-const mdDate = (d: string) => (d && d.length >= 10 ? `${+d.slice(5, 7)}/${+d.slice(8, 10)}` : "—");
 // 숙제 영역 태그 — [오늘] 내주기와 동일 라벨.
 const AREA_TAGS = ["개념", "연산", "복습", "오답", "심화", "활용", "사고력", "서술형", "수학익힘"];
 
@@ -22,9 +22,10 @@ export function Homework() {
   const [bookDraft, setBookDraft] = useState<Record<string, string>>({});
   const [pctDraft, setPctDraft] = useState<Record<string, string>>({});
 
+  const [sort, setSort] = useStudentSort("homework");
   const students = useMemo(
-    () => activeStudents(data.students).slice().sort((a, b) => a.name.localeCompare(b.name, "ko")),
-    [data.students]
+    () => sortStudents(activeStudents(data.students), sort),
+    [data.students, sort]
   );
   const qq = q.trim().toLowerCase();
   const shownStudents = qq ? students.filter((s) => (s.name + " " + (s.grade || "")).toLowerCase().includes(qq)) : students;
@@ -88,6 +89,7 @@ export function Homework() {
       <div className="eng-split">
         <div className="eng-side-wrap card">
           <input className="input" style={{ marginBottom: 8 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="학생 검색" />
+          <div style={{ marginBottom: 8 }}><StudentSortToggle value={sort} onChange={setSort} /></div>
           <div className="eng-side">
             {shownStudents.length === 0 ? (
               <div className="eng-side-empty">학생이 없어요.</div>
@@ -129,7 +131,15 @@ export function Homework() {
                             <tbody>
                               {rows.map((h) => (
                                 <tr key={h.id}>
-                                  <td className="eng-hwt-date">{mdDate(h.date)}</td>
+                                  <td className="eng-hwt-date">
+                                    <input
+                                      type="date"
+                                      className="math-hwt-date-in"
+                                      value={h.date && h.date.length >= 10 ? h.date.slice(0, 10) : ""}
+                                      onChange={(e) => { const v = e.target.value; if (/^\d{4}-\d{2}-\d{2}$/.test(v) && v !== h.date) patch(h, (x) => { x.date = v; }); }}
+                                      title="숙제 날짜 수정"
+                                    />
+                                  </td>
                                   <td className="math-hwt-book">
                                     <input
                                       className="math-hwt-input"

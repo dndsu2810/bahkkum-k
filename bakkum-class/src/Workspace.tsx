@@ -653,8 +653,9 @@ export function Workspace() {
               ordersPending={ordersPending}
             />
             <ThemeToggle />
-            <span className="acct-chip">
-              {user.name} · <span className="role">{ROLE_LABEL[shownRole(user)]}</span>
+            <span className="acct-chip" title={`${user.name} · ${ROLE_LABEL[shownRole(user)]}`}>
+              <span className="acct-nm">{user.name}</span>
+              <span className="role">{ROLE_LABEL[shownRole(user)]}</span>
             </span>
             <button className="acct-logout" onClick={() => logout()}>
               로그아웃

@@ -7,6 +7,7 @@ import { fmtWhen } from "../lib/dates";
 import { Icon } from "../icons";
 import { EmptyHive } from "../soez";
 import { NOTICE_AUDIENCES, audienceLabel, type NoticeAudience } from "../lib/notice";
+import { NoticeManager } from "../components/NoticeManager";
 
 type Mode = { kind: "list" } | { kind: "detail"; id: string } | { kind: "edit"; id?: string };
 
@@ -26,6 +27,8 @@ export function Notices({ readOnly }: { readOnly?: boolean } = {}) {
 
 /* ─────────── 목록 ─────────── */
 function NoticeList({ readOnly, onNew, onOpen }: { readOnly?: boolean; onNew: () => void; onOpen: (id: string) => void }) {
+  const { user } = useAuth();
+  const isAdmin = !readOnly && user?.role === "admin";
   const [items, setItems] = useState<PostListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -47,6 +50,8 @@ function NoticeList({ readOnly, onNew, onOpen }: { readOnly?: boolean; onNew: ()
         </div>
         {!readOnly && <button className="btn primary" onClick={onNew}><Icon name="plus" /> 새 공지</button>}
       </div>
+
+      {isAdmin && <NoticeManager />}
 
       {loading ? (
         <div className="mt-loading">불러오는 중…</div>
@@ -147,6 +152,7 @@ function NoticeEditor({ id, onDone, onCancel }: { id?: string; onDone: () => voi
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState<NoticeAudience>("staff");
   const [banner, setBanner] = useState(false);
+  const [bannerText, setBannerText] = useState("");
   const [files, setFiles] = useState<PostFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -157,7 +163,7 @@ function NoticeEditor({ id, onDone, onCancel }: { id?: string; onDone: () => voi
     let alive = true;
     postApi.get(id).then((p) => {
       if (!alive) return;
-      setTitle(p.title); setBody(p.body); setAudience(p.audience); setBanner(p.banner); setFiles(p.files);
+      setTitle(p.title); setBody(p.body); setAudience(p.audience); setBanner(p.banner); setBannerText(p.bannerText || ""); setFiles(p.files);
       setLoaded(true);
     }).catch(() => { if (alive) { setErr("불러오지 못했어요."); setLoaded(true); } });
     return () => { alive = false; };
@@ -182,7 +188,7 @@ function NoticeEditor({ id, onDone, onCancel }: { id?: string; onDone: () => voi
     if (!ok) return;
     setSaving(true);
     try {
-      await postApi.save({ id, title: title.trim(), body, files, audience, banner });
+      await postApi.save({ id, title: title.trim(), body, files, audience, banner, bannerText: bannerText.trim() });
       onDone();
     } catch (e) { setErr(e instanceof Error ? e.message : "저장에 실패했어요."); setSaving(false); }
   }
@@ -240,6 +246,13 @@ function NoticeEditor({ id, onDone, onCancel }: { id?: string; onDone: () => voi
           <input type="checkbox" checked={banner} onChange={(e) => setBanner(e.target.checked)} />
           <span>공지 배너로 등록 (상단에 띄우기 · 체크 해제하면 내려가요)</span>
         </label>
+        {banner && (
+          <label className="mt-f po-banner-text">
+            <span>배너에 보일 문구 <span style={{ color: "var(--ink3)", fontWeight: 400 }}>(선택 — 비우면 제목이 떠요)</span></span>
+            <input className="input" value={bannerText} onChange={(e) => setBannerText(e.target.value)} placeholder={title.trim() ? `짧게 한 줄 (비우면 "${title.trim()}")` : "짧게 한 줄"} />
+            <span className="po-banner-hint">배너엔 이 문구만 뜨고, 누르면 위에서 쓴 글 내용이 펼쳐져 보여요.</span>
+          </label>
+        )}
 
         {err && <div className="mt-err">{err}</div>}
         <div className="mt-save-foot">

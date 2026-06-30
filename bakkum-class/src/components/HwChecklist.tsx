@@ -4,13 +4,14 @@ import { useState } from "react";
 import { HW_STATUSES, type HwItem, type HwStatus } from "../lib/engApi";
 import { Icon } from "../icons";
 
-export function HwChecklist({ items, onChange, currentBy, currentByName, placeholder = "숙제 추가 (예: 단어 3과 외우기)", readOnly = false }: {
+export function HwChecklist({ items, onChange, currentBy, currentByName, placeholder = "숙제 추가 (예: 단어 3과 외우기)", readOnly = false, noDelete = false }: {
   items: HwItem[];
   onChange: (next: HwItem[]) => void;
   currentBy: "student" | "teacher";
   currentByName: string;
   placeholder?: string;
   readOnly?: boolean;
+  noDelete?: boolean; // 추가·체크는 되지만 삭제(X)만 막아요(학생용).
 }) {
   const [text, setText] = useState("");
 
@@ -50,7 +51,7 @@ export function HwChecklist({ items, onChange, currentBy, currentByName, placeho
                 {it.by === "student" ? "학생 입력" : "최종: " + it.byName}
               </span>
             )}
-            {!readOnly && <button type="button" className="hwc-x" onClick={() => remove(i)} aria-label="삭제">×</button>}
+            {!readOnly && !noDelete && <button type="button" className="hwc-x" onClick={() => remove(i)} aria-label="삭제">×</button>}
           </div>
         );
       })}

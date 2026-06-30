@@ -4,13 +4,48 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>쏘이지 · 수업 관리</title>
+  <meta name="description" content="바꿈영수학원 수업 관리 — 출결·숙제·진도·테스트·시간표를 한 곳에서. 선생님과 학생을 위한 쏘이지." />
+  <!-- 사설 관리 도구라 검색엔진에는 노출하지 않는다(원하면 아래 한 줄 제거). -->
+  <meta name="robots" content="noindex, nofollow" />
+  <!-- 링크 공유(카톡·SNS) 미리보기 — Open Graph / Twitter. og:image는 쏘이지 로고(1200×630). -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="쏘이지" />
+  <meta property="og:title" content="쏘이지 · 바꿈영수학원 수업 관리" />
+  <meta property="og:description" content="출결·숙제·진도·테스트·시간표를 한 곳에서. 선생님과 학생을 위한 수업 관리." />
+  <meta property="og:url" content="https://bakkum-class.dndsu2810.workers.dev" />
+  <meta property="og:image" content="https://bakkum-class.dndsu2810.workers.dev/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="쏘이지 · 바꿈영수학원 수업 관리" />
+  <meta name="twitter:description" content="출결·숙제·진도·테스트·시간표를 한 곳에서." />
+  <meta name="twitter:image" content="https://bakkum-class.dndsu2810.workers.dev/og-image.png" />
   <!-- 앱 아이콘(파비콘·홈화면·즐겨찾기) + PWA -->
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-  <link rel="apple-touch-icon" href="/icon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+  <!-- iOS는 apple-touch-icon에 SVG를 못 써서 PNG 필요(없으면 홈화면 추가가 사파리 바로가기로 떨어짐). -->
+  <link rel="apple-touch-icon" href="/icon-192.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#F4A93C" />
   <meta name="apple-mobile-web-app-title" content="쏘이지" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <!-- 방문 분석(GA4) — 아래 GA_ID에 측정 ID(G-XXXXXXXXXX)를 넣으면 자동 활성화.
+       비어 있으면 스크립트를 전혀 로드하지 않아 안전(켜기 전엔 아무 일도 안 함). -->
+  <script>
+    window.__GA_ID = "G-EDFDT593YF"; // GA4 측정 ID(바꿈영수학원 쏘이지).
+    (function () {
+      var id = window.__GA_ID;
+      if (!id) return;
+      var s = document.createElement("script");
+      s.async = true;
+      s.src = "https://www.googletagmanager.com/gtag/js?id=" + id;
+      document.head.appendChild(s);
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function () { window.dataLayer.push(arguments); };
+      window.gtag("js", new Date());
+      window.gtag("config", id);
+    })();
+  </script>
   <link rel="stylesheet" as="style" crossorigin
         href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <!-- 로고 워드마크 전용 Jua (그 외 모든 텍스트는 Pretendard) -->

@@ -6,10 +6,10 @@ import { emptyExtras } from "../lib/reportTypes";
 import { computeAtt, deriveNotes } from "../lib/reportCompute";
 import { loadExtras, saveExtras } from "../lib/reportExtras";
 import { saveReportAsImages } from "../lib/reportImage";
-import { curMonthStr, inMonth, monthOptions, studentById } from "../lib/logic";
+import { curMonthStr, inMonth, monthOptions, studentById, sortStudents } from "../lib/logic";
 import { uid } from "../lib/dates";
-import { catIndex } from "../lib/categories";
 import { Select } from "../components/ui";
+import { StudentSortToggle, useStudentSort } from "../components/StudentSortToggle";
 import { Icon } from "../icons";
 import { ReportCard } from "../components/ReportCard";
 import { ReportPreview } from "./ReportPreview";
@@ -42,12 +42,19 @@ export function Report() {
     img.src = "/report-logo.png";
   }, []);
 
+  const [sort, setSort] = useStudentSort("report");
+  // 리포트 달 기준으로, 아직 수학을 시작하지 않은 학생은 숨긴다.
+  // (예: 첫등원 7/1인 학생은 6월 리포트에 뜰 필요 없음) — 수학 첫등원일(mathStart) 우선, 없으면 등록일.
   const sorted = useMemo(
     () =>
-      data.students
-        .slice()
-        .sort((a, b) => (a.grade === b.grade ? (a.name < b.name ? -1 : 1) : catIndex(a.grade) - catIndex(b.grade))),
-    [data.students]
+      sortStudents(
+        data.students.filter((s) => {
+          const startM = (s.mathStart || s.startDate || "").slice(0, 7);
+          return !startM || startM <= ym; // 첫등원 달이 리포트 달보다 미래면 제외
+        }),
+        sort
+      ),
+    [data.students, ym, sort]
   );
 
   function defaultExtras(studentId: string): ReportExtras {
@@ -225,6 +232,7 @@ export function Report() {
       <div className="eng-split rep-split">
         <div className="eng-side-wrap card">
           <input className="input" style={{ marginBottom: 8 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="학생 검색" />
+          <div style={{ marginBottom: 8 }}><StudentSortToggle value={sort} onChange={setSort} /></div>
           <div className="eng-side">
             {shown.length === 0 ? (
               <div className="eng-side-empty">학생이 없어요.</div>

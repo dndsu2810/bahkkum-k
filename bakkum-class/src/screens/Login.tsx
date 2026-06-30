@@ -14,7 +14,7 @@ const ERR_MSG: Record<string, string> = {
 
 export function Login() {
   const { setUser } = useAuth();
-  const [tab, setTab] = useState<Tab>("teacher");
+  const [tab, setTab] = useState<Tab>("student");
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
   const [birth, setBirth] = useState("");
@@ -136,7 +136,14 @@ export function Login() {
           {busy ? "확인 중…" : "로그인"}
         </button>
       </form>
-      <footer className="maker-credit">제작자 EZ</footer>
+      <footer className="maker-credit">
+        <nav className="auth-legal">
+          <a href="/terms">이용약관</a>
+          <span aria-hidden="true">·</span>
+          <a href="/privacy">개인정보처리방침</a>
+        </nav>
+        <span>제작자 EZ</span>
+      </footer>
 
       {blocked && (
         <div className="prof-overlay" onClick={() => setBlocked("")}>

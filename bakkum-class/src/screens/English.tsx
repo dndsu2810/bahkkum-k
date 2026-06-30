@@ -6,7 +6,7 @@ import { eventsApi, type EventItem } from "../lib/hubApi";
 import { MID_ENG_TIMETABLE } from "../lib/engTimetableSeed";
 import { DOW, DOW_ORDER, TODAY, fmtDayBand, fmtMD, fmtMDDow, mondayOf, parseD, timeToMin, todayStr, ymd } from "../lib/dates";
 import { holidayName } from "../lib/holidays";
-import { loadCheckout, saveCheckout, pruneCheckout, notifyCheckoutOnce } from "../lib/checkoutState";
+import { loadCheckout, saveCheckout, pruneCheckout, notifyCheckoutOnce, fetchCheckout, setCheckout } from "../lib/checkoutState";
 import { useDashOrder, isInteractiveTarget } from "../lib/dashOrder";
 import { Select, Empty } from "../components/ui";
 import { HwChecklist } from "../components/HwChecklist";
@@ -75,6 +75,7 @@ const blankDaily = (studentId: string, date: string): EngDaily => ({
   materials: "",
   hwAssign: [],
   hwCheck: [],
+  carryHidden: [],
   hwNone: false,
   testNone: false,
   updatedAt: 0,
@@ -245,12 +246,15 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
 
   // 오늘 등원 예정 = 그 요일 영어 수업 학생 − 빠진 학생 + 옮겨온 학생.
   const dowSel = DOW[parseD(date).getDay()];
+  // 첫 등원일(영어) 또는 등록일이 보는 날짜보다 미래면 아직 등원 전 — 오늘 목록에서 제외.
+  const startedByDate = (s: RosterStudent) => (!s.startDate || date >= s.startDate) && (!s.engStart || date >= s.engStart);
   const scheduledIds = useMemo(() => {
-    const base = new Set(students.filter((s) => s.engSlots.some((sl) => sl.day === dowSel)).map((s) => s.id));
+    const base = new Set(students.filter((s) => startedByDate(s) && s.engSlots.some((sl) => sl.day === dowSel)).map((s) => s.id));
     for (const id of departedIds) base.delete(id);
     for (const id of arrivedIds) base.add(id);
     return base;
-  }, [students, dowSel, departedIds, arrivedIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students, dowSel, departedIds, arrivedIds, date]);
   // 변경 시간(이 날로 잡힌 시간)이 있으면 그걸, 없으면 원래 요일 슬롯 시간.
   const slotTimeOf = (s: RosterStudent) =>
     arrivalOf(approvedChanges, s.id, "english", date)?.toTime || s.engSlots.find((sl) => sl.day === dowSel)?.time || "";
@@ -265,7 +269,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
   // A-4 초등 출결 활성화 — 초등은 시간표(engSlots)가 없을 때가 많아 예정 목록이 비기 쉽다.
   // 출결 탭에서 예정 학생이 없으면 그 반 전체 학생을 보여줘 출결을 무조건 할 수 있게(대시보드 집계 필수).
   const attEmpty = todayList.length === 0;
-  const attList = attEmpty && band === "elem" ? students : todayList;
+  const attList = attEmpty && band === "elem" ? students.filter(startedByDate) : todayList;
   const attAddable = attEmpty && band === "elem" ? [] : addable;
 
   const conflicts = useMemo(() => findSlotConflicts(students, date), [students, date]);
@@ -432,7 +436,7 @@ export function English({ band, tab: initialTab }: { band: Band; tab?: Tab }) {
                       : "왼쪽에서 학생을 선택하면 테스트 점수를 기록할 수 있어요."}
               </div>
             ) : tab === "today" ? (
-              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={addDoneItemForStudent} onAddNextGoal={addNextGoal} examMode={band === "mid" && naesinActiveOn(naesinMap[sel], date)} planNextDate={nextEngDate(students.find((s) => s.id === sel)?.engSlots || [], date)} ingBooks={ingBooksOf(sel)} />
+              <DailyEditor key={sel + date} student={nameOf[sel] || ""} band={band} value={getDaily(sel)} onSave={saveDaily} doneItemsAll={doneOptions} reasonsAll={reasonsAll} onAddDoneItem={addDoneItemForStudent} onAddNextGoal={addNextGoal} examMode={band === "mid" && naesinActiveOn(naesinMap[sel], date)} planNextDate={nextEngDate(students.find((s) => s.id === sel)?.engSlots || [], date)} ingBooks={ingBooksOf(sel)} autoSave />
             ) : tab === "progress" ? (
               <ProgressPanel studentId={sel} name={nameOf[sel] || ""} onChanged={loadProg} />
             ) : tab === "cur" ? (
@@ -851,8 +855,9 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
   // 지난(가장 가까운 이전 날짜) '내줄 숙제' — 이번 '숙제 검사'로 이어진다.
   const carried = useMemo(() => {
     const prior = hist.filter((x) => x.date < d.date && x.hwAssign && x.hwAssign.length).sort((a, b) => (a.date < b.date ? 1 : -1));
-    return (prior[0]?.hwAssign || []).map((i) => i.text);
-  }, [hist, d.date]);
+    const hidden = d.carryHidden || [];
+    return (prior[0]?.hwAssign || []).map((i) => i.text).filter((t) => !hidden.includes(t)); // X로 지운 이어받음 항목은 제외
+  }, [hist, d.date, d.carryHidden]);
   // 화면에 보일 '숙제 검사' 행 = (지난 내줄숙제 ∪ 이미 기록된 검사). 상태는 d.hwCheck에서.
   const checkStatusOf = (text: string): HwStatus => (d.hwCheck.find((c) => c.text === text)?.status || "") as HwStatus;
   const checkRows = useMemo(() => {
@@ -866,17 +871,36 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
     const others = d.hwCheck.filter((c) => c.text !== text);
     setD({ ...d, hwCheck: status ? [...others, { text, status }] : others });
   }
-  function removeCheck(text: string) { setD({ ...d, hwCheck: d.hwCheck.filter((c) => c.text !== text) }); }
+  // 행 X 삭제 — '이어받음'은 carryHidden에 넣어 다시 살아나지 않게 숨기고, 직접 추가한 항목은 hwCheck에서 제거.
+  function removeRow(r: { text: string; carried: boolean }) {
+    setD({
+      ...d,
+      hwCheck: d.hwCheck.filter((c) => c.text !== r.text),
+      carryHidden: r.carried ? [...(d.carryHidden || []), r.text] : (d.carryHidden || []),
+    });
+  }
   // 검사할 숙제 직접 추가 — 상태는 비워둔다. 당일 추가해도 '검사 완료'로 잡히지 않고, 교사가 완료/미흡/안함을 눌러야 검사로 인정.
   function addCheck(text: string) { const v = text.trim(); if (!v || d.hwCheck.some((c) => c.text === v) || carried.includes(v)) return; setD({ ...d, hwCheck: [...d.hwCheck, { text: v, status: "" }] }); }
   // 내신모드 자유 숙제 칸 — 내신 기간이거나, 숙제 자료가 배부되어 검사/내줄 항목이 생기면 평소에도 표시.
   const showFreeHw = showHw && (examMode || d.hwCheck.length > 0); // 숙제 검사(지난) — 오늘의 숙제는 아래 별도 체크리스트
 
-  // 학생/다른 강사가 입력해 value(서버값)가 바뀌면, 교사가 편집 중이 아닐 때만 반영(편집분 보존).
+  // 외부(다른 탭·학생·강사)에서 value(서버값)가 바뀌면 필드별 3-way 병합으로 반영한다.
+  //  - 외부에서 바뀐 필드는 가져오되, 교사가 이 에디터에서 직접 바꾼 필드는 보존.
+  //  → 출결기록 탭에서 적은 결석 사유가 대시보드 에디터의 옛 값에 덮여 사라지던 문제 해결.
   const prevValue = useRef(value);
   useEffect(() => {
-    if (JSON.stringify(d) === JSON.stringify(prevValue.current)) setD(value);
+    const prev = prevValue.current;
     prevValue.current = value;
+    if (JSON.stringify(value) === JSON.stringify(prev)) return;
+    setD((cur) => {
+      const next = { ...cur } as EngDaily;
+      (Object.keys(value) as (keyof EngDaily)[]).forEach((k) => {
+        const changedExternally = JSON.stringify(value[k]) !== JSON.stringify(prev[k]);
+        const userUntouched = JSON.stringify(cur[k]) === JSON.stringify(prev[k]);
+        if (changedExternally && userUntouched) (next[k] as unknown) = value[k];
+      });
+      return next;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
@@ -957,6 +981,19 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
         </div>
       </div>
 
+      {/* 그날 바로가기 링크 — 저장하면 그날 학생 화면 일지에 버튼으로 보여요(이름=버튼 글자). */}
+      <div className="eng-field">
+        <div className="eng-label">바로가기 링크 <span className="eng-auto-hint" style={{ fontWeight: 400 }}>학생 화면에 버튼으로 보여요 · 누르면 이동</span></div>
+        {(d.links || []).map((l, i) => (
+          <div className="lnk-row" key={i}>
+            <input className="input lnk-name" value={l.name} onChange={(e) => setD({ ...d, links: (d.links || []).map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} placeholder="링크 이름 (예: 온라인 교재)" />
+            <input className="input lnk-url" value={l.url} onChange={(e) => setD({ ...d, links: (d.links || []).map((x, j) => (j === i ? { ...x, url: e.target.value } : x)) })} placeholder="링크 주소 (https://...)" />
+            <button className="lnk-x" onClick={() => setD({ ...d, links: (d.links || []).filter((_, j) => j !== i) })} title="이 링크 삭제" aria-label="이 링크 삭제"><Icon name="trash" /></button>
+          </div>
+        ))}
+        <button type="button" className="btn ghost sm" onClick={() => setD({ ...d, links: [...(d.links || []), { name: "", url: "" }] })}><Icon name="plus" /> 링크 추가</button>
+      </div>
+
       {!compact && (
         <div className="eng-field">
           <div className="eng-label">수업 태도</div>
@@ -974,7 +1011,7 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
           {d.makeup ? (
             <div className="eng-auto-hint">보강 수업은 포인트가 적립되지 않아요.</div>
           ) : autoPts.items.length === 0 ? (
-            <div className="eng-auto-hint">출결·숙제를 입력하면 포인트가 <b>자동</b>으로 들어가요. (점수는 ‘포인트 항목’ 화면에서)</div>
+            <div className="eng-auto-hint">출결·숙제를 입력하면 포인트가 <b>자동</b>으로 들어가요. (점수는 ‘포인트 랭킹’ 화면에서)</div>
           ) : (
             <div className="eng-auto-pts">
               {autoPts.items.map((x, i) => (
@@ -1025,7 +1062,7 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
                           return <button key={s} className={"eas hw " + cls + (st === s ? " on " + cls : "")} onClick={() => setCheckStatus(r.text, st === s ? "" : (s as HwStatus))}>{s}</button>;
                         })}
                       </div>
-                      <button className="eng-hwfree-x" onClick={() => removeCheck(r.text)} aria-label="삭제">×</button>
+                      <button className="eng-hwfree-x" onClick={() => removeRow(r)} aria-label="삭제">×</button>
                     </div>
                   );
                 })}
@@ -1067,19 +1104,23 @@ function DailyEditor({ student, band, value, onSave, doneItemsAll, reasonsAll, o
             <input className="input" value={d.bookNo} onChange={(e) => setD({ ...d, bookNo: e.target.value })} placeholder="예: 145" />
           </div>
           <div className="eng-field">
-            <div className="eng-label">오늘 한 것</div>
-            <div className="eng-pts">
+            <div className="eng-label">오늘뭐해요 (한 것 체크 + 범위)</div>
+            <div className="eng-curlist">
               {doneItemsAll.map((it) => {
                 const on = d.doneItems.includes(it);
+                const ranges = d.curRanges || {};
                 return (
-                  <button key={it} className={"eng-pt" + (on ? " on" : "")} onClick={() => setD({ ...d, doneItems: on ? d.doneItems.filter((x) => x !== it) : [...d.doneItems, it] })}>{it}</button>
+                  <div key={it} className={"eng-curitem" + (on ? " on" : "")}>
+                    <button type="button" className={"eng-pt" + (on ? " on" : "")} onClick={() => setD({ ...d, doneItems: on ? d.doneItems.filter((x) => x !== it) : [...d.doneItems, it] })}>{it}</button>
+                    <input className="input eng-currange" value={ranges[it] || ""} onChange={(e) => setD({ ...d, curRanges: { ...ranges, [it]: e.target.value } })} placeholder="범위 (예: p.20~25)" />
+                  </div>
                 );
               })}
               <button
                 type="button"
                 className="eng-pt eng-pt-add"
                 onClick={() => {
-                  const v = window.prompt("추가할 '오늘 한 것' 항목 이름");
+                  const v = window.prompt("추가할 '오늘뭐해요' 항목 이름");
                   if (!v || !v.trim()) return;
                   const all = window.confirm("모든 학생에게 추가할까요?\n[확인] 모두에게  ·  [취소] 이 학생만");
                   onAddDoneItem(v.trim(), all ? "all" : "student");
@@ -2119,7 +2160,17 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
   // 하원한 학생 — 카드를 맨 아래로 내리고 접는다. 새로고침해도 그날 분은 유지(날짜별 localStorage).
   const outScope = "eng-" + band;
   const [outIds, setOutIds] = useState<Set<string>>(() => loadCheckout(outScope, date));
-  useEffect(() => { setOutIds(loadCheckout(outScope, date)); }, [outScope, date]); // 날짜/밴드 바뀌면 그날 하원 상태로 교체
+  // 하원 상태는 서버 공유 — 같은 과목(scope) 강사 기기끼리 동기화(과목 간은 분리). 마운트·날짜변경·15초·포커스.
+  useEffect(() => {
+    let alive = true;
+    setOutIds(loadCheckout(outScope, date)); // 즉시 로컬 캐시 표시
+    const sync = () => fetchCheckout(outScope, date).then((s) => { if (alive) setOutIds(s); }).catch(() => {});
+    void sync();
+    const iv = window.setInterval(sync, 15000);
+    const onFocus = () => void sync();
+    window.addEventListener("focus", onFocus);
+    return () => { alive = false; window.clearInterval(iv); window.removeEventListener("focus", onFocus); };
+  }, [outScope, date]);
   useEffect(() => { pruneCheckout(todayStr()); }, []); // 오래된 날짜 키 정리
   const toggleOpen = (id: string) => setOpenIds((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleOut = (id: string, name?: string) => {
@@ -2127,6 +2178,7 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
     const next = new Set(outIds); willOut ? next.add(id) : next.delete(id);
     setOutIds(next);
     saveCheckout(outScope, date, next);
+    void setCheckout(outScope, date, next); // 서버에 전체 목록 저장 — 새로고침/다른 기기에도 그대로 복원
     if (willOut) {
       setOpenIds((p) => { const n = new Set(p); n.delete(id); return n; }); // 하원하면 접기
       notifyCheckoutOnce(id, name || "", date); // 학생에게 '하원해도 좋아요' 알림
@@ -2147,7 +2199,7 @@ function EngInputDash({ students, daily, band, date, scheduledIds, setStatus, ge
   const candidates = students.filter((s) => scheduledIds.has(s.id) && !attSet.has(s.id));
   const hits = q.trim() ? students.filter((s) => !attSet.has(s.id) && s.name.includes(q.trim())).slice(0, 24) : [];
   const markIn = (sid: string) => { setStatus(sid, "출석"); setQ(""); pushOrder(sid); };
-  const markOut = (sid: string) => { void saveDaily({ ...getDaily(sid), attStatus: "", attended: false, lateMin: 0 }); const next = new Set(outIds); next.delete(sid); setOutIds(next); saveCheckout(outScope, date, next); };
+  const markOut = (sid: string) => { void saveDaily({ ...getDaily(sid), attStatus: "", attended: false, lateMin: 0 }); const next = new Set(outIds); next.delete(sid); setOutIds(next); saveCheckout(outScope, date, next); void setCheckout(outScope, date, next); };
   return (
     <div className="eng-dash">
       {/* 번호표 대기열 (영어) */}

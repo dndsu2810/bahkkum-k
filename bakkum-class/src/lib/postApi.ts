@@ -20,6 +20,7 @@ export interface PostListItem {
   title: string;
   audience: NoticeAudience;
   banner: boolean;
+  bannerText: string; // 배너에 보일 문구(비면 제목). banner=true일 때만 의미.
   authorName: string;
   editorName: string;
   fileCount: number;
@@ -49,7 +50,7 @@ export const postApi = {
   list: () => jget<{ posts: PostListItem[] }>("/api/posts").then((j) => j.posts),
   get: (id: string) => jget<{ post: PostDetail }>(`/api/posts/${id}`).then((j) => j.post),
   unseen: () => jget<{ count: number }>("/api/posts/unseen").then((j) => j.count),
-  save: (p: { id?: string; title: string; body: string; files: PostFile[]; audience: NoticeAudience; banner: boolean }) =>
+  save: (p: { id?: string; title: string; body: string; files: PostFile[]; audience: NoticeAudience; banner: boolean; bannerText?: string }) =>
     jpost<{ ok?: boolean; id?: string }>("/api/posts", p),
   remove: (id: string) => jpost("/api/posts/delete", { id }),
 };

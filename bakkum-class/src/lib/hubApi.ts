@@ -41,14 +41,15 @@ export interface NoteItem {
   authorId: string;
   authorName: string;
   body: string;
+  kind?: string; // '' 강사 특이사항 | 'counsel' 학부모 상담 기록
   createdAt: number;
 }
 export const notesApi = {
-  list: (studentId?: string) =>
-    jget<{ notes: NoteItem[] }>("/api/notes" + (studentId ? "?student_id=" + encodeURIComponent(studentId) : "")).then(
+  list: (studentId?: string, kind?: string) =>
+    jget<{ notes: NoteItem[] }>("/api/notes" + (studentId ? "?student_id=" + encodeURIComponent(studentId) + (kind !== undefined ? "&kind=" + encodeURIComponent(kind) : "") : "")).then(
       (j) => j.notes
     ),
-  add: (studentId: string, body: string) => jpost("/api/notes", { studentId, body }),
+  add: (studentId: string, body: string, kind?: string) => jpost("/api/notes", { studentId, body, kind }),
   remove: (id: string) => jpost("/api/notes/delete", { id }),
 };
 

@@ -435,6 +435,105 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 .seg-btn{flex:1;border:1px solid var(--line2);background:var(--card);border-radius:var(--r-md);min-height:44px;padding:9px;font-size:var(--t-base);font-weight:600;color:var(--ink2);transition:.15s}
 .seg-btn:hover{border-color:var(--brand)}
 .seg-btn.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand-d)}
+/* 학생 관리 — 보기 필터(구분·상태) + 정렬 바 */
+.stu-filterbar{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center;margin-bottom:var(--s4)}
+.stu-filtergroup{display:flex;align-items:center;gap:9px}
+.stu-filterlabel{font-size:var(--t-cap);font-weight:700;color:var(--ink3);white-space:nowrap}
+.stu-filterbar .seg{gap:6px;flex-wrap:wrap}
+.stu-filterbar .seg-btn{flex:0 0 auto;min-height:34px;padding:6px 13px;font-size:var(--t-sm);font-weight:600;white-space:nowrap}
+.stu-empty{padding:40px 16px;text-align:center;color:var(--ink3);font-size:var(--t-base)}
+/* ── 통합 시간표(샘플) — 영어/수학 분할 격자 ── */
+.tta{--tta-eng:#4f46e5;--tta-eng-bg:#eef0ff;--tta-eng-line:#c7ccfb;--tta-math:#0e9f6e;--tta-math-bg:#e9f8f1;--tta-math-line:#aee5cd}
+.tta .page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.tta-seg{display:inline-flex;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+.tta-seg button{border:0;background:transparent;padding:7px 13px;font-size:var(--t-sm);font-weight:700;color:var(--ink3);border-radius:7px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.tta-seg button.on{background:var(--card);color:var(--ink);box-shadow:var(--sh-sm)}
+.tta-seg.sm button{padding:5px 11px;font-size:var(--t-cap)}
+.tta-toolbar{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:center;margin:14px 0}
+.tta-filters{display:flex;align-items:center;gap:9px}
+.tta-flabel{font-size:var(--t-cap);font-weight:700;color:var(--ink3)}
+.tta-layout{display:flex;align-items:flex-start;gap:16px}
+.tta-side{flex:0 0 230px;width:230px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-sm);padding:13px;position:sticky;top:12px}
+.tta-side-head{font-size:var(--t-cap);font-weight:800;color:var(--ink3);letter-spacing:.03em;margin-bottom:9px;text-transform:uppercase}
+.tta-side-head span{color:var(--brand-d)}
+.tta-roster{list-style:none;margin:0;padding:0;max-height:52vh;overflow:auto}
+.tta-roster li{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:9px;cursor:pointer;margin-bottom:2px;border:1.5px solid transparent}
+.tta-roster li:hover{background:var(--card2)}
+.tta-roster li.active{background:var(--brand-soft);border-color:var(--brand)}
+.tta-name{flex:1;font-weight:700;font-size:var(--t-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tta-load{display:flex;gap:4px}
+.tta-pill{font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:20px}
+.tta-pill.e{color:var(--tta-eng);background:var(--tta-eng-bg)}
+.tta-pill.m{color:var(--tta-math);background:var(--tta-math-bg)}
+.tta-gr{font-size:9.5px;font-weight:800;border-radius:5px;padding:1px 4px;line-height:1.2}
+.tta-gr.cho{background:#fdecd2;color:#b45309}
+.tta-gr.jung{background:#dfe5ff;color:#3730a3}
+.tta-gr.go{background:#fbdbe9;color:#9d2463}
+.tta-hint{font-size:11.5px;color:var(--ink3);margin-top:11px;line-height:1.55;padding:9px 10px;background:var(--card2);border-radius:9px}
+.tta-hint b{color:var(--ink)}
+.tta-main{flex:1;min-width:0}
+.tta-gridwrap{overflow:auto;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--sh-sm)}
+.tta-grid{border-collapse:collapse;width:100%;table-layout:fixed}
+.tta-grid th,.tta-grid td{border:1px solid var(--line);vertical-align:top}
+.tta-grid thead th{background:var(--card2);padding:7px 4px;font-size:var(--t-cap);font-weight:800;text-align:center}
+.tta-tcol{width:84px}
+.tta-dayhead{font-size:var(--t-sm);font-weight:800}
+.tta-subhead.e{color:var(--tta-eng);background:var(--tta-eng-bg)}
+.tta-subhead.m{color:var(--tta-math);background:var(--tta-math-bg)}
+.tta-timecell{background:var(--card2);text-align:center;padding:8px 3px;width:84px}
+.tta-blk{font-weight:800;font-size:var(--t-sm)}
+.tta-rng{font-size:10.5px;color:var(--ink3);margin-top:2px}
+.tta-cell{padding:5px;min-height:42px;cursor:default;transition:background .08s}
+.tta-cell.paintable{cursor:cell}
+.tta-cell.c-eng.paintable:hover{background:var(--tta-eng-bg)}
+.tta-cell.c-math.paintable:hover{background:var(--tta-math-bg)}
+.tta-count{font-size:10px;color:var(--ink3);font-weight:800;float:right;margin:-1px 0 1px}
+.tta-stack{display:flex;flex-wrap:wrap;gap:4px;min-height:16px;clear:both}
+.tta-tag{display:inline-flex;align-items:center;gap:5px;padding:2px 5px 2px 6px;border-radius:7px;font-size:11.5px;font-weight:700;line-height:1.3;border:1px solid transparent}
+.tta-tag.e{background:var(--tta-eng-bg);color:var(--tta-eng);border-color:var(--tta-eng-line)}
+.tta-tag.m{background:var(--tta-math-bg);color:var(--tta-math);border-color:var(--tta-math-line)}
+.tta-tag.dim{opacity:.38}
+.tta-rm{cursor:pointer;opacity:.5;font-size:13px;line-height:.8}
+.tta-rm:hover{opacity:1}
+.tta-grid tfoot td{background:var(--card2);padding:7px 4px;text-align:center;font-size:var(--t-sm);font-weight:800}
+.tta-foot-l{font-size:var(--t-cap);color:var(--ink3);text-align:left!important;padding-left:8px!important}
+.tta-foot.e{color:var(--tta-eng)}
+.tta-foot.m{color:var(--tta-math)}
+.tta-empty{padding:40px;text-align:center;color:var(--ink3)}
+.tta-note{display:flex;align-items:center;gap:6px;margin-top:14px;font-size:var(--t-cap);color:var(--ink3)}
+.tta-stview{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.tta-stcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-sm);padding:13px 14px}
+.tta-stcard h4{margin:0 0 2px;font-size:var(--t-base);display:flex;align-items:center;gap:7px}
+.tta-stsub{font-size:11.5px;color:var(--ink3);margin-bottom:10px}
+.tta-mini{border-collapse:collapse;width:100%;table-layout:fixed}
+.tta-mini th,.tta-mini td{border:1px solid var(--line);text-align:center;font-size:10.5px;padding:3px 0;height:22px}
+.tta-mini th{background:var(--card2);color:var(--ink3);font-weight:700}
+.tta-mini td.tta-mini-t{background:var(--card2);color:var(--ink3);font-weight:700;font-size:10px}
+.tta-mini td.e{background:var(--tta-eng);color:#fff;font-weight:800}
+.tta-mini td.m{background:var(--tta-math);color:#fff;font-weight:800}
+@media(max-width:880px){.tta-layout{flex-direction:column}.tta-side{width:100%;flex:none;position:static}.tta-roster{max-height:none}}
+/* 포인트 항목(점수표) 칩 — 포인트 랭킹 안에서 눌러서 수정 */
+.pitems{padding:14px 16px;margin-bottom:var(--s4)}
+.pitems-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+.pitems-title{font-size:var(--t-base);font-weight:800;color:var(--ink);margin:0}
+.pitems-desc{font-size:var(--t-cap);color:var(--ink3);margin:3px 0 0;line-height:1.4}
+.pchip-wrap{display:flex;flex-wrap:wrap;gap:8px}
+.pchip{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--line2);border-radius:var(--r-full);background:var(--card);font-size:var(--t-sm);font-weight:600;color:var(--ink);cursor:pointer;transition:.12s}
+.pchip:hover{border-color:var(--brand);background:#FBF6EA}
+.pchip b{font-weight:800}
+.pchip.plus{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.pchip.minus{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.pchip.add{color:var(--ink3);font-weight:700;border-style:dashed}
+.pchip.editing{padding:5px 7px;gap:5px;border-color:var(--brand);background:var(--card);cursor:default}
+.pchip-name{width:120px;border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 8px;font-size:var(--t-sm);background:var(--card);color:var(--ink)}
+.pchip-val{width:62px;border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 6px;font-size:var(--t-sm);background:var(--card);color:var(--ink)}
+.pchip-unit{font-size:var(--t-cap);color:var(--ink3)}
+.pchip-del,.pchip-done{width:28px;height:28px;border-radius:var(--r-sm);border:1px solid var(--line2);background:var(--card);cursor:pointer;font-weight:800}
+.pchip-del{color:var(--bad)}
+.pchip-done{color:var(--ok);border-color:var(--ok)}
+/* 화면 공통 명단 정렬 토글(가나다/학년) — 작게 */
+.seg.stu-sort{gap:6px;flex-wrap:wrap}
+.seg.stu-sort .seg-btn{flex:0 0 auto;min-height:32px;padding:5px 12px;font-size:var(--t-sm);font-weight:600;white-space:nowrap}
 .check{display:flex;align-items:flex-start;gap:10px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);padding:12px 13px}
 .check input{width:17px;height:17px;margin-top:1px;accent-color:var(--brand);flex-shrink:0}
 .check .ctxt{font-size:var(--t-cap);font-weight:600;color:var(--ink)}
@@ -488,7 +587,8 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 .rep-suprow-head{font-size:var(--t-cap);font-weight:700;color:var(--ink3)}
 .rep-suprow-head span{padding-left:2px}
 @media (max-width:760px){.rep-suprow{grid-template-columns:1fr 1fr;gap:6px}.rep-suprow-head{display:none}}
-.rep-itemrow{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.rep-itemrow{display:flex;gap:7px;align-items:center;flex-wrap:wrap;border-radius:var(--r-sm);padding:2px 4px;margin:0 -4px}
+.rep-itemrow.on{background:var(--brand-soft);box-shadow:inset 0 0 0 1px var(--brand-line)}
 .rep-itemrow .input,.rep-itemrow select.input{padding:7px 9px;font-size:var(--t-cap);width:auto;min-height:44px}
 .rep-x{width:44px;height:44px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--card);color:var(--ink3);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .rep-x:hover{background:var(--bad-soft);color:var(--bad);border-color:transparent}
@@ -513,6 +613,15 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 /* 출결 선택 — 또렷한 버튼(테두리+카드 배경+진한 글자), 선택 시 뜻에 맞는 색으로 채움 */
 .att-seg{display:inline-flex;flex-wrap:wrap;gap:var(--s2);flex-shrink:0}
 .att-seg button{border:1px solid var(--line2);background:var(--card);min-height:40px;padding:0 var(--s4);min-width:60px;border-radius:var(--r-md);font-size:var(--t-sm);font-weight:700;color:var(--ink);transition:.15s;cursor:pointer}
+/* 출결 기록 표(아래) 인라인 수정 — 셀 안에 들어가게 작게 */
+.att-rec-seg{justify-content:flex-start;gap:6px}
+.att-rec-seg .att-seg{gap:5px}
+.att-rec-seg .att-seg button{min-height:32px;min-width:46px;padding:0 10px;font-size:var(--t-cap)}
+.att-rec-seg .att-more{min-height:32px;padding:0 10px;font-size:var(--t-cap)}
+.att-rec-seg .mini-num{width:64px}
+.att-rec-time{color:var(--ink3);font-weight:600;font-size:var(--t-cap)}
+.tbl-grouped .mini-seg button{min-height:32px;padding:0 10px;font-size:var(--t-cap)}
+.tbl-grouped .mini-note{min-width:140px}
 .att-seg button:hover{background:#FBF6EA;border-color:var(--brand-line)}
 .att-seg button.on-present,.att-seg button.on.t-green{background:var(--ok);border-color:var(--ok);color:#fff;box-shadow:var(--sh-sm)}
 .att-seg button.on-absent,.att-seg button.on.t-red{background:var(--bad);border-color:var(--bad);color:#fff;box-shadow:var(--sh-sm)}
@@ -612,6 +721,7 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .today-sec-tag.asn{background:rgba(22,163,107,.13);color:#0E7A4C}
 .today-hwitem{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 0}
 .today-hwitem + .today-hwitem{border-top:1px dashed var(--line)}
+.today-hwrow + .today-hwrow{border-top:1px dashed var(--line)}
 .today-hwitem-name{flex:1;min-width:130px;font-size:var(--t-base);font-weight:600;color:var(--ink);display:inline-flex;align-items:center;gap:6px;overflow:visible}
 /* 숙제명만 말줄임 — 뒤의 '결석 이월' 등 배지는 잘리지 않게 */
 .today-hwitem-title{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -619,6 +729,11 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .today-hwitem-name svg{width:15px;height:15px;color:var(--ok);flex-shrink:0}
 .today-hwitem-name b{font-weight:700}
 .today-assignrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:8px;margin-top:4px;border-top:1px dashed var(--line)}
+/* 검사일 변경·지연 인라인 패널 — 검사할 숙제 줄 아래로 펼쳐짐 */
+.today-sched{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 6px;padding:9px 11px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md)}
+.today-sched-lbl{font-size:var(--t-sm);font-weight:600;color:var(--ink2)}
+.today-sched-quick{border:1px solid var(--line2);border-radius:var(--r-md);background:#fcfdff;color:var(--ink2);font-size:var(--t-sm);font-weight:600;min-height:32px;padding:0 10px;cursor:pointer}
+.today-sched-quick:hover{border-color:var(--brand);color:var(--brand)}
 /* 1:1 보충학습 표시 — 길어도 세로로 찌그러지지 않게 한 줄 텍스트로 자연스럽게 줄바꿈 */
 .today-supitem{display:flex;align-items:flex-start;gap:8px;padding:6px 0}
 .today-supitem + .today-supitem{border-top:1px dashed var(--line)}
@@ -724,6 +839,20 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .inc-next{margin-top:9px;font-size:var(--t-sm);font-weight:600;color:var(--ink3)}
 .inc-names{font-weight:700;color:var(--ink2)}
 .inc-v.inc-minus{color:var(--ink3)}
+/* 인센티브 카운트 제외 학생 고르기 */
+.inc-manage{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.inc-manage-toggle{display:flex;align-items:center;gap:7px;background:none;border:none;padding:0;cursor:pointer;font-size:var(--t-sm);font-weight:700;color:var(--ink2)}
+.inc-manage-toggle:hover{color:var(--ink)}
+.inc-manage-chev{display:inline-flex;transition:transform .15s}
+.inc-manage-chev svg{width:16px;height:16px}
+.inc-manage-toggle.open .inc-manage-chev{transform:rotate(180deg)}
+.inc-manage-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:11px}
+.inc-manage-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card2);cursor:pointer;user-select:none}
+.inc-manage-item:hover{border-color:var(--brand-line)}
+.inc-manage-item.on{background:var(--bad-soft);border-color:var(--bad)}
+.inc-manage-item input{cursor:pointer;flex:0 0 auto}
+.inc-manage-name{font-size:var(--t-base);font-weight:600;color:var(--ink);flex:1 1 auto}
+.inc-manage-grade{font-size:var(--t-cap);color:var(--ink3);flex:0 0 auto}
 
 /* 대시보드 — 상단 2단(좌 요일별 분포 / 우 2×2 통계). 좌우 높이 맞춤(차트 기준으로 우측이 늘어남) */
 .dash-top{display:grid;grid-template-columns:1.25fr 1fr;gap:var(--s4);margin-bottom:var(--s5);align-items:stretch}
@@ -1192,11 +1321,14 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .acct{display:flex;align-items:center;gap:var(--s2)}
 .acct-chip{display:flex;align-items:center;gap:6px;font-size:var(--t-sm);font-weight:600;
   color:var(--ink2);background:var(--bg);border:1px solid var(--line);border-radius:var(--r-full);
-  padding:5px 12px}
+  padding:5px 12px;white-space:nowrap;flex:none}
 .acct-chip .role{color:var(--brand-d)}
+.acct-chip .role::before{content:"·";margin-right:6px;color:var(--ink3);font-weight:400}
 .acct-logout{border:1px solid var(--line);background:var(--card);color:var(--ink2);
-  border-radius:var(--r-sm);padding:6px 12px;font-size:var(--t-sm);font-weight:600;transition:background .15s}
+  border-radius:var(--r-sm);padding:6px 12px;font-size:var(--t-sm);font-weight:600;transition:background .15s;white-space:nowrap;flex:none}
 .acct-logout:hover{background:var(--bg);color:var(--ink)}
+/* 모바일: 좁은 헤더에서 역할 라벨이 글자 단위로 세로로 쪼개지던 문제 → 이름만 남김 */
+@media(max-width:880px){.acct-chip .role{display:none}}
 
 /* 강사 계정 관리(설정 안 섹션) */
 .acct-list{display:flex;flex-direction:column;gap:var(--s2);margin-top:var(--s3)}
@@ -1379,6 +1511,11 @@ kbd{display:inline-block;min-width:16px;padding:1px 5px;margin:0 1px;font-size:1
 .prof-memo-ro{white-space:pre-wrap;color:var(--ink);line-height:1.6;margin:0}
 .prof-grid>.prof-memo,.prof-grid>.prof-memo-ro,.prof-grid>.prof-slot-block{grid-column:1/-1}
 .prof-slot-block{display:flex;flex-direction:column;gap:8px}
+.prof-dup{margin-top:5px;font-size:var(--t-cap);font-weight:700;color:var(--bad);line-height:1.4}
+.prof-dup.block{padding:5px 8px;border-radius:var(--r-sm);background:var(--bad-soft)}
+.prof-efffrom{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:8px}
+.prof-efffrom-l{font-size:var(--t-cap);font-weight:700;color:var(--ink2)}
+.prof-efffrom-h{flex:1 1 100%;font-size:var(--t-cap);color:var(--ink3);line-height:1.4}
 .prof-slots{display:flex;flex-direction:column;gap:8px}
 .prof-slot-tag{font-size:10px;font-weight:700;border-radius:var(--r-full);padding:1px 7px;margin-left:4px;vertical-align:middle}
 .prof-slot-tag.math{color:var(--brand-d);background:var(--brand-soft)}
@@ -1520,9 +1657,11 @@ button.eng-wnm.is-link:hover{text-decoration:underline;filter:brightness(.92)}
 .dash-card{padding:var(--s5)}
 .dash-h{font-size:var(--t-base);font-weight:700;color:var(--ink);margin-bottom:var(--s3)}
 .dash-rows{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto}
-.dash-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;border:1px solid var(--line);
-  background:var(--card);border-radius:var(--r-md);padding:9px 12px;cursor:pointer;transition:background .12s,border-color .12s}
+.dash-row{display:flex;flex-direction:column;align-items:stretch;gap:4px;width:100%;border:1px solid var(--line);
+  background:var(--card);border-radius:var(--r-md);padding:9px 12px;cursor:pointer;transition:background .12s,border-color .12s;text-align:left}
 .dash-row:hover{border-color:var(--brand-line);background:var(--brand-soft)}
+.dash-row-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.dash-row-reasons{font-size:var(--t-cap);color:var(--bad)}
 .dash-row-nm{font-weight:600;color:var(--ink)}
 .dash-row-tags{display:flex;gap:5px}
 .dash-tag{font-size:11px;font-weight:700;border-radius:var(--r-full);padding:1px 9px}
@@ -1615,6 +1754,10 @@ button.eng-wnm.is-link:hover{text-decoration:underline;filter:brightness(.92)}
 [data-theme="dark"] .eng-hw3-seg{background:#141c2b}
 /* 포인트 적립/차감 사유 칩 */
 .eng-pts{display:flex;flex-wrap:wrap;gap:6px}
+.eng-curlist{display:flex;flex-direction:column;gap:6px}
+.eng-curitem{display:flex;align-items:center;gap:8px}
+.eng-curitem .eng-pt{flex:0 0 auto}
+.eng-currange{flex:1;min-width:0}
 .eng-pt{border:1px solid var(--line2);background:var(--card);color:var(--ink2);border-radius:var(--r-full);
   padding:5px 11px;font-size:var(--t-sm);font-weight:600;cursor:pointer;transition:.12s}
 .eng-pt:hover{border-color:var(--brand-line)}
@@ -1685,6 +1828,8 @@ button.eng-wnm.is-link:hover{text-decoration:underline;filter:brightness(.92)}
 .math-hwt-sel{font-size:var(--t-cap);border:1px solid var(--line2);border-radius:var(--r-sm);padding:4px 6px;background:var(--card2);color:var(--ink)}
 .math-hwt-input{width:100%;border:1px solid var(--line2);border-radius:var(--r-sm);padding:5px 7px;background:var(--card2);color:var(--ink);font-size:var(--t-cap);font-weight:600}
 .math-hwt-input:focus{border-color:var(--brand-line);outline:none}
+.math-hwt-date-in{border:1px solid var(--line2);border-radius:var(--r-sm);padding:4px 6px;background:var(--card2);color:var(--ink2);font-size:var(--t-cap);font-weight:600}
+.math-hwt-date-in:focus{border-color:var(--brand-line);outline:none}
 .math-hwt-pctinput{width:52px;border:1px solid var(--line2);border-radius:var(--r-sm);padding:5px 6px;background:var(--card2);color:var(--brand-d);font-weight:700;font-size:var(--t-cap);text-align:center}
 .math-hwt-pctinput:focus{border-color:var(--brand-line);outline:none}
 /* 표 안 영역태그 칩 — 내주기 칩보다 작게(행 높이 절약) */
@@ -2421,10 +2566,14 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 
 .sp{display:flex;flex-direction:column;gap:var(--s4)}
 .sp-empty{padding:var(--s8);text-align:center;color:var(--ink3)}
+.sp-skel{display:flex;flex-direction:column;gap:16px}
+.sp-skel-card{display:flex;align-items:center;gap:16px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px}
+.sp-skel-lines{display:flex;flex-direction:column;gap:9px;flex:1}
 .sp-muted{color:var(--ink3);font-size:var(--t-sm)}
 
-.sp-head{display:flex;align-items:center;gap:14px;padding:var(--s4) var(--s5);
+.sp-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:var(--s4) var(--s5);
   background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-sm)}
+.sp-head-info{min-width:0}
 .sp-avatar{width:56px;height:56px;border-radius:50%;object-fit:cover;flex:none}
 .sp-avatar-empty{display:flex;align-items:center;justify-content:center;background:var(--brand-soft);
   color:var(--brand-d);font-weight:700;font-size:var(--t-lg)}
@@ -2436,6 +2585,26 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .sp-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
   box-shadow:var(--sh-sm);padding:var(--s5)}
 .sp-card-h{font-size:var(--t-md);margin:0 0 var(--s3);color:var(--ink)}
+
+/* 학생 화면 바로가기 버튼 — 링크 이름이 버튼 글자, 누르면 새 탭. */
+.sp-links{display:flex;flex-wrap:wrap;gap:10px}
+.sp-link-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border:1px solid var(--brand-line);border-radius:var(--r-full);background:var(--brand-soft);color:var(--brand-d);font-weight:700;text-decoration:none;line-height:1.2;transition:background .12s,transform .12s}
+.sp-link-btn:hover{background:var(--brand);color:#fff;transform:translateY(-1px)}
+.sp-link-btn svg{width:18px;height:18px;flex:none}
+.sp-link-btn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+.sp-link-btn.sm{padding:5px 11px;font-size:var(--t-cap)}
+.sp-link-btn.sm svg{width:15px;height:15px}
+.sp-hist-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+
+/* 강사용 링크 편집 — 이름·주소 두 칸 + 삭제. */
+.lnk-rows{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.lnk-row{display:flex;gap:8px;align-items:center}
+.lnk-row .lnk-name{flex:0 0 34%;min-width:120px}
+.lnk-row .lnk-url{flex:1 1 auto;min-width:0}
+.lnk-x{flex:none;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card2);color:var(--ink3);cursor:pointer}
+.lnk-x:hover{color:var(--bad,#dc2626);border-color:var(--bad,#dc2626)}
+.lnk-x svg{width:16px;height:16px}
+.lnk-foot{display:flex;align-items:center;gap:10px}
 
 /* 시간표 */
 .sp-tt{display:flex;flex-direction:column;gap:6px}
@@ -2545,10 +2714,17 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .maker-credit{text-align:center;color:var(--ink4);font-size:var(--t-cap);
   padding:var(--s4) var(--s4) var(--s5);opacity:.55;letter-spacing:.04em}
 .content .maker-credit{margin-top:var(--s6)}
-.auth-wrap .maker-credit{position:fixed;left:0;right:0;bottom:0;padding-bottom:var(--s4)}
+.auth-wrap .maker-credit{position:fixed;left:0;right:0;bottom:0;padding-bottom:var(--s4);display:flex;flex-direction:column;gap:6px;align-items:center}
+.auth-legal{display:flex;align-items:center;gap:8px}
+.auth-legal a{color:var(--ink3);text-decoration:none;font-weight:600}
+.auth-legal a:hover{color:var(--brand-d);text-decoration:underline}
 
 /* ===== 학생 일지: 오늘 한 것 체크박스 ===== */
 .sp-checks{display:flex;flex-direction:column;gap:2px}
+.sp-curlist{display:flex;flex-direction:column;gap:6px}
+.sp-curitem{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.sp-curitem .sp-check{align-self:flex-start}
+.sp-currange{width:100%;min-width:0;padding:5px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--ink);font-size:var(--t-sm)}
 .sp-check{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-md);
   cursor:pointer;user-select:none;transition:background .12s}
 .sp-check:hover{background:var(--card2)}
@@ -2612,12 +2788,34 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .notice-band.warn{background:var(--warn-soft);border-color:#fcd9a3;color:var(--warn)}
 .notice-ic{flex:none}
 .notice-text{flex:1;min-width:0;white-space:pre-wrap}
+/* 공지 마퀴 — 넘칠 때만 오른쪽→왼쪽으로 흐르고, 마우스 올리면 멈춤 */
+.notice-mq{flex:1;min-width:0;overflow:hidden}
+.notice-mq-track{display:flex;width:max-content}
+.notice-mq-item{white-space:nowrap;padding-right:48px}
+.notice-mq-track.run{animation:notice-scroll linear infinite}
+.notice-mq:hover .notice-mq-track.run{animation-play-state:paused}
+@keyframes notice-scroll{to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.notice-mq-track.run{animation:none}}
 .notice-x{flex:none;border:none;background:transparent;cursor:pointer;font-size:13px;color:inherit;opacity:.6;padding:2px 4px}
 .notice-x:hover{opacity:1}
+.ntc-f{display:flex;flex-direction:column;gap:4px}
+.ntc-f>span{font-size:var(--t-cap);font-weight:600;color:var(--ink2)}
 .notice-dot{flex:none;width:12px;height:12px;border-radius:50%}
 .notice-dot.info{background:var(--brand)}
 .notice-dot.warn{background:var(--warn)}
-.sp-shell-actions{display:flex;align-items:center;gap:8px}
+.sp-shell-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+
+/* 모바일: 학생 헤더가 한 줄로 넘쳐 로그아웃·공지 버튼이 화면 밖으로 밀리던 문제.
+   라벨을 숨겨 아이콘만 남기고, 간격·여백을 좁혀 한 줄에 들어오게 한다. */
+@media (max-width:560px){
+  .sp-shell-top{padding:0 var(--s4)}
+  .sp-shell-actions{gap:6px}
+  .sp-shell-actions .sp-lbl{display:none}
+  /* 아이콘만 남은 버튼은 정사각에 가깝게(터치 영역 유지) */
+  .sp-shell-actions .btn{padding:8px 10px;min-width:40px;justify-content:center}
+  .sp-shell-actions .bb-chip-top{padding:8px 10px;min-width:40px}
+  .sp-shell-brand span{font-size:11px}
+}
 
 /* ===== 오류·개선 요청 ===== */
 .issue-form{padding:var(--s4) var(--s5);display:flex;flex-direction:column;gap:10px}
@@ -2924,6 +3122,15 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .mk-archive-hint{font-weight:500;color:var(--ink4);font-size:11px;margin-left:auto}
 
 /* 학생 프로필 — 누적 강사 특이사항 타임라인 (와이어프레임 학생상세 특이사항 탭) */
+.prof-mtg{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
+.prof-mtg-t{font-size:var(--t-cap);font-weight:800;color:var(--ink3)}
+.prof-mtg-item{display:flex;flex-direction:column;gap:4px}
+.prof-mtg-row{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:1px solid var(--line);background:var(--card2);border-radius:var(--r-sm);padding:7px 10px;cursor:pointer}
+.prof-mtg-row:hover{border-color:var(--brand-line);background:var(--brand-soft)}
+.prof-mtg-date{font-size:var(--t-cap);color:var(--ink3);white-space:nowrap}
+.prof-mtg-title{flex:1;min-width:0;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prof-mtg-cat{font-size:var(--t-cap);color:var(--info);background:var(--info-bg);border-radius:var(--r-full);padding:1px 8px;white-space:nowrap}
+.prof-mtg-sum{font-size:var(--t-sm);color:var(--ink2);white-space:pre-wrap;line-height:1.5;background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px}
 .prof-notes{display:flex;flex-direction:column;gap:10px}
 .prof-notes-add{display:flex;gap:8px;align-items:center}
 .prof-notes-add .inline-input{flex:1}
@@ -3381,6 +3588,8 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .po-upload{align-self:flex-start;cursor:pointer}
 .po-banner-check{display:flex;align-items:center;gap:8px;font-size:var(--t-sm);font-weight:600;color:var(--ink2);cursor:pointer}
 .po-banner-check input{width:16px;height:16px}
+.po-banner-text{margin-top:2px;padding-left:24px}
+.po-banner-hint{font-size:var(--t-cap);color:var(--ink3);font-weight:400}
 
 /* 사이드바 메뉴 검색 + new 배지 */
 .nav-search{display:flex;gap:6px;padding:4px 8px 8px}
@@ -3664,6 +3873,21 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .qp-raised-badge svg{width:14px;height:14px;vertical-align:-2px;margin-right:3px}
 .qc-card .qc{gap:8px}
 .qc-card .qc-row{padding:9px 11px}
+/* 번호표 컴팩트 — 프로필 헤더 오른쪽 빈 공간용. 카드 없이 작게.
+   과목이 둘이면(영어·수학) 위아래 대신 가로로 나열해 프로필이 높아지지 않게 */
+.qc-mini{margin-left:auto;display:flex;flex-flow:row wrap;gap:6px 8px;align-items:center;justify-content:flex-end;min-width:0}
+.qc-mini-h{display:inline-flex;align-items:center;gap:5px;font-size:var(--t-cap);font-weight:700;color:var(--brand-d,#C5851E)}
+.qc-mini-h svg{width:13px;height:13px;stroke-width:2.2}
+.qc-mini-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end;
+  background:var(--brand-soft,#FDEFD3);border:1px solid var(--brand-line,#F3DDB0);border-radius:var(--r-md);padding:5px 9px}
+.qc-mini-row.called{border-color:var(--brand,#F4A93C);box-shadow:0 0 0 1px var(--brand,#F4A93C) inset}
+.qc-mini-subj{font-weight:800;color:var(--ink);font-size:var(--t-sm)}
+.qc-mini .qc-num{font-size:var(--t-base)}
+.qc-mini-ahead{font-size:var(--t-cap);color:var(--ink2)}
+.qc-mini-call{display:inline-flex;align-items:center;gap:3px;font-size:var(--t-cap);font-weight:800;color:var(--brand-d,#C5851E)}
+.qc-mini-call svg{width:13px;height:13px;stroke-width:2.4}
+.qc-mini .btn.sm{padding:5px 9px;min-height:32px}
+@media(max-width:680px){.qc-mini{margin-left:0;width:100%;justify-content:flex-start}}
 /* 학생 '차례' 큰 배너(상단 고정) — 호출 시 눈에 띄게 */
 .qc-turn{position:fixed;top:0;left:0;right:0;z-index:200;display:flex;align-items:center;gap:14px;
   background:var(--ok,#3a8a52);color:#fff;padding:16px 20px;box-shadow:0 6px 24px rgba(0,0,0,.18);animation:qcTurnIn .25s ease}
@@ -3675,3 +3899,303 @@ button.desk-tt-name.is-link:hover{text-decoration:underline;filter:brightness(.9
 .qc-turn-txt span{font-size:var(--t-sm);opacity:.92}
 .qc-turn-x{margin-left:auto;background:#fff;color:var(--ok,#3a8a52);border:none;font-weight:800}
 .qc-hint{font-size:var(--t-cap);color:var(--ink4);margin:8px 2px 0}
+
+/* ── 시간표 리뉴얼(샘플) ───────────────────────────────────────────── */
+.tts-viewtoggle{display:inline-flex;gap:4px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-full);padding:4px}
+.tts-seg{display:inline-flex;align-items:center;gap:6px;border:none;background:transparent;color:var(--ink2);font-weight:700;font-size:var(--t-sm);padding:7px 14px;border-radius:var(--r-full);cursor:pointer}
+.tts-seg svg{width:16px;height:16px;stroke-width:2}
+.tts-seg.on{background:var(--brand);color:var(--on-brand);box-shadow:var(--sh-sm)}
+
+.tts-weekbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:4px 0 16px}
+.tts-weeks{display:inline-flex;gap:4px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-full);padding:4px}
+.tts-weekrange{display:inline-flex;align-items:center;gap:6px;font-size:var(--t-sm);font-weight:700;color:var(--ink2)}
+.tts-weekrange svg{width:16px;height:16px;stroke-width:2}
+.tts-subjseg{display:inline-flex;gap:4px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-full);padding:4px;margin-left:auto}
+
+.tts-hint{font-weight:500;color:var(--ink3);font-size:var(--t-cap)}
+
+/* 특강 영역 */
+.tts-specials{margin:4px 0 16px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px;box-shadow:var(--sh-sm)}
+.tts-specials-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tts-specials-head>span{font-weight:800;color:var(--ink);font-size:var(--t-sm)}
+.tts-specials-head .btn svg{width:15px;height:15px}
+.tts-specials-empty{margin:8px 2px 2px}
+.tts-spcards{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
+.tts-spcard{flex:1 1 250px;max-width:320px;background:var(--card2);border:1px solid var(--line);border-left:4px solid var(--brand);border-radius:var(--r-md);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.tts-spcard.ended{opacity:.6}
+.tts-spcard-top{display:flex;align-items:center;gap:8px}
+.tts-spdot{width:12px;height:12px;border-radius:var(--r-full);flex:none}
+.tts-spname{flex:1;min-width:0;border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 8px;background:var(--card);color:var(--ink);font-size:var(--t-base);font-weight:700}
+.tts-spx{border:none;background:transparent;color:var(--ink3);cursor:pointer;padding:3px;display:inline-flex}
+.tts-spx svg{width:16px;height:16px;stroke-width:2}
+.tts-spx:hover{color:var(--bad)}
+.tts-spcolors{display:flex;gap:6px}
+.tts-spswatch{width:20px;height:20px;border-radius:var(--r-full);border:2px solid transparent;cursor:pointer;padding:0}
+.tts-spswatch.on{border-color:var(--ink);box-shadow:0 0 0 2px var(--card2) inset}
+.tts-spend{display:flex;gap:14px}
+.tts-spradio{display:inline-flex;align-items:center;gap:5px;font-size:var(--t-sm);font-weight:700;color:var(--ink2);cursor:pointer}
+.tts-spfield{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:var(--t-sm);color:var(--ink2)}
+.tts-spfield b{color:var(--brand-d)}
+.tts-spfield input[type=number]{width:56px;padding:5px 6px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--ink);text-align:center;font-size:var(--t-base)}
+.tts-spfield input[type=date]{padding:5px 6px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--ink);font-size:var(--t-sm)}
+.tts-spstudents{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tts-spchip{display:inline-flex;align-items:center;gap:4px;padding:3px 6px 3px 9px;border-radius:var(--r-full);font-size:var(--t-cap);font-weight:700;border:1px solid;cursor:grab;user-select:none}
+.tts-spchip:active{cursor:grabbing}
+.tts-spchip-x{border:none;background:transparent;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:0 1px;opacity:.7}
+.tts-spchip-x:hover{opacity:1}
+.tts-spadd{padding:5px 8px;border:1px dashed var(--line2);border-radius:var(--r-sm);background:var(--card);color:var(--ink2);font-size:var(--t-cap);cursor:pointer}
+.tts-spended{font-size:var(--t-cap);font-weight:700;color:var(--bad)}
+
+.tts-layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:900px){.tts-layout{grid-template-columns:1fr}}
+
+.tts-students{position:sticky;top:8px;max-height:calc(100vh - 120px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px;box-shadow:var(--sh-sm);display:flex;flex-direction:column;gap:8px;transition:background .15s,box-shadow .15s}
+.tts-students-head{position:sticky;top:-12px;background:var(--card);z-index:1;margin:-2px 0 0}
+.tts-students.tts-drop-cancel{background:var(--bad-soft);box-shadow:0 0 0 2px var(--bad) inset}
+.tts-students-head{display:flex;align-items:center;gap:6px;font-weight:800;color:var(--ink);font-size:var(--t-sm);padding:2px 4px 4px}
+.tts-students-head span{font-size:var(--t-cap);font-weight:700;color:var(--ink3);background:var(--card2);border:1px solid var(--line);border-radius:var(--r-full);padding:1px 7px}
+
+.tts-scard{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card2);cursor:grab;user-select:none}
+.tts-scard:active{cursor:grabbing}
+.tts-scard.full{opacity:.55;cursor:default}
+.tts-scard-main{display:flex;align-items:center;gap:7px;min-width:0}
+.tts-scard-main b{font-size:var(--t-base);color:var(--ink)}
+.tts-level{font-size:var(--t-cap);font-weight:700;color:var(--ink3)}
+.tts-rem{font-size:var(--t-cap);color:var(--ink3);white-space:nowrap}
+.tts-rem b{color:var(--brand-d);font-size:var(--t-base)}
+.tts-rem.done{color:var(--ok);font-weight:800}
+/* 수학 반 색 — 초등 저학년=꿀, 초등 고학년=초록, 중고등=인포 */
+.tts-scard.tts-math{border-left:4px solid var(--brand)}
+.tts-scard.tts-low{border-left:4px solid var(--brand)}
+.tts-scard.tts-elem{border-left:4px solid var(--brand)}
+.tts-autosave{display:inline-flex;align-items:center;gap:5px;font-size:var(--t-cap);font-weight:700;color:var(--ink3)}
+.tts-autosave svg{width:15px;height:15px;stroke-width:2}
+.tts-scard.tts-high{border-left:4px solid var(--ok)}
+.tts-scard.tts-mid{border-left:4px solid var(--info)}
+.tts-scard.tts-eng{border-left:4px solid #4f46e5}
+
+.tts-pickwrap{display:flex;flex-direction:column;gap:6px}
+.tts-pick-label{font-size:var(--t-cap);color:var(--ink3);font-weight:700;padding:0 4px}
+.tts-pick{display:flex;align-items:center;gap:7px;justify-content:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card2);cursor:pointer;text-align:left}
+.tts-pick b{color:var(--ink)}
+.tts-pick.on{border-color:var(--brand);background:var(--brand-soft);box-shadow:0 0 0 1px var(--brand) inset}
+
+.tts-gridwrap{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px;box-shadow:var(--sh-sm);overflow-x:auto}
+
+/* 전체 시간표 같은 레이아웃 — 요일별 칸, 시간 줄·구분선, 그 밑에 학생 이름표. */
+.tts-board{display:flex;gap:10px;align-items:flex-start;min-width:min-content}
+.tts-daycol{flex:1 1 160px;min-width:150px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card2);overflow:hidden}
+.tts-daycol-h{position:sticky;top:0;text-align:center;font-weight:800;color:var(--ink2);font-size:var(--t-sm);padding:8px 0;background:var(--brand-soft);border-bottom:1px solid var(--line)}
+.tts-slot{display:flex;flex-direction:column;gap:4px;padding:6px 8px;border-bottom:1px dashed var(--line);min-height:20px}
+.tts-slot:last-child{border-bottom:none}
+.tts-slot.has{background:var(--card)}
+.tts-slot.over{background:var(--brand-soft);box-shadow:0 0 0 2px var(--brand) inset}
+.tts-slot-time{font-size:var(--t-cap);color:var(--ink3);font-weight:700}
+.tts-slot-names{display:flex;flex-wrap:wrap;gap:4px}
+.tts-tag{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:3px 4px 3px 9px;border-radius:var(--r-full);font-size:var(--t-cap);font-weight:700;cursor:grab;user-select:none;line-height:1.3}
+.tts-tag:active{cursor:grabbing}
+.tts-tag-name{white-space:nowrap}
+.tts-tag-name.as-link{border:none;background:transparent;color:inherit;font:inherit;font-weight:700;padding:0;cursor:pointer}
+.tts-tag-name.as-link:hover{text-decoration:underline}
+.tts-tag-n{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:var(--r-full);font-size:10px;font-weight:800;background:rgba(0,0,0,.12)}
+.tts-tag-x{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;margin-left:1px;border:none;border-radius:var(--r-full);background:rgba(0,0,0,.1);color:inherit;font-size:13px;line-height:1;font-weight:800;cursor:pointer;opacity:.65}
+.tts-tag-x:hover{opacity:1;background:var(--bad-soft,rgba(220,38,38,.18));color:var(--bad,#dc2626)}
+.tts-tag.tts-math{background:var(--brand-soft);color:var(--brand-d);border:1px solid var(--brand-line)}
+.tts-tag.tts-low{background:var(--brand-soft);color:var(--brand-d);border:1px solid var(--brand-line)}
+.tts-tag.tts-elem{background:var(--brand-soft);color:var(--brand-d);border:1px solid var(--brand-line)}
+.tts-tag.tts-high{background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok)}
+.tts-tag.tts-mid{background:var(--info-bg);color:var(--info);border:1px solid var(--info)}
+.tts-tag.tts-eng{background:#eef0ff;color:#4f46e5;border:1px solid #c7ccfb}
+[data-theme="dark"] .tts-tag.tts-eng{background:#23244a;color:#aab2ff;border-color:#3a3d77}
+.tts-tag.special{border:1px solid}
+
+.tts-studentview{display:flex;flex-direction:column;gap:12px}
+.tts-sv-head{font-size:var(--t-sm);color:var(--ink2)}
+.tts-sv-head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.tts-sv-capture{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px}
+.tts-sv-cap-title{font-size:var(--t-md);font-weight:800;color:var(--ink);margin:0 0 10px}
+.tts-sv-head b{color:var(--ink)}
+.tts-sv-empty{font-size:var(--t-cap);color:var(--ink4);text-align:center;padding:10px 6px}
+.tts-sv-block{display:flex;flex-direction:column;gap:2px;padding:8px 10px;margin:6px;border-radius:var(--r-md)}
+.tts-sv-block b{font-size:var(--t-sm)}
+.tts-sv-block span{font-size:var(--t-cap);opacity:.8}
+.tts-sv-block.tts-elem{background:var(--brand-soft);color:var(--brand-d);border:1px solid var(--brand-line)}
+.tts-sv-block.tts-mid{background:var(--info-bg);color:var(--info);border:1px solid var(--info)}
+.tts-sv-block.special{border:1px solid}
+
+.tts-note{display:flex;align-items:center;gap:6px;margin-top:18px;font-size:var(--t-cap);color:var(--ink3)}
+.tts-note svg{width:15px;height:15px;flex:none;stroke-width:2}
+
+/* ── 수학 학생 화면 (영어 화면과 같은 자리) ───────────────────────── */
+.sp-subj-switch{display:inline-flex;gap:4px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-full);padding:4px;margin-bottom:14px}
+.sp-soon{display:flex;align-items:center;gap:8px;color:var(--ink3);font-size:var(--t-sm);background:var(--card2);border:1px dashed var(--line2);border-radius:var(--r-md);padding:18px}
+.sp-soon svg{width:18px;height:18px;stroke-width:2;flex:none}
+.sp-pick{max-width:640px;margin:32px auto;text-align:center}
+.sp-pick-title{font-size:var(--t-xl);font-weight:800;color:var(--ink);margin:0 0 6px}
+.sp-pick-sub{color:var(--ink3);font-size:var(--t-sm);margin:0 0 22px}
+.sp-pick-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:520px){.sp-pick-grid{grid-template-columns:1fr}}
+.sp-pick-card{display:flex;flex-direction:column;align-items:center;gap:6px;padding:30px 20px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--sh-sm);cursor:pointer;transition:transform .1s,box-shadow .15s,border-color .15s}
+.sp-pick-card:hover{transform:translateY(-2px);box-shadow:var(--sh);border-color:var(--brand)}
+.sp-pick-card b{font-size:var(--t-lg);color:var(--ink)}
+.sp-pick-card span{font-size:var(--t-cap);color:var(--ink3)}
+.sp-pick-ic{display:inline-flex;width:50px;height:50px;align-items:center;justify-content:center;border-radius:var(--r-full);background:var(--brand-soft);color:var(--brand-d);margin-bottom:4px}
+.sp-pick-ic svg{width:26px;height:26px;stroke-width:2}
+.sp-pick-card.eng .sp-pick-ic{background:var(--info-bg);color:var(--info)}
+/* 수학 학생 화면 — 읽기 전용 기록 리스트 */
+.sp-mblocks{display:flex;flex-direction:column;gap:14px}
+.sp-mblock-h{font-size:var(--t-sm);font-weight:800;color:var(--ink2);margin-bottom:6px}
+.sp-mlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.sp-mrow{display:flex;align-items:center;gap:8px;font-size:var(--t-sm);color:var(--ink);padding:7px 10px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-sm)}
+.sp-mmain{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-mdate{font-size:var(--t-cap);color:var(--ink3);white-space:nowrap}
+.sp-mscore{font-size:var(--t-sm);font-weight:800;color:var(--brand-d);white-space:nowrap}
+.sp-mtag{font-size:var(--t-cap);font-weight:700;padding:2px 8px;border-radius:var(--r-full);white-space:nowrap}
+.sp-mtag.ok{background:var(--ok-soft);color:var(--ok)}
+.sp-mtag.warn{background:var(--warn-soft);color:var(--warn)}
+.sp-mtag.bad{background:var(--bad-soft);color:var(--bad)}
+.sp-mtag.info{background:var(--info-bg);color:var(--info)}
+
+/* 프로필 요약 */
+.sp-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 14px}
+@media(max-width:680px){.sp-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sp-sum{display:flex;flex-direction:column;gap:3px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--sh-sm)}
+.sp-sum-l{font-size:var(--t-cap);color:var(--ink3)}
+.sp-sum b{font-size:var(--t-sm);color:var(--ink);font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-sum b.warn{color:var(--warn)}
+
+/* 카드 헤더(제목 + 주차 화살표) */
+.sp-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 var(--s3)}
+.sp-week{display:inline-flex;align-items:center;gap:8px}
+.sp-week-arr{width:26px;height:26px;border:1px solid var(--line);background:var(--card2);border-radius:var(--r-sm);color:var(--ink2);font-size:16px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.sp-week-arr:hover{border-color:var(--brand);color:var(--brand-d)}
+.sp-week-lbl{font-size:var(--t-sm);font-weight:700;color:var(--ink2);min-width:64px;text-align:center}
+.sp-toggle{display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:6px 12px;border:1px solid var(--line);background:var(--card2);border-radius:var(--r-full);font-size:var(--t-cap);font-weight:700;color:var(--ink2);cursor:pointer}
+.sp-toggle:hover{border-color:var(--brand);color:var(--brand-d)}
+.sp-tt-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+.sp-tt-foot .btn svg{width:15px;height:15px}
+.sp-req-status{font-size:var(--t-cap);font-weight:700;color:var(--warn)}
+.sp-req-list{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:5px}
+.sp-req-row{display:flex;align-items:center;gap:8px;font-size:var(--t-cap);color:var(--ink2)}
+.sp-reqmodal{max-width:480px}
+.sp-req-form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sp-req-f{display:flex;flex-direction:column;gap:4px;font-size:var(--t-sm);font-weight:700;color:var(--ink2)}
+.sp-req-f .input{font-weight:500}
+.sp-req-full{grid-column:1 / -1}
+.sp-req-check{grid-column:1 / -1;display:flex;align-items:center;gap:8px;font-size:var(--t-sm);font-weight:700;color:var(--ink);cursor:pointer}
+.sp-req-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+@media(max-width:520px){.sp-req-form{grid-template-columns:1fr}}
+
+/* 알림장 — 강사 입력칸(ClassNoteBox) */
+.cnote{margin-top:10px}
+.cnote-h{display:flex;align-items:center;gap:8px;font-size:var(--t-sm);font-weight:800;color:var(--ink2);margin-bottom:4px}
+.cnote-state{font-size:var(--t-cap);font-weight:700;color:var(--ink3)}
+.cnote-state.ok{color:var(--ok)}
+.cnote-ta{width:100%;resize:vertical}
+/* 알림장 — 학생 화면 표시 */
+.sp-classnote{background:var(--honey-100);border:1px solid var(--honey-300);border-radius:var(--r-md);padding:12px}
+.sp-classnote-h{font-size:var(--t-sm);font-weight:800;color:var(--comb);margin-bottom:8px}
+.sp-classnote-memo{margin:8px 0 0;font-size:var(--t-sm);color:var(--ink);white-space:pre-wrap;line-height:1.5}
+.sp-classnote-sub{margin:0;font-size:var(--t-sm);font-weight:800;color:var(--ink2)}
+/* 알림장 공지 — 학생 화면 활성 목록 */
+.sp-alim-list{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-direction:column;gap:6px}
+.sp-alim-item{display:flex;align-items:flex-start;gap:8px;background:#fff;border:1px solid var(--honey-300);border-radius:var(--r-sm);padding:8px 10px}
+.sp-alim-body{flex:1;min-width:0;font-size:var(--t-sm);color:var(--ink);white-space:pre-wrap;line-height:1.5;font-weight:600}
+.sp-alim-due{flex:none;font-size:var(--t-cap);font-weight:700;color:var(--comb);background:var(--honey-100);border-radius:999px;padding:2px 8px;align-self:center}
+
+/* 반복 시험 예약 — 목록 */
+.trule-empty{padding:14px 4px;color:var(--ink3);font-size:var(--t-sm)}
+.trule-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.trule-item{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card2);padding:12px 14px}
+.trule-item.off{opacity:.6}
+.trule-kind{flex:none;font-size:var(--t-cap);font-weight:800;color:var(--ink2);background:var(--honey-100);border-radius:999px;padding:4px 10px;white-space:nowrap}
+.trule-kind.ktc{color:#fff;background:var(--brand)}
+.trule-main{flex:1;min-width:0}
+.trule-name{font-size:var(--t-base);font-weight:700;color:var(--ink)}
+.trule-sum{font-size:var(--t-sm);color:var(--ink3);font-weight:600;margin-top:2px}
+.trule-addbtn{align-self:flex-start;margin-top:2px}
+
+/* 반복 시험 예약 — 편집 팝업 */
+.trule-overlay{position:fixed;inset:0;background:rgba(20,18,15,.42);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60}
+.trule-modal{width:100%;max-width:540px;max-height:88vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-lg, 0 18px 50px rgba(0,0,0,.25))}
+.trule-modal-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:18px 20px 8px}
+.trule-modal-h h3{margin:0;font-size:var(--t-lg);font-weight:800;color:var(--ink)}
+.trule-x{border:none;background:none;cursor:pointer;color:var(--ink3);padding:4px;display:flex}
+.trule-x svg{width:20px;height:20px}
+.trule-form{display:flex;flex-direction:column;gap:16px;padding:8px 20px 4px}
+.trule-frow{display:flex;gap:14px;flex-wrap:wrap}
+.trule-frow .trule-f{flex:1;min-width:160px}
+.trule-f{display:flex;flex-direction:column;gap:7px}
+.trule-f > span{font-size:var(--t-sm);font-weight:700;color:var(--ink2)}
+.trule-opt{font-style:normal;font-weight:600;color:var(--ink3);font-size:var(--t-cap);margin-left:4px}
+.trule-f .input{width:100%}
+.trule-until{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.trule-until .input{width:auto;flex:none}
+.trule-until-clear{border:none;background:none;color:var(--brand);font-size:var(--t-cap);font-weight:700;cursor:pointer;text-decoration:underline;white-space:nowrap}
+.trule-note{display:flex;align-items:flex-start;gap:8px;background:var(--honey-100);border-radius:var(--r-md);padding:10px 12px;font-size:var(--t-sm);color:var(--ink2);line-height:1.5}
+.trule-note svg{width:16px;height:16px;flex:none;margin-top:2px;color:var(--comb)}
+.trule-search{margin-bottom:2px}
+.trule-picks{display:flex;flex-wrap:wrap;gap:7px;max-height:200px;overflow:auto;padding:4px;border:1px solid var(--line);border-radius:var(--r-md);background:#fcfdff}
+.trule-chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line2);border-radius:999px;background:var(--card);color:var(--ink2);font-size:var(--t-sm);font-weight:600;min-height:34px;padding:0 13px;cursor:pointer}
+.trule-chip.on{border-color:var(--brand);background:var(--brand);color:#fff}
+.trule-chip svg{width:13px;height:13px}
+.trule-chip-g{font-size:var(--t-cap);font-weight:700;opacity:.7}
+.trule-chip-warn{font-size:var(--t-cap);font-weight:700;color:var(--warn);margin-left:2px}
+.trule-chip.on .trule-chip-warn{color:#fff}
+.trule-modal-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px 20px;margin-top:6px;border-top:1px solid var(--line)}
+.trule-modal-actions{display:flex;gap:10px}
+.trule-del{color:var(--warn)}
+
+/* 알림장 공지 — 강사 대시보드 */
+.alim-cnt{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--honey-300);color:var(--comb);font-size:var(--t-cap);font-weight:800;margin-left:4px}
+.alim-form{border-top:1px solid var(--line);margin-top:10px;padding-top:12px;display:flex;flex-direction:column;gap:10px}
+.alim-ta{width:100%;resize:vertical}
+.alim-target{display:flex;flex-direction:column;gap:8px}
+.alim-mode{display:flex;gap:6px;flex-wrap:wrap}
+.alim-mode button{border:1px solid var(--line2);border-radius:var(--r-md);background:#fcfdff;color:var(--ink2);font-size:var(--t-sm);font-weight:700;min-height:36px;padding:0 14px;cursor:pointer}
+.alim-mode button.on{border-color:var(--brand);background:var(--brand);color:#fff}
+.alim-bands{display:flex;gap:6px;flex-wrap:wrap}
+.alim-bands button{border:1px solid var(--line2);border-radius:var(--r-md);background:#fcfdff;color:var(--ink2);font-size:var(--t-sm);font-weight:600;min-height:34px;padding:0 12px;cursor:pointer}
+.alim-bands button.on{border-color:var(--brand);color:var(--brand);background:var(--honey-100)}
+.alim-bandcnt{color:var(--ink3);font-weight:700;margin-left:2px}
+.alim-pick{display:flex;flex-direction:column;gap:8px}
+.alim-search{max-width:240px}
+.alim-picklist{display:flex;flex-wrap:wrap;gap:6px;max-height:160px;overflow:auto;padding:2px}
+.alim-chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line2);border-radius:999px;background:#fcfdff;color:var(--ink2);font-size:var(--t-sm);font-weight:600;min-height:32px;padding:0 12px;cursor:pointer}
+.alim-chip.on{border-color:var(--brand);background:var(--brand);color:#fff}
+.alim-chip svg{width:13px;height:13px}
+.alim-foot{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:4px}
+.alim-due{display:flex;align-items:center;gap:8px;font-size:var(--t-sm);font-weight:700;color:var(--ink2)}
+.alim-due > span:first-child{white-space:nowrap;flex:none}
+.alim-due input{min-height:40px;width:auto;flex:none}
+.alim-due-hint{font-size:var(--t-cap);color:var(--ink3);font-weight:600;white-space:nowrap}
+.alim-due-clear{border:none;background:none;color:var(--brand);font-size:var(--t-cap);font-weight:700;cursor:pointer;text-decoration:underline}
+.alim-count{margin-left:auto;font-size:var(--t-sm);font-weight:700;color:var(--ink2)}
+.alim-empty{padding:14px 4px;color:var(--ink3);font-size:var(--t-sm)}
+.alim-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.alim-item{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--line);border-radius:var(--r-md);padding:10px 12px;background:var(--card2)}
+.alim-item-body{flex:1;min-width:0;font-size:var(--t-base);font-weight:600;color:var(--ink);white-space:pre-wrap;line-height:1.5}
+.alim-item-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:none}
+.alim-tag{font-size:var(--t-cap);font-weight:800;color:var(--brand);background:var(--honey-100);border-radius:999px;padding:3px 9px}
+.alim-period{font-size:var(--t-cap);font-weight:600;color:var(--ink3)}
+.alim-by{font-size:var(--t-cap);font-weight:600;color:var(--ink3)}
+.alim-del{flex:none}
+
+/* 컴팩트 시간표(에타 스타일) */
+.ett{border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:var(--card)}
+.ett-head{display:grid}
+.ett-corner{border-bottom:1px solid var(--line)}
+.ett-day{text-align:center;font-size:var(--t-sm);font-weight:800;color:var(--ink2);padding:6px 0;background:var(--brand-soft);border-bottom:1px solid var(--line);border-left:1px solid var(--line)}
+.ett-body{display:grid;position:relative}
+.ett-times{position:relative}
+.ett-hlabel{position:absolute;right:5px;transform:translateY(-6px);font-size:10px;color:var(--ink3);white-space:nowrap}
+.ett-col{position:relative;border-left:1px solid var(--line)}
+.ett-line{position:absolute;left:0;right:0;border-top:1px dashed var(--line)}
+.ett-block{position:absolute;left:2px;right:2px;border-radius:6px;padding:3px 5px;overflow:hidden;display:flex;flex-direction:column;gap:1px;border:1px solid}
+.ett-block b{font-size:11px;font-weight:800;line-height:1.2}
+.ett-block span{font-size:9px;opacity:.85;line-height:1.1}
+.ett-block.ett-low{background:var(--brand-soft);color:var(--brand-d);border-color:var(--brand-line)}
+.ett-block.ett-high{background:var(--ok-soft);color:var(--ok);border-color:var(--ok)}
+.ett-block.ett-mid{background:var(--info-bg);color:var(--info);border-color:var(--info)}
+.ett-block.ett-math{background:var(--info-bg);color:var(--info);border-color:var(--info)}
+.ett-block.ett-eng{background:var(--brand-soft);color:var(--brand-d);border-color:var(--brand-line)}

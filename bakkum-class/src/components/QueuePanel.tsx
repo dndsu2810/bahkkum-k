@@ -3,6 +3,18 @@ import { useEffect, useRef, useState } from "react";
 import { queueApi, SUBJECT_LABEL, type QueueRow, type QueueSubject } from "../lib/queueApi";
 import { Icon } from "../icons";
 
+/** 한국어 음성 안내 — 선생님 컴에서 호출 버튼을 누른 순간(사용자 제스처) 재생되므로 음성 차단에 안 걸려요. */
+function speak(text: string) {
+  try {
+    if (!("speechSynthesis" in window)) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "ko-KR";
+    u.rate = 1;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  } catch { /* 음성 미지원은 무시 */ }
+}
+
 export function QueuePanel({ subject }: { subject: QueueSubject }) {
   const [list, setList] = useState<QueueRow[]>([]);
   const [busy, setBusy] = useState(false);
@@ -23,6 +35,11 @@ export function QueuePanel({ subject }: { subject: QueueSubject }) {
     if (busy) return;
     setBusy(true);
     try { await fn(); await load(); } catch { /* ignore */ } finally { setBusy(false); }
+  }
+  // 호출(다시 호출) — 선생님 컴에서 바로 이름을 불러줘요. 학생 화면 큰 배너(시각)는 그대로 떠요.
+  function callAndSpeak(r: QueueRow) {
+    speak(`${r.name} 학생 차례입니다`);
+    void act(() => queueApi.call(r.id));
   }
 
   const raisedCount = list.filter((r) => r.raised).length;
@@ -49,11 +66,11 @@ export function QueuePanel({ subject }: { subject: QueueSubject }) {
               <div className="qp-btns">
                 {r.status === "called" ? (
                   <>
-                    <button className="btn ghost sm" disabled={busy} onClick={() => act(() => queueApi.call(r.id))}>다시 호출</button>
+                    <button className="btn ghost sm" disabled={busy} onClick={() => callAndSpeak(r)}>다시 호출</button>
                     <button className="btn ghost sm" disabled={busy} onClick={() => act(() => queueApi.wait(r.id))}>대기로</button>
                   </>
                 ) : (
-                  <button className="btn ghost sm" disabled={busy} onClick={() => act(() => queueApi.call(r.id))}>호출</button>
+                  <button className="btn ghost sm" disabled={busy} onClick={() => callAndSpeak(r)}>호출</button>
                 )}
                 <button className="btn primary sm" disabled={busy} onClick={() => act(() => queueApi.done(r.id))}>완료</button>
               </div>

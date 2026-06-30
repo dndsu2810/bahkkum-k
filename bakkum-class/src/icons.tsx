@@ -22,6 +22,12 @@ const paths: Record<string, ReactNode> = {
   ),
   x: <path d="M18 6 6 18M6 6l12 12" />,
   menu: <path d="M3 6h18M3 12h18M3 18h18" />,
+  link: (
+    <>
+      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </>
+  ),
   check: <path d="M20 6 9 17l-5-5" />,
   users: (
     <>
@@ -184,6 +190,12 @@ const paths: Record<string, ReactNode> = {
       <circle cx="12" cy="12" r="9" />
       <path d="M5.4 6.2c2.6 1.7 3.9 4.2 3.9 5.8s-1.3 4.1-3.9 5.8" />
       <path d="M18.6 6.2c-2.6 1.7-3.9 4.2-3.9 5.8s1.3 4.1 3.9 5.8" />
+    </>
+  ),
+  logout: (
+    <>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="M16 17l5-5-5-5M21 12H9" />
     </>
   ),
 };

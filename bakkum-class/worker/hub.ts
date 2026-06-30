@@ -76,6 +76,8 @@ export async function ensureHubTables(env: Env): Promise<void> {
     // 인쇄 마감일(언제까지 인쇄) · 배부 예정일(언제 학생에게 줄지) — 인쇄대기 카드 요약에 표시.
     "ALTER TABLE class_materials ADD COLUMN print_by TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_materials ADD COLUMN give_date TEXT NOT NULL DEFAULT ''",
+    // 메모 종류 — '' (강사 특이사항) | 'counsel' (학부모 상담 기록). 학생 프로필에서 섹션 분리.
+    "ALTER TABLE class_notes ADD COLUMN kind TEXT NOT NULL DEFAULT ''",
   ]) {
     try {
       await env.DB.prepare(a).run();
@@ -100,20 +102,24 @@ export async function handleHub(
   if (p === "/api/notes" && m === "GET") {
     const url = new URL(request.url);
     const sid = url.searchParams.get("student_id") || "";
-    const q = sid
-      ? env.DB.prepare("SELECT * FROM class_notes WHERE student_id=? ORDER BY created_at DESC").bind(sid)
-      : env.DB.prepare("SELECT * FROM class_notes ORDER BY created_at DESC LIMIT 500");
+    const kind = url.searchParams.get("kind"); // null이면 전체, 지정 시 그 종류만('' 특이사항 / 'counsel' 상담)
+    const q = sid && kind !== null
+      ? env.DB.prepare("SELECT * FROM class_notes WHERE student_id=? AND kind=? ORDER BY created_at DESC").bind(sid, kind)
+      : sid
+        ? env.DB.prepare("SELECT * FROM class_notes WHERE student_id=? ORDER BY created_at DESC").bind(sid)
+        : env.DB.prepare("SELECT * FROM class_notes ORDER BY created_at DESC LIMIT 500");
     const r = await q.all<Record<string, unknown>>();
     return json({ notes: (r.results || []).map(noteRow) });
   }
   if (p === "/api/notes" && m === "POST") {
-    const b = (await request.json().catch(() => ({}))) as { studentId?: string; body?: string };
+    const b = (await request.json().catch(() => ({}))) as { studentId?: string; body?: string; kind?: string };
     const body = (b.body || "").trim();
     if (!b.studentId || !body) return json({ error: "bad_input" }, 400);
+    const kind = b.kind === "counsel" ? "counsel" : "";
     const id = newId("note");
     await env.DB
-      .prepare("INSERT INTO class_notes(id,student_id,author_id,author_name,body,created_at) VALUES(?,?,?,?,?,?)")
-      .bind(id, String(b.studentId), me.sub, me.name, body.slice(0, 4000), Date.now())
+      .prepare("INSERT INTO class_notes(id,student_id,author_id,author_name,body,kind,created_at) VALUES(?,?,?,?,?,?,?)")
+      .bind(id, String(b.studentId), me.sub, me.name, body.slice(0, 4000), kind, Date.now())
       .run();
     return json({ ok: true, id });
   }
@@ -537,6 +543,7 @@ function noteRow(r: Record<string, unknown>) {
     authorId: String(r.author_id ?? ""),
     authorName: String(r.author_name ?? ""),
     body: String(r.body ?? ""),
+    kind: String(r.kind ?? ""),
     createdAt: Number(r.created_at ?? 0),
   };
 }

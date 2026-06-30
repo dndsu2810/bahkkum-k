@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { meetingApi, type MeetingDetail, type MeetingListItem } from "../lib/meetingApi";
 import { listUsers, type UserRow } from "../lib/authApi";
+import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { useAuth } from "../auth";
 import { tasksApi, type BoardTask } from "../lib/hubApi";
 import { TaskModal, blankTask } from "../components/TaskModal";
@@ -114,6 +115,9 @@ function MeetingEditor({ id, onDone, onCancel }: { id?: number; onDone: () => vo
   const [categories, setCategories] = useState<string[]>([]);
   const [staff, setStaff] = useState<UserRow[]>([]);
   const [picked, setPicked] = useState<string[]>([]); // 참석자 user id(sub)
+  const [roster, setRoster] = useState<RosterStudent[]>([]); // 연계 학생 후보
+  const [studentId, setStudentId] = useState(""); // 연계 학생(학부모 상담)
+  const [stuQ, setStuQ] = useState(""); // 학생 검색어
   const [agenda, setAgenda] = useState("");
   const [tab, setTab] = useState<"audio" | "text">("audio");
   const [file, setFile] = useState<File | null>(null);
@@ -121,7 +125,7 @@ function MeetingEditor({ id, onDone, onCancel }: { id?: number; onDone: () => vo
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
-  const [result, setResult] = useState<{ rawText: string; summary: string } | null>(null);
+  const [result, setResult] = useState<{ rawText: string; summary: string; notice?: string } | null>(null);
   const [addingCat, setAddingCat] = useState(false);
   const [newCat, setNewCat] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -163,6 +167,7 @@ function MeetingEditor({ id, onDone, onCancel }: { id?: number; onDone: () => vo
   useEffect(() => {
     let alive = true;
     listUsers().then((u) => { if (alive) setStaff(u.filter((x) => x.role !== "student")); }).catch(() => {});
+    getRoster().then((r) => { if (alive) setRoster(r); }).catch(() => {});
     meetingApi.categories().then((c) => { if (alive) setCategories(c); }).catch(() => {});
     if (editing && id) {
       meetingApi.get(id).then((m) => {
@@ -170,6 +175,7 @@ function MeetingEditor({ id, onDone, onCancel }: { id?: number; onDone: () => vo
         setTitle(m.title);
         setDate(m.meetingDate || today());
         setCategory(m.category || "");
+        setStudentId(m.studentId || "");
         setPicked(m.attendeeSubs || []);
         setAgenda(m.agenda || "");
         if (m.rawText) setText(m.rawText);
@@ -275,6 +281,7 @@ function MeetingEditor({ id, onDone, onCancel }: { id?: number; onDone: () => vo
       const agendaText = hasContent(agenda) ? htmlToText(agenda) : "";
       const r = await meetingApi.transcribe(tab === "audio" ? { audio: file, agenda: agendaText } : { text: text.trim(), agenda: agendaText });
       setResult(r);
+      if (r.notice) setErr(r.notice); // 변환은 됐지만 요약이 비어 온 경우의 안내(원문은 result에 보존됨).
     } catch (e) {
       setErr(e instanceof Error ? e.message : "AI 요약에 실패했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
@@ -298,6 +305,7 @@ function MeetingEditor({ id, onDone, onCancel }: { id?: number; onDone: () => vo
         meetingDate: date,
         attendees: attendeeNames(),
         attendeeSubs: picked,
+        studentId,
         agenda: hasContent(agenda) ? agenda : "",
         rawText: withSummary ? result?.rawText : (editing ? text : ""),
         summary: withSummary ? result?.summary : "",
@@ -362,6 +370,28 @@ function MeetingEditor({ id, onDone, onCancel }: { id?: number; onDone: () => vo
                 </button>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* 연계 학생 — 학부모 상담 회의록을 학생 프로필 '상담 기록'에 연결(선택). */}
+        <div className="mt-f">
+          <span>연계 학생 <em className="mt-opt">선택 · 학부모 상담이면 학생을 연결하면 학생 프로필 '상담 기록'에 떠요</em></span>
+          {studentId ? (
+            <div className="mt-att-chips">
+              <span className="mt-chip on"><Icon name="check" /> {roster.find((r) => r.id === studentId)?.name || "학생"}</span>
+              <button type="button" className="mt-chip" onClick={() => { setStudentId(""); setStuQ(""); }}>연결 해제</button>
+            </div>
+          ) : (
+            <>
+              <input className="input" value={stuQ} onChange={(e) => setStuQ(e.target.value)} placeholder="학생 이름으로 검색" />
+              {stuQ.trim() && (
+                <div className="mt-att-chips" style={{ marginTop: 6 }}>
+                  {roster.filter((r) => r.name.includes(stuQ.trim())).slice(0, 8).map((r) => (
+                    <button key={r.id} type="button" className="mt-chip" onClick={() => { setStudentId(r.id); setStuQ(""); }}>{r.name}<span className="mt-chip-role">{r.grade}</span></button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
 

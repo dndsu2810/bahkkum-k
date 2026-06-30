@@ -10,7 +10,7 @@ import { computeScore, type ScoreMode } from "../lib/score";
 import { Icon } from "../icons";
 
 /* 시험 점수 한 줄 — 점수/만점/갯수 토글로 입력. 예약(예정) 시험이 오늘이면 '예정' 배지와 함께 떠서 점수를 채운다. */
-function TodayTestRow({ t, onScore, onToggle, onRemove }: { t: TestLog; onScore: (v: ScoreValue) => void; onToggle: () => void; onRemove: () => void }) {
+function TodayTestRow({ t, onScore, onToggle, onRemove, onEdit }: { t: TestLog; onScore: (v: ScoreValue) => void; onToggle: () => void; onRemove: () => void; onEdit: () => void }) {
   const mode = (t.scoreMode || "score") as ScoreMode;
   const num = mode === "score" ? t.score : (t.scoreNum ?? 0);
   const den = t.scoreDen ?? (mode === "max" ? 100 : 0);
@@ -26,6 +26,7 @@ function TodayTestRow({ t, onScore, onToggle, onRemove }: { t: TestLog; onScore:
       <button className={"btn sm" + (t.status === "완료" ? " primary" : "")} onClick={onToggle} title="완료/예정 전환">
         <Icon name="check" />{t.status === "완료" ? "완료" : "완료로"}
       </button>
+      <button className="btn ghost sm" onClick={onEdit} title="시험명·단원 수정"><Icon name="edit" /></button>
       <button className="btn ghost sm" onClick={onRemove} title="삭제"><Icon name="trash" /></button>
     </div>
   );
@@ -48,6 +49,10 @@ export function TodayTests({ student, day }: { student: Student; day: string }) 
   const [todayRange, setTodayRange] = useState("");
   const [planName, setPlanName] = useState("");
   const [planRange, setPlanRange] = useState("");
+  // 예약·기록 시험 인라인 수정(시험명·단원).
+  const [editId, setEditId] = useState<string | null>(null);
+  const [eName, setEName] = useState("");
+  const [eRange, setERange] = useState("");
 
   const pushN = (rec: TestLog) =>
     pushTestNotion(rec.studentId, { date: rec.date, type: rec.type, round: rec.round, range: rec.range, score: rec.score, status: rec.status, memo: rec.memo });
@@ -67,9 +72,26 @@ export function TodayTests({ student, day }: { student: Student; day: string }) 
     mutate((d) => { const x = d.testLog.find((r) => r.id === t.id); if (x) { fn(x); synced = { ...x }; } });
     if (synced) pushN(synced);
   }
+  // 점수를 입력하면 자동으로 '완료'가 된다. 점수는 완료 전·후 언제든 수정 가능.
   function setScoreOf(t: TestLog, v: ScoreValue) { patch(t, (x) => { x.scoreMode = v.scoreMode; x.scoreNum = v.scoreNum; x.scoreDen = v.scoreDen; x.score = v.score; x.status = "완료"; }); }
-  function toggleStatus(t: TestLog) { patch(t, (x) => { x.status = x.status === "완료" ? "예정" : "완료"; if (x.status === "예정") x.score = 0; }); }
+  // 완료/예정 전환 — 점수는 절대 건드리지 않는다(완료 후 점수 작성, 점수 입력 후 완료 모두 허용).
+  function toggleStatus(t: TestLog) { patch(t, (x) => { x.status = x.status === "완료" ? "예정" : "완료"; }); }
   function removeT(t: TestLog) { mutate((d) => { d.testLog = d.testLog.filter((r) => r.id !== t.id); }); }
+  function startEdit(t: TestLog) { setEditId(t.id); setEName(t.type); setERange(t.range); }
+  function saveEdit(t: TestLog) {
+    const nm = eName.trim();
+    patch(t, (x) => { if (nm) x.type = nm; x.range = eRange.trim(); });
+    setEditId(null);
+  }
+  // 시험 수정 줄(시험명·단원) — 오늘 본 시험·예약 공용.
+  const editRow = (t: TestLog) => (
+    <div className="today-hwitem assigned test-edit" key={t.id}>
+      <input className="today-assign-input" value={eName} onChange={(e) => setEName(e.target.value)} placeholder="시험명" onKeyDown={(e) => { if (e.key === "Enter") saveEdit(t); }} />
+      <input className="today-assign-input" value={eRange} onChange={(e) => setERange(e.target.value)} placeholder="시험 범위(단원)" onKeyDown={(e) => { if (e.key === "Enter") saveEdit(t); }} />
+      <button className="btn primary sm" onClick={() => saveEdit(t)}>저장</button>
+      <button className="btn ghost sm" onClick={() => setEditId(null)}>취소</button>
+    </div>
+  );
 
   function addPlan() {
     const nm = planName.trim();
@@ -92,7 +114,7 @@ export function TodayTests({ student, day }: { student: Student; day: string }) 
           <div className="today-hwrow-empty">아직 오늘 본 시험이 없어요. 아래에서 추가하거나, 미리 예약해 두면 그날 여기 떠요</div>
         ) : (
           todays.map((t) => (
-            <TodayTestRow key={t.id} t={t} onScore={(v) => setScoreOf(t, v)} onToggle={() => toggleStatus(t)} onRemove={() => removeT(t)} />
+            editId === t.id ? editRow(t) : <TodayTestRow key={t.id} t={t} onScore={(v) => setScoreOf(t, v)} onToggle={() => toggleStatus(t)} onRemove={() => removeT(t)} onEdit={() => startEdit(t)} />
           ))
         )}
         <div className="today-assignrow test-addrow">
@@ -123,14 +145,17 @@ export function TodayTests({ student, day }: { student: Student; day: string }) 
         ) : (
           <>
             {planned.map((p) => (
+              editId === p.id ? editRow(p) : (
               <div className="today-hwitem assigned" key={p.id}>
                 <span className="today-hwitem-name">
                   <b>{p.type}</b><span className="badge b-orange">예약</span>
                   {p.round ? <span className="test-rec-round">{p.round}</span> : null}
-                  {p.range ? <span className="muted"> · {p.range}</span> : null}
+                  {p.range ? <span className="muted"> · {p.range}</span> : <span className="muted"> · 범위 미입력</span>}
                 </span>
+                <button className="btn ghost sm" onClick={() => startEdit(p)} title="시험명·단원 수정"><Icon name="edit" /></button>
                 <button className="btn ghost sm" onClick={() => removeT(p)} title="삭제"><Icon name="trash" /></button>
               </div>
+              )
             ))}
             <div className="today-assignrow">
               <input

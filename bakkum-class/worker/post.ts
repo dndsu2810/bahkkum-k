@@ -10,12 +10,20 @@ import type { SessionUser } from "./auth";
 import { ensureFeedbackTables } from "./feedback";
 import { noticeVisible, normalizeAudience } from "../src/lib/notice";
 
-async function bandOf(env: Env, sub: string): Promise<string> {
+/** 학생의 공지 필터 정보 — 영어 band(elem/mid/bridge) + 수학 수강 여부. */
+async function audienceOf(env: Env, sub: string): Promise<{ band: string; isMath: boolean }> {
   try {
-    const r = await env.DB.prepare("SELECT english_band FROM class_student_meta WHERE student_id=?").bind(sub).first<{ english_band: string }>();
-    return String(r?.english_band ?? "");
+    const r = await env.DB.prepare("SELECT english_band, subjects, math_class FROM class_student_meta WHERE student_id=?").bind(sub).first<{ english_band: string; subjects: string; math_class: string }>();
+    const band = String(r?.english_band ?? "");
+    let isMath = !!String(r?.math_class ?? "");
+    if (!isMath) { try { const s = JSON.parse(String(r?.subjects ?? "[]")); isMath = Array.isArray(s) && s.map(String).includes("math"); } catch { /* ignore */ } }
+    if (!isMath) {
+      const ml = await env.DB.prepare("SELECT 1 FROM class_lessons WHERE student_id=? LIMIT 1").bind(sub).first();
+      isMath = !!ml;
+    }
+    return { band, isMath };
   } catch {
-    return "";
+    return { band: "", isMath: false };
   }
 }
 
@@ -36,6 +44,8 @@ async function ensurePostTables(env: Env): Promise<void> {
   ]) {
     try { await env.DB.prepare(s).run(); } catch { /* ignore */ }
   }
+  // 배너에 보일 짧은 문구 — 비우면 제목을 그대로 쓴다(배너=문구, 누르면 글 본문=세부).
+  try { await env.DB.prepare("ALTER TABLE class_post ADD COLUMN banner_text TEXT NOT NULL DEFAULT ''").run(); } catch { /* 이미 있으면 무시 */ }
   postReady = true;
 }
 
@@ -53,6 +63,7 @@ function listRow(r: Record<string, unknown>, read: boolean) {
     title: String(r.title ?? ""),
     audience: String(r.audience ?? "staff"),
     banner: Number(r.banner) === 1,
+    bannerText: String(r.banner_text ?? ""),
     authorName: String(r.author_name ?? ""),
     editorName: String(r.editor_name ?? ""),
     fileCount: parseFiles(r.files).length,
@@ -62,18 +73,20 @@ function listRow(r: Record<string, unknown>, read: boolean) {
   };
 }
 
-/** 배너 동기화 — banner=1이면 class_notice에 post_<id>로 띄우고, 0이면 내린다. */
-async function syncBanner(env: Env, id: string, on: boolean, title: string, audience: string, author: string): Promise<void> {
+/** 배너 동기화 — banner=1이면 class_notice에 post_<id>로 띄우고, 0이면 내린다.
+ *  bannerText(배너에 보일 문구)가 있으면 그걸, 없으면 제목을 배너 문구로 쓴다. 누르면 글 본문이 열림(NoticeBanner). */
+async function syncBanner(env: Env, id: string, on: boolean, title: string, bannerText: string, audience: string, author: string): Promise<void> {
   await ensureFeedbackTables(env);
   const nid = "post_" + id;
   if (on) {
     const exists = await env.DB.prepare("SELECT id FROM class_notice WHERE id=?").bind(nid).first();
     const aud = normalizeAudience(audience);
+    const label = (bannerText || "").trim() || title;
     if (exists) {
-      await env.DB.prepare("UPDATE class_notice SET text=?, active=1, audience=? WHERE id=?").bind(title, aud, nid).run();
+      await env.DB.prepare("UPDATE class_notice SET text=?, active=1, audience=? WHERE id=?").bind(label, aud, nid).run();
     } else {
       await env.DB.prepare("INSERT INTO class_notice(id,text,level,active,start_date,end_date,created_at,created_by,audience) VALUES(?,?,?,?,?,?,?,?,?)")
-        .bind(nid, title, "info", 1, "", "", Date.now(), author, aud).run();
+        .bind(nid, label, "info", 1, "", "", Date.now(), author, aud).run();
     }
   } else {
     await env.DB.prepare("DELETE FROM class_notice WHERE id=?").bind(nid).run();
@@ -90,8 +103,8 @@ export async function handlePost(env: Env, request: Request, p: string, me: Sess
     const r = await env.DB.prepare("SELECT id,title,audience,banner,author_name,editor_name,files,created_at,updated_at FROM class_post ORDER BY updated_at DESC LIMIT 300").all<Record<string, unknown>>();
     let rows = r.results || [];
     if (!isStaff) {
-      const band = await bandOf(env, me.sub);
-      rows = rows.filter((row) => noticeVisible(String(row.audience ?? "staff"), { isStudent: true, band }));
+      const { band, isMath } = await audienceOf(env, me.sub);
+      rows = rows.filter((row) => noticeVisible(String(row.audience ?? "staff"), { isStudent: true, band, isMath }));
     }
     const readSet = new Set<string>();
     try {
@@ -107,14 +120,14 @@ export async function handlePost(env: Env, request: Request, p: string, me: Sess
       const r = await env.DB.prepare("SELECT COUNT(*) n FROM class_post WHERE id NOT IN (SELECT post_id FROM class_post_read WHERE user_sub=?)").bind(me.sub).first<{ n: number }>();
       return json({ count: Number(r?.n) || 0 });
     }
-    const band = await bandOf(env, me.sub);
+    const { band, isMath } = await audienceOf(env, me.sub);
     const all = await env.DB.prepare("SELECT id,audience FROM class_post").all<{ id: string; audience: string }>();
     const readSet = new Set<string>();
     try {
       const rr = await env.DB.prepare("SELECT post_id FROM class_post_read WHERE user_sub=?").bind(me.sub).all<{ post_id: string }>();
       for (const x of rr.results || []) readSet.add(String(x.post_id));
     } catch { /* ignore */ }
-    const count = (all.results || []).filter((row) => noticeVisible(String(row.audience ?? "staff"), { isStudent: true, band }) && !readSet.has(String(row.id))).length;
+    const count = (all.results || []).filter((row) => noticeVisible(String(row.audience ?? "staff"), { isStudent: true, band, isMath }) && !readSet.has(String(row.id))).length;
     return json({ count });
   }
 
@@ -123,7 +136,7 @@ export async function handlePost(env: Env, request: Request, p: string, me: Sess
     const id = p.split("/").pop()!;
     const row = await env.DB.prepare("SELECT * FROM class_post WHERE id=?").bind(id).first<Record<string, unknown>>();
     if (!row) return json({ error: "not_found" }, 404);
-    if (!isStaff && !noticeVisible(String(row.audience ?? "staff"), { isStudent: true, band: await bandOf(env, me.sub) })) return json({ error: "forbidden" }, 403);
+    if (!isStaff && !noticeVisible(String(row.audience ?? "staff"), { isStudent: true, ...(await audienceOf(env, me.sub)) })) return json({ error: "forbidden" }, 403);
     try { await env.DB.prepare("INSERT OR IGNORE INTO class_post_read(post_id,user_sub,read_at) VALUES(?,?,?)").bind(id, me.sub, Date.now()).run(); } catch { /* ignore */ }
     return json({ post: {
       ...listRow(row, true),
@@ -142,6 +155,7 @@ export async function handlePost(env: Env, request: Request, p: string, me: Sess
     const body = String(b.body || "").slice(0, 200000);
     const audience = normalizeAudience(b.audience);
     const banner = b.banner ? 1 : 0;
+    const bannerText = String(b.bannerText || "").trim().slice(0, 200);
     const files = JSON.stringify(parseFiles(b.files).slice(0, 30));
     const now = Date.now();
     const id = String(b.id || "");
@@ -150,19 +164,19 @@ export async function handlePost(env: Env, request: Request, p: string, me: Sess
       if (!cur) return json({ error: "not_found" }, 404);
       // 다른 사람이 수정하면 editor_name 기록(작성자 본인이 고치면 비움).
       const editor = String(cur.author_sub) === me.sub ? "" : me.name;
-      await env.DB.prepare("UPDATE class_post SET title=?, body=?, files=?, audience=?, banner=?, editor_name=?, updated_at=? WHERE id=?")
-        .bind(title, body, files, audience, banner, editor, now, id).run();
+      await env.DB.prepare("UPDATE class_post SET title=?, body=?, files=?, audience=?, banner=?, banner_text=?, editor_name=?, updated_at=? WHERE id=?")
+        .bind(title, body, files, audience, banner, bannerText, editor, now, id).run();
       // 내용이 바뀌었으니 다시 'new'로(작성자 제외 모두 미열람) — 본인은 읽음 유지.
       try { await env.DB.prepare("DELETE FROM class_post_read WHERE post_id=? AND user_sub<>?").bind(id, me.sub).run(); } catch { /* ignore */ }
-      await syncBanner(env, id, banner === 1, title, audience, me.name);
+      await syncBanner(env, id, banner === 1, title, bannerText, audience, me.name);
       return json({ ok: true, id });
     }
     const newPostId = newId("post");
-    await env.DB.prepare("INSERT INTO class_post(id,title,body,files,audience,banner,author_sub,author_name,editor_name,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)")
-      .bind(newPostId, title, body, files, audience, banner, me.sub, me.name, "", now, now).run();
+    await env.DB.prepare("INSERT INTO class_post(id,title,body,files,audience,banner,banner_text,author_sub,author_name,editor_name,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(newPostId, title, body, files, audience, banner, bannerText, me.sub, me.name, "", now, now).run();
     // 작성자는 자기 글을 읽은 것으로.
     try { await env.DB.prepare("INSERT OR IGNORE INTO class_post_read(post_id,user_sub,read_at) VALUES(?,?,?)").bind(newPostId, me.sub, now).run(); } catch { /* ignore */ }
-    await syncBanner(env, newPostId, banner === 1, title, audience, me.name);
+    await syncBanner(env, newPostId, banner === 1, title, bannerText, audience, me.name);
     return json({ ok: true, id: newPostId });
   }
 

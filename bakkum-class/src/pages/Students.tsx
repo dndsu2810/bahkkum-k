@@ -3,9 +3,9 @@ import type { Student, StudentStatus } from "../types";
 import { useStore } from "../store";
 import { syncStudents } from "../api";
 import { saveStudentCore } from "../lib/rosterApi";
-import { catIndex } from "../lib/categories";
+import { mathBandOf, GRADE_OPTIONS, type MathBand } from "../lib/grade";
 import { StudentTable, type EditField } from "../components/StudentTable";
-import { StudentModal } from "../components/modals";
+import { StudentProfilePopup } from "../components/StudentProfilePopup";
 import { Icon } from "../icons";
 
 function applyField(s: Student, field: EditField, value: string) {
@@ -16,8 +16,10 @@ function applyField(s: Student, field: EditField, value: string) {
 }
 
 export function Students() {
-  const { data, openModal, mutate, mutateAsync, toast, reload } = useStore();
+  const { data, mutate, mutateAsync, toast, reload } = useStore();
   const [syncing, setSyncing] = useState(false);
+  // 학생관리 팝업 — undefined: 닫힘 · null: 신규 등록 · string: 그 학생 편집(공통 팝업).
+  const [profileId, setProfileId] = useState<string | null | undefined>(undefined);
 
   // 노션 학생 명단만 동기화 (출결·숙제 등 기록은 안 건드림). 노션 페이지 ID로 매칭해
   // 중복 없이 새 학생 추가 + 바뀐 정보만 갱신, 앱에서 수정한 값은 보존.
@@ -43,9 +45,47 @@ export function Students() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const sorted = data.students
-    .slice()
-    .sort((a, b) => (a.grade === b.grade ? (a.name < b.name ? -1 : 1) : catIndex(a.grade) - catIndex(b.grade)));
+  // 보기 필터(구분·상태) + 정렬 — 마지막으로 본 설정을 기억(다음에 열어도 유지).
+  type BandF = "all" | MathBand;
+  type StatusF = "all" | "재원" | "off"; // off = 휴원·퇴원
+  type SortBy = "name" | "reg" | "grade";
+  const VIEW_KEY = "math_students_view";
+  const savedView = (() => {
+    try { return JSON.parse(localStorage.getItem(VIEW_KEY) || "{}") as { band?: BandF; status?: StatusF; sort?: SortBy }; } catch { return {}; }
+  })();
+  const [bandFilter, setBandFilter] = useState<BandF>(savedView.band ?? "all");
+  const [statusFilter, setStatusFilter] = useState<StatusF>(savedView.status ?? "재원");
+  const [sortBy, setSortBy] = useState<SortBy>(savedView.sort ?? "name");
+  useEffect(() => {
+    try { localStorage.setItem(VIEW_KEY, JSON.stringify({ band: bandFilter, status: statusFilter, sort: sortBy })); } catch { /* ignore */ }
+  }, [bandFilter, statusFilter, sortBy]);
+
+  const filtered = data.students.filter((s) => {
+    if (bandFilter !== "all" && mathBandOf(s.grade) !== bandFilter) return false;
+    if (statusFilter === "재원" && s.status !== "재원") return false;
+    if (statusFilter === "off" && !(s.status === "휴원" || s.status === "퇴원")) return false;
+    return true;
+  });
+  const gradeRank = (g: string) => { const i = GRADE_OPTIONS.indexOf(g); return i < 0 ? GRADE_OPTIONS.length : i; };
+  const sorted = filtered.slice().sort((a, b) =>
+    sortBy === "reg"
+      ? (a.startDate || "").localeCompare(b.startDate || "") || a.name.localeCompare(b.name, "ko")
+      : sortBy === "grade"
+        ? gradeRank(a.grade) - gradeRank(b.grade) || a.name.localeCompare(b.name, "ko")
+        : a.name.localeCompare(b.name, "ko")
+  );
+
+  const BANDS: { key: "all" | MathBand; label: string }[] = [
+    { key: "all", label: "전체" },
+    { key: "low", label: "초등 저학년" },
+    { key: "high", label: "초등 고학년" },
+    { key: "mid", label: "중고등" },
+  ];
+  const STATUSES: { key: "all" | "재원" | "off"; label: string }[] = [
+    { key: "재원", label: "재원" },
+    { key: "off", label: "휴·퇴원" },
+    { key: "all", label: "전체" },
+  ];
 
   // 표 안에서 바로 수정 → 즉시 저장. 수정한 필드는 '앱 소유'로 표시해 노션 동기화가
   // 덮어쓰지 않게 한다(명단=노션 원본 · 앱→노션 안 보냄 규칙 유지).
@@ -91,7 +131,7 @@ export function Students() {
         <div>
           <h1 className="page-title">수학 학생 관리</h1>
           <div className="page-desc">
-            전체 {data.students.length}명 · 셀을 클릭하면 이름·구분·상태·학교를 바로 수정할 수 있어요
+            보이는 학생 {sorted.length}명 (전체 {data.students.length}명) · 셀을 클릭하면 이름·구분·상태·학교를 바로 수정할 수 있어요
           </div>
         </div>
         <div className="head-actions">
@@ -101,22 +141,55 @@ export function Students() {
             </span>
             새로고침
           </button>
-          <button className="btn primary" onClick={() => openModal(<StudentModal id={null} />)}>
+          <button className="btn primary" onClick={() => setProfileId(null)}>
             <Icon name="plus" />
             학생 추가
           </button>
         </div>
       </div>
-      <div className="card">
-        <div className="tbl-wrap">
-          <StudentTable
-            list={sorted}
-            withActions
-            onEdit={(id) => openModal(<StudentModal id={id} />)}
-            onPatch={onPatch}
-          />
+      <div className="stu-filterbar">
+        <div className="stu-filtergroup">
+          <span className="stu-filterlabel">구분</span>
+          <div className="seg">
+            {BANDS.map((b) => (
+              <button key={b.key} type="button" className={"seg-btn" + (bandFilter === b.key ? " on" : "")} onClick={() => setBandFilter(b.key)}>{b.label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="stu-filtergroup">
+          <span className="stu-filterlabel">상태</span>
+          <div className="seg">
+            {STATUSES.map((s) => (
+              <button key={s.key} type="button" className={"seg-btn" + (statusFilter === s.key ? " on" : "")} onClick={() => setStatusFilter(s.key)}>{s.label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="stu-filtergroup">
+          <span className="stu-filterlabel">정렬</span>
+          <div className="seg">
+            <button type="button" className={"seg-btn" + (sortBy === "name" ? " on" : "")} onClick={() => setSortBy("name")}>이름순</button>
+            <button type="button" className={"seg-btn" + (sortBy === "grade" ? " on" : "")} onClick={() => setSortBy("grade")}>학년순</button>
+            <button type="button" className={"seg-btn" + (sortBy === "reg" ? " on" : "")} onClick={() => setSortBy("reg")}>등록순</button>
+          </div>
         </div>
       </div>
+      <div className="card">
+        <div className="tbl-wrap">
+          {sorted.length ? (
+            <StudentTable
+              list={sorted}
+              withActions
+              onEdit={(id) => setProfileId(id)}
+              onPatch={onPatch}
+            />
+          ) : (
+            <div className="stu-empty">조건에 맞는 학생이 없어요.</div>
+          )}
+        </div>
+      </div>
+      {profileId !== undefined && (
+        <StudentProfilePopup id={profileId} onClose={() => setProfileId(undefined)} />
+      )}
     </section>
   );
 }

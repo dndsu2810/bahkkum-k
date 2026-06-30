@@ -68,6 +68,7 @@ import { handleHub, ensureHubTables } from "./hub";
 import { handleEng, handleStudent, ensureEngTables } from "./eng";
 import { handleBaseball } from "./baseball";
 import { handleQueue } from "./queue";
+import { handleCheckout } from "./checkout";
 import { handleFeedback } from "./feedback";
 import { handleMessages } from "./message";
 import { handleCheckin } from "./checkin";
@@ -130,6 +131,11 @@ export default {
         // 번호표(대기순번)·호출 — 권한은 핸들러 내부(학생/강사 구분).
         if (p.startsWith("/api/queue")) {
           const res = await handleQueue(env, request, p, await readSession(env, request));
+          if (res) return res;
+        }
+        // 대시보드 '하원' 공유 상태 — 강사 기기 간 동기화(과목 scope별).
+        if (p.startsWith("/api/checkout")) {
+          const res = await handleCheckout(env, request, p, await readSession(env, request));
           if (res) return res;
         }
 
@@ -309,6 +315,24 @@ export default {
           if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
           return await rosterSlotsUpdate(env, request);
         }
+        // 통합 시간표 '초안' — 블록 샌드박스 배치를 저장/불러오기(설계용). 실제 시간표는 안 건드림. 스태프 공통.
+        if (p === "/api/timetable-draft") {
+          const me = await readSession(env, request);
+          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
+          await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_timetable_draft (id TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL DEFAULT 0)").run().catch(() => {});
+          if (request.method === "GET") {
+            const row = await env.DB.prepare("SELECT data, updated_at FROM class_timetable_draft WHERE id='default'").first<{ data: string; updated_at: number }>().catch(() => null);
+            let data: unknown = null;
+            try { data = row?.data ? JSON.parse(row.data) : null; } catch { data = null; }
+            return json({ data, updatedAt: Number(row?.updated_at ?? 0) });
+          }
+          if (request.method === "POST") {
+            const body = await request.text();
+            if (body.length > 1_000_000) return json({ error: "too_large" }, 413);
+            await env.DB.prepare("INSERT INTO class_timetable_draft(id,data,updated_at) VALUES('default',?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at").bind(body, Date.now()).run();
+            return json({ ok: true });
+          }
+        }
         // 학년 일괄: 생년월일 자동채움 · 전체 승급 · 일괄 되돌리기(원장 전용).
         if ((p === "/api/roster/grade-fill" || p === "/api/roster/promote" || p === "/api/roster/grade-bulk") && request.method === "POST") {
           const me = await readSession(env, request);
@@ -451,6 +475,27 @@ export default {
           if (res) return res;
         }
 
+        // ---- 알림장(수학 일일 메모) — 강사 저장/조회, 학생은 본인 것만 조회 ----
+        if (p === "/api/classnote") {
+          const me = await readSession(env, request);
+          if (!me) return json({ error: "forbidden" }, 403);
+          return await handleClassNote(env, request, me);
+        }
+
+        // ---- 알림장 공지(여러 명·전체 대상 + 마감일) — 강사 작성/삭제, 학생은 본인 활성 공지 조회 ----
+        if (p === "/api/alim") {
+          const me = await readSession(env, request);
+          if (!me) return json({ error: "forbidden" }, 403);
+          return await handleAlim(env, request, me);
+        }
+
+        // ---- 반복 시험 예약 규칙(주간test·KTC) — 강사 전용 ----
+        if (p === "/api/test-rules") {
+          const me = await readSession(env, request);
+          if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
+          return await handleTestRules(env, request);
+        }
+
         // ---- 영어(신규) — 원장·영어 강사 전용 ----
         // 단, 통합 포인트 랭킹·포인트 항목은 수학/공통에서도 쓰는 공용 데이터라 권한을 완화한다.
         //  · /api/eng/ranking      : 수학+영어 합산 랭킹 → 로그인한 모든 사용자 열람
@@ -476,7 +521,7 @@ export default {
 
         // 수학 앱 핵심 데이터(로스터·기록·포인트) — 스태프(학생 제외) 로그인 필요.
         // (이전엔 무인증이라 PII 노출·무단 덮어쓰기 위험이 있었음)
-        if (p === "/api/data" || p === "/api/students" || p === "/api/students/hide" || p === "/api/points" || p === "/api/points/redeem") {
+        if (p === "/api/data" || p === "/api/students" || p === "/api/students/hide" || p === "/api/points" || p === "/api/points/redeem" || p === "/api/student-timetable") {
           const me = await readSession(env, request);
           if (!me || me.role === "student") return json({ error: "forbidden" }, 403);
         }
@@ -484,6 +529,8 @@ export default {
         if (p === "/api/points/redeem" && request.method === "POST") return await redeemRanking(env, request);
         if (p === "/api/data" && request.method === "GET") return json(await readSnapshot(env));
         if (p === "/api/data" && request.method === "PUT") return await putData(env, request);
+        // 시간표 전용 저장(학생 1명) — 전체저장(putData)이 stale 화면에 시간표를 되돌리던 문제 차단.
+        if (p === "/api/student-timetable" && request.method === "POST") return await saveStudentTimetable(env, request);
         if (p === "/api/students" && request.method === "POST") return await postStudents(env, request);
         if (p === "/api/students/hide" && request.method === "POST") {
           const b = (await request.json()) as { id?: string };
@@ -550,6 +597,8 @@ export default {
   async scheduled(event: ScheduledController, env: Env): Promise<void> {
     // 일일 브리핑은 지정된 크론에서만(매분 크론과 구분).
     if (event.cron === "0 4 * * *" || event.cron === "0 12 * * *") {
+      // 영어 시간표 적용일 승격 — 그 날(예: 7/1)이 되면 라이브로 안정 교체.
+      try { await promoteEngSchedules(env); } catch (e) { console.error("promoteEngSchedules failed", String(e)); }
       const slot: "noon" | "night" = event.cron === "0 4 * * *" ? "noon" : "night";
       try { await runBriefing(env, slot, true); } catch (e) { console.error("scheduled briefing failed", String(e)); }
       try { await flushKioskOutbox(env); } catch (e) { console.error("flushKioskOutbox failed", String(e)); }
@@ -686,6 +735,8 @@ async function ensureStudentMeta(env: Env): Promise<void> {
     // 과목별 첫 등원일 — 영수 동시 수강생은 수학·영어 첫 등원일이 다를 수 있어 따로 둔다.
     "ALTER TABLE class_student_meta ADD COLUMN math_start TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE class_student_meta ADD COLUMN eng_start TEXT NOT NULL DEFAULT ''",
+    // 수학 반 구분 — '' = 학년으로 자동(초1~3 저학년/초4~6 고학년/중고등), 'low'/'high'로 직접 지정.
+    "ALTER TABLE class_student_meta ADD COLUMN math_class TEXT NOT NULL DEFAULT ''",
   ]) {
     try {
       await env.DB.prepare(col).run();
@@ -715,6 +766,7 @@ interface RosterStudent {
   checkinNo: string; // 등하원 키오스크 출석번호(학원이 부여)
   mathStart: string; // 수학 첫 등원일
   engStart: string; // 영어 첫 등원일
+  mathClass: string; // 수학 반: "" 자동(학년 기준) | "low" 초등 저학년 | "high" 초등 고학년
   mathSlots: Slot[]; // 수학 수업 요일·시간 (class_lessons 공유 — 수학 앱과 양방향)
   engSlots: Slot[]; // 영어 수업 요일·시간 (class_eng_lessons)
 }
@@ -732,11 +784,11 @@ async function readRoster(env: Env): Promise<RosterStudent[]> {
     )
     .all<Record<string, unknown>>();
 
-  const metaMap: Record<string, { online_id: string; subjects: string; english_band: string; attend_days?: string; memo?: string; photo?: string; checkin_no?: string; math_start?: string; eng_start?: string }> = {};
+  const metaMap: Record<string, { online_id: string; subjects: string; english_band: string; attend_days?: string; memo?: string; photo?: string; checkin_no?: string; math_start?: string; eng_start?: string; math_class?: string }> = {};
   try {
     const m = await env.DB
-      .prepare("SELECT student_id, online_id, subjects, english_band, attend_days, memo, photo, checkin_no, math_start, eng_start FROM class_student_meta")
-      .all<{ student_id: string; online_id: string; subjects: string; english_band: string; attend_days: string; memo: string; photo: string; checkin_no: string; math_start: string; eng_start: string }>();
+      .prepare("SELECT student_id, online_id, subjects, english_band, attend_days, memo, photo, checkin_no, math_start, eng_start, math_class FROM class_student_meta")
+      .all<{ student_id: string; online_id: string; subjects: string; english_band: string; attend_days: string; memo: string; photo: string; checkin_no: string; math_start: string; eng_start: string; math_class: string }>();
     for (const r of m.results || []) metaMap[String(r.student_id)] = r;
   } catch {
     /* meta 없으면 기본값 */
@@ -744,6 +796,8 @@ async function readRoster(env: Env): Promise<RosterStudent[]> {
 
   // 과목별 수업 슬롯 — 수학(class_lessons, 수학 앱과 공유)·영어(class_eng_lessons).
   await ensureEngLessons(env);
+  await ensureSchedulesTable(env);
+  await promoteEngSchedules(env); // 적용일이 된 영어 시간표를 라이브로 승격(7/1 등). 라이브가 항상 '오늘 유효'.
   const mathSlotMap: Record<string, Slot[]> = {};
   const engSlotMap: Record<string, Slot[]> = {};
   try {
@@ -790,6 +844,7 @@ async function readRoster(env: Env): Promise<RosterStudent[]> {
       checkinNo: meta?.checkin_no || "",
       mathStart: meta?.math_start || "",
       engStart: meta?.eng_start || "",
+      mathClass: meta?.math_class || "",
       mathSlots: mathSlotMap[id] || [],
       engSlots: engSlotMap[id] || [],
     };
@@ -818,6 +873,7 @@ async function rosterMetaUpsert(env: Env, request: Request): Promise<Response> {
     checkinNo?: string;
     mathStart?: string;
     engStart?: string;
+    mathClass?: string;
   };
   const sid = String(b.studentId || "");
   if (!sid) return json({ error: "studentId_required" }, 400);
@@ -831,11 +887,12 @@ async function rosterMetaUpsert(env: Env, request: Request): Promise<Response> {
   const checkinNo = typeof b.checkinNo === "string" ? b.checkinNo.trim().slice(0, 20) : "";
   const mathStart = typeof b.mathStart === "string" ? b.mathStart.slice(0, 20) : "";
   const engStart = typeof b.engStart === "string" ? b.engStart.slice(0, 20) : "";
+  const mathClass = b.mathClass === "low" || b.mathClass === "high" ? b.mathClass : "";
   await env.DB
     .prepare(
-      "INSERT INTO class_student_meta(student_id,online_id,subjects,english_band,attend_days,memo,photo,checkin_no,math_start,eng_start,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id) DO UPDATE SET online_id=excluded.online_id, subjects=excluded.subjects, english_band=excluded.english_band, attend_days=excluded.attend_days, memo=excluded.memo, photo=excluded.photo, checkin_no=excluded.checkin_no, math_start=excluded.math_start, eng_start=excluded.eng_start, updated_at=excluded.updated_at"
+      "INSERT INTO class_student_meta(student_id,online_id,subjects,english_band,attend_days,memo,photo,checkin_no,math_start,eng_start,math_class,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id) DO UPDATE SET online_id=excluded.online_id, subjects=excluded.subjects, english_band=excluded.english_band, attend_days=excluded.attend_days, memo=excluded.memo, photo=excluded.photo, checkin_no=excluded.checkin_no, math_start=excluded.math_start, eng_start=excluded.eng_start, math_class=excluded.math_class, updated_at=excluded.updated_at"
     )
-    .bind(sid, onlineId, JSON.stringify(subjects), band, JSON.stringify(attendDays), memo, photo, checkinNo, mathStart, engStart, Date.now())
+    .bind(sid, onlineId, JSON.stringify(subjects), band, JSON.stringify(attendDays), memo, photo, checkinNo, mathStart, engStart, mathClass, Date.now())
     .run();
   return json({ ok: true });
 }
@@ -1001,10 +1058,17 @@ async function rosterSlotsUpdate(env: Env, request: Request): Promise<Response> 
     studentId?: string;
     math?: { day?: string; time?: string; duration?: number }[];
     english?: { day?: string; time?: string; duration?: number }[];
+    mathEffFrom?: string; // 수학 시간표 적용 시작일(YYYY-MM-DD) — 이 날부터 새 시간표, 이전은 옛 시간표 유지
+    engEffFrom?: string; // 영어 시간표 적용 시작일(YYYY-MM-DD) — 이 날부터 새 시간표, 이전은 옛 시간표 유지
+    mathOn?: boolean; // 이 학생이 수학 수강 중인지(과목 체크). 꺼져 있으면 기본은 기존 시간표 '보존'.
+    engOn?: boolean; // 영어 수강 여부.
+    clearMath?: boolean; // 수학 과목을 끄며 '시간표 삭제'를 사용자가 명시적으로 확인했을 때만 true.
+    clearEnglish?: boolean; // 영어 시간표 삭제 확인.
   };
   const sid = String(b.studentId || "");
   if (!sid || !/^\d+$/.test(sid)) return json({ error: "studentId_required" }, 400);
   await ensureEngLessons(env);
+  await ensureSchedulesTable(env);
   const clean = (arr: unknown): Slot[] =>
     (Array.isArray(arr) ? arr : [])
       .map((l) => {
@@ -1014,19 +1078,97 @@ async function rosterSlotsUpdate(env: Env, request: Request): Promise<Response> 
       .filter((l) => DOW.includes(l.day) && /^\d{1,2}:\d{2}$/.test(l.time));
   const math = clean(b.math);
   const eng = clean(b.english);
+  const effFrom = typeof b.mathEffFrom === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.mathEffFrom) ? b.mathEffFrom : "";
+  const engEffFrom = typeof b.engEffFrom === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.engEffFrom) ? b.engEffFrom : "";
+  // 데이터 보호: 과목 수강 여부. 플래그가 없는(구버전) 호출은 보낸 슬롯 유무로 추정.
+  const mathOn = typeof b.mathOn === "boolean" ? b.mathOn : math.length > 0;
+  const engOn = typeof b.engOn === "boolean" ? b.engOn : eng.length > 0;
+  // '삭제'는 사용자가 과목을 끄며 명시적으로 확인했을 때(clearX=true)만 수행한다.
+  const clearMath = b.clearMath === true;
+  const clearEnglish = b.clearEnglish === true;
+
+  // 현재 수학 시간표를 읽어 실제로 바뀌었는지 본다.
+  //  → 수학 시간표가 그대로면(예: 영어만 수정) 수학 class_lessons·이력(class_schedules)은 전혀 건드리지 않는다.
+  //    (예전엔 영어만 고쳐도 수학 이력을 지워, 예약해 둔 시간표 변경이 사라지는 문제가 있었음)
+  type Ver = { from: string; lessons: Slot[] };
+  const oldRes = await env.DB.prepare("SELECT day,time,duration FROM class_lessons WHERE student_id=? ORDER BY sort_order").bind(sid).all<{ day: string; time: string; duration: number }>();
+  const oldLessons: Slot[] = (oldRes.results || []).map((r) => ({ day: String(r.day), time: String(r.time), duration: Number(r.duration) }));
+  const mathChanged = JSON.stringify(oldLessons) !== JSON.stringify(math);
+
   const stmts: D1PreparedStatement[] = [];
-  stmts.push(env.DB.prepare("DELETE FROM class_lessons WHERE student_id=?").bind(sid));
-  math.forEach((l, i) =>
-    stmts.push(
-      env.DB.prepare("INSERT INTO class_lessons(id,student_id,day,time,duration,sort_order) VALUES(?,?,?,?,?,?)").bind(`${sid}-${i}`, sid, l.day, l.time, l.duration, i)
-    )
-  );
-  stmts.push(env.DB.prepare("DELETE FROM class_eng_lessons WHERE student_id=?").bind(sid));
-  eng.forEach((l, i) =>
-    stmts.push(
-      env.DB.prepare("INSERT INTO class_eng_lessons(id,student_id,day,time,duration) VALUES(?,?,?,?,?)").bind(`${sid}-e${i}`, sid, l.day, l.time, l.duration)
-    )
-  );
+  // 수학: 수강 중이면 기존대로(바뀐 경우만) 교체. 끈 경우엔 '삭제 확인(clearMath)'이 있을 때만 지우고,
+  //        아니면 class_lessons·이력을 전혀 건드리지 않는다(수학앱 공유 데이터 보호).
+  if (mathOn) {
+    if (mathChanged) {
+      let finalMath = math; // class_lessons에 저장할 현재(최신) 시간표
+      let history: Ver[] = []; // class_schedules에 저장할 다버전 이력(2개 이상일 때만)
+      // 적용 시작일이 있고, 옛 시간표가 있으면 그 날짜 전까지 옛 시간표를 이력으로 보존.
+      if (effFrom && oldLessons.length) {
+        let prev: Ver[] = [];
+        const schedRow = await env.DB.prepare("SELECT versions FROM class_schedules WHERE student_id=?").bind(sid).first<{ versions: string }>();
+        if (schedRow?.versions) { try { prev = JSON.parse(schedRow.versions) as Ver[]; } catch { prev = []; } }
+        if (!prev.length) {
+          const stu = await env.DB.prepare("SELECT start_date FROM students WHERE id=?").bind(sid).first<{ start_date: string }>();
+          prev = [{ from: String(stu?.start_date || "2000-01-01"), lessons: oldLessons }];
+        }
+        const past = prev.filter((v) => v.from < effFrom);
+        const hist = math.length ? [...past, { from: effFrom, lessons: math }] : past;
+        hist.sort((a, b) => (a.from < b.from ? -1 : 1));
+        history = hist;
+        finalMath = hist.length ? hist.reduce((a, c) => (c.from > a.from ? c : a)).lessons : [];
+      }
+      stmts.push(env.DB.prepare("DELETE FROM class_lessons WHERE student_id=?").bind(sid));
+      finalMath.forEach((l, i) =>
+        stmts.push(
+          env.DB.prepare("INSERT INTO class_lessons(id,student_id,day,time,duration,sort_order) VALUES(?,?,?,?,?,?)").bind(`${sid}-${i}`, sid, l.day, l.time, l.duration, i)
+        )
+      );
+      // 다버전 이력이 있으면(2개 이상) 보존, 없으면 stale 이력 삭제(되돌림 사고 방지).
+      stmts.push(env.DB.prepare("DELETE FROM class_schedules WHERE student_id=?").bind(sid));
+      if (history.length > 1) stmts.push(env.DB.prepare("INSERT INTO class_schedules(student_id,versions) VALUES(?,?)").bind(sid, JSON.stringify(history)));
+    }
+  } else if (clearMath) {
+    stmts.push(env.DB.prepare("DELETE FROM class_lessons WHERE student_id=?").bind(sid));
+    stmts.push(env.DB.prepare("DELETE FROM class_schedules WHERE student_id=?").bind(sid));
+  }
+  // 영어: 수강 중이면 (바뀐 경우만) 교체. 적용 시작일(engEffFrom)이 미래면 라이브는 '오늘 유효'(현재) 그대로 두고
+  //        새 시간표는 이력(class_eng_schedules)에만 보관 → 오늘·내일은 안 바뀌고, 그 날 자동 승격.
+  if (engOn) {
+    const oldEngRes = await env.DB.prepare("SELECT day,time,duration FROM class_eng_lessons WHERE student_id=?").bind(sid).all<{ day: string; time: string; duration: number }>();
+    const oldEng: Slot[] = (oldEngRes.results || []).map((r) => ({ day: String(r.day), time: String(r.time), duration: Number(r.duration) }));
+    const engChanged = JSON.stringify(oldEng) !== JSON.stringify(eng);
+    if (engChanged) {
+      let liveEng = eng; // 라이브(class_eng_lessons)에 저장할 '오늘 유효' 시간표
+      let engHistory: Ver[] = [];
+      // 적용 시작일이 있고 옛 시간표가 있으면, 그 날짜 전까지는 옛 시간표를 유지(이력 보존).
+      if (engEffFrom && oldEng.length) {
+        let prev: Ver[] = [];
+        const schedRow = await env.DB.prepare("SELECT versions FROM class_eng_schedules WHERE student_id=?").bind(sid).first<{ versions: string }>();
+        if (schedRow?.versions) { try { prev = JSON.parse(schedRow.versions) as Ver[]; } catch { prev = []; } }
+        if (!prev.length) {
+          const stu = await env.DB.prepare("SELECT start_date FROM students WHERE id=?").bind(sid).first<{ start_date: string }>();
+          prev = [{ from: String(stu?.start_date || "2000-01-01"), lessons: oldEng }];
+        }
+        const past = prev.filter((v) => v.from < engEffFrom);
+        const hist = eng.length ? [...past, { from: engEffFrom, lessons: eng }] : past;
+        hist.sort((a, b) => (a.from < b.from ? -1 : 1));
+        engHistory = hist;
+        // 라이브 = 오늘 기준 유효 버전(미래 버전은 라이브에 쓰지 않음 → 오늘 안전).
+        liveEng = effectiveVerLessons(hist, kstToday().date);
+      }
+      stmts.push(env.DB.prepare("DELETE FROM class_eng_lessons WHERE student_id=?").bind(sid));
+      liveEng.forEach((l, i) =>
+        stmts.push(env.DB.prepare("INSERT INTO class_eng_lessons(id,student_id,day,time,duration) VALUES(?,?,?,?,?)").bind(`${sid}-e${i}`, sid, l.day, l.time, l.duration))
+      );
+      // 이력은 미래 버전이 있을 때(2개 이상)만 보존. 없으면 stale 이력 제거.
+      stmts.push(env.DB.prepare("DELETE FROM class_eng_schedules WHERE student_id=?").bind(sid));
+      if (engHistory.length > 1) stmts.push(env.DB.prepare("INSERT INTO class_eng_schedules(student_id,versions) VALUES(?,?)").bind(sid, JSON.stringify(engHistory)));
+    }
+  } else if (clearEnglish) {
+    stmts.push(env.DB.prepare("DELETE FROM class_eng_lessons WHERE student_id=?").bind(sid));
+    stmts.push(env.DB.prepare("DELETE FROM class_eng_schedules WHERE student_id=?").bind(sid));
+  }
+  if (!stmts.length) return json({ ok: true, unchanged: true }); // 보호로 손댈 게 없으면 그대로 둔다.
   try {
     await env.DB.batch(stmts);
   } catch (e) {
@@ -1078,6 +1220,8 @@ async function adminOverview(env: Env, url: URL): Promise<Response> {
   type LA = { late: number; absent: number };
   const blank = (): Record<Cat, LA> => ({ math: { late: 0, absent: 0 }, elem: { late: 0, absent: 0 }, mid: { late: 0, absent: 0 } });
   const per: Record<string, Record<Cat, LA>> = {};
+  const reasonsPer: Record<string, string[]> = {}; // 학생별 결석 사유(날짜 + 사유)
+  const reasonSeen = new Set<string>();
   const seen = new Set<string>();
   const bandOf: Record<string, string> = {};
   for (const s of roster) bandOf[s.id] = s.englishBand;
@@ -1088,16 +1232,25 @@ async function adminOverview(env: Env, url: URL): Promise<Response> {
     if (st === "지각") { late++; (per[sid] ||= blank())[cat].late++; }
     else if (st === "결석" || st === "무단결석") { absent++; (per[sid] ||= blank())[cat].absent++; }
   };
+  const addReason = (sid: string, date: string, st: string, reason: string) => {
+    if ((st !== "결석" && st !== "무단결석") || !reason.trim()) return;
+    const k = sid + "|" + date + "|" + reason;
+    if (reasonSeen.has(k)) return;
+    reasonSeen.add(k);
+    (reasonsPer[sid] ||= []).push(`${date.slice(5)} ${reason.trim()}`);
+  };
   try {
-    const aRes = await env.DB.prepare("SELECT att_key,status FROM class_attendance WHERE att_key LIKE ?").bind(month + "%").all<Record<string, unknown>>();
+    const aRes = await env.DB.prepare("SELECT att_key,status,note FROM class_attendance WHERE att_key LIKE ?").bind(month + "%").all<Record<string, unknown>>();
     for (const r of aRes.results || []) {
       const parts = String(r.att_key).split("|");
       bump(parts[1], parts[0], String(r.status), "math");
+      addReason(parts[1], parts[0], String(r.status), String(r.note ?? ""));
     }
-    const eRes = await env.DB.prepare("SELECT student_id,date,att_status FROM class_eng_daily WHERE date LIKE ?").bind(month + "%").all<Record<string, unknown>>();
+    const eRes = await env.DB.prepare("SELECT student_id,date,att_status,absent_reason FROM class_eng_daily WHERE date LIKE ?").bind(month + "%").all<Record<string, unknown>>();
     for (const r of eRes.results || []) {
       const sid = String(r.student_id);
       bump(sid, String(r.date), String(r.att_status ?? ""), bandOf[sid] === "elem" ? "elem" : "mid");
+      addReason(sid, String(r.date), String(r.att_status ?? ""), String(r.absent_reason ?? ""));
     }
   } catch {
     /* ignore */
@@ -1105,7 +1258,7 @@ async function adminOverview(env: Env, url: URL): Promise<Response> {
   const tot = (c: Record<Cat, LA>) => c.math.late + c.math.absent + c.elem.late + c.elem.absent + c.mid.late + c.mid.absent;
   const perStudent = Object.keys(per)
     .filter((sid) => nameOf[sid])
-    .map((sid) => ({ id: sid, name: nameOf[sid], math: per[sid].math, elem: per[sid].elem, mid: per[sid].mid }))
+    .map((sid) => ({ id: sid, name: nameOf[sid], math: per[sid].math, elem: per[sid].elem, mid: per[sid].mid, reasons: reasonsPer[sid] || [] }))
     .sort((a, b) => tot(per[b.id]) - tot(per[a.id]));
 
   // 특이사항 — 수학·허브(class_notes)와 영어 수업기록(class_eng_daily.note)을 한데 모아 과목 라벨과 함께.
@@ -1136,6 +1289,25 @@ async function adminOverview(env: Env, url: URL): Promise<Response> {
         studentName: nameOf[sid] || "",
         author: "",
         body: String(r.note || ""),
+        createdAt: Number(r.updated_at || 0) || Date.parse(String(r.date) + "T00:00:00+09:00") || 0,
+        subject: band,
+      });
+    }
+  } catch {
+    /* ignore */
+  }
+  // 영어 결석 사유(class_eng_daily.absent_reason) — 출결기록에 적은 결석 사유를 원장 특이사항에 함께 모음.
+  try {
+    const arRes = await env.DB.prepare("SELECT student_id, date, absent_reason, att_status, updated_at FROM class_eng_daily WHERE absent_reason <> '' ORDER BY date DESC LIMIT 30").all<Record<string, unknown>>();
+    for (const r of arRes.results || []) {
+      const sid = String(r.student_id);
+      const band = bandOf[sid] === "elem" ? "초등영어" : "영어";
+      const st = String(r.att_status || "") || "결석";
+      notes.push({
+        studentId: sid,
+        studentName: nameOf[sid] || "",
+        author: "",
+        body: `${st} 사유: ${String(r.absent_reason || "")}`,
         createdAt: Number(r.updated_at || 0) || Date.parse(String(r.date) + "T00:00:00+09:00") || 0,
         subject: band,
       });
@@ -1442,6 +1614,162 @@ async function writeTimetable(env: Env, request: Request): Promise<Response> {
   return json({ ok: true, mathLessons: math.length, engLessons: eng.length, mathStudents: mathIds.length, engStudents: engIds.length });
 }
 
+/* ---------------- 알림장(수학 일일 메모) ----------------
+   학생·날짜별 1건. 강사가 작성, 학생은 본인 것만 조회. 스냅샷과 분리(전체저장 위험 회피). */
+let classNoteReady = false;
+async function ensureClassNote(env: Env): Promise<void> {
+  if (classNoteReady) return;
+  try {
+    await env.DB
+      .prepare("CREATE TABLE IF NOT EXISTS class_daily_note (student_id TEXT NOT NULL, date TEXT NOT NULL, memo TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(student_id,date))")
+      .run();
+  } catch {
+    /* ignore */
+  }
+  classNoteReady = true;
+}
+async function handleClassNote(env: Env, request: Request, me: SessionUser): Promise<Response> {
+  await ensureClassNote(env);
+  const url = new URL(request.url);
+  if (request.method === "GET") {
+    const date = url.searchParams.get("date") || "";
+    let sid = url.searchParams.get("student_id") || "";
+    if (me.role === "student") sid = me.sub; // 학생은 본인만
+    if (!sid || !date) return json({ error: "bad_input" }, 400);
+    const r = await env.DB.prepare("SELECT memo FROM class_daily_note WHERE student_id=? AND date=?").bind(sid, date).first<{ memo: string }>();
+    return json({ memo: String(r?.memo ?? "") });
+  }
+  if (request.method === "POST") {
+    if (me.role === "student") return json({ error: "forbidden" }, 403); // 작성은 강사만
+    const b = (await request.json().catch(() => ({}))) as { studentId?: string; date?: string; memo?: string };
+    const sid = String(b.studentId || "");
+    const date = String(b.date || "");
+    const memo = String(b.memo || "").slice(0, 2000);
+    if (!sid || !date) return json({ error: "bad_input" }, 400);
+    await env.DB
+      .prepare("INSERT INTO class_daily_note(student_id,date,memo,updated_at) VALUES(?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET memo=excluded.memo, updated_at=excluded.updated_at")
+      .bind(sid, date, memo, Date.now())
+      .run();
+    return json({ ok: true });
+  }
+  return json({ error: "method_not_allowed" }, 405);
+}
+
+/* ---------------- 알림장 공지(여러 명·전체 대상 + 마감일) ----------------
+   한 번에 여러 학생에게 같은 공지를 보냄(batch로 묶음). start_date~due_date 사이에만 보임
+   (due_date='' 이면 마감 없음). 강사 작성·삭제, 학생은 본인 활성 공지만 조회. 스냅샷과 분리. */
+let alimReady = false;
+async function ensureAlim(env: Env): Promise<void> {
+  if (alimReady) return;
+  try {
+    await env.DB
+      .prepare("CREATE TABLE IF NOT EXISTS class_alim (id TEXT PRIMARY KEY, batch TEXT NOT NULL DEFAULT '', student_id TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', start_date TEXT NOT NULL DEFAULT '', due_date TEXT NOT NULL DEFAULT '', author_name TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)")
+      .run();
+    await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_alim_student ON class_alim(student_id)").run();
+  } catch {
+    /* ignore */
+  }
+  alimReady = true;
+}
+async function handleAlim(env: Env, request: Request, me: SessionUser): Promise<Response> {
+  await ensureAlim(env);
+  const url = new URL(request.url);
+  // 활성 공지 = start_date <= date AND (due_date='' OR date <= due_date)
+  if (request.method === "GET") {
+    const date = url.searchParams.get("date") || kstToday().date;
+    if (me.role === "student") {
+      const r = await env.DB
+        .prepare("SELECT id, body, start_date, due_date, created_at FROM class_alim WHERE student_id=? AND start_date<=? AND (due_date='' OR due_date>=?) ORDER BY created_at DESC")
+        .bind(me.sub, date, date)
+        .all<Record<string, unknown>>();
+      return json({ notices: (r.results || []).map((x) => ({ id: String(x.id), body: String(x.body ?? ""), startDate: String(x.start_date ?? ""), dueDate: String(x.due_date ?? ""), createdAt: Number(x.created_at ?? 0) })) });
+    }
+    // 강사 — 그 날짜에 활성인 모든 공지(학생별 행). 프론트에서 batch로 묶어 표시.
+    const r = await env.DB
+      .prepare("SELECT id, batch, student_id, body, start_date, due_date, author_name, created_at FROM class_alim WHERE start_date<=? AND (due_date='' OR due_date>=?) ORDER BY created_at DESC")
+      .bind(date, date)
+      .all<Record<string, unknown>>();
+    return json({ notices: (r.results || []).map((x) => ({ id: String(x.id), batch: String(x.batch ?? ""), studentId: String(x.student_id ?? ""), body: String(x.body ?? ""), startDate: String(x.start_date ?? ""), dueDate: String(x.due_date ?? ""), authorName: String(x.author_name ?? ""), createdAt: Number(x.created_at ?? 0) })) });
+  }
+  if (request.method === "POST") {
+    if (me.role === "student") return json({ error: "forbidden" }, 403);
+    const b = (await request.json().catch(() => ({}))) as { studentIds?: unknown; body?: string; startDate?: string; dueDate?: string };
+    const ids = Array.isArray(b.studentIds) ? b.studentIds.map((x) => String(x)).filter(Boolean) : [];
+    const body = String(b.body || "").trim().slice(0, 2000);
+    const startDate = String(b.startDate || kstToday().date);
+    const dueDate = String(b.dueDate || "");
+    if (!ids.length || !body) return json({ error: "bad_input" }, 400);
+    const batch = "alb_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    const now = Date.now();
+    const author = me.name || "";
+    const stmt = env.DB.prepare("INSERT INTO class_alim(id,batch,student_id,body,start_date,due_date,author_name,created_at) VALUES(?,?,?,?,?,?,?,?)");
+    await env.DB.batch(ids.map((sid, i) => stmt.bind("ali_" + batch.slice(4) + "_" + i, batch, sid, body, startDate, dueDate, author, now)));
+    return json({ ok: true, batch, count: ids.length });
+  }
+  if (request.method === "DELETE") {
+    if (me.role === "student") return json({ error: "forbidden" }, 403);
+    const b = (await request.json().catch(() => ({}))) as { batch?: string; id?: string };
+    if (b.batch) await env.DB.prepare("DELETE FROM class_alim WHERE batch=?").bind(String(b.batch)).run();
+    else if (b.id) await env.DB.prepare("DELETE FROM class_alim WHERE id=?").bind(String(b.id)).run();
+    else return json({ error: "bad_input" }, 400);
+    return json({ ok: true });
+  }
+  return json({ error: "method_not_allowed" }, 405);
+}
+
+/* ---------------- 반복 시험 예약 규칙(주간test·KTC) ----------------
+   규칙 = {이름, 종류(weekly|ktc), 대상 학생}. 실제 예약(TestLog)은 프론트가 규칙대로 생성. */
+let testRuleReady = false;
+async function ensureTestRule(env: Env): Promise<void> {
+  if (testRuleReady) return;
+  try {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_test_rule (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT 'weekly', student_ids TEXT NOT NULL DEFAULT '[]', active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL DEFAULT 0)").run();
+    for (const col of [
+      "ALTER TABLE class_test_rule ADD COLUMN day TEXT NOT NULL DEFAULT 'auto'",
+      "ALTER TABLE class_test_rule ADD COLUMN def_range TEXT NOT NULL DEFAULT ''", // 단원 미리 입력(선택)
+      "ALTER TABLE class_test_rule ADD COLUMN until_date TEXT NOT NULL DEFAULT ''", // 반복 마감일('' = 계속)
+      "ALTER TABLE class_test_rule ADD COLUMN wom TEXT NOT NULL DEFAULT 'every'", // 주차: every|1|2|3|4|5
+    ]) { try { await env.DB.prepare(col).run(); } catch { /* 이미 있음 */ } }
+  } catch { /* ignore */ }
+  testRuleReady = true;
+}
+async function handleTestRules(env: Env, request: Request): Promise<Response> {
+  await ensureTestRule(env);
+  if (request.method === "GET") {
+    const r = await env.DB.prepare("SELECT id,name,kind,student_ids,active,created_at,day,def_range,until_date,wom FROM class_test_rule ORDER BY created_at").all<Record<string, unknown>>();
+    const rules = (r.results || []).map((x) => ({
+      id: String(x.id), name: String(x.name ?? ""), kind: String(x.kind ?? "weekly"),
+      studentIds: (() => { try { const a = JSON.parse(String(x.student_ids ?? "[]")); return Array.isArray(a) ? a.map(String) : []; } catch { return []; } })(),
+      active: Number(x.active ?? 1) === 1, createdAt: Number(x.created_at ?? 0), day: String(x.day ?? "auto"),
+      range: String(x.def_range ?? ""), until: String(x.until_date ?? ""), wom: String(x.wom ?? "every"),
+    }));
+    return json({ rules });
+  }
+  if (request.method === "POST") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string; name?: string; kind?: string; studentIds?: unknown; active?: boolean; createdAt?: number; day?: string; range?: string; until?: string; wom?: string };
+    const id = String(b.id || "tr_" + Math.random().toString(36).slice(2, 10));
+    const name = String(b.name || "").slice(0, 60);
+    const kind = b.kind === "ktc" ? "ktc" : "weekly";
+    const ids = Array.isArray(b.studentIds) ? b.studentIds.map((x) => String(x)).filter(Boolean) : [];
+    const active = b.active === false ? 0 : 1;
+    const createdAt = Number(b.createdAt) || Date.now();
+    const day = ["월", "화", "수", "목", "금", "토", "일"].includes(String(b.day)) ? String(b.day) : "auto";
+    const range = String(b.range || "").slice(0, 120);
+    const until = /^\d{4}-\d{2}-\d{2}$/.test(String(b.until)) ? String(b.until) : "";
+    const wom = ["1", "2", "3", "4", "5"].includes(String(b.wom)) ? String(b.wom) : "every";
+    await env.DB.prepare("INSERT INTO class_test_rule(id,name,kind,student_ids,active,created_at,day,def_range,until_date,wom) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, student_ids=excluded.student_ids, active=excluded.active, day=excluded.day, def_range=excluded.def_range, until_date=excluded.until_date, wom=excluded.wom")
+      .bind(id, name, kind, JSON.stringify(ids), active, createdAt, day, range, until, wom).run();
+    return json({ ok: true, id });
+  }
+  if (request.method === "DELETE") {
+    const b = (await request.json().catch(() => ({}))) as { id?: string };
+    if (!b.id) return json({ error: "bad_input" }, 400);
+    await env.DB.prepare("DELETE FROM class_test_rule WHERE id=?").bind(String(b.id)).run();
+    return json({ ok: true });
+  }
+  return json({ error: "method_not_allowed" }, 405);
+}
+
 /* ---------------- 노션 매뉴얼/SNS 가져오기 ---------------- */
 function mapImportance(s: string): number {
   if (s.includes("핵심")) return 4;
@@ -1473,6 +1801,8 @@ async function importWiki(env: Env): Promise<Response> {
   } catch (e) {
     return json({ error: String(e) }, 500);
   }
+  // 데이터 보호: 노션이 빈 응답을 줬을 때(인증·필터·일시 오류 등) 기존 위키를 통째로 지우지 않는다.
+  if (!pages.length) return json({ ok: true, imported: 0, skipped: "empty_source" });
   // 노션 이미지(로고·스크린샷)를 R2로 옮겨 영구 URL로. 노션 원본 URL은 임시라 그대로 두면 곧 깨진다.
   let imgCount = 0;
   for (const p of pages) {
@@ -1869,6 +2199,8 @@ async function importSns(env: Env): Promise<Response> {
   } catch (e) {
     return json({ error: String(e) }, 500);
   }
+  // 데이터 보호: 노션이 빈 응답을 줬을 때(인증·필터·일시 오류 등) 기존 SNS를 통째로 지우지 않는다.
+  if (!pages.length) return json({ ok: true, imported: 0, skipped: "empty_source" });
   await env.DB.prepare("DELETE FROM class_sns WHERE src <> ''").run();
   const stmts: D1PreparedStatement[] = [];
   for (const p of pages) {
@@ -1894,12 +2226,68 @@ function defaultScope(role: Role): string[] {
   return [];
 }
 
+/** 버전 이력에서 그 날짜에 유효한(=from<=date 중 가장 늦은) 시간표를 고른다. 없으면 빈 배열. */
+function effectiveVerLessons(versions: { from: string; lessons: Slot[] }[], date: string): Slot[] {
+  let chosen: { from: string; lessons: Slot[] } | null = null;
+  for (const v of versions || []) {
+    if (typeof v?.from === "string" && v.from <= date && (!chosen || v.from > chosen.from)) chosen = v;
+  }
+  return chosen ? chosen.lessons || [] : [];
+}
+
+/** 영어 시간표 적용일 승격 — 라이브(class_eng_lessons)를 '오늘 유효' 버전으로 맞춘다(데이터 안전: 추가/교체만, 없는 걸 비우지 않음).
+ *  미래 버전이 그 날(예: 7/1)이 되면 자동 반영. 이력이 현재 1개만 남으면(미래 없음) 이력 행을 정리.
+ *  소비자(대시보드·봇·명단)는 라이브만 읽으므로 별도 수정 없이 안정적으로 교체된다. */
+async function promoteEngSchedules(env: Env): Promise<void> {
+  try {
+    const today = kstToday().date;
+    const rows = await env.DB.prepare("SELECT student_id, versions FROM class_eng_schedules").all<{ student_id: string; versions: string }>();
+    for (const row of rows.results || []) {
+      const sid = String(row.student_id);
+      let versions: { from: string; lessons: Slot[] }[] = [];
+      try { const v = JSON.parse(String(row.versions || "[]")); if (Array.isArray(v)) versions = v; } catch { versions = []; }
+      if (!versions.length) { await env.DB.prepare("DELETE FROM class_eng_schedules WHERE student_id=?").bind(sid).run().catch(() => {}); continue; }
+      const eff = effectiveVerLessons(versions, today); // 오늘 유효 시간표
+      const curRes = await env.DB.prepare("SELECT day,time,duration FROM class_eng_lessons WHERE student_id=?").bind(sid).all<{ day: string; time: string; duration: number }>();
+      const cur: Slot[] = (curRes.results || []).map((r) => ({ day: String(r.day), time: String(r.time), duration: Number(r.duration) }));
+      // 라이브가 이미 오늘 유효본과 같으면 아무것도 안 함(쓰기 없음).
+      if (JSON.stringify(cur) === JSON.stringify(eff)) {
+        // 미래 버전이 더 없으면(=오늘 이후 from 없음) 이력 행 정리 — 라이브에 이미 반영됨.
+        if (!versions.some((v) => v.from > today)) await env.DB.prepare("DELETE FROM class_eng_schedules WHERE student_id=?").bind(sid).run().catch(() => {});
+        continue;
+      }
+      // 라이브를 오늘 유효본으로 교체(승격).
+      const stmts: D1PreparedStatement[] = [env.DB.prepare("DELETE FROM class_eng_lessons WHERE student_id=?").bind(sid)];
+      eff.forEach((l, i) => stmts.push(env.DB.prepare("INSERT INTO class_eng_lessons(id,student_id,day,time,duration) VALUES(?,?,?,?,?)").bind(`${sid}-e${i}`, sid, l.day, l.time, l.duration)));
+      // 이력 정리: 과거 baseline 1개 + 미래만 남기고, 미래가 없으면 행 삭제.
+      const future = versions.filter((v) => v.from > today);
+      if (future.length) {
+        const baseline = { from: today, lessons: eff };
+        stmts.push(env.DB.prepare("UPDATE class_eng_schedules SET versions=? WHERE student_id=?").bind(JSON.stringify([baseline, ...future]), sid));
+      } else {
+        stmts.push(env.DB.prepare("DELETE FROM class_eng_schedules WHERE student_id=?").bind(sid));
+      }
+      await env.DB.batch(stmts).catch(() => {});
+    }
+  } catch {
+    /* 승격 실패는 무시 — 라이브는 그대로(안전) */
+  }
+}
+
 /* class_schedules / class_tests 테이블 자가 생성(마이그레이션 미적용이어도 동작하게).
    추가전용(IF NOT EXISTS) — 기존 데이터 무영향. */
 async function ensureSchedulesTable(env: Env): Promise<void> {
   try {
     await env.DB
       .prepare("CREATE TABLE IF NOT EXISTS class_schedules (student_id TEXT PRIMARY KEY, versions TEXT NOT NULL DEFAULT '[]')")
+      .run();
+  } catch {
+    /* ignore */
+  }
+  // 영어 시간표 적용일 버전 — 수학(class_schedules)과 동일 구조. 미래 버전을 보관하고, 라이브(class_eng_lessons)는 항상 '오늘 유효' 버전만.
+  try {
+    await env.DB
+      .prepare("CREATE TABLE IF NOT EXISTS class_eng_schedules (student_id TEXT PRIMARY KEY, versions TEXT NOT NULL DEFAULT '[]')")
       .run();
   } catch {
     /* ignore */
@@ -1996,6 +2384,23 @@ async function readNoHomework(env: Env): Promise<Set<string>> {
   } catch {
     return new Set();
   }
+}
+
+// 1:1 보충학습 테이블 — 보충명·학습내용·비고 컬럼은 나중에 추가(additive ALTER). 월말리포트 표 입력 저장용.
+let supplementReady = false;
+async function ensureSupplement(env: Env): Promise<void> {
+  if (supplementReady) return;
+  try {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_supplement (id TEXT PRIMARY KEY, student_id TEXT NOT NULL, date TEXT NOT NULL DEFAULT '', minutes INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)").run();
+  } catch { /* ignore */ }
+  for (const c of [
+    "ALTER TABLE class_supplement ADD COLUMN name TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_supplement ADD COLUMN content TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE class_supplement ADD COLUMN note TEXT NOT NULL DEFAULT ''",
+  ]) {
+    try { await env.DB.prepare(c).run(); } catch { /* 이미 있으면 무시 */ }
+  }
+  supplementReady = true;
 }
 
 /* ---------------- read (roster ⨝ class_* extras) ---------------- */
@@ -2199,13 +2604,13 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
   }
 
   // 보충수업(남은 분·사유) — 별도 쿼리 + try/catch(테이블 없어도 안전).
-  const supplements: { id: string; studentId: string; date: string; minutes: number; reason: string }[] = [];
+  const supplements: { id: string; studentId: string; date: string; minutes: number; reason: string; name: string; content: string; note: string }[] = [];
   try {
-    await env.DB.prepare("CREATE TABLE IF NOT EXISTS class_supplement (id TEXT PRIMARY KEY, student_id TEXT NOT NULL, date TEXT NOT NULL DEFAULT '', minutes INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)").run();
+    await ensureSupplement(env);
     const sRes = await env.DB.prepare("SELECT * FROM class_supplement ORDER BY date DESC").all();
     for (const r of sRes.results as Record<string, unknown>[]) {
       if (!rosterIds.has(String(r.student_id))) continue;
-      supplements.push({ id: String(r.id), studentId: String(r.student_id), date: String(r.date ?? ""), minutes: Number(r.minutes ?? 0), reason: String(r.reason ?? "") });
+      supplements.push({ id: String(r.id), studentId: String(r.student_id), date: String(r.date ?? ""), minutes: Number(r.minutes ?? 0), reason: String(r.reason ?? ""), name: String(r.name ?? ""), content: String(r.content ?? ""), note: String(r.note ?? "") });
     }
   } catch {
     /* class_supplement 없으면 빈 배열 */
@@ -2238,9 +2643,40 @@ async function readSnapshot(env: Env): Promise<DataSnapshot> {
 }
 
 /* ---------------- write (class_* only; roster never bulk-touched) ---------------- */
+/** 시간표 전용 저장(학생 1명) — class_lessons + 다버전 이력(class_schedules)을 그 학생만 교체.
+ *  StudentModal에서 시간표를 실제로 편집/생성할 때만 호출. 전체저장(putData)은 시간표를 더 이상 건드리지 않으므로
+ *  오래된 화면의 일반 저장이 다른 사람의 시간표를 되돌리지 못한다. */
+async function saveStudentTimetable(env: Env, request: Request): Promise<Response> {
+  await ensureSchedulesTable(env);
+  const b = (await request.json().catch(() => ({}))) as {
+    studentId?: string;
+    lessons?: { day?: string; time?: string; duration?: number }[];
+    schedule?: { from?: string; lessons?: { day?: string; time?: string; duration?: number }[] }[];
+  };
+  const sid = String(b.studentId || "");
+  if (!sid) return json({ error: "studentId_required" }, 400);
+  const cleanLessons = (arr: unknown): { day: string; time: string; duration: number }[] =>
+    (Array.isArray(arr) ? arr : [])
+      .map((l) => { const o = (l || {}) as { day?: string; time?: string; duration?: number }; return { day: String(o.day || ""), time: String(o.time || ""), duration: Number(o.duration) || 0 }; })
+      .filter((l) => DOW.includes(l.day) && /^\d{1,2}:\d{2}$/.test(l.time));
+  const lessons = cleanLessons(b.lessons);
+  const schedule = (Array.isArray(b.schedule) ? b.schedule : [])
+    .map((v) => ({ from: String(v?.from || ""), lessons: cleanLessons(v?.lessons) }))
+    .filter((v) => /^\d{4}-\d{2}-\d{2}$/.test(v.from));
+  const stmts: D1PreparedStatement[] = [];
+  stmts.push(env.DB.prepare("DELETE FROM class_lessons WHERE student_id=?").bind(sid));
+  lessons.forEach((l, i) => stmts.push(env.DB.prepare("INSERT INTO class_lessons(id,student_id,day,time,duration,sort_order) VALUES(?,?,?,?,?,?)").bind(`${sid}-${i}`, sid, l.day, l.time, l.duration, i)));
+  stmts.push(env.DB.prepare("DELETE FROM class_schedules WHERE student_id=?").bind(sid));
+  // 다버전 이력이 있을 때만 보관(단일 버전은 class_lessons로 충분).
+  if (schedule.length > 1) stmts.push(env.DB.prepare("INSERT INTO class_schedules(student_id,versions) VALUES(?,?)").bind(sid, JSON.stringify(schedule)));
+  try { await env.DB.batch(stmts); } catch (e) { return json({ error: String(e) }, 500); }
+  return json({ ok: true });
+}
+
 async function putData(env: Env, request: Request): Promise<Response> {
   const snap = (await request.json()) as DataSnapshot;
   await ensureSchedulesTable(env); // 테이블 없어도 저장이 통째로 실패하지 않게
+  await ensureSupplement(env); // 보충 보충명·학습내용·비고 컬럼 보장(배치 밖에서 ALTER)
   // 업무보드 hub 전용 컬럼(담당자·우선순위·원장전용)은 수학 스냅샷에 없다.
   // 스냅샷 저장 때 통째로 덮어쓰면 사라지므로, 기존 값을 미리 읽어 보존한다.
   const prevTaskHub = new Map<string, { assignee: string; priority: string; adminOnly: number; assignDate: string }>();
@@ -2255,10 +2691,10 @@ async function putData(env: Env, request: Request): Promise<Response> {
   // 추가한 기록을 stale 스냅샷이 덮어쓰지 못하게 한다.
   // 시간표(lessons)·시간표이력(schedules)은 학생별 재구성이라 그대로 전체 교체.
   // class_student_overrides 는 전체 삭제하지 않는다(허브 '앱 소유' 표시 보존).
-  const stmts: D1PreparedStatement[] = [
-    env.DB.prepare("DELETE FROM class_lessons"),
-    env.DB.prepare("DELETE FROM class_schedules"),
-  ];
+  // 시간표(class_lessons)·시간표이력(class_schedules)도 전체 삭제하지 않는다.
+  //  → 스냅샷에 들어 있는 학생만 아래 루프에서 학생별로 교체(delete+insert).
+  //  (이전엔 전체 DELETE 후 재생성이라, 비어있는/일부 스냅샷이 저장되면 모든 학생 시간표가 날아갔다.)
+  const stmts: D1PreparedStatement[] = [];
 
   // 강사 업무 보드 카드 — hub 전용 컬럼은 기존 값 보존(수학 스냅샷엔 없음).
   for (const k of snap.tasks || []) {
@@ -2320,13 +2756,12 @@ async function putData(env: Env, request: Request): Promise<Response> {
     );
   }
 
-  // 보충수업(남은 분·사유) — 테이블 보장 후 upsert.
-  stmts.push(env.DB.prepare("CREATE TABLE IF NOT EXISTS class_supplement (id TEXT PRIMARY KEY, student_id TEXT NOT NULL, date TEXT NOT NULL DEFAULT '', minutes INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0)"));
+  // 보충수업(남은 분·사유 + 보충명·학습내용·비고) — 컬럼은 putData 시작 시 ensureSupplement로 보장됨.
   for (const sp of snap.supplements || []) {
     stmts.push(
       env.DB
-        .prepare("INSERT INTO class_supplement(id,student_id,date,minutes,reason,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET student_id=excluded.student_id,date=excluded.date,minutes=excluded.minutes,reason=excluded.reason")
-        .bind(sp.id, sp.studentId, sp.date || "", sp.minutes || 0, sp.reason || "", Date.now())
+        .prepare("INSERT INTO class_supplement(id,student_id,date,minutes,reason,name,content,note,created_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET student_id=excluded.student_id,date=excluded.date,minutes=excluded.minutes,reason=excluded.reason,name=excluded.name,content=excluded.content,note=excluded.note")
+        .bind(sp.id, sp.studentId, sp.date || "", sp.minutes || 0, sp.reason || "", sp.name || "", sp.content || "", sp.note || "", Date.now())
     );
   }
 
@@ -2350,21 +2785,8 @@ async function putData(env: Env, request: Request): Promise<Response> {
   }
 
   for (const s of snap.students) {
-    (s.lessons || []).forEach((l, i) => {
-      stmts.push(
-        env.DB
-          .prepare("INSERT INTO class_lessons(id,student_id,day,time,duration,sort_order) VALUES(?,?,?,?,?,?)")
-          .bind(`${s.id}-${i}`, s.id, l.day, l.time, l.duration, i)
-      );
-    });
-    // 시간표 변경 이력(버전)을 JSON으로 보관 — 단일 버전뿐이면 굳이 저장하지 않음
-    if (s.schedule && s.schedule.length > 1) {
-      stmts.push(
-        env.DB
-          .prepare("INSERT INTO class_schedules(student_id,versions) VALUES(?,?)")
-          .bind(s.id, JSON.stringify(s.schedule))
-      );
-    }
+    // 시간표(class_lessons·class_schedules)는 여기서 건드리지 않는다 — 오래된 화면의 일반 저장이
+    // 다른 사람의 시간표를 되돌리던 문제를 막기 위해, 시간표는 StudentModal이 /api/student-timetable로만 저장.
     // 앱에서 인라인 수정한 '앱 소유' 필드 목록 — 노션 동기화가 덮어쓰지 않게 보관.
     // 전체 삭제 대신 병합(upsert)해 기존 표시를 보존한다.
     if (s.appEdited && s.appEdited.length) {
@@ -2468,9 +2890,11 @@ async function postStudents(env: Env, request: Request): Promise<Response> {
   const name = (b.name || "").trim();
   if (!name) return json({ error: "name_required" }, 400);
 
-  // link to an existing roster student with the same name, else insert. Then
-  // set academic columns. Never touches points/photo_url/notion_page_id.
-  const existing = await env.DB.prepare("SELECT id FROM students WHERE name = ?").bind(name).first<{ id: number }>();
+  // link to an existing roster student with the same name AND birthdate(=같은 사람), else insert.
+  // 이름만 같고 생년월일이 다르면(=동명이인) 새 학생으로 추가한다. 생년월일이 둘 다 비어 있으면 이름만으로 연결.
+  // 핵심 학적 컬럼만 세팅. points/photo_url/notion_page_id는 건드리지 않음.
+  const bd = (b.birthdate || "").trim();
+  const existing = await env.DB.prepare("SELECT id FROM students WHERE name = ? AND IFNULL(birth_date,'') = ?").bind(name, bd).first<{ id: number }>();
   let id: number;
   if (existing) {
     id = existing.id;

@@ -6,6 +6,16 @@ import type { Env } from "./index";
 import type { SessionUser } from "./auth";
 import { kstToday } from "./briefing";
 import { baseballBoardFor } from "./baseball";
+import { sendKakao } from "./kakao";
+import { ensureHubTables } from "./hub";
+
+/** YYYY-MM-DD에 n일 더한 날짜(UTC 기준 날짜 연산 — 문자열 비교용). */
+function addDaysYmd(ymd: string, n: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -106,6 +116,8 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "CREATE TABLE IF NOT EXISTS class_eng_curriculum (student_id TEXT PRIMARY KEY, items TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL DEFAULT 0)",
     // 학생이 직접 추가하는 '내가 추가한 학습'(강사 커리큘럼과 분리 — 강사 것을 덮지 않음).
     "CREATE TABLE IF NOT EXISTS class_eng_curriculum_self (student_id TEXT PRIMARY KEY, items TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL DEFAULT 0)",
+    // 학생 화면 '바로가기' 링크 — 그날 일지(날짜별)에 붙는 링크 [{name,url}]. (student_id,date) 1건. 강사 편집.
+    "CREATE TABLE IF NOT EXISTS class_eng_daily_links (student_id TEXT NOT NULL, date TEXT NOT NULL, links TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(student_id, date))",
     // '오늘 한 것' 학생별 추가 항목(전체공통은 class_config). 학생-1건, items JSON 배열.
     "CREATE TABLE IF NOT EXISTS class_eng_done_items (student_id TEXT PRIMARY KEY, items TEXT NOT NULL DEFAULT '[]')",
     // 내신기간 모드 — 학생별 ON/OFF + 기간(시작·종료) + 학교·시험일(D-day). 기간 안에서만 '오늘' 숙제가 자유입력+배부자료 기준으로 바뀐다.
@@ -160,6 +172,8 @@ export async function ensureEngTables(env: Env): Promise<void> {
     "ALTER TABLE class_eng_naesin ADD COLUMN grade TEXT NOT NULL DEFAULT ''",
     // 교재 완료일 — 수학 진도·교재관리와 동일. status='완료'로 바뀐 날.
     "ALTER TABLE class_eng_progress ADD COLUMN end_date TEXT NOT NULL DEFAULT ''",
+    // 초등 '오늘뭐해요' 항목별 범위(학생/강사 입력). {항목명: "범위/분량"} JSON. 완료여부는 done_items 재사용.
+    "ALTER TABLE class_eng_daily ADD COLUMN cur_ranges TEXT NOT NULL DEFAULT '{}'",
   ]) {
     try {
       await env.DB.prepare(a).run();
@@ -282,7 +296,21 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
     else if (date) q = env.DB.prepare("SELECT * FROM class_eng_daily WHERE date=?").bind(date);
     else q = env.DB.prepare("SELECT * FROM class_eng_daily ORDER BY date DESC LIMIT 500");
     const r = await q.all<Record<string, unknown>>();
-    return json({ daily: (r.results || []).map(dailyRow) });
+    const daily = (r.results || []).map(dailyRow);
+    // 그날 일지 링크(날짜별) 붙이기 — 학생별 조회면 그 학생, 날짜별 조회면 그 날짜 기준.
+    try {
+      let lq;
+      if (sid) lq = env.DB.prepare("SELECT student_id, date, links FROM class_eng_daily_links WHERE student_id=?").bind(sid);
+      else if (date) lq = env.DB.prepare("SELECT student_id, date, links FROM class_eng_daily_links WHERE date=?").bind(date);
+      else lq = env.DB.prepare("SELECT student_id, date, links FROM class_eng_daily_links");
+      const lr = await lq.all<{ student_id: string; date: string; links: string }>();
+      const map = new Map<string, { name: string; url: string }[]>();
+      for (const x of lr.results || []) map.set(String(x.student_id) + "|" + String(x.date), parseLinks(x.links));
+      for (const row of daily) (row as { studentId: string; date: string; links?: unknown }).links = map.get(row.studentId + "|" + row.date) || [];
+    } catch {
+      /* 링크 테이블 없으면 생략 */
+    }
+    return json({ daily });
   }
   if (p === "/api/eng/daily" && m === "POST") {
     const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -327,13 +355,23 @@ export async function handleEng(env: Env, request: Request, p: string, me: Sessi
           .filter((x) => x.text)
           .slice(0, 60)
       : [];
-    const hwItems = JSON.stringify({ assign: hwAssign, check: hwCheck, hwNone: !!b.hwNone, testNone: !!b.testNone });
+    const carryHidden = Array.isArray(b.carryHidden) ? (b.carryHidden as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 60) : [];
+    const hwItems = JSON.stringify({ assign: hwAssign, check: hwCheck, carryHidden, hwNone: !!b.hwNone, testNone: !!b.testNone });
     await env.DB
       .prepare(
-        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,makeup,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,book_no,book_next,word_test,done_items,comment,hw_comment,materials,hw_items,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, makeup=excluded.makeup, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, book_no=excluded.book_no, book_next=excluded.book_next, word_test=excluded.word_test, done_items=excluded.done_items, comment=excluded.comment, hw_comment=excluded.hw_comment, materials=excluded.materials, hw_items=excluded.hw_items, updated_at=excluded.updated_at"
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,late_min,absent_reason,makeup,goals,homework,hw_checked,hw_word,hw_reading,hw_grammar,wrong_check,attitude,point_reasons,points,note,book_no,book_next,word_test,done_items,comment,hw_comment,materials,hw_items,cur_ranges,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET attended=excluded.attended, att_status=excluded.att_status, late_min=excluded.late_min, absent_reason=excluded.absent_reason, makeup=excluded.makeup, goals=excluded.goals, homework=excluded.homework, hw_checked=excluded.hw_checked, hw_word=excluded.hw_word, hw_reading=excluded.hw_reading, hw_grammar=excluded.hw_grammar, wrong_check=excluded.wrong_check, attitude=excluded.attitude, point_reasons=excluded.point_reasons, points=excluded.points, note=excluded.note, book_no=excluded.book_no, book_next=excluded.book_next, word_test=excluded.word_test, done_items=excluded.done_items, comment=excluded.comment, hw_comment=excluded.hw_comment, materials=excluded.materials, hw_items=excluded.hw_items, cur_ranges=excluded.cur_ranges, updated_at=excluded.updated_at"
       )
-      .bind(sid, date, attended, status, lateMin, reason, makeup, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwW, hwR, hwG, b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(autoReasons), points, String(b.note || ""), String(b.bookNo || ""), String(b.bookNext || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.comment || ""), String(b.hwComment || ""), String(b.materials || ""), hwItems, Date.now())
+      .bind(sid, date, attended, status, lateMin, reason, makeup, goals, String(b.homework || ""), b.hwChecked ? 1 : 0, hwW, hwR, hwG, b.wrongCheck ? 1 : 0, String(b.attitude || ""), JSON.stringify(autoReasons), points, String(b.note || ""), String(b.bookNo || ""), String(b.bookNext || ""), String(b.wordTest || ""), JSON.stringify(doneItems), String(b.comment || ""), String(b.hwComment || ""), String(b.materials || ""), hwItems, JSON.stringify(b.curRanges && typeof b.curRanges === "object" ? b.curRanges : {}), Date.now())
       .run();
+    // 그날 일지 바로가기 링크 — 별도 테이블에 (학생,날짜)별로 저장. b.links가 올 때만 갱신(다른 저장에서 안 건드림).
+    if (b.links !== undefined) {
+      const dayLinks = cleanLinks(b.links);
+      await env.DB
+        .prepare("INSERT INTO class_eng_daily_links(student_id,date,links,updated_at) VALUES(?,?,?,?) ON CONFLICT(student_id,date) DO UPDATE SET links=excluded.links, updated_at=excluded.updated_at")
+        .bind(sid, date, JSON.stringify(dayLinks), Date.now())
+        .run()
+        .catch(() => {});
+    }
     // 결석 → 보강 관리로 연결: 같은 학생·결석일의 보강이 없으면 '예정'으로 자동 생성.
     if (status === "결석") {
       try {
@@ -603,6 +641,40 @@ function cleanRows(v: unknown): CurriculumRow[] {
     .slice(0, 30);
 }
 
+/** 학생 바로가기 링크 정리 — 안전한 스킴(http/https/mailto/tel)만, name·url 둘 다 있어야 저장. */
+function normalizeLinkUrl(raw: string): string {
+  const u = String(raw ?? "").trim();
+  if (!u) return "";
+  if (/^(https?:\/\/|mailto:|tel:)/i.test(u)) return u;
+  // 스킴 없이 도메인만 적었으면 https:// 를 붙여 준다. javascript: 등 위험 스킴은 거른다.
+  if (/^[a-z]+:/i.test(u)) return ""; // 알 수 없는 스킴은 차단
+  return "https://" + u;
+}
+function cleanLinks(v: unknown): { name: string; url: string }[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((x) => ({
+      name: String((x as Record<string, unknown>)?.name ?? "").trim().slice(0, 60),
+      url: normalizeLinkUrl(String((x as Record<string, unknown>)?.url ?? "")),
+    }))
+    .filter((r) => r.name && r.url)
+    .slice(0, 20);
+}
+function parseLinks(s: unknown): { name: string; url: string }[] {
+  try { return cleanLinks(JSON.parse(String(s ?? "[]"))); } catch { return []; }
+}
+/** 한 학생의 날짜별 그날-일지 링크 맵(date → links[]). */
+async function dailyLinksByStudent(env: Env, sid: string): Promise<Map<string, { name: string; url: string }[]>> {
+  const m = new Map<string, { name: string; url: string }[]>();
+  try {
+    const r = await env.DB.prepare("SELECT date, links FROM class_eng_daily_links WHERE student_id=?").bind(sid).all<{ date: string; links: string }>();
+    for (const row of r.results || []) m.set(String(row.date), parseLinks(row.links));
+  } catch {
+    /* 테이블 없으면 빈 맵 */
+  }
+  return m;
+}
+
 function parseCurriculum(s: unknown): Curriculum {
   try {
     const v = JSON.parse(String(s ?? ""));
@@ -622,6 +694,62 @@ function parseCurriculum(s: unknown): Curriculum {
     /* ignore */
   }
   return { note: "", sections: [] };
+}
+
+/** 한 학생의 수학 기록(읽기 전용) — 기존 수학 앱 테이블에서 그 학생 것만 모아 온다.
+ *  새 테이블 없이 출석·숙제·진도·시험·보강·등하원을 그대로 보여주기 위함. 항목별 실패는 무시. */
+async function readMathStudent(env: Env, sid: string): Promise<{
+  attendance: { date: string; status: string }[];
+  homework: { date: string; book: string; status: string; completion: number; memo: string; recheckDate: string }[];
+  progress: { unit: string; area: string; pct: number }[];
+  tests: { date: string; type: string; range: string; score: number; status: string }[];
+  makeups: { absentDate: string; makeupDate: string; makeupTime: string; status: string; memo: string }[];
+  checkin: { date: string; kind: string; subject: string; time: string }[];
+  noteToday: string;
+}> {
+  const out = {
+    attendance: [] as { date: string; status: string }[],
+    homework: [] as { date: string; book: string; status: string; completion: number; memo: string; recheckDate: string }[],
+    progress: [] as { unit: string; area: string; pct: number }[],
+    tests: [] as { date: string; type: string; range: string; score: number; status: string }[],
+    makeups: [] as { absentDate: string; makeupDate: string; makeupTime: string; status: string; memo: string }[],
+    checkin: [] as { date: string; kind: string; subject: string; time: string }[],
+    noteToday: "",
+  };
+  // 출석 — att_key "날짜|학생|시간". 구분자로 감싸 다른 학생 id와 안 섞이게.
+  try {
+    const r = await env.DB.prepare("SELECT att_key, status FROM class_attendance WHERE att_key LIKE ?").bind("%|" + sid + "|%").all<{ att_key: string; status: string }>();
+    for (const x of r.results || []) {
+      let st = String(x.status);
+      if (st === "present") st = "출석"; else if (st === "absent") st = "결석";
+      out.attendance.push({ date: String(x.att_key).split("|")[0], status: st });
+    }
+  } catch { /* 없으면 빈 배열 */ }
+  try {
+    const r = await env.DB.prepare("SELECT date, book, status, completion, memo, recheck_date FROM class_homework WHERE student_id=? ORDER BY date DESC LIMIT 150").bind(sid).all<{ date: string; book: string; status: string; completion: number; memo: string; recheck_date: string }>();
+    out.homework = (r.results || []).map((x) => ({ date: String(x.date ?? ""), book: String(x.book ?? ""), status: String(x.status ?? ""), completion: Number(x.completion ?? 0), memo: String(x.memo ?? ""), recheckDate: String(x.recheck_date ?? "") }));
+  } catch { /* ignore */ }
+  try {
+    const r = await env.DB.prepare("SELECT unit, area, pct FROM class_progress WHERE student_id=? ORDER BY updated_at DESC LIMIT 40").bind(sid).all<{ unit: string; area: string; pct: number }>();
+    out.progress = (r.results || []).map((x) => ({ unit: String(x.unit ?? ""), area: String(x.area ?? ""), pct: Number(x.pct ?? 0) }));
+  } catch { /* ignore */ }
+  try {
+    const r = await env.DB.prepare("SELECT date, type, range_, score, status FROM class_tests WHERE student_id=? ORDER BY date DESC LIMIT 60").bind(sid).all<{ date: string; type: string; range_: string; score: number; status: string }>();
+    out.tests = (r.results || []).map((x) => ({ date: String(x.date ?? ""), type: String(x.type ?? ""), range: String(x.range_ ?? ""), score: Number(x.score ?? 0), status: x.status === "완료" ? "완료" : "예정" }));
+  } catch { /* ignore */ }
+  try {
+    const r = await env.DB.prepare("SELECT absent_date, makeup_date, makeup_time, status, memo FROM class_makeups WHERE student_id=?").bind(sid).all<{ absent_date: string; makeup_date: string; makeup_time: string; status: string; memo: string }>();
+    out.makeups = (r.results || []).map((x) => ({ absentDate: String(x.absent_date ?? ""), makeupDate: String(x.makeup_date ?? ""), makeupTime: String(x.makeup_time ?? ""), status: String(x.status ?? ""), memo: String(x.memo ?? "") }));
+  } catch { /* ignore */ }
+  try {
+    const r = await env.DB.prepare("SELECT date, kind, subject, time FROM class_checkin WHERE student_id=? ORDER BY date DESC, time DESC LIMIT 60").bind(sid).all<{ date: string; kind: string; subject: string; time: string }>();
+    out.checkin = (r.results || []).map((x) => ({ date: String(x.date ?? ""), kind: String(x.kind ?? ""), subject: String(x.subject ?? ""), time: String(x.time ?? "") }));
+  } catch { /* ignore */ }
+  try {
+    const r = await env.DB.prepare("SELECT memo FROM class_daily_note WHERE student_id=? AND date=?").bind(sid, kstToday().date).first<{ memo: string }>();
+    out.noteToday = String(r?.memo ?? "");
+  } catch { /* 알림장 테이블 없으면 빈 값 */ }
+  return out;
 }
 
 export async function handleStudent(env: Env, request: Request, p: string, me: SessionUser): Promise<Response | null> {
@@ -649,10 +777,14 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
 
     let band = "";
     let photo = "";
+    let mathClass = "";
+    let metaSubjects: string[] = [];
     try {
-      const meta = await env.DB.prepare("SELECT english_band, photo FROM class_student_meta WHERE student_id=?").bind(sid).first<{ english_band: string; photo: string }>();
+      const meta = await env.DB.prepare("SELECT english_band, photo, subjects, math_class FROM class_student_meta WHERE student_id=?").bind(sid).first<{ english_band: string; photo: string; subjects: string; math_class: string }>();
       band = String(meta?.english_band ?? "");
       photo = String(meta?.photo ?? "");
+      mathClass = String(meta?.math_class ?? "");
+      try { const s = JSON.parse(String(meta?.subjects ?? "[]")); if (Array.isArray(s)) metaSubjects = s.map(String); } catch { /* ignore */ }
     } catch {
       /* meta 없으면 기본값 */
     }
@@ -663,6 +795,23 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
       .all<{ day: string; time: string; duration: number }>();
     const engSlots = (slotsRes.results || []).map((r) => ({ day: String(r.day), time: String(r.time), duration: Number(r.duration) }));
 
+    // 수학 시간표(class_lessons — 수학 앱과 공유). 학생 수학 화면 시간표용.
+    let mathSlots: { day: string; time: string; duration: number }[] = [];
+    try {
+      const mRes = await env.DB
+        .prepare("SELECT day, time, duration FROM class_lessons WHERE student_id=? ORDER BY sort_order")
+        .bind(String(sid))
+        .all<{ day: string; time: string; duration: number }>();
+      mathSlots = (mRes.results || []).map((r) => ({ day: String(r.day), time: String(r.time), duration: Number(r.duration) }));
+    } catch {
+      /* 수학 수업 없으면 빈 배열 */
+    }
+
+    // 수강 과목 — 메타 우선, 없으면 수업시간 유무로 추론(영수 둘 다면 학생 화면에서 과목 선택).
+    const subjects: string[] = [...metaSubjects];
+    if (!subjects.includes("math") && mathSlots.length) subjects.push("math");
+    if (!subjects.includes("english") && (engSlots.length || band)) subjects.push("english");
+
     const curRow = await env.DB.prepare("SELECT items FROM class_eng_curriculum WHERE student_id=?").bind(sid).first<{ items: string }>();
     const curriculum = parseCurriculum(curRow?.items);
     const selfRow = await env.DB.prepare("SELECT items FROM class_eng_curriculum_self WHERE student_id=?").bind(sid).first<{ items: string }>();
@@ -670,6 +819,9 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
 
     const dRes = await env.DB.prepare("SELECT * FROM class_eng_daily WHERE student_id=? ORDER BY date DESC LIMIT 120").bind(sid).all<Record<string, unknown>>();
     const daily = (dRes.results || []).map(dailyRow);
+    // 그날 일지에 붙는 바로가기 링크(날짜별) — 같은 학생의 날짜별 링크를 일지에 붙여 준다.
+    const linkByDate = await dailyLinksByStudent(env, String(sid));
+    for (const row of daily) (row as { date: string; links?: unknown }).links = linkByDate.get(row.date) || [];
 
     // 배부된 자료(수업/숙제) — 해제(배부취소) 전까지 계속 보임. 학생·강사 동일하게 일지에 표시.
     let materials: { kind: string; name: string }[] = [];
@@ -729,11 +881,18 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
     // 수학 전광판(수학 야구) — 수학 수강생이면 점수판을, 아니면 null. 학생 화면 칩/모달용.
     const mathBoard = await baseballBoardFor(env, String(sid)).catch(() => null);
 
+    // 수학 학생 화면(읽기 전용) — 그 학생의 출석·숙제·진도·시험·보강·등하원을 기존 테이블에서 모아 온다.
+    // 각 항목은 try/catch로 분리(테이블이 없거나 조회 실패해도 페이지는 안 깨지게).
+    const math = subjects.includes("math") ? await readMathStudent(env, String(sid)) : null;
+
     return json({
       role: me.role,
       canEditCurriculum: canEditCurriculum(me),
       student: { id: String(sRow.id), name: String(sRow.name ?? ""), grade: String(sRow.grade ?? ""), school: String(sRow.school ?? ""), band, photo },
+      subjects,
+      mathClass,
       engSlots,
+      mathSlots,
       curriculum,
       selfCurriculum,
       daily,
@@ -741,8 +900,72 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
       progressBooks,
       examMode,
       mathBoard,
+      math,
       doneItemOptions: await doneItemsFor(env, sid),
     });
+  }
+
+  /* ---- 수업시간 변경 신청(학생) — 3일 전 + 어머님 확인 필수. 저장 후 카카오워크(수업 요약 채널)로 알림. ---- */
+  if (p === "/api/student/change-req" && m === "POST") {
+    const sid = me.sub; // 학생 본인
+    const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const fromDate = String(b.fromDate || "");
+    const toDate = String(b.toDate || "");
+    const fromTime = String(b.fromTime || "");
+    const toTime = String(b.toTime || "");
+    const reason = String(b.reason || "").slice(0, 500);
+    const parentOk = b.parentConfirmed === true;
+    if (!fromDate || !toDate || !fromTime || !toTime) return json({ error: "bad_input" }, 400);
+    if (!parentOk) return json({ error: "parent_required" }, 400);
+    // 최소 3일 전: 옮길 수업 날짜(fromDate)가 오늘+3 이상.
+    const minDate = addDaysYmd(kstToday().date, 3);
+    if (fromDate < minDate) return json({ error: "too_soon", minDate }, 400);
+
+    const sRow = await env.DB.prepare("SELECT name FROM students WHERE id=?").bind(Number(sid)).first<{ name: string }>();
+    const name = String(sRow?.name ?? "");
+    const reasonFull = "(어머님 확인 완료) " + reason;
+    await ensureHubTables(env);
+    // 승인자(받는 사람) = 수학 담당(없으면 원장). '변경요청' 화면 '받은 요청' 탭에 떠야 승인 가능.
+    let targetId = "", targetName = "";
+    try {
+      const tRow = await env.DB
+        .prepare("SELECT id, name FROM class_users WHERE role IN ('math','admin') ORDER BY CASE role WHEN 'math' THEN 0 ELSE 1 END LIMIT 1")
+        .first<{ id: string; name: string }>();
+      targetId = String(tRow?.id ?? "");
+      targetName = String(tRow?.name ?? "");
+    } catch { /* 사용자 테이블 조회 실패 시 빈 값 */ }
+    const id = newId("req");
+    const now = Date.now();
+    await env.DB
+      .prepare("INSERT INTO class_change_reqs(id,student_id,student_name,subject,change_date,from_date,to_date,from_time,to_time,reason,requester_id,requester_name,target_id,target_name,status,response,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(id, sid, name, "math", toDate, fromDate, toDate, fromTime, toTime, reasonFull, sid, name, targetId, targetName, "pending", "", now, now)
+      .run();
+
+    // 카카오워크 알림 — 수업 요약과 같은 채널(env.KAKAO_WEBHOOK_URL).
+    const text = `📋 수업시간 변경 요청\n학생: ${name}\n옮길 수업: ${fromDate} ${fromTime}\n→ 변경 희망: ${toDate} ${toTime}\n사유: ${reason || "(미작성)"}\n어머님 확인: 완료\n\n앱 '시간표 변경' 화면에서 승인/거절해 주세요.`;
+    const appUrl = env.APP_URL || "https://bakkum-class.dndsu2810.workers.dev";
+    await sendKakao(env, text, { label: "변경 요청 보기", url: appUrl }, "수업시간 변경 요청").catch(() => {});
+    return json({ ok: true, id });
+  }
+
+  /* ---- 내 변경 신청 목록(학생 본인) — 상태 확인용. ---- */
+  if (p === "/api/student/change-reqs" && m === "GET") {
+    await ensureHubTables(env);
+    const r = await env.DB
+      .prepare("SELECT id, from_date, to_date, from_time, to_time, reason, status, created_at FROM class_change_reqs WHERE requester_id=? AND subject='math' ORDER BY created_at DESC LIMIT 30")
+      .bind(me.sub)
+      .all<Record<string, unknown>>();
+    const reqs = (r.results || []).map((x) => ({
+      id: String(x.id),
+      fromDate: String(x.from_date ?? ""),
+      toDate: String(x.to_date ?? ""),
+      fromTime: String(x.from_time ?? ""),
+      toTime: String(x.to_time ?? ""),
+      reason: String(x.reason ?? ""),
+      status: String(x.status ?? "pending"),
+      createdAt: Number(x.created_at ?? 0),
+    }));
+    return json({ reqs });
   }
 
   /* ---- 일지 입력(학생 본인 또는 강사) — 학습 로그 칸만 저장, 출결은 건드리지 않음 ---- */
@@ -755,11 +978,11 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
     // 학생이 일지를 적으면 그 날 '출석'으로 간주(기존 출결값이 없을 때만 채움 — 강사 출결 보존).
     await env.DB
       .prepare(
-        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,book_no,done_items,start_time,end_time,student_note,updated_at) VALUES(?,?,1,'출석',?,?,?,?,?,?) " +
+        "INSERT INTO class_eng_daily(student_id,date,attended,att_status,book_no,done_items,start_time,end_time,student_note,cur_ranges,updated_at) VALUES(?,?,1,'출석',?,?,?,?,?,?,?) " +
           "ON CONFLICT(student_id,date) DO UPDATE SET attended=1, att_status=CASE WHEN class_eng_daily.att_status='' THEN '출석' ELSE class_eng_daily.att_status END, " +
-          "book_no=excluded.book_no, done_items=excluded.done_items, start_time=excluded.start_time, end_time=excluded.end_time, student_note=excluded.student_note, updated_at=excluded.updated_at"
+          "book_no=excluded.book_no, done_items=excluded.done_items, start_time=excluded.start_time, end_time=excluded.end_time, student_note=excluded.student_note, cur_ranges=excluded.cur_ranges, updated_at=excluded.updated_at"
       )
-      .bind(sid, date, String(b.bookNo || ""), JSON.stringify(doneItems), String(b.startTime || ""), String(b.endTime || ""), String(b.studentNote || ""), Date.now())
+      .bind(sid, date, String(b.bookNo || ""), JSON.stringify(doneItems), String(b.startTime || ""), String(b.endTime || ""), String(b.studentNote || ""), JSON.stringify(b.curRanges && typeof b.curRanges === "object" ? b.curRanges : {}), Date.now())
       .run();
     // 학습 목표 체크 — 학생/강사가 같은 목표를 공유(양방향). goals를 보낼 때만 갱신해 강사 목표를 덮어쓰지 않음.
     if (Array.isArray(b.goals)) {
@@ -771,17 +994,22 @@ export async function handleStudent(env: Env, request: Request, p: string, me: S
       const row = await env.DB.prepare("SELECT hw_items FROM class_eng_daily WHERE student_id=? AND date=?").bind(sid, date).first<{ hw_items: string }>();
       let curAssign: HwAssignItem[] = [];
       let curCheck: { text: string; status: string }[] = [];
+      let curHidden: string[] = [];
+      let curHwNone = false, curTestNone = false;
       try {
         const o = JSON.parse(String(row?.hw_items ?? "{}")) as Record<string, unknown>;
         curAssign = coerceHwAssign(o?.assign);
         if (Array.isArray(o?.check)) curCheck = (o.check as Record<string, unknown>[]).map((x) => ({ text: String(x?.text ?? ""), status: String(x?.status ?? "") })).filter((x) => x.text);
+        if (Array.isArray(o?.carryHidden)) curHidden = (o.carryHidden as unknown[]).map((x) => String(x).trim()).filter(Boolean);
+        curHwNone = !!o?.hwNone; curTestNone = !!o?.testNone;
       } catch { /* ignore */ }
       const hwSt = (v: unknown) => (["완료", "미흡", "안함", "없음"].includes(String(v)) ? String(v) : "");
       const assign = Array.isArray(b.hwAssign) ? coerceHwAssign(b.hwAssign) : curAssign;
       const check = Array.isArray(b.hwCheck)
         ? (b.hwCheck as { text?: unknown; status?: unknown }[]).map((x) => ({ text: String(x?.text ?? "").trim(), status: hwSt(x?.status) })).filter((x) => x.text).slice(0, 60)
         : curCheck;
-      await env.DB.prepare("UPDATE class_eng_daily SET hw_items=?, updated_at=? WHERE student_id=? AND date=?").bind(JSON.stringify({ assign, check }), Date.now(), sid, date).run();
+      const carryHidden = Array.isArray(b.carryHidden) ? (b.carryHidden as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 60) : curHidden;
+      await env.DB.prepare("UPDATE class_eng_daily SET hw_items=?, updated_at=? WHERE student_id=? AND date=?").bind(JSON.stringify({ assign, check, carryHidden, hwNone: curHwNone, testNone: curTestNone }), Date.now(), sid, date).run();
     }
     return json({ ok: true });
   }
@@ -869,6 +1097,7 @@ function dailyRow(r: Record<string, unknown>) {
   }
   let hwAssign: HwAssignItem[] = [];
   let hwCheck: { text: string; status: string }[] = [];
+  let carryHidden: string[] = [];
   let hwNone = false;
   let testNone = false;
   try {
@@ -876,6 +1105,7 @@ function dailyRow(r: Record<string, unknown>) {
     if (hi && typeof hi === "object") {
       hwAssign = coerceHwAssign(hi.assign);
       if (Array.isArray(hi.check)) hwCheck = hi.check.map((x: Record<string, unknown>) => ({ text: String(x?.text ?? ""), status: String(x?.status ?? "") })).filter((x: { text: string }) => x.text);
+      if (Array.isArray(hi.carryHidden)) carryHidden = hi.carryHidden.map((x: unknown) => String(x).trim()).filter(Boolean);
       hwNone = !!hi.hwNone;
       testNone = !!hi.testNone;
     }
@@ -905,6 +1135,7 @@ function dailyRow(r: Record<string, unknown>) {
     bookNext: String(r.book_next ?? ""),
     wordTest: String(r.word_test ?? ""),
     doneItems: (() => { try { const a = JSON.parse(String(r.done_items ?? "[]")); return Array.isArray(a) ? a.map(String) : []; } catch { return []; } })(),
+    curRanges: (() => { try { const o = JSON.parse(String(r.cur_ranges ?? "{}")); return o && typeof o === "object" ? (o as Record<string, string>) : {}; } catch { return {}; } })(),
     startTime: String(r.start_time ?? ""),
     endTime: String(r.end_time ?? ""),
     comment: String(r.comment ?? ""),
@@ -913,6 +1144,7 @@ function dailyRow(r: Record<string, unknown>) {
     materials: String(r.materials ?? ""),
     hwAssign,
     hwCheck,
+    carryHidden,
     hwNone,
     testNone,
     updatedAt: Number(r.updated_at ?? 0),

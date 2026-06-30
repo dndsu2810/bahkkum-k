@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { feedbackApi, type Notice } from "../lib/feedbackApi";
 import { postApi } from "../lib/postApi";
 import { sanitizeHtml } from "../lib/richText";
@@ -12,6 +12,40 @@ function dismissed(): Set<string> {
     return new Set();
   }
 }
+
+/** 공지 문구 — 한 줄을 넘기면 오른쪽→왼쪽으로 흐르는 슬라이드(마퀴), 짧으면 그대로 둔다.
+ *  넘칠 때만 두 벌을 이어 붙여 끊김 없이 반복하고, 마우스를 올리면 멈춰서 읽기 좋게. */
+function NoticeMarquee({ text }: { text: string }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const itemRef = useRef<HTMLSpanElement>(null);
+  const [scroll, setScroll] = useState(false);
+  const [dur, setDur] = useState(12);
+
+  useLayoutEffect(() => {
+    function measure() {
+      const wrap = wrapRef.current, item = itemRef.current;
+      if (!wrap || !item) return;
+      const itemW = item.scrollWidth - MQ_GAP; // 글자 폭(반복용 여백 제외)
+      const over = itemW > wrap.clientWidth + 4;
+      setScroll(over);
+      if (over) setDur(Math.max(8, Math.round(item.scrollWidth / 55))); // 약 55px/초로 일정 속도
+    }
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    return () => ro.disconnect();
+  }, [text]);
+
+  return (
+    <div className="notice-mq" ref={wrapRef}>
+      <div className={"notice-mq-track" + (scroll ? " run" : "")} style={scroll ? { animationDuration: `${dur}s` } : undefined}>
+        <span className="notice-mq-item" ref={itemRef}>{text}</span>
+        {scroll && <span className="notice-mq-item" aria-hidden="true">{text}</span>}
+      </div>
+    </div>
+  );
+}
+const MQ_GAP = 48; // .notice-mq-item padding-right(px)와 일치 — 반복 간격
 
 /** 공지 배너 — 활성 공지가 있을 때만 상단에 뜬다(없으면 렌더 안 함).
  *  배너를 누르면 본문 팝업(게시글이면 글 본문, 아니면 공지 문구). × 누르면 그 사람 화면에선 접힘. */
@@ -59,7 +93,8 @@ export function NoticeBanner() {
         setLoading(false);
       }
     } else {
-      setDetail({ title: "공지사항", text: n.text });
+      // 세부 내용을 따로 적었으면 그걸 본문으로, 없으면 배너 문구 그대로.
+      setDetail({ title: n.text, text: n.detail || n.text });
     }
   }
 
@@ -72,7 +107,7 @@ export function NoticeBanner() {
           {shown.map((n) => (
             <div key={n.id} className={"notice-band " + (n.level === "warn" ? "warn" : "info")} role="button" tabIndex={0} onClick={() => open(n)} onKeyDown={(e) => { if (e.key === "Enter") open(n); }} title="눌러서 자세히 보기">
               <span className="notice-ic"><Icon name="megaphone" /></span>
-              <span className="notice-text">{n.text}</span>
+              <NoticeMarquee text={n.text} />
               <button className="notice-x" onClick={(e) => { e.stopPropagation(); close(n.id); }} aria-label="닫기">✕</button>
             </div>
           ))}

@@ -42,6 +42,8 @@ async function ensureMeetingTable(env: Env): Promise<void> {
     "ALTER TABLE meeting_records ADD COLUMN created_sub TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE meeting_records ADD COLUMN attendee_subs TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE meeting_records ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0",
+    // 연계 학생 — 학부모 상담 회의록을 학생 프로필 '상담 기록'에 연결. 비우면 일반 회의.
+    "ALTER TABLE meeting_records ADD COLUMN student_id TEXT NOT NULL DEFAULT ''",
   ]) {
     try { await env.DB.prepare(col).run(); } catch { /* 이미 있으면 무시 */ }
   }
@@ -94,6 +96,7 @@ function listRow(r: Record<string, unknown>) {
     createdBy: String(r.created_by ?? ""),
     createdAt: Number(r.created_at ?? 0),
     hasSummary: !!String(r.summary ?? ""),
+    studentId: String(r.student_id ?? ""),
   };
 }
 function detailRow(r: Record<string, unknown>) {
@@ -193,12 +196,14 @@ export async function handleMeeting(env: Env, request: Request, p: string, me: S
     return json({ ok: true, categories: await getCategories(env) });
   }
 
-  // 목록 — 권한 필터(원장 전체 / 그 외 작성자·참석자 본인).
+  // 목록 — 권한 필터(원장 전체 / 그 외 작성자·참석자 본인). student_id 지정 시 그 학생 연계 회의록만.
   if (p === "/api/meetings" && m === "GET") {
+    const sidFilter = new URL(request.url).searchParams.get("student_id") || "";
     const { results } = await env.DB
-      .prepare("SELECT id, title, category, meeting_date, attendees, status, summary, created_by, created_sub, attendee_subs, created_at FROM meeting_records ORDER BY meeting_date DESC, created_at DESC")
+      .prepare("SELECT id, title, category, meeting_date, attendees, status, summary, created_by, created_sub, attendee_subs, student_id, created_at FROM meeting_records ORDER BY meeting_date DESC, created_at DESC")
       .all<Record<string, unknown>>();
-    const visible = (results || []).filter((r) => canView(me, String(r.created_sub ?? ""), parseSubs(r.attendee_subs)));
+    let visible = (results || []).filter((r) => canView(me, String(r.created_sub ?? ""), parseSubs(r.attendee_subs)));
+    if (sidFilter) visible = visible.filter((r) => String(r.student_id ?? "") === sidFilter);
     return json({ meetings: visible.map(listRow) });
   }
 
@@ -229,9 +234,11 @@ export async function handleMeeting(env: Env, request: Request, p: string, me: S
         wForm.append("model", "whisper-1");
         wForm.append("language", "ko");
         wForm.append("temperature", "0");
-        // 무음 구간 환각(유튜브식 문구)을 줄이려 회의 맥락을 prompt로 주고, 구간별 신뢰도를 받는다.
+        // 구간별 신뢰도(no_speech 등)를 받아 정리에 쓴다.
         wForm.append("response_format", "verbose_json");
-        wForm.append("prompt", "다음은 학원 운영 회의 녹음입니다. 한국어 회의 내용을 그대로 받아씁니다.");
+        // ⚠ prompt(문장형 맥락)는 넣지 않는다. 녹음이 조금만 조용/잡음이어도 Whisper가
+        //   실제 음성 대신 prompt 문장을 통째로 반복(환각)하는 사례가 있었다(클로바는 정상).
+        //   OpenAI 권장대로 prompt는 고유명사 보정 용도에 한해서만 쓰는 게 안전.
         const wRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
           method: "POST",
           headers: { Authorization: `Bearer ${openaiKey}` },
@@ -242,9 +249,15 @@ export async function handleMeeting(env: Env, request: Request, p: string, me: S
           return json({ error: "음성 변환에 실패했어요. " + errText.slice(0, 300) }, 500);
         }
         const wData = (await wRes.json()) as { text?: string; segments?: { text?: string; no_speech_prob?: number; avg_logprob?: number }[] };
+        const rawWhisperLen = String(wData.text || "").length;
         rawText = cleanTranscript(wData);
         if (!rawText) {
           return json({ error: "음성이 또렷하게 녹음되지 않았어요. 마이크에 가까이·조용한 곳에서 다시 녹음하거나, ‘텍스트 직접 입력’으로 넣어 주세요." }, 422);
+        }
+        // 무음·잡음 녹음의 Whisper 환각 신호: 같은 문장이 길게 반복돼 정리(중복제거) 후 거의 사라짐.
+        // 원본은 길었는데 정리 결과가 극단적으로 짧으면 = 실제 목소리가 안 담긴 녹음으로 본다.
+        if (rawWhisperLen > 200 && rawText.length < 40) {
+          return json({ error: "녹음에서 사람 목소리가 거의 잡히지 않았어요. 같은 말만 반복 인식됐는데, 마이크가 회의 소리를 제대로 못 담았을 때 나타나요. 폰을 말하는 사람 가까이 두고 다시 녹음하거나(스피커폰·녹음앱 확인), ‘텍스트 직접 입력’으로 넣어 주세요." }, 422);
         }
       } else if (manualText) {
         rawText = manualText;
@@ -269,8 +282,23 @@ export async function handleMeeting(env: Env, request: Request, p: string, me: S
         const errText = await cRes.text();
         return json({ error: "AI 요약 생성에 실패했어요. " + errText.slice(0, 300) }, 500);
       }
-      const cData = (await cRes.json()) as { content?: { text?: string }[] };
-      const summary = String(cData.content?.[0]?.text || "").trim();
+      const cData = (await cRes.json()) as { content?: { type?: string; text?: string }[]; stop_reason?: string };
+      // 텍스트 블록을 모두 합친다(여러 블록으로 쪼개져 올 수 있음). 첫 블록만 보던 기존 방식의 누락 방지.
+      const summary = (cData.content || [])
+        .filter((b) => b && b.type === "text" && b.text)
+        .map((b) => String(b.text))
+        .join("\n")
+        .trim();
+      // Claude가 200을 줬는데 요약이 비어 온 경우 — 조용히 빈 화면으로 넘기지 않는다.
+      // 변환된 원문은 살려서 돌려주고(돈·시간 들인 변환 보존), 원인(stop_reason)을 함께 안내한다.
+      if (!summary) {
+        const why = String(cData.stop_reason || "");
+        const hint =
+          why === "refusal"
+            ? "AI가 이 내용 요약을 거부했어요. 민감한 표현이 섞였는지 확인하거나, 원문을 다듬어 다시 시도해 주세요."
+            : "AI 요약이 비어서 왔어요. 아래 ‘다시 요약’을 눌러 주세요. 계속되면 원장님께 알려 주세요.";
+        return json({ rawText, summary: "", notice: `${hint}${why ? ` (stop=${why})` : ""}` });
+      }
       return json({ rawText, summary });
     } catch (e) {
       return json({ error: String(e) }, 500);
@@ -289,6 +317,7 @@ export async function handleMeeting(env: Env, request: Request, p: string, me: S
       agenda?: string;
       rawText?: string;
       summary?: string;
+      studentId?: string;
     };
     const title = String(b.title || "").trim().slice(0, 200);
     const meetingDate = String(b.meetingDate || "").trim().slice(0, 20);
@@ -300,6 +329,7 @@ export async function handleMeeting(env: Env, request: Request, p: string, me: S
     const rawText = String(b.rawText || "").slice(0, 200000);
     const summary = String(b.summary || "").slice(0, 20000);
     const status = summary ? "완료" : "예정";
+    const studentId = String(b.studentId || "").trim().slice(0, 40);
     const now = Date.now();
 
     if (b.id) {
@@ -307,15 +337,15 @@ export async function handleMeeting(env: Env, request: Request, p: string, me: S
       if (!cur) return json({ error: "not_found" }, 404);
       if (me.role !== "admin" && String(cur.created_sub) !== me.sub) return json({ error: "forbidden" }, 403);
       await env.DB
-        .prepare("UPDATE meeting_records SET title=?, category=?, meeting_date=?, attendees=?, attendee_subs=?, agenda=?, raw_text=?, summary=?, status=?, updated_at=? WHERE id=?")
-        .bind(title, category, meetingDate, attendees, JSON.stringify(attendeeSubs), agenda, rawText, summary, status, now, Number(b.id))
+        .prepare("UPDATE meeting_records SET title=?, category=?, meeting_date=?, attendees=?, attendee_subs=?, agenda=?, raw_text=?, summary=?, status=?, student_id=?, updated_at=? WHERE id=?")
+        .bind(title, category, meetingDate, attendees, JSON.stringify(attendeeSubs), agenda, rawText, summary, status, studentId, now, Number(b.id))
         .run();
       return json({ ok: true, id: Number(b.id) });
     }
 
     const r = await env.DB
-      .prepare("INSERT INTO meeting_records(title, category, meeting_date, attendees, attendee_subs, agenda, raw_text, summary, status, created_by, created_sub, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)")
-      .bind(title, category, meetingDate, attendees, JSON.stringify(attendeeSubs), agenda, rawText, summary, status, me.name, me.sub, now, now)
+      .prepare("INSERT INTO meeting_records(title, category, meeting_date, attendees, attendee_subs, agenda, raw_text, summary, status, created_by, created_sub, student_id, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(title, category, meetingDate, attendees, JSON.stringify(attendeeSubs), agenda, rawText, summary, status, me.name, me.sub, studentId, now, now)
       .run();
     return json({ ok: true, id: r.meta.last_row_id });
   }

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import type { Lesson, Makeup, ScheduleVersion, StudentStatus, TestLog } from "../types";
 import { useStore } from "../store";
 import { createStudent, hideStudent, pushTestNotion } from "../api";
-import { saveStudentCore } from "../lib/rosterApi";
+import { saveStudentCore, saveStudentTimetable } from "../lib/rosterApi";
 import { DOW_ORDER, fmtMDDow, todayStr, uid } from "../lib/dates";
 import { activeStudents, studentById } from "../lib/logic";
 import { GRADE_OPTIONS } from "../lib/grade";
@@ -54,6 +54,7 @@ export function StudentModal({ id }: { id: string | null }) {
   });
   // 시간표를 바꿀 때 새 시간표가 적용될 시작일 (기존 학생 수정 시에만 사용)
   const [effFrom, setEffFrom] = useState(todayStr());
+  const [effFromTouched, setEffFromTouched] = useState(false); // 사용자가 시작일을 직접 바꿨는지(과거로 당기기 등)
 
   function updateSlot(i: number, key: keyof Lesson, value: string) {
     setSlots((cur) =>
@@ -94,6 +95,8 @@ export function StudentModal({ id }: { id: string | null }) {
     };
     if (id) {
       let scheduleChanged = false;
+      let nextSchedule: ScheduleVersion[] = [];
+      let nextLessons: Lesson[] = lessons;
       mutate((d) => {
         const s = studentById(d.students, id);
         if (!s) return;
@@ -113,10 +116,16 @@ export function StudentModal({ id }: { id: string | null }) {
         const past = prev.filter((v) => v.from < effFrom);
         const hist = lessons.length ? [...past, { from: effFrom, lessons }] : past;
         hist.sort((a, b) => (a.from < b.from ? -1 : 1));
-        scheduleChanged = JSON.stringify(prevLatest) !== JSON.stringify(lessons);
+        // 수업 내용이 바뀌었거나, 사용자가 '적용 시작일'을 직접 건드렸으면(=시작일만 바꿔 과거로 당기는 경우 포함) 저장.
+        scheduleChanged = JSON.stringify(prevLatest) !== JSON.stringify(lessons) || effFromTouched;
         s.schedule = hist;
         s.lessons = hist.length ? hist.reduce((a, b) => (b.from > a.from ? b : a)).lessons : [];
+        nextSchedule = hist;
+        nextLessons = s.lessons;
       });
+      // 시간표를 실제로 바꿨을 때만 그 학생 시간표를 따로 저장 — 전체저장(putData)은 시간표를 더 이상 건드리지 않음.
+      // (시간표를 안 바꿨으면 호출하지 않아, 오래된 화면에서 다른 필드만 고쳐도 시간표가 되돌아가지 않음)
+      if (scheduleChanged) void saveStudentTimetable({ studentId: id, lessons: nextLessons, schedule: nextSchedule }).catch(() => {});
       // 공통 학생 명단(students 테이블)에도 핵심 정보를 함께 반영 — 두 화면을 따로 고치지 않게.
       void saveStudentCore({
         studentId: id,
@@ -140,6 +149,8 @@ export function StudentModal({ id }: { id: string | null }) {
       mutate((d) => {
         d.students.push({ id: newId, ...fields, appEdited: ["name", "grade", "status", "school", "birthdate", "parentPhone", "studentPhone", "startDate"] });
       });
+      // 시간표를 따로 저장(전체저장은 시간표를 안 건드림). 신규 학생 시간표가 누락되지 않게.
+      void saveStudentTimetable({ studentId: newId, lessons, schedule }).catch(() => {});
       closeModal();
       toast("학생을 추가했어요.");
     }
@@ -336,12 +347,12 @@ export function StudentModal({ id }: { id: string | null }) {
                 className="input"
                 type="date"
                 value={effFrom}
-                onChange={(e) => setEffFrom(e.target.value)}
+                onChange={(e) => { setEffFrom(e.target.value); setEffFromTouched(true); }}
                 style={{ width: "auto" }}
               />
               <div className="hint">
-                시간표를 바꾸면 이 날짜부터 새 시간표로 출결에 표시되고, 이전 날짜는 기존 시간표가 그대로
-                유지됩니다. (시간표를 안 바꾸면 무시돼요.)
+                이 날짜부터 새 시간표로 출결에 표시되고, 이전 날짜는 기존 시간표가 유지돼요.
+                과거 날짜로 당기면 그날부터 이 시간표로 보여요(저장 버튼을 눌러야 적용).
               </div>
               {existing.schedule && existing.schedule.length > 1 && (
                 <div className="hint" style={{ marginTop: 6 }}>

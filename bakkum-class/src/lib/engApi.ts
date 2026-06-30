@@ -84,6 +84,7 @@ export interface EngDaily {
   bookNext: string;
   wordTest: string;
   doneItems: string[];
+  curRanges?: Record<string, string>; // '오늘뭐해요' 항목별 범위/분량
   comment: string; // 수업 코멘트(학생은 읽기 전용)
   hwComment: string; // 숙제 코멘트(중고등영어 — 숙제에 대한 코멘트, 학생 읽기)
   studentNote: string; // 학생이 '선생님께' 남기는 메모(강사는 읽기)
@@ -91,9 +92,13 @@ export interface EngDaily {
   // 내신모드 자유 숙제 — 내줄 숙제(다음 시간) + 숙제 검사(지난 것: 항목+상태). 숙제 자료 배부 시 자동 편입.
   hwAssign: HwItem[];
   hwCheck: { text: string; status: HwStatus }[];
+  // 지난 시간 '이어받은' 숙제 중 X로 지운 항목(다시 살아나지 않게 숨김 목록으로 보관).
+  carryHidden?: string[];
   // 내신모드 빠른 '없음' — 숙제/시험이 아예 없던 회차를 한 번에 기록(텍스트 입력 없이).
   hwNone: boolean;
   testNone: boolean;
+  // 그날 일지에 붙는 바로가기 링크 — 학생 화면에 버튼으로 보인다. [{name, url}]
+  links?: { name: string; url: string }[];
   updatedAt: number;
 }
 

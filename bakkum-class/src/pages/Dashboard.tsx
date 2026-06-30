@@ -9,13 +9,15 @@ import {
   monthOptions,
   newThisMonth,
   pct,
+  studentById,
+  cmpMathStart,
 } from "../lib/logic";
 import { fmtMD, parseD } from "../lib/dates";
 import { buildReport, copyText } from "../lib/report";
 import { parseGrade } from "../lib/grade";
 import { WeekdayBars } from "../components/charts";
 import { StudentTable } from "../components/StudentTable";
-import { StudentModal } from "../components/modals";
+import { StudentProfilePopup } from "../components/StudentProfilePopup";
 import { Select } from "../components/ui";
 import { Icon, type IconName } from "../icons";
 
@@ -47,10 +49,16 @@ function Stat({ icon, tone, num, label, sub }: { icon: IconName; tone: string; n
 
 
 export function Dashboard() {
-  const { data, toast, openModal } = useStore();
+  const { data, toast, mutate } = useStore();
   const [curMonth, setCurMonth] = useState(curMonthStr());
+  const [profileId, setProfileId] = useState<string | null | undefined>(undefined);
+  const [manageExcluded, setManageExcluded] = useState(false); // 인센티브 제외 학생 고르기 펼침
+  function toggleExcluded(id: string, val: boolean) {
+    mutate((d) => { const s = studentById(d.students, id); if (s) s.excluded = val; });
+  }
 
   const active = activeStudents(data.students); // 전체 재원 (명단엔 전원 표시)
+  const roster = active.slice().sort(cmpMathStart); // 명단 표 — 수학 첫 등원일 순
   // 정산·재적은 수학 등록일(mathStart) 기준 — 학생 목록을 수학 등록일로 매핑해 계산.
   const calcStudents = data.students.map(mathDated);
   const enrolled = enrolledStudents(calcStudents, curMonth); // 이번 달 재적 (첫주=7일 이전 등록)
@@ -155,6 +163,24 @@ export function Dashboard() {
             </>
           )}
         </div>
+        {/* 인센티브 카운트 제외 학생 — 여기서 바로 체크(원장 가족 등 정산 제외). 체크하면 위 '카운트 제외'에 반영. */}
+        <div className="inc-manage">
+          <button type="button" className={"inc-manage-toggle" + (manageExcluded ? " open" : "")} onClick={() => setManageExcluded((v) => !v)}>
+            <span className="inc-manage-chev"><Icon name="chev" /></span>
+            인센티브 카운트 제외 학생 고르기{excludedActive.length ? ` · ${excludedActive.length}명 제외 중` : ""}
+          </button>
+          {manageExcluded && (
+            <div className="inc-manage-list">
+              {active.slice().sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
+                <label key={s.id} className={"inc-manage-item" + (s.excluded ? " on" : "")}>
+                  <input type="checkbox" checked={!!s.excluded} onChange={(e) => toggleExcluded(s.id, e.target.checked)} />
+                  <span className="inc-manage-name">{s.name}</span>
+                  <span className="inc-manage-grade">{s.grade}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="card sec-gap">
@@ -162,14 +188,17 @@ export function Dashboard() {
           <div>
             <div className="card-title">재원 학생</div>
             <div className="card-sub">
-              전체 {active.length}명{fresh.length ? ` · 이번 달 재적 ${enrolled.length}명 (신규 ${fresh.length}명은 다음 달부터)` : ""} · 학생을 누르면 상세정보가 떠요
+              전체 {active.length}명{fresh.length ? ` · 이번 달 재적 ${enrolled.length}명 (신규 ${fresh.length}명은 다음 달부터)` : ""} · 수학 첫 등원일 순 · 학생을 누르면 상세정보가 떠요
             </div>
           </div>
         </div>
         <div className="tbl-wrap">
-          <StudentTable list={active} withActions={false} onRowClick={(id) => openModal(<StudentModal id={id} />)} />
+          <StudentTable list={roster} withActions={false} onRowClick={(id) => setProfileId(id)} />
         </div>
       </div>
+      {profileId !== undefined && (
+        <StudentProfilePopup id={profileId} onClose={() => setProfileId(undefined)} />
+      )}
     </section>
   );
 }

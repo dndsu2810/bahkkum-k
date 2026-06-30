@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import type { ProgLog } from "../types";
 import { useStore } from "../store";
-import { activeStudents } from "../lib/logic";
+import { activeStudents, sortStudents } from "../lib/logic";
 import { fmtDayBand, todayStr, uid } from "../lib/dates";
 import { TodayLink } from "../components/ui";
+import { StudentSortToggle, useStudentSort } from "../components/StudentSortToggle";
 import { Icon } from "../icons";
 
 /**
@@ -16,9 +17,10 @@ export function Progress() {
   const [sel, setSel] = useState("");
   const [q, setQ] = useState("");
 
+  const [sort, setSort] = useStudentSort("progress");
   const students = useMemo(
-    () => activeStudents(data.students).slice().sort((a, b) => a.name.localeCompare(b.name, "ko")),
-    [data.students]
+    () => sortStudents(activeStudents(data.students), sort),
+    [data.students, sort]
   );
   const qq = q.trim().toLowerCase();
   const shownStudents = qq ? students.filter((s) => (s.name + " " + (s.grade || "")).toLowerCase().includes(qq)) : students;
@@ -96,6 +98,7 @@ export function Progress() {
       <div className="eng-split">
         <div className="eng-side-wrap card">
           <input className="input" style={{ marginBottom: 8 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="학생 검색" />
+          <div style={{ marginBottom: 8 }}><StudentSortToggle value={sort} onChange={setSort} /></div>
           <div className="eng-side">
             {shownStudents.length === 0 ? (
               <div className="eng-side-empty">학생이 없어요.</div>

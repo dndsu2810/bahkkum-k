@@ -7,13 +7,21 @@ import type { SessionUser } from "./auth";
 import { sendKakao } from "./kakao";
 import { noticeVisible, normalizeAudience } from "../src/lib/notice";
 
-/** 학생의 영어 band(elem/mid/bridge) — 공지 대상 필터용. */
-async function bandOf(env: Env, sub: string): Promise<string> {
+/** 학생의 공지 필터 정보 — 영어 band(elem/mid/bridge) + 수학 수강 여부. */
+async function audienceOf(env: Env, sub: string): Promise<{ band: string; isMath: boolean }> {
   try {
-    const r = await env.DB.prepare("SELECT english_band FROM class_student_meta WHERE student_id=?").bind(sub).first<{ english_band: string }>();
-    return String(r?.english_band ?? "");
+    const r = await env.DB.prepare("SELECT english_band, subjects, math_class FROM class_student_meta WHERE student_id=?").bind(sub).first<{ english_band: string; subjects: string; math_class: string }>();
+    const band = String(r?.english_band ?? "");
+    let isMath = !!String(r?.math_class ?? "");
+    if (!isMath) { try { const s = JSON.parse(String(r?.subjects ?? "[]")); isMath = Array.isArray(s) && s.map(String).includes("math"); } catch { /* ignore */ } }
+    // 메타에 표시가 없으면 수학 시간표(class_lessons) 유무로 보강.
+    if (!isMath) {
+      const ml = await env.DB.prepare("SELECT 1 FROM class_lessons WHERE student_id=? LIMIT 1").bind(sub).first();
+      isMath = !!ml;
+    }
+    return { band, isMath };
   } catch {
-    return "";
+    return { band: "", isMath: false };
   }
 }
 
@@ -33,6 +41,8 @@ export async function ensureFeedbackTables(env: Env): Promise<void> {
     "CREATE TABLE IF NOT EXISTS class_notice (id TEXT PRIMARY KEY, text TEXT NOT NULL DEFAULT '', level TEXT NOT NULL DEFAULT 'info', active INTEGER NOT NULL DEFAULT 1, start_date TEXT NOT NULL DEFAULT '', end_date TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL DEFAULT '', audience TEXT NOT NULL DEFAULT 'staff')",
     // 기존 공지에 audience 추가 — 기본 'staff'(강사만). '강사에게'로 만들던 기존 동작 유지 + 학생 화면 노출 방지.
     "ALTER TABLE class_notice ADD COLUMN audience TEXT NOT NULL DEFAULT 'staff'",
+    // 세부 내용 — 배너엔 text(짧은 문구)만 띄우고, 누르면 이 detail을 팝업으로 보여준다. 비면 text만 보여줌.
+    "ALTER TABLE class_notice ADD COLUMN detail TEXT NOT NULL DEFAULT ''",
     // 오류·개선 요청 — 누구나 작성, 원장이 상태 변경.
     "CREATE TABLE IF NOT EXISTS class_issue (id TEXT PRIMARY KEY, page TEXT NOT NULL DEFAULT '', author_sub TEXT NOT NULL DEFAULT '', author_name TEXT NOT NULL DEFAULT '', author_role TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '', shot TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '접수', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)",
   ];
@@ -118,8 +128,8 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
       .map(noticeRow)
       .filter((n) => (!n.startDate || n.startDate <= today) && (!n.endDate || n.endDate >= today));
     const isStudent = me.role === "student";
-    const band = isStudent ? await bandOf(env, me.sub) : "";
-    list = list.filter((n) => noticeVisible(n.audience, { isStudent, band }));
+    const { band, isMath } = isStudent ? await audienceOf(env, me.sub) : { band: "", isMath: false };
+    list = list.filter((n) => noticeVisible(n.audience, { isStudent, band, isMath }));
     return json({ notices: list });
   }
   if (p === "/api/notice/all" && m === "GET") {
@@ -135,13 +145,14 @@ export async function handleFeedback(env: Env, request: Request, p: string, me: 
     const audience = normalizeAudience(b.audience);
     const active = b.active ? 1 : 0;
     const exists = await env.DB.prepare("SELECT id FROM class_notice WHERE id=?").bind(id).first();
+    const detail = String(b.detail || "");
     if (exists) {
-      await env.DB.prepare("UPDATE class_notice SET text=?, level=?, active=?, start_date=?, end_date=?, audience=? WHERE id=?")
-        .bind(String(b.text || ""), level, active, String(b.startDate || ""), String(b.endDate || ""), audience, id)
+      await env.DB.prepare("UPDATE class_notice SET text=?, detail=?, level=?, active=?, start_date=?, end_date=?, audience=? WHERE id=?")
+        .bind(String(b.text || ""), detail, level, active, String(b.startDate || ""), String(b.endDate || ""), audience, id)
         .run();
     } else {
-      await env.DB.prepare("INSERT INTO class_notice(id,text,level,active,start_date,end_date,created_at,created_by,audience) VALUES(?,?,?,?,?,?,?,?,?)")
-        .bind(id, String(b.text || ""), level, active, String(b.startDate || ""), String(b.endDate || ""), Date.now(), me.name, audience)
+      await env.DB.prepare("INSERT INTO class_notice(id,text,detail,level,active,start_date,end_date,created_at,created_by,audience) VALUES(?,?,?,?,?,?,?,?,?,?)")
+        .bind(id, String(b.text || ""), detail, level, active, String(b.startDate || ""), String(b.endDate || ""), Date.now(), me.name, audience)
         .run();
     }
     return json({ ok: true, id });
@@ -289,6 +300,7 @@ function noticeRow(r: Record<string, unknown>) {
   return {
     id: String(r.id),
     text: String(r.text ?? ""),
+    detail: String(r.detail ?? ""),
     level: String(r.level ?? "info"),
     active: Number(r.active) === 1,
     startDate: String(r.start_date ?? ""),

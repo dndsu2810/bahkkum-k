@@ -13,6 +13,7 @@ import { Tests } from "../pages/Tests";
 import { Report } from "../pages/Report";
 import { LessonPlan } from "../pages/LessonPlan";
 import { MathBaseball } from "../pages/MathBaseball";
+import { TimetableSample } from "../pages/TimetableSample";
 
 /** 수학 수업관리 콘텐츠 — store.page에 따라 수학 페이지를 렌더(설정·보드는 허브 쪽). */
 export function MathContent() {
@@ -57,6 +58,7 @@ export function MathContent() {
       {page === "baseball" && <MathBaseball />}
       {page === "report" && <Report />}
       {page === "plan" && <LessonPlan />}
+      {page === "timetable_sample" && <TimetableSample />}
     </>
   );
 }

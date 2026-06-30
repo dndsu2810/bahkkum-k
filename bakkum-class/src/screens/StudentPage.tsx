@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth";
-import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type Curriculum, type CurriculumSection, type CurriculumRow, type StudentLogRow, type StudentGoal } from "../lib/studentApi";
+import { studentApi, STUDENT_LOG_ITEMS, type StudentPageData, type Curriculum, type CurriculumSection, type CurriculumRow, type StudentLogRow, type StudentGoal, type StudentLink } from "../lib/studentApi";
 import { messageApi, type Message } from "../lib/messageApi";
-import { DOW, DOW_ORDER, fmtFull, fmtMDDow, fmtWhen, parseD, timeToMin, todayStr } from "../lib/dates";
+import { DOW, TODAY, fmtFull, fmtMD, fmtMDDow, fmtWhen, mondayOf, parseD, todayStr } from "../lib/dates";
 import { NoticeBanner } from "../components/NoticeBanner";
 import { DateField } from "../components/DateControls";
 import { getCachedLogo } from "../lib/configApi";
@@ -18,11 +18,56 @@ import { QueueCard } from "../components/QueueCard";
 import { baseballApi } from "../lib/baseballApi";
 import type { MathBoard, BaseballRule, BaseballConfig } from "../lib/baseball";
 import { HwChecklist } from "../components/HwChecklist";
+import { Skeleton } from "../components/Skeleton";
+
+// 학생 화면 로딩 자리표시 — 밋밋한 "불러오는 중…" 대신 실제 레이아웃(프로필·시간표) 모양으로.
+function SpSkeleton() {
+  return (
+    <div className="sp-skel" aria-busy="true" aria-label="불러오는 중">
+      <div className="sp-skel-card">
+        <Skeleton w={64} h={64} r={14} />
+        <div className="sp-skel-lines">
+          <Skeleton w="42%" h={20} />
+          <Skeleton w="62%" h={13} />
+        </div>
+      </div>
+      <Skeleton w="100%" h={54} r={16} />
+      <Skeleton w="100%" h={220} r={18} />
+    </div>
+  );
+}
 import { coerceAssign, type HwItem } from "../lib/engApi";
+import { alimApi, type MyAlim } from "../lib/alimApi";
+import { mathBandOf } from "../lib/grade";
+import { WeekTimetable } from "../components/MathTimetableBoard";
 
 /** 학생 개별 페이지(시간표 · 커리큘럼 · 일지 입력/이력).
  *  - 학생 본인: studentId 생략(본인). 일지 입력 가능, 커리큘럼 조회.
  *  - 강사/원장: studentId 지정. 커리큘럼 편집 + 일지 대리 입력. */
+/** 안전한 링크만 — http(s)·mailto·tel만 허용(javascript: 등 차단). 서버도 거르지만 한 번 더. */
+function safeUrl(u: string): boolean {
+  return /^(https?:\/\/|mailto:|tel:)/i.test(String(u || "").trim());
+}
+
+/** 학생 화면 바로가기 — 강사가 학생별로 넣은 링크를 버튼으로. 링크 이름이 버튼 글자, 누르면 새 탭으로 이동. */
+function LinkCard({ links }: { links: StudentLink[] }) {
+  const safe = links.filter((l) => l.name && safeUrl(l.url));
+  if (!safe.length) return null;
+  return (
+    <section className="sp-card">
+      <h3 className="sp-card-h">바로가기</h3>
+      <div className="sp-links">
+        {safe.map((l, i) => (
+          <a key={i} className="sp-link-btn" href={l.url} target="_blank" rel="noopener noreferrer">
+            <Icon name="link" />
+            <span>{l.name}</span>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function StudentPage({ studentId, embedded }: { studentId?: string; embedded?: boolean }) {
   const [data, setData] = useState<StudentPageData | null>(null);
   const [err, setErr] = useState("");
@@ -54,7 +99,7 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId]);
 
-  if (loading) return <div className="sp-empty">불러오는 중…</div>;
+  if (loading) return <SpSkeleton />;
   if (err || !data) return <div className="sp-empty">불러오지 못했어요{err ? ` (${err})` : ""}.</div>;
 
   const canEditCur = data.canEditCurriculum;
@@ -68,7 +113,7 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
 
   return (
     <div className={"sp" + (embedded ? " is-embed" : "")}>
-      {/* 헤더 — 학생 프로필 */}
+      {/* 헤더 — 학생 프로필. 오른쪽 빈 공간에 번호표(컴팩트). 본인 화면에서만(강사가 볼 땐 숨김). */}
       <div className="sp-head">
         <HexAvatar name={s.name} photo={s.photo} size={56} className="sp-avatar-hex" />
         <div className="sp-head-info">
@@ -77,6 +122,7 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
             {[s.grade, s.school, s.band === "elem" ? "초등 영어" : s.band === "mid" ? "중고등 영어" : ""].filter(Boolean).join(" · ")}
           </div>
         </div>
+        {!studentId && <QueueCard compact />}
       </div>
 
       {monthRecs.length > 0 && (
@@ -88,16 +134,14 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
       )}
 
       <div className="sp-grid">
-        {/* 시간표 */}
+        {/* 시간표 — 영수 둘 다 들으면 두 과목 함께, 한 과목만 들으면 그 과목만 */}
         <section className="sp-card">
           <h3 className="sp-card-h">수업 시간표</h3>
-          <Timetable slots={data.engSlots} />
+          <WeekTimetable math={data.mathSlots} eng={data.engSlots} />
         </section>
 
-        {/* 번호표 — 시간표 옆 빈 칸에. 본인 화면에서만(강사가 볼 땐 자동으로 숨김). */}
-        {!studentId && <QueueCard />}
-
-        {/* 오늘 뭐해요? (구 '커리큘럼') — 초등영어 전용. 중고등은 숨김. */}
+        {/* 오늘 뭐해요? — 선생님이 정한 학습 순서·내용(초등영어 전용). 학생은 읽기 전용, 권한자는 편집.
+            아래 '내가 추가한 학습'은 학생이 스스로 반복할 학습(강사 커리큘럼과 별개). */}
         {!isMidBand && (
           <section className="sp-card">
             <h3 className="sp-card-h">오늘 뭐해요?</h3>
@@ -106,11 +150,13 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
             ) : (
               <CurriculumView cur={data.curriculum} />
             )}
-            {/* 학생이 스스로 반복할 학습을 추가(강사 커리큘럼과 별개). */}
             <SelfLearning items={data.selfCurriculum} studentId={canEditCur ? s.id : undefined} onSaved={reloadSilent} />
           </section>
         )}
       </div>
+
+      {/* 오늘 일지 바로가기 링크 — 선생님이 그날 일지에 넣은 버튼(있을 때만) */}
+      {(() => { const tl = data.daily.find((r) => r.date === todayStr())?.links || []; return tl.length > 0 ? <LinkCard links={tl} /> : null; })()}
 
       {/* 일지 입력 */}
       <section className="sp-card">
@@ -133,58 +179,305 @@ export function StudentPage({ studentId, embedded }: { studentId?: string; embed
   );
 }
 
-/* ---------------- 시간표 ---------------- */
-function Timetable({ slots }: { slots: { day: string; time: string; duration: number }[] }) {
-  if (!slots.length) return <div className="sp-muted">등록된 영어 수업 시간이 없어요.</div>;
-  const byDay: Record<string, { time: string; duration: number }[]> = {};
-  for (const sl of slots) (byDay[sl.day] ||= []).push({ time: sl.time, duration: sl.duration });
-  const days = DOW_ORDER.filter((d) => byDay[d]);
+/* 월 이동(YYYY-MM) 헬퍼 — 숙제 기록 월별 보기용. */
+function shiftMonth(ym: string, delta: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, (m - 1) + delta, 1);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+function monthLabel(ym: string): string {
+  const [y, m] = ym.split("-");
+  return `${y}.${Number(m)}`;
+}
+
+/* 수학 숙제 한 줄 — 검사일(검사 예정일=recheck, 없으면 마감일)을 함께 보여줘요. */
+function HwRow({ h }: { h: { date: string; book: string; status: string; memo: string; recheckDate?: string } }) {
+  const checkDay = h.recheckDate || h.date;
   return (
-    <div className="sp-tt">
-      {days.map((d) => (
-        <div className="sp-tt-row" key={d}>
-          <span className="sp-tt-day">{d}</span>
-          <span className="sp-tt-times">
-            {byDay[d]
-              .sort((a, b) => timeToMin(a.time) - timeToMin(b.time))
-              .map((t, i) => (
-                <span className="sp-tt-chip" key={i}>
-                  {t.time}
-                  {t.duration ? <em> · {t.duration}분</em> : null}
-                </span>
-              ))}
-          </span>
+    <li className="sp-mrow">
+      <span className={"sp-mtag " + (h.status === "done" ? "ok" : h.status === "late" ? "bad" : "warn")}>
+        {h.status === "done" ? "완료" : h.status === "late" ? "지연" : "검사 전"}
+      </span>
+      <span className="sp-mmain">{h.book || "숙제"}{h.memo ? ` · ${h.memo}` : ""}</span>
+      <span className="sp-mdate">{checkDay ? `검사 ${fmtMDDow(checkDay)}` : "검사일 미정"}</span>
+    </li>
+  );
+}
+
+/* ---------------- 수학 학생 화면 (영어 화면과 같은 자리 배치) ----------------
+ *  2단계(읽기 전용): 기존 수학 기록(출석·숙제·진도·시험·보강·등하원)을 그대로 보여줘요.
+ *  쓰기(선생님께 메모·알림장 작성·주간 신청)는 다음 단계. */
+function MathStudentPage() {
+  const [data, setData] = useState<StudentPageData | null>(null);
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [weekOffset, setWeekOffset] = useState(0); // 시간표 주차 이동(화살표)
+  const [hwMonth, setHwMonth] = useState(() => todayStr().slice(0, 7)); // 숙제 기록 월
+  const [showDoneHw, setShowDoneHw] = useState(false); // 완료 숙제 토글
+  const [alims, setAlims] = useState<MyAlim[]>([]); // 활성 알림장 공지(마감 안 지난 것)
+  const firstErr = useRef(true);
+  useEffect(() => {
+    let on = true;
+    const load = () => alimApi.mine(todayStr()).then((l) => { if (on) setAlims(l); });
+    void load();
+    const iv = window.setInterval(load, 30000);
+    return () => { on = false; window.clearInterval(iv); };
+  }, []);
+  useEffect(() => {
+    let alive = true;
+    const load = () => studentApi.page()
+      .then((d) => { if (alive) { setData((cur) => (JSON.stringify(cur) === JSON.stringify(d) ? cur : d)); setErr(""); firstErr.current = false; setLoading(false); } })
+      .catch((e) => { if (alive) { if (firstErr.current) setErr(String((e as Error)?.message || e)); setLoading(false); } });
+    void load();
+    const iv = window.setInterval(load, 15000);
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    return () => { alive = false; window.clearInterval(iv); window.removeEventListener("focus", onFocus); };
+  }, []);
+
+  if (loading) return <SpSkeleton />;
+  if (err || !data) return <div className="sp-empty">불러오지 못했어요{err ? ` (${err})` : ""}.</div>;
+  const s = data.student;
+  const band = mathBandOf(s.grade, (data.mathClass as "" | "low" | "high") || "");
+  const bandLabel = band === "low" ? "초등 저학년" : band === "high" ? "초등 고학년" : "중고등";
+  const math = data.math;
+  const today = todayStr();
+  const ym = today.slice(0, 7);
+  const slots = data.mathSlots || [];
+
+  // 이번 달 출석(벌집) — 출석/지각/조퇴를 출석으로.
+  const monthAtt = (math?.attendance || []).filter((r) => r.date.slice(0, 7) === ym && r.status);
+  const present = monthAtt.filter((r) => ["출석", "지각", "조퇴"].includes(r.status)).length;
+
+  // 오늘 본 시험 / 예정 시험.
+  const tests = math?.tests || [];
+  const todayDone = tests.filter((t) => t.date === today && t.status === "완료");
+  const upcomingTests = tests.filter((t) => t.status === "예정" && (!t.date || t.date >= today)).slice(0, 4);
+  // 진행 중 진도.
+  const ongoing = (math?.progress || []).filter((p) => p.pct < 100).slice(0, 6);
+  // 알림장(오늘) — 강사 메모 + 오늘 숙제 자동.
+  const noteToday = math?.noteToday || "";
+  const todayHw = (math?.homework || []).filter((h) => h.date === today);
+  // 숙제 — 마감(미완료) 요약 + 선택한 달 기록(완료는 토글).
+  const pendingHw = (math?.homework || []).filter((h) => h.status !== "done");
+  const monthHw = (math?.homework || []).filter((h) => (h.date || "").slice(0, 7) === hwMonth);
+  const hwTodo = monthHw.filter((h) => h.status !== "done");
+  const hwDone = monthHw.filter((h) => h.status === "done");
+  // 다가올 보강 — 완료/스킵 제외 + 보강일이 지나지 않은 것만(지난 건 끝난 보강).
+  const upcomingMakeups = (math?.makeups || []).filter((m) => m.status !== "done" && m.status !== "skip" && (!m.makeupDate || m.makeupDate >= today)).slice(0, 6);
+  // 최근 등하원.
+  const checkin = (math?.checkin || []).slice(0, 8);
+
+  // 오늘 수업(요일 일치).
+  const todayKor = ["일", "월", "화", "수", "목", "금", "토"][new Date().getDay()];
+  const todayClasses = slots.filter((sl) => sl.day === todayKor).sort((a, b) => a.time.localeCompare(b.time));
+
+  // 시간표 주차 라벨.
+  const mon = mondayOf(TODAY, weekOffset);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  const weekLabel = weekOffset === 0 ? "이번 주" : weekOffset === 1 ? "다음 주" : weekOffset === -1 ? "지난 주" : `${fmtMD(mon)}~${fmtMD(sun)}`;
+
+  return (
+    <div className="sp">
+      {/* (C) 프로필 + 번호표 */}
+      <div className="sp-head">
+        <HexAvatar name={s.name} photo={s.photo} size={56} className="sp-avatar-hex" />
+        <div className="sp-head-info">
+          <h2>{s.name}</h2>
+          <div className="sp-sub">{[s.grade, s.school, "수학 · " + bandLabel].filter(Boolean).join(" · ")}</div>
         </div>
-      ))}
+        <QueueCard compact />
+      </div>
+
+      {/* 프로필 요약 — 오늘·다가오는 일정·마감 숙제 한눈에 */}
+      <div className="sp-summary">
+        <div className="sp-sum">
+          <span className="sp-sum-l">오늘 수업</span>
+          <b>{todayClasses.length ? todayClasses.map((c) => c.time).join(", ") : "없음"}</b>
+        </div>
+        <div className="sp-sum">
+          <span className="sp-sum-l">마감 숙제</span>
+          <b className={pendingHw.length ? "warn" : ""}>{pendingHw.length ? `${pendingHw.length}건` : "없음"}</b>
+        </div>
+        <div className="sp-sum">
+          <span className="sp-sum-l">다가오는 보강</span>
+          <b>{upcomingMakeups[0] ? (upcomingMakeups[0].makeupDate ? fmtMDDow(upcomingMakeups[0].makeupDate) : "조율 중") : "없음"}</b>
+        </div>
+        <div className="sp-sum">
+          <span className="sp-sum-l">다가오는 시험</span>
+          <b>{upcomingTests[0] ? (upcomingTests[0].date ? fmtMDDow(upcomingTests[0].date) : "미정") : "없음"}</b>
+        </div>
+      </div>
+
+      {/* (D) 이번 달 출석 — 벌집 */}
+      {monthAtt.length > 0 && (
+        <div className="sp-att-gauge">
+          <span className="sp-att-label">이번 달 출석</span>
+          <CombGauge value={present} total={monthAtt.length} size={16} />
+          <b className="sp-att-num">{present}<span>/{monthAtt.length}일</span></b>
+        </div>
+      )}
+
+      <div className="sp-grid">
+        {/* (E 왼쪽) 수학 시간표 — 컴팩트(에타) + 주차 화살표 */}
+        <section className="sp-card">
+          <div className="sp-card-head">
+            <h3 className="sp-card-h" style={{ margin: 0 }}>수업 시간표</h3>
+            <div className="sp-week">
+              <button className="sp-week-arr" onClick={() => setWeekOffset((w) => w - 1)} aria-label="이전 주">‹</button>
+              <span className="sp-week-lbl">{weekLabel}</span>
+              <button className="sp-week-arr" onClick={() => setWeekOffset((w) => w + 1)} aria-label="다음 주">›</button>
+            </div>
+          </div>
+          <WeekTimetable math={data.mathSlots} eng={data.engSlots} />
+          <p className="sp-muted" style={{ marginTop: 8 }}>시간표는 보기 전용이에요. 수정은 선생님만 할 수 있어요.</p>
+        </section>
+
+        {/* (E 오른쪽) 알림장(오늘) + 수학 숙제 기록 */}
+        <section className="sp-card">
+          <div className="sp-classnote">
+            <div className="sp-classnote-h">오늘 알림장 · {fmtMDDow(today)}</div>
+            {alims.length > 0 && (
+              <ul className="sp-alim-list">
+                {alims.map((a) => (
+                  <li className="sp-alim-item" key={a.id}>
+                    <span className="sp-alim-body">{a.body}</span>
+                    {a.dueDate && <span className="sp-alim-due">{fmtMDDow(a.dueDate)}까지</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {todayHw.length > 0 && <ul className="sp-mlist">{todayHw.map((h, i) => <HwRow key={i} h={h} />)}</ul>}
+            {noteToday ? (
+              <p className="sp-classnote-memo">{noteToday}</p>
+            ) : (
+              todayHw.length === 0 && alims.length === 0 && <div className="sp-muted">오늘 알림장이 없어요.</div>
+            )}
+          </div>
+          <div className="sp-card-head" style={{ marginTop: 14 }}>
+            <h4 className="sp-classnote-sub">숙제 기록</h4>
+            <div className="sp-week">
+              <button className="sp-week-arr" onClick={() => setHwMonth((mm) => shiftMonth(mm, -1))} aria-label="이전 달">‹</button>
+              <span className="sp-week-lbl">{monthLabel(hwMonth)}</span>
+              <button className="sp-week-arr" onClick={() => setHwMonth((mm) => shiftMonth(mm, 1))} aria-label="다음 달">›</button>
+            </div>
+          </div>
+          {hwTodo.length === 0 && hwDone.length === 0 ? (
+            <div className="sp-muted">이 달 숙제 기록이 없어요.</div>
+          ) : (
+            <>
+              {hwTodo.length > 0 ? (
+                <ul className="sp-mlist">{hwTodo.map((h, i) => <HwRow key={i} h={h} />)}</ul>
+              ) : (
+                <div className="sp-muted">검사할 숙제가 없어요.</div>
+              )}
+              {hwDone.length > 0 && (
+                <>
+                  <button className="sp-toggle" onClick={() => setShowDoneHw((v) => !v)} aria-expanded={showDoneHw}>
+                    완료 {hwDone.length}개 {showDoneHw ? "숨기기" : "보기"}
+                  </button>
+                  {showDoneHw && <ul className="sp-mlist">{hwDone.map((h, i) => <HwRow key={i} h={h} />)}</ul>}
+                </>
+              )}
+            </>
+          )}
+        </section>
+      </div>
+
+      {/* (F) 오늘 수업 일지 — 진도·시험(읽기 전용) */}
+      <section className="sp-card">
+        <h3 className="sp-card-h">오늘 수업 일지</h3>
+        <div className="sp-mblocks">
+          <div className="sp-mblock">
+            <div className="sp-mblock-h">진행 중 진도</div>
+            {ongoing.length === 0 ? <div className="sp-muted">진행 중인 진도가 없어요.</div> : (
+              <ul className="sp-mlist">
+                {ongoing.map((p, i) => <li key={i} className="sp-mrow"><span className="sp-mmain">{p.unit}{p.area ? ` · ${p.area}` : ""}</span><span className="sp-mdate">{p.pct}%</span></li>)}
+              </ul>
+            )}
+          </div>
+          <div className="sp-mblock">
+            <div className="sp-mblock-h">오늘 본 시험</div>
+            {todayDone.length === 0 ? <div className="sp-muted">오늘 본 시험이 없어요.</div> : (
+              <ul className="sp-mlist">
+                {todayDone.map((t, i) => <li key={i} className="sp-mrow"><span className="sp-mmain">{t.type}{t.range ? ` · ${t.range}` : ""}</span><span className="sp-mscore">{t.score}점</span></li>)}
+              </ul>
+            )}
+          </div>
+          <div className="sp-mblock">
+            <div className="sp-mblock-h">예정 시험</div>
+            {upcomingTests.length === 0 ? <div className="sp-muted">예정된 시험이 없어요.</div> : (
+              <ul className="sp-mlist">
+                {upcomingTests.map((t, i) => <li key={i} className="sp-mrow"><span className="sp-mmain">{t.type}{t.range ? ` · ${t.range}` : ""}</span><span className="sp-mdate">{t.date ? fmtMDDow(t.date) : "미정"}</span></li>)}
+              </ul>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* (G) 등하원 · 보강 */}
+      <section className="sp-card">
+        <h3 className="sp-card-h">등하원 · 보강</h3>
+        <div className="sp-mblocks">
+          <div className="sp-mblock">
+            <div className="sp-mblock-h">다가올 보강</div>
+            {upcomingMakeups.length === 0 ? <div className="sp-muted">예정된 보강이 없어요.</div> : (
+              <ul className="sp-mlist">
+                {upcomingMakeups.map((m, i) => (
+                  <li key={i} className="sp-mrow">
+                    <span className="sp-mmain">{m.makeupDate ? `${fmtMDDow(m.makeupDate)}${m.makeupTime ? " " + m.makeupTime : ""}` : "일정 조율 중"}{m.memo ? ` · ${m.memo}` : ""}</span>
+                    <span className="sp-mtag warn">{m.absentDate ? `${m.absentDate.slice(5)} 결석분` : "보강"}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="sp-mblock">
+            <div className="sp-mblock-h">최근 등하원</div>
+            {checkin.length === 0 ? <div className="sp-muted">등하원 기록이 없어요.</div> : (
+              <ul className="sp-mlist">
+                {checkin.map((c, i) => (
+                  <li key={i} className="sp-mrow">
+                    <span className={"sp-mtag " + (c.kind === "하원" ? "info" : "ok")}>{c.kind}</span>
+                    <span className="sp-mmain">{c.subject || "수업"}</span>
+                    <span className="sp-mdate">{fmtMDDow(c.date)} {c.time}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
 
-/* ---------------- 커리큘럼(조회) ---------------- */
-function CurriculumView({ cur }: { cur: Curriculum }) {
-  if (!cur.sections.length) return <div className="sp-muted">아직 등록된 학습이 없어요.</div>;
+/* 영어·수학 둘 다 듣는 학생의 진입 선택 화면. */
+function SubjectPicker({ onPick }: { onPick: (s: "math" | "english") => void }) {
   return (
-    <div className="sp-cur">
-      {cur.note && <div className="sp-cur-note"><Icon name="info" /> {cur.note}</div>}
-      {cur.sections.map((sec, si) => (
-        <div className="sp-cur-sec" key={si}>
-          {sec.title && <div className="sp-cur-sectitle">{sec.title}</div>}
-          <ol className="sp-cur-rows">
-            {sec.rows.map((r, ri) => (
-              <li className="sp-cur-row" key={ri}>
-                <span className="sp-cur-name">{r.name}</span>
-                {r.amount && <span className="sp-cur-amt">{r.amount}</span>}
-              </li>
-            ))}
-          </ol>
-        </div>
-      ))}
+    <div className="sp-pick">
+      <h2 className="sp-pick-title">오늘 어떤 수업을 볼까요?</h2>
+      <p className="sp-pick-sub">과목을 고르면 그 과목 화면으로 들어가요. 언제든 위에서 바꿀 수 있어요.</p>
+      <div className="sp-pick-grid">
+        <button className="sp-pick-card eng" onClick={() => onPick("english")}>
+          <span className="sp-pick-ic"><Icon name="book" /></span>
+          <b>영어</b>
+          <span>영어 시간표 · 수업 일지</span>
+        </button>
+        <button className="sp-pick-card math" onClick={() => onPick("math")}>
+          <span className="sp-pick-ic"><Icon name="baseball" /></span>
+          <b>수학</b>
+          <span>수학 시간표 · 수학 야구</span>
+        </button>
+      </div>
     </div>
   );
 }
 
 /* ---------------- 내가 추가한 학습(학생 본인이 자율 추가) ---------------- */
 function SelfLearning({ items, studentId, onSaved }: { items: CurriculumRow[]; studentId?: string; onSaved: () => void }) {
+  const { user } = useAuth();
+  const isStudent = user?.role === "student"; // 학생은 추가는 되지만 삭제는 못 해요.
   const [rows, setRows] = useState<CurriculumRow[]>(items);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -214,7 +507,7 @@ function SelfLearning({ items, studentId, onSaved }: { items: CurriculumRow[]; s
         <div className="sp-self-row" key={i}>
           <input className="input" value={r.name} placeholder="학습 (예: 단어 복습)" onChange={(e) => setRow(i, { name: e.target.value })} />
           <input className="input sp-self-amt" value={r.amount} placeholder="분량(선택)" onChange={(e) => setRow(i, { amount: e.target.value })} />
-          <button type="button" className="sp-self-del" onClick={() => del(i)} aria-label="삭제"><Icon name="x" /></button>
+          {!isStudent && <button type="button" className="sp-self-del" onClick={() => del(i)} aria-label="삭제"><Icon name="x" /></button>}
         </div>
       ))}
       <div className="sp-self-act">
@@ -222,6 +515,29 @@ function SelfLearning({ items, studentId, onSaved }: { items: CurriculumRow[]; s
         <button type="button" className="btn primary sm" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : "저장"}</button>
         {msg && <span className="sp-saved">{msg}</span>}
       </div>
+    </div>
+  );
+}
+
+/* ---------------- 오늘 뭐해요?(읽기 전용) — 선생님이 정한 순서·내용을 학생에게 보여줘요. ---------------- */
+function CurriculumView({ cur }: { cur: Curriculum }) {
+  if (!cur.sections.length) return <div className="sp-muted">아직 등록된 학습이 없어요.</div>;
+  return (
+    <div className="sp-cur">
+      {cur.note && <div className="sp-cur-note"><Icon name="info" /> {cur.note}</div>}
+      {cur.sections.map((sec, si) => (
+        <div className="sp-cur-sec" key={si}>
+          {sec.title && <div className="sp-cur-sectitle">{sec.title}</div>}
+          <ol className="sp-cur-rows">
+            {sec.rows.map((r, ri) => (
+              <li className="sp-cur-row" key={ri}>
+                <span className="sp-cur-name">{r.name}</span>
+                {r.amount && <span className="sp-cur-amt">{r.amount}</span>}
+              </li>
+            ))}
+          </ol>
+        </div>
+      ))}
     </div>
   );
 }
@@ -314,6 +630,7 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
   const isMid = band === "mid" || band === "bridge"; // 중고등(Bridge 포함) — 숙제 3분류·교재 진도
   // 숙제 체크리스트 작성자 — 학생 본인이면 학생, 강사/원장이 보는 중이면 강사.
   const hwBy: "student" | "teacher" = user?.role === "student" ? "student" : "teacher";
+  const isStudent = user?.role === "student"; // 학생은 추가·체크는 되지만 삭제는 못 해요.
   const hwByName = user?.name || "";
   const [date, setDate] = useState(todayStr());
   const [goals, setGoals] = useState<StudentGoal[]>([]);
@@ -324,6 +641,7 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
   // 오늘의 숙제 — 선생님이 낸 숙제·배부 자료 + 학생도 직접 추가(강사와 양방향). 항목별 상태·작성자.
   const [hwAssign, setHwAssign] = useState<HwItem[]>([]);
   const [doneItems, setDoneItems] = useState<string[]>([]);
+  const [curRanges, setCurRanges] = useState<Record<string, string>>({}); // 항목별 범위/분량
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [studentNote, setStudentNote] = useState("");
@@ -348,6 +666,7 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
     setHwAssign(coerceAssign(row?.hwAssign));
     setBookNo(row?.bookNo || "");
     setDoneItems(row?.doneItems || []);
+    setCurRanges(row?.curRanges || {});
     setStartTime(row?.startTime || "");
     setEndTime(row?.endTime || "");
     setStudentNote(row?.studentNote || "");
@@ -361,7 +680,7 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
     autoTimer.current = setTimeout(() => { void save(); }, 1200);
     return () => { if (autoTimer.current) clearTimeout(autoTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [goals, hwCheck, hwAssign, bookNo, doneItems, startTime, endTime, studentNote]);
+  }, [goals, hwCheck, hwAssign, bookNo, doneItems, curRanges, startTime, endTime, studentNote]);
 
   // 선택한 날짜의 요일에 잡힌 수업시간(자동입력용).
   const dow = DOW[parseD(date).getDay()];
@@ -387,7 +706,7 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
     setSaving(true);
     setSavedMsg("");
     try {
-      await studentApi.saveLog({ studentId, date, goals, hwCheck, hwAssign, bookNo, doneItems, startTime, endTime, studentNote });
+      await studentApi.saveLog({ studentId, date, goals, hwCheck, hwAssign, bookNo, doneItems, curRanges, startTime, endTime, studentNote });
       setSavedMsg("저장됐어요 ✓");
       onSaved();
     } catch (e) {
@@ -439,7 +758,7 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
                   <input type="checkbox" checked={on} onChange={() => { dirtyRef.current = true; setGoals(goals.map((x, j) => (j === i ? { ...x, done: !x.done } : x))); }} />
                   <span className="sp-check-box" aria-hidden="true" />
                   <span className="sp-check-label">{g.text}</span>
-                  <button type="button" className="sp-hw-x" onClick={(e) => { e.preventDefault(); dirtyRef.current = true; setGoals(goals.filter((_, j) => j !== i)); }} aria-label="삭제">×</button>
+                  {!isStudent && <button type="button" className="sp-hw-x" onClick={(e) => { e.preventDefault(); dirtyRef.current = true; setGoals(goals.filter((_, j) => j !== i)); }} aria-label="삭제">×</button>}
                 </label>
               );
             })}
@@ -490,22 +809,30 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
           )}
         </div>
       ) : (
-        /* 오늘 한 것 — 체크박스, 체크하면 줄이 그어져 '완료' 표시 */
+        /* 오늘뭐해요 — 항목별로 '완료' 체크 + 범위(분량) 입력. 항목은 '오늘 한 것 수정' 버튼으로 관리. */
         <div className="sp-f">
-          <span>오늘 한 것 (한 것에 체크!)</span>
-          <div className="sp-checks">
+          <span>오늘뭐해요 (한 것에 체크하고, 어디까지 했는지 적어요)</span>
+          <div className="sp-curlist">
             {items.map((it) => {
               const on = doneItems.includes(it);
               return (
-                <label key={it} className={"sp-check" + (on ? " on" : "")}>
+                <div key={it} className={"sp-curitem" + (on ? " on" : "")}>
+                  <label className={"sp-check" + (on ? " on" : "")}>
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => { dirtyRef.current = true; setDoneItems(on ? doneItems.filter((x) => x !== it) : [...doneItems, it]); }}
+                    />
+                    <span className="sp-check-box" aria-hidden="true" />
+                    <span className="sp-check-label">{it}</span>
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={on}
-                    onChange={() => setDoneItems(on ? doneItems.filter((x) => x !== it) : [...doneItems, it])}
+                    className="sp-currange"
+                    value={curRanges[it] || ""}
+                    onChange={(e) => { dirtyRef.current = true; setCurRanges({ ...curRanges, [it]: e.target.value }); }}
+                    placeholder="범위 (예: p.20~25)"
                   />
-                  <span className="sp-check-box" aria-hidden="true" />
-                  <span className="sp-check-label">{it}</span>
-                </label>
+                </div>
               );
             })}
           </div>
@@ -515,7 +842,7 @@ function LogEditor({ studentId, tid, existing, slots, options, band, progressBoo
       {/* 오늘의 숙제 — 항목마다 완료/미흡/안함/없음 + 작성자(학생 초록 / 강사 주황). 선생님 화면과 양방향 공유. */}
       <div className="sp-f">
         <span>오늘의 숙제</span>
-        <HwChecklist items={hwAssign} onChange={(next) => { dirtyRef.current = true; setHwAssign(next); }} currentBy={hwBy} currentByName={hwByName} placeholder="오늘 받은 숙제 추가 (예: 단어 3과 외우기)" />
+        <HwChecklist items={hwAssign} onChange={(next) => { dirtyRef.current = true; setHwAssign(next); }} currentBy={hwBy} currentByName={hwByName} placeholder="오늘 받은 숙제 추가 (예: 단어 3과 외우기)" noDelete={isStudent} />
       </div>
 
       {/* 숙제 코멘트 — 선생님이 숙제에 대해 남긴 글(읽기 전용). */}
@@ -607,6 +934,13 @@ function LogHistory({ rows, band }: { rows: StudentLogRow[]; band: string }) {
               )}
             </div>
             {r.comment && <div className="sp-hist-note">{r.comment}</div>}
+            {r.links && r.links.length > 0 && (
+              <div className="sp-hist-links">
+                {r.links.filter((l) => safeUrl(l.url)).map((l, i) => (
+                  <a key={i} className="sp-link-btn sm" href={l.url} target="_blank" rel="noopener noreferrer"><Icon name="link" /><span>{l.name}</span></a>
+                ))}
+              </div>
+            )}
           </div>
         ))}
         {!shown.length && <div className="sp-muted">이 달에 작성한 일지가 없어요.</div>}
@@ -628,6 +962,22 @@ export function StudentHome() {
   const [boardCfg, setBoardCfg] = useState<BaseballConfig | undefined>(undefined);
   const [boardOpen, setBoardOpen] = useState(false);
   const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null); // 하원 배너(오늘만)
+  // 진입 과목 — 영수 둘 다 들으면 선택 화면(subject=null), 한 과목이면 바로 그 화면.
+  const [subjects, setSubjects] = useState<string[] | null>(null);
+  const [subject, setSubject] = useState<"math" | "english" | null>(null);
+  useEffect(() => {
+    let alive = true;
+    studentApi.page()
+      .then((d) => {
+        if (!alive) return;
+        const subs = d.subjects && d.subjects.length ? d.subjects : ["english"];
+        setSubjects(subs);
+        if (subs.length === 1) setSubject(subs[0] === "math" ? "math" : "english");
+        // 둘 다면 subject는 null로 두어 선택 화면을 띄운다.
+      })
+      .catch(() => { if (alive) { setSubjects(["english"]); setSubject("english"); } });
+    return () => { alive = false; };
+  }, []);
   const logo = getCachedLogo();
   // 하원 배너 — 오늘 강사가 하원 누르면 상단에 계속 떠있고, 다음날이면 자동으로 사라짐(15초 폴링).
   useEffect(() => {
@@ -678,17 +1028,17 @@ export function StudentHome() {
           <StudentMessages />
           {/* 수학 전광판 — 수학 수강생만. 공지사항 옆 상단에. */}
           {board && (
-            <button className="bb-chip bb-chip-top" onClick={() => setBoardOpen(true)} aria-haspopup="dialog">
-              <span className="bb-chip-ic"><Icon name="baseball" /></span> 수학 전광판
+            <button className="bb-chip bb-chip-top" onClick={() => setBoardOpen(true)} aria-haspopup="dialog" title="수학 전광판">
+              <span className="bb-chip-ic"><Icon name="baseball" /></span> <span className="sp-lbl">수학 전광판</span>
             </button>
           )}
-          <button className="btn ghost sm" onClick={() => setShowGuide(true)}><Icon name="book" /> 사용 안내</button>
-          <button className="btn ghost sm sp-notice-btn" onClick={() => setShowNotice(true)}>
-            <Icon name="megaphone" /> 공지사항
+          <button className="btn ghost sm" onClick={() => setShowGuide(true)} title="사용 안내"><Icon name="book" /> <span className="sp-lbl">사용 안내</span></button>
+          <button className="btn ghost sm sp-notice-btn" onClick={() => setShowNotice(true)} title="공지사항">
+            <Icon name="megaphone" /> <span className="sp-lbl">공지사항</span>
             {noticeUnseen > 0 && <span className="nav-badge new" style={{ minWidth: "auto", marginLeft: 4 }}>new {noticeUnseen}</span>}
           </button>
-          <button className="btn ghost sm" onClick={() => setShowIssue(true)}><Icon name="alert" /> 오류 신고</button>
-          <button className="btn ghost" onClick={() => logout()}>로그아웃</button>
+          <button className="btn ghost sm" onClick={() => setShowIssue(true)} title="오류 신고"><Icon name="alert" /> <span className="sp-lbl">오류 신고</span></button>
+          <button className="btn ghost" onClick={() => logout()} title="로그아웃"><Icon name="logout" /> <span className="sp-lbl">로그아웃</span></button>
         </div>
       </header>
       <main className="sp-shell-body">
@@ -699,7 +1049,26 @@ export function StudentHome() {
           </div>
         )}
         <NoticeBanner />
-        <StudentPage />
+        {/* 영수 둘 다 들으면 과목 전환 칩 — 어느 화면에서든 바꿀 수 있게. */}
+        {subjects && subjects.length > 1 && subject && (
+          <div className="sp-subj-switch" role="tablist" aria-label="과목 전환">
+            <button className={"tts-seg" + (subject === "english" ? " on" : "")} onClick={() => setSubject("english")}>
+              <Icon name="book" /> 영어
+            </button>
+            <button className={"tts-seg" + (subject === "math" ? " on" : "")} onClick={() => setSubject("math")}>
+              <Icon name="baseball" /> 수학
+            </button>
+          </div>
+        )}
+        {subjects === null ? (
+          <SpSkeleton />
+        ) : subject === null ? (
+          <SubjectPicker onPick={setSubject} />
+        ) : subject === "math" ? (
+          <MathStudentPage />
+        ) : (
+          <StudentPage />
+        )}
       </main>
       {user && <div className="sp-shell-foot">{user.name} 학생 · 본인 기록</div>}
       <footer className="maker-credit">제작자 EZ</footer>

@@ -41,8 +41,9 @@ function AccountMenu() {
   if (!user || noBackend) return null;
   return (
     <div className="acct">
-      <span className="acct-chip">
-        {user.name} · <span className="role">{ROLE_LABEL[user.role]}</span>
+      <span className="acct-chip" title={`${user.name} · ${ROLE_LABEL[user.role]}`}>
+        <span className="acct-nm">{user.name}</span>
+        <span className="role">{ROLE_LABEL[user.role]}</span>
       </span>
       <button className="acct-logout" onClick={() => logout()}>
         로그아웃

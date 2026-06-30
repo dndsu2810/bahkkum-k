@@ -47,13 +47,27 @@ export async function runCheckinAlerts(env: Env, opts?: { atMinutes?: number; dr
   const hol = await env.DB.prepare("SELECT 1 AS x FROM class_events WHERE category='휴원' AND date<=? AND (CASE WHEN end_date='' THEN date ELSE end_date END)>=? LIMIT 1").bind(date, date).first().catch(() => null);
   if (hol) return out;
 
-  // 학생: 재원생만. 이름·학년.
-  const stuRows = await allRows<{ id: string | number; name: string; grade: string; status: string }>(env, "SELECT id, name, grade, status FROM students");
+  // 학생: 재원생만. 이름·학년·등록일(start_date).
+  const stuRows = await allRows<{ id: string | number; name: string; grade: string; status: string; start_date: string }>(env, "SELECT id, name, grade, status, start_date FROM students");
   const stu: Record<string, { name: string; grade: string }> = {};
-  for (const s of stuRows) if (s.status === "재원") stu[String(s.id)] = { name: String(s.name || ""), grade: String(s.grade || "") };
-  const metaRows = await allRows<{ student_id: string; english_band: string }>(env, "SELECT student_id, english_band FROM class_student_meta");
+  const startDateOf: Record<string, string> = {}; // 학생 등록일(이전엔 등하원 알림 안 보냄)
+  for (const s of stuRows) if (s.status === "재원") { stu[String(s.id)] = { name: String(s.name || ""), grade: String(s.grade || "") }; startDateOf[String(s.id)] = String(s.start_date || ""); }
+  // 과목별 첫 등원일(math_start·eng_start) — 그 날짜 전에는 그 과목 등하원 알림을 보내지 않는다.
+  const metaRows = await allRows<{ student_id: string; english_band: string; math_start: string; eng_start: string }>(env, "SELECT student_id, english_band, math_start, eng_start FROM class_student_meta");
   const band: Record<string, string> = {};
-  for (const m of metaRows) band[String(m.student_id)] = String(m.english_band || "");
+  const mathStartOf: Record<string, string> = {};
+  const engStartOf: Record<string, string> = {};
+  for (const m of metaRows) { band[String(m.student_id)] = String(m.english_band || ""); mathStartOf[String(m.student_id)] = String(m.math_start || ""); engStartOf[String(m.student_id)] = String(m.eng_start || ""); }
+
+  // 그 학생이 오늘(date) 이 과목 수업을 '시작했는지' — 첫 등원일/등록일이 미래면 아직 아님.
+  // 보강(makeup)은 강사가 직접 잡은 일정이라 게이팅하지 않는다.
+  function started(sid: string, subject: "math" | "english"): boolean {
+    const gen = startDateOf[sid];
+    if (gen && date < gen) return false;
+    const subjStart = subject === "math" ? mathStartOf[sid] : engStartOf[sid];
+    if (subjStart && date < subjStart) return false;
+    return true;
+  }
 
   // 유효 슬롯(키: sid|subject|startMin). 재원생만.
   const slots = new Map<string, Eff>();
@@ -61,13 +75,36 @@ export async function runCheckinAlerts(env: Env, opts?: { atMinutes?: number; dr
   const key = (sid: string, subj: string, start: number) => `${sid}|${subj}|${start}`;
   function add(sid: string, subject: "math" | "english", start: number, duration: number, makeup: boolean) {
     if (start < 0 || !stu[sid]) return;
+    // 정규/시간변경 슬롯은 첫 등원일 전이면 건너뛴다(보강은 예외).
+    if (!makeup && !started(sid, subject)) return;
     slots.set(key(sid, subject, start), { sid, subject, start, end: start + (duration > 0 ? duration : (subject === "math" ? 60 : 50)), makeup });
   }
   function remove(sid: string, subject: string, start: number) { slots.delete(key(sid, subject, start)); }
 
   // 1) 기본 시간표(오늘 요일).
+  // 수학은 '적용 시작일' 다버전 이력(class_schedules)이 있으면, class_lessons(현재 스냅샷) 대신
+  // 오늘 날짜에 유효한 버전을 쓴다 — 미래 적용일로 미리 바꿔둔 시간표가 그날 전에 발송되지 않도록.
+  type SchedVer = { from: string; lessons: { day: string; time: string; duration: number }[] };
+  const versioned = new Set<string>();
+  for (const v of await allRows<{ student_id: string; versions: string }>(env, "SELECT student_id, versions FROM class_schedules")) {
+    let arr: SchedVer[] = [];
+    try { const p = JSON.parse(String(v.versions || "[]")); if (Array.isArray(p)) arr = p; } catch { arr = []; }
+    if (!arr.length) continue;
+    const sid = String(v.student_id);
+    versioned.add(sid);
+    // 오늘 날짜에 유효한 버전 = from<=오늘 중 가장 늦은 것. 모두 미래면 오늘은 수업 없음.
+    const eff = arr.filter((x) => x && typeof x.from === "string" && x.from <= date).sort((a, b) => (a.from < b.from ? -1 : 1)).pop();
+    if (!eff) continue;
+    for (const l of eff.lessons || []) {
+      if (l.day !== dow) continue;
+      dur[`${sid}|math`] ??= Number(l.duration) || 0;
+      add(sid, "math", hmToMin(l.time), Number(l.duration) || 0, false);
+    }
+  }
   for (const r of await allRows<{ student_id: string; time: string; duration: number }>(env, "SELECT student_id, time, duration FROM class_lessons WHERE day=?", dow)) {
-    const sid = String(r.student_id); dur[`${sid}|math`] ??= Number(r.duration) || 0;
+    const sid = String(r.student_id);
+    if (versioned.has(sid)) continue; // 이력 있는 학생은 위에서 유효 버전으로 처리함
+    dur[`${sid}|math`] ??= Number(r.duration) || 0;
     add(sid, "math", hmToMin(r.time), Number(r.duration) || 0, false);
   }
   for (const r of await allRows<{ student_id: string; time: string; duration: number }>(env, "SELECT student_id, time, duration FROM class_eng_lessons WHERE day=?", dow)) {

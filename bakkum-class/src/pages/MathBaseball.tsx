@@ -4,6 +4,8 @@ import { Icon } from "../icons";
 import { Scoreboard } from "../components/Scoreboard";
 import { baseballApi, type ClassResp, type ClassRow, type LogEntry } from "../lib/baseballApi";
 import { type BaseballRule, type RuleTrigger, type BaseballConfig } from "../lib/baseball";
+import { sortStudents } from "../lib/logic";
+import { StudentSortToggle, useStudentSort } from "../components/StudentSortToggle";
 
 /* 수학 야구(수학 전광판) — 선생님 관리 화면.
  *  · 반 학생별 스트라이크·볼·아웃 현황(출결·숙제에서 자동 반영).
@@ -54,11 +56,13 @@ export function MathBaseball() {
     return () => clearInterval(iv);
   }, []);
 
+  const [sort, setSort] = useStudentSort("baseball");
   const students = useMemo(() => {
     const list = view?.students || [];
     const qq = q.trim().toLowerCase();
-    return qq ? list.filter((s) => (s.name + " " + s.grade).toLowerCase().includes(qq)) : list;
-  }, [view, q]);
+    const filtered = qq ? list.filter((s) => (s.name + " " + s.grade).toLowerCase().includes(qq)) : list;
+    return sortStudents(filtered, sort);
+  }, [view, q, sort]);
 
   async function act(fn: () => Promise<unknown>, done: string) {
     if (busy) return;
@@ -94,6 +98,7 @@ export function MathBaseball() {
 
       <div className="bb-search">
         <input className="input" placeholder="학생 이름·학년으로 찾기" value={q} onChange={(e) => setQ(e.target.value)} />
+        <StudentSortToggle value={sort} onChange={setSort} />
       </div>
 
       {err && <div className="bb-error">현황을 불러오지 못했어요. 잠시 후 다시 시도해 주세요. ({err})</div>}

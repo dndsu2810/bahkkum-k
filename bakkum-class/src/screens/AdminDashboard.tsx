@@ -114,11 +114,16 @@ export function AdminDashboard() {
                   <div className="dash-rows">
                     {rows.map(({ p, v }) => (
                       <button className="dash-row" key={p.id} onClick={() => setOpenId(p.id)}>
-                        <span className="dash-row-nm">{p.name}</span>
-                        <span className="dash-row-tags">
-                          {v.late > 0 && <span className="dash-tag late">지각 {v.late}</span>}
-                          {v.absent > 0 && <span className="dash-tag absent">결석 {v.absent}</span>}
+                        <span className="dash-row-top">
+                          <span className="dash-row-nm">{p.name}</span>
+                          <span className="dash-row-tags">
+                            {v.late > 0 && <span className="dash-tag late">지각 {v.late}</span>}
+                            {v.absent > 0 && <span className="dash-tag absent">결석 {v.absent}</span>}
+                          </span>
                         </span>
+                        {p.reasons && p.reasons.length > 0 && (
+                          <span className="dash-row-reasons">결석 사유 · {p.reasons.join(" / ")}</span>
+                        )}
                       </button>
                     ))}
                   </div>

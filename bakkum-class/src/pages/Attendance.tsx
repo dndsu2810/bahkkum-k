@@ -53,7 +53,8 @@ function lessonsOnDate(students: Student[], dateStr: string): LessonOnDate[] {
       if (l.day === dow) list.push({ student: s, time: l.time, duration: l.duration });
     });
   });
-  list.sort((a, b) => timeToMin(a.time) - timeToMin(b.time));
+  // 시간 우선, 같은 시간이면 가나다(한글 이름)순
+  list.sort((a, b) => timeToMin(a.time) - timeToMin(b.time) || a.student.name.localeCompare(b.student.name, "ko"));
   return list;
 }
 
@@ -250,6 +251,13 @@ export function Attendance() {
         note: s.note || "",
       });
     }
+  }
+
+  // 출결 기록(아래 월별 표) 한 줄을 그날 수업처럼 만들어, 위 편집기와 똑같이 수정할 수 있게.
+  // (보강 계산용 수업시간은 그 날짜 시간표에서 찾고, 없으면 60분)
+  function recordIt(date: string, time: string, s: Student): LessonOnDate {
+    const dur = effectiveLessons(s, date).find((l) => l.time === time)?.duration || 60;
+    return { student: s, time, duration: dur };
   }
 
   // 행 포커스 상태에서 1=출석 2=지각 3=결석, Enter=다음 학생 (A-7)
@@ -467,17 +475,51 @@ export function Attendance() {
                       </tr>
                       {open && g.rows.map((r) => {
                         const s = studentById(data.students, r.sid);
+                        const st = r.rec.status;
+                        // 삭제된 학생 기록은 보기만(수정 불가). 그 외엔 위 편집기와 똑같이 인라인 수정.
+                        if (!s) {
+                          return (
+                            <tr key={r.key}>
+                              <td style={{ fontWeight: 700, color: "var(--text)" }}>(삭제된 학생)</td>
+                              <td><span className={"badge " + (REC_TONE[st] || "b-gray")}>{st}{st === "지각" && r.rec.lateMinutes ? ` ${r.rec.lateMinutes}분` : ""}</span></td>
+                              <td className="muted">{r.rec.attitude || "—"}</td>
+                              <td className="muted">{r.rec.note || "—"}</td>
+                            </tr>
+                          );
+                        }
+                        const it = recordIt(r.date, r.time, s);
+                        const moreOpen = (!!st && ATT_MORE.includes(st as AttStatus)) || moreKey === r.key;
                         return (
                           <tr key={r.key}>
-                            <td style={{ fontWeight: 700, color: "var(--text)" }}>{s ? s.name : "(삭제된 학생)"}</td>
+                            <td style={{ fontWeight: 700, color: "var(--text)" }}>{s.name}{r.time ? <span className="att-rec-time"> · {r.time}</span> : null}</td>
                             <td>
-                              <span className={"badge " + (REC_TONE[r.rec.status] || "b-gray")}>
-                                {r.rec.status}
-                                {r.rec.status === "지각" && r.rec.lateMinutes ? ` ${r.rec.lateMinutes}분` : ""}
+                              <div className="att-segwrap att-rec-seg">
+                                <div className="att-seg">
+                                  {ATT_MAIN.map((opt) => (
+                                    <button key={opt} className={st === opt ? "on t-" + TONE[opt] : ""} onClick={() => setStatus(it, r.key, opt)}>{opt}</button>
+                                  ))}
+                                  {moreOpen && ATT_MORE.map((opt) => (
+                                    <button key={opt} className={st === opt ? "on t-" + TONE[opt] : ""} onClick={() => setStatus(it, r.key, opt)}>{opt}</button>
+                                  ))}
+                                </div>
+                                {!(!!st && ATT_MORE.includes(st as AttStatus)) && (
+                                  <button className="att-more" onClick={() => setMoreKey(moreKey === r.key ? null : r.key)}>{moreOpen ? "접기" : "⋯"}</button>
+                                )}
+                                {st === "지각" && (
+                                  <input className="mini-num" type="number" min={0} step={5} placeholder="분" value={r.rec.lateMinutes ?? ""} onWheel={(e) => e.currentTarget.blur()} onChange={(e) => patchRecord(r.key, { lateMinutes: +e.target.value || 0 })} />
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <span className="mini-seg">
+                                {ATTITUDES.map((a) => (
+                                  <button key={a} className={r.rec.attitude === a ? "on" : ""} onClick={() => patchRecord(r.key, { attitude: a })}>{a}</button>
+                                ))}
                               </span>
                             </td>
-                            <td className="muted">{r.rec.attitude || "—"}</td>
-                            <td className="muted">{r.rec.note || "—"}</td>
+                            <td>
+                              <input className="mini-note" placeholder="특이사항 (선택)" value={r.rec.note ?? ""} onChange={(e) => patchRecord(r.key, { note: e.target.value })} />
+                            </td>
                           </tr>
                         );
                       })}

@@ -3,6 +3,8 @@
 export type Subject = "math" | "english";
 // bridge = 초등 고학년이지만 중고등처럼 수업받는 학생. 중고등(mid)에서 함께 관리.
 export type EnglishBand = "elem" | "mid" | "bridge" | "";
+// 수학 반: "" = 학년으로 자동(초1~3 저학년 / 초4~6 고학년 / 중고등) · "low" 초등 저학년 · "high" 초등 고학년.
+export type MathClass = "" | "low" | "high";
 
 /** 학생 영어반(band)이 화면 band("elem"|"mid")에 속하는지. bridge는 중고등(mid)에 포함. */
 export function inEngBand(studentBand: EnglishBand, screenBand: "elem" | "mid"): boolean {
@@ -29,6 +31,7 @@ export interface RosterStudent {
   onlineId: string;
   subjects: Subject[];
   englishBand: EnglishBand;
+  mathClass: MathClass; // 수학 반(저학년/고학년) — 비우면 학년으로 자동 분류
   attendDays: string[]; // 등원요일 ["월","수","금"]
   memo: string; // 메모/특이사항
   photo: string; // 프로필 사진 URL(선택)
@@ -100,6 +103,7 @@ export async function saveStudentMeta(input: {
   checkinNo?: string;
   mathStart?: string;
   engStart?: string;
+  mathClass?: MathClass;
 }): Promise<void> {
   const r = await fetch("/api/roster/meta", {
     method: "POST",
@@ -114,7 +118,19 @@ export async function saveStudentMeta(input: {
 }
 
 /** 학생 과목별 수업 슬롯 저장(원장 전용) — 수학은 수학 앱과 공유, 영어는 영어 시간표. */
-export async function saveStudentSlots(input: { studentId: string; math: Slot[]; english: Slot[] }): Promise<void> {
+export async function saveStudentSlots(input: {
+  studentId: string;
+  math: Slot[];
+  english: Slot[];
+  mathEffFrom?: string;
+  engEffFrom?: string; // 영어 시간표 적용 시작일(미래면 그 날부터 교체, 오늘은 그대로)
+  /** 과목 수강 여부(체크 상태). 꺼져 있으면 기본은 시간표 보존. */
+  mathOn?: boolean;
+  engOn?: boolean;
+  /** 과목을 끄며 시간표 삭제를 사용자가 확인했을 때만 true. */
+  clearMath?: boolean;
+  clearEnglish?: boolean;
+}): Promise<void> {
   const r = await fetch("/api/roster/slots", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -125,6 +141,21 @@ export async function saveStudentSlots(input: { studentId: string; math: Slot[];
     throw new Error(j.error || "save_failed");
   }
   invalidateRoster();
+}
+
+/** 시간표 전용 저장(학생 1명) — 전체저장(putData)이 시간표를 더 이상 안 건드리므로, 시간표 편집/생성 시 호출.
+ *  lessons(현재 시간표) + schedule(다버전 이력)을 그 학생만 교체. 오래된 화면의 일반 저장이 되돌리지 못함. */
+export async function saveStudentTimetable(input: {
+  studentId: string;
+  lessons: { day: string; time: string; duration: number }[];
+  schedule?: { from: string; lessons: { day: string; time: string; duration: number }[] }[];
+}): Promise<void> {
+  const r = await fetch("/api/student-timetable", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!r.ok) throw new Error("timetable_save_failed");
 }
 
 /** 공통 학생 핵심 필드 저장(원장 전용) — students에 기록 + 노션 동기화 보호(앱 소유). */

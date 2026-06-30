@@ -3,11 +3,13 @@ import { useAuth } from "../auth";
 import { checkinApi, type CheckinRow } from "../lib/checkinApi";
 import {
   type EnglishBand,
+  type MathClass,
   type RosterStudent,
   type Slot,
   type Subject,
   inEngBand,
   getRoster,
+  invalidateRoster,
   saveStudentCore,
   saveStudentMeta,
   saveStudentSlots,
@@ -16,13 +18,22 @@ import {
   bulkGrades,
   type PromoteBefore,
 } from "../lib/rosterApi";
-import { GRADE_DIVS, DIV_MAX, makeGrade, parseGrade } from "../lib/grade";
+import { createStudent } from "../api";
+import type { StudentStatus } from "../types";
+import { todayStr } from "../lib/dates";
+import { GRADE_DIVS, DIV_MAX, makeGrade, parseGrade, mathBandOf } from "../lib/grade";
 import { uploadImage } from "../lib/configApi";
 import { notesApi, type NoteItem } from "../lib/hubApi";
+import { meetingApi, type MeetingListItem, type MeetingDetail } from "../lib/meetingApi";
 import { StudentPage } from "./StudentPage";
 import { SkeletonList } from "../components/Skeleton";
 import { HexAvatar } from "../soez";
 import { Icon } from "../icons";
+
+/** 신규 등록용 빈 학생 — 모든 필드 기본값. 등록일만 오늘로. */
+function blankStudent(): RosterStudent {
+  return { id: "", name: "", grade: "", status: "재원", school: "", birthdate: "", parentPhone: "", studentPhone: "", startDate: todayStr(), onlineId: "", subjects: [], englishBand: "", mathClass: "", attendDays: [], memo: "", photo: "", checkinNo: "", mathStart: "", engStart: "", mathSlots: [], engSlots: [] };
+}
 
 type FilterKey = "all" | "math" | "english" | "elem" | "mid";
 
@@ -35,6 +46,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 ];
 
 const BAND_LABEL: Record<Exclude<EnglishBand, "">, string> = { elem: "초등", mid: "중고등", bridge: "Bridge" };
+const MATH_BAND_LABEL: Record<"low" | "high" | "mid", string> = { low: "초등 저학년", high: "초등 고학년", mid: "중고등" };
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
 const STATUSES = ["재원", "휴원", "퇴원", "상담"];
 type StatusKey = "all" | "재원" | "휴원" | "퇴원";
@@ -45,9 +57,9 @@ const STATUS_FILTERS: { key: StatusKey; label: string }[] = [
   { key: "퇴원", label: "퇴원" },
 ];
 
-// 등원요일: 지정값이 있으면 그것, 없으면 수업시간(요일)에서 자동 반영.
+// 등원요일 = 수업시간(요일) + 수동으로 추가한 요일의 합집합. 수업을 추가하면 그 요일이 자동으로 포함된다.
 const effAttendDays = (r: RosterStudent) =>
-  r.attendDays.length ? r.attendDays : DOW.filter((dd) => r.mathSlots.some((s) => s.day === dd) || r.engSlots.some((s) => s.day === dd));
+  DOW.filter((dd) => r.mathSlots.some((s) => s.day === dd) || r.engSlots.some((s) => s.day === dd) || r.attendDays.includes(dd));
 const subjLabel = (s: RosterStudent) =>
   [s.subjects.includes("math") ? "수학" : "", s.subjects.includes("english") ? "영어" : ""].filter(Boolean).join("·") || "—";
 
@@ -64,6 +76,7 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
   const [filter, setFilter] = useState<FilterKey>("all");
   const [statusF, setStatusF] = useState<StatusKey>("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false); // 신규 학생 등록 모달
   const [schoolF, setSchoolF] = useState("");
   const [gradeF, setGradeF] = useState("");
   const [gradeBusy, setGradeBusy] = useState(false);
@@ -179,6 +192,9 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
               {lastPromote && <button className="btn ghost" onClick={doUndo} disabled={gradeBusy}>되돌리기</button>}
             </>
           )}
+          {canEdit && !bandLock && (
+            <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" /> 학생 추가</button>
+          )}
           <div className="sm-count">{list.length}명</div>
         </div>
       </div>
@@ -272,6 +288,17 @@ export function StudentMaster({ bandLock, jumpTo }: { bandLock?: "elem" | "mid";
           onSaved={applyLocal}
         />
       )}
+
+      {adding && (
+        <ProfileModal
+          key="new-student"
+          student={blankStudent()}
+          canEdit={canEdit}
+          isNew
+          onClose={() => setAdding(false)}
+          onSaved={(s) => setRows((cur) => (cur.some((r) => r.id === s.id) ? cur.map((r) => (r.id === s.id ? s : r)) : [...cur, s]))}
+        />
+      )}
     </div>
   );
 }
@@ -282,11 +309,13 @@ export function ProfileModal({
   canEdit,
   onClose,
   onSaved,
+  isNew = false,
 }: {
   student: RosterStudent;
   canEdit: boolean;
   onClose: () => void;
   onSaved: (s: RosterStudent) => void;
+  isNew?: boolean; // 신규 등록 — 저장할 때 학생을 새로 만들고, 동명이인 검사를 강제
 }) {
   const [f, setF] = useState<RosterStudent>(student);
   const [busy, setBusy] = useState(false);
@@ -294,7 +323,19 @@ export function ProfileModal({
   const [err, setErr] = useState("");
   const [photoBusy, setPhotoBusy] = useState(false);
   const [showPage, setShowPage] = useState(false);
+  const [mathEffFrom, setMathEffFrom] = useState(todayStr()); // 수학 시간표 적용 시작일
+  const [engEffFrom, setEngEffFrom] = useState(todayStr()); // 영어 시간표 적용 시작일
   const hasEng = f.subjects.includes("english");
+
+  // 동명이인 검사 — 재원생 중 같은 이름(본인 제외). 생년월일까지 같으면 동일인으로 보고 등록을 막는다.
+  const [roster, setRoster] = useState<RosterStudent[]>([]);
+  useEffect(() => { getRoster().then(setRoster).catch(() => {}); }, []);
+  const nameTrim = f.name.trim();
+  const sameName = nameTrim
+    ? roster.filter((r) => r.id !== f.id && (r.status || "재원") === "재원" && r.name.trim() === nameTrim)
+    : [];
+  // 생년월일이 둘 다 있고 같은 학생이 있으면 같은 사람 → 등록 불가.
+  const sameNameAndBirth = sameName.filter((r) => f.birthdate && r.birthdate && r.birthdate === f.birthdate);
 
   // 프로필 사진 업로드(선택) — 올리면 즉시 저장.
   async function onPhoto(file?: File | null) {
@@ -303,12 +344,12 @@ export function ProfileModal({
     try {
       const url = await uploadImage(file);
       setF((cur) => ({ ...cur, photo: url }));
-      await saveStudentMeta({ studentId: f.id, onlineId: f.onlineId, subjects: f.subjects, englishBand: f.englishBand, attendDays: f.attendDays, memo: f.memo, photo: url, checkinNo: f.checkinNo, mathStart: f.mathStart, engStart: f.engStart });
+      await saveStudentMeta({ studentId: f.id, onlineId: f.onlineId, subjects: f.subjects, englishBand: f.englishBand, attendDays: f.attendDays, memo: f.memo, photo: url, checkinNo: f.checkinNo, mathStart: f.mathStart, engStart: f.engStart, mathClass: f.mathClass });
     } catch { setErr("사진 업로드에 실패했어요."); } finally { setPhotoBusy(false); }
   }
-  // 등원요일 = 수동 지정값이 있으면 그것, 없으면 수업시간(요일)에서 자동 반영.
+  // 등원요일 = 수업시간(요일) + 수동 추가 요일의 합집합. 수업을 추가하면 그 요일이 자동 포함된다.
   const slotDays = DOW.filter((dd) => f.mathSlots.some((s) => s.day === dd) || f.engSlots.some((s) => s.day === dd));
-  const effectiveDays = f.attendDays.length ? f.attendDays : slotDays;
+  const effectiveDays = DOW.filter((dd) => slotDays.includes(dd) || f.attendDays.includes(dd));
 
   const set = <K extends keyof RosterStudent>(k: K, v: RosterStudent[K]) => setF((c) => ({ ...c, [k]: v }));
   function toggleSubject(s: Subject) {
@@ -322,26 +363,55 @@ export function ProfileModal({
   }
   function toggleDay(d: string) {
     setF((c) => {
-      // 처음 토글하면 자동 반영된 요일(수업시간 기준)에서 시작.
-      const base = c.attendDays.length ? c.attendDays : DOW.filter((dd) => c.mathSlots.some((s) => s.day === dd) || c.engSlots.some((s) => s.day === dd));
-      const next = base.includes(d) ? base.filter((x) => x !== d) : [...base, d];
-      return { ...c, attendDays: DOW.filter((x) => next.includes(x)) };
+      // 현재 보이는 등원요일(수업시간 + 수동 추가)에서 토글.
+      const slotDaysC = DOW.filter((dd) => c.mathSlots.some((s) => s.day === dd) || c.engSlots.some((s) => s.day === dd));
+      const cur = new Set<string>([...slotDaysC, ...c.attendDays]);
+      if (cur.has(d)) cur.delete(d); else cur.add(d);
+      return { ...c, attendDays: DOW.filter((x) => cur.has(x)) };
     });
   }
 
   async function save() {
     if (busy) return;
-    if (!f.name.trim()) { setErr("이름을 입력해 주세요."); return; }
+    if (!nameTrim) { setErr("이름을 입력해 주세요."); return; }
+    // 신규 등록 시: 동명이인 + 생년월일 동일 → 같은 사람이라 새로 등록할 수 없음(이름을 바꾸거나 생년월일 확인).
+    if (isNew && sameNameAndBirth.length) { setErr("같은 이름·생년월일의 재원 학생이 이미 있어요. 이름을 바꾸거나 생년월일을 확인해 주세요."); return; }
     // 중복 등록 방지 — 한 학생이 같은 요일·시간에 수학·영어 둘 다 등록되면 막는다.
     if (f.subjects.includes("math") && f.subjects.includes("english")) {
       const clash = f.mathSlots.find((m) => f.engSlots.some((e) => e.day === m.day && e.time === m.time));
       if (clash) { setErr(`${clash.day} ${clash.time}에 수학·영어 수업이 겹쳐요. 한 학생은 같은 시간에 한 과목만 등록할 수 있어요.`); return; }
     }
+    // 데이터 보호: 과목을 끄면 그 과목 시간표가 사라진다. 기존 시간표가 있으면 삭제 전에 한 번 더 확인.
+    //  - 확인하면 clearX=true로 보내 백엔드가 삭제, 취소하면 저장 자체를 멈춘다(아무것도 안 바뀜).
+    const mathOn = f.subjects.includes("math");
+    const engOn = f.subjects.includes("english");
+    let clearMath = false;
+    let clearEnglish = false;
+    if (!isNew) {
+      const hadMath = (student.mathSlots?.length || 0) > 0;
+      const hadEng = (student.engSlots?.length || 0) > 0;
+      if (!mathOn && hadMath) {
+        if (!window.confirm(`${nameTrim} 학생의 ‘수학’을 끄면 수학 시간표가 삭제돼요.\n수학 수업관리와 공유되는 데이터라 되돌릴 수 없어요.\n\n그래도 삭제할까요?`)) return;
+        clearMath = true;
+      }
+      if (!engOn && hadEng) {
+        if (!window.confirm(`${nameTrim} 학생의 ‘영어’를 끄면 영어 시간표가 삭제돼요.\n되돌릴 수 없어요.\n\n그래도 삭제할까요?`)) return;
+        clearEnglish = true;
+      }
+    }
     setBusy(true);
     setErr("");
     try {
+      // 신규: 먼저 학생을 만들어 id를 받아온다(공통 명단 students 테이블이 id 발급).
+      let sid = f.id;
+      if (isNew || !sid) {
+        const { id: newId } = await createStudent({ name: nameTrim, grade: f.grade, status: (f.status || "재원") as StudentStatus, startDate: f.startDate, school: f.school, birthdate: f.birthdate, parentPhone: f.parentPhone, studentPhone: f.studentPhone });
+        sid = newId;
+        setF((c) => ({ ...c, id: newId }));
+        invalidateRoster();
+      }
       await saveStudentMeta({
-        studentId: f.id,
+        studentId: sid,
         onlineId: f.onlineId,
         subjects: f.subjects,
         englishBand: f.englishBand,
@@ -351,10 +421,11 @@ export function ProfileModal({
         checkinNo: f.checkinNo,
         mathStart: f.mathStart,
         engStart: f.engStart,
+        mathClass: f.mathClass,
       });
       await saveStudentCore({
-        studentId: f.id,
-        name: f.name.trim(),
+        studentId: sid,
+        name: nameTrim,
         grade: f.grade,
         status: f.status,
         school: f.school,
@@ -364,13 +435,21 @@ export function ProfileModal({
         startDate: f.startDate,
       });
       await saveStudentSlots({
-        studentId: f.id,
-        math: f.subjects.includes("math") ? f.mathSlots : [],
-        english: f.subjects.includes("english") ? f.engSlots : [],
+        studentId: sid,
+        math: mathOn ? f.mathSlots : [],
+        english: engOn ? f.engSlots : [],
+        mathEffFrom: !isNew && mathOn ? mathEffFrom : "",
+        engEffFrom: !isNew && engOn ? engEffFrom : "",
+        mathOn,
+        engOn,
+        clearMath,
+        clearEnglish,
       });
-      onSaved(f);
+      invalidateRoster();
+      onSaved({ ...f, id: sid });
       setDone(true);
       setTimeout(() => setDone(false), 1400);
+      if (isNew) { setTimeout(onClose, 600); } // 신규 등록은 저장 후 닫아 목록으로 돌아가기
     } catch {
       setErr("저장에 실패했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
@@ -418,7 +497,18 @@ export function ProfileModal({
 
         <div className="prof-body">
           <Section title="기본 정보">
-            <Field label="이름"><Txt ro={ro} value={f.name} onChange={(v) => set("name", v)} placeholder="학생 이름" /></Field>
+            <Field label="이름">
+              <Txt ro={ro} value={f.name} onChange={(v) => set("name", v)} placeholder="학생 이름" />
+              {sameName.length > 0 && (
+                <div className={"prof-dup" + (sameNameAndBirth.length ? " block" : "")}>
+                  {sameNameAndBirth.length
+                    ? (isNew
+                      ? "같은 이름·생년월일의 재원 학생이 있어요. 등록할 수 없어요 — 이름을 바꿔 주세요."
+                      : "같은 이름·생년월일의 재원 학생이 있어요. 동일인이 아닌지 확인해 주세요.")
+                    : `재원생 중 같은 이름(${nameTrim})이 ${sameName.length}명 있어요.${isNew ? " 생년월일이 같으면 등록할 수 없어요." : ""}`}
+                </div>
+              )}
+            </Field>
             <Field label="학년">
               {ro ? <span className="prof-val">{f.grade || "—"}</span> : <GradeSelect value={f.grade} onChange={(v) => set("grade", v)} />}
             </Field>
@@ -456,6 +546,21 @@ export function ProfileModal({
                 )}
               </Field>
             )}
+            {f.subjects.includes("math") && (
+              <Field label="수학 반">
+                {ro ? (
+                  <span className="prof-val">
+                    {f.mathClass ? MATH_BAND_LABEL[f.mathClass] : `자동 · ${MATH_BAND_LABEL[mathBandOf(f.grade)]}`}
+                  </span>
+                ) : (
+                  <select className="inline-select" value={f.mathClass || ""} onChange={(e) => set("mathClass", e.target.value as MathClass)}>
+                    <option value="">자동 (학년 기준: {MATH_BAND_LABEL[mathBandOf(f.grade)]})</option>
+                    <option value="low">초등 저학년</option>
+                    <option value="high">초등 고학년</option>
+                  </select>
+                )}
+              </Field>
+            )}
             <Field label="등원요일">
               <div className="prof-days">
                 {DOW.map((d) => (
@@ -476,12 +581,26 @@ export function ProfileModal({
               <div className="prof-slot-block">
                 <span className="prof-field-l">수학 수업시간 <span className="prof-slot-tag math">시간표 반영</span></span>
                 <SlotEditor ro={ro} slots={f.mathSlots} onChange={(s) => set("mathSlots", s)} />
+                {!ro && !isNew && (
+                  <div className="prof-efffrom">
+                    <span className="prof-efffrom-l">시간표 적용 시작일</span>
+                    <input type="date" className="inline-select" value={mathEffFrom} onChange={(e) => setMathEffFrom(e.target.value)} />
+                    <span className="prof-efffrom-h">이 날짜부터 새 시간표로 보여요. 시간표를 바꿨을 때만 적용되고, 이전 날짜는 기존 시간표가 유지돼요.</span>
+                  </div>
+                )}
               </div>
             )}
             {hasEng && (
               <div className="prof-slot-block">
                 <span className="prof-field-l">영어 수업시간 <span className="prof-slot-tag eng">시간표 반영</span></span>
                 <SlotEditor ro={ro} slots={f.engSlots} onChange={(s) => set("engSlots", s)} />
+                {!ro && !isNew && (
+                  <div className="prof-efffrom">
+                    <span className="prof-efffrom-l">시간표 적용 시작일</span>
+                    <input type="date" className="inline-select" value={engEffFrom} onChange={(e) => setEngEffFrom(e.target.value)} />
+                    <span className="prof-efffrom-h">이 날짜부터 새 시간표로 보여요. 시간표를 바꿨을 때만 적용되고, 이전 날짜는 기존 시간표가 유지돼요.</span>
+                  </div>
+                )}
               </div>
             )}
           </Section>
@@ -494,10 +613,17 @@ export function ProfileModal({
             )}
           </Section>
 
-          {/* 강사 특이사항(누적) — 과목 공통, 강사들이 시간순으로 남긴 기록(class_notes). 와이어프레임 학생상세 '특이사항 탭'. */}
+          {/* 강사 특이사항(누적) — 과목 공통, 강사들이 시간순으로 남긴 기록(class_notes kind=''). */}
           <section className="prof-sec">
             <h4 className="prof-sec-t">강사 특이사항 (누적)</h4>
-            <StudentNotes studentId={f.id} canEdit={canEdit} />
+            <StudentNotes studentId={f.id} canEdit={canEdit} kind="" />
+          </section>
+
+          {/* 학부모 상담 기록(누적) — 상담 내용 시간순(class_notes kind='counsel') + 연계된 회의록. */}
+          <section className="prof-sec">
+            <h4 className="prof-sec-t">학부모 상담 기록 (누적)</h4>
+            <StudentNotes studentId={f.id} canEdit={canEdit} kind="counsel" placeholder="상담 기록 추가 (예: 6/25 어머니 통화 — 진도 상담)" emptyText="아직 상담 기록이 없어요." confirmText="이 상담 기록을 삭제할까요?" />
+            <StudentMeetings studentId={f.id} />
           </section>
 
           {/* 등하원 이력(조회용) — 수정·발송 없음. 상담 시 보여주는 용도. */}
@@ -513,7 +639,7 @@ export function ProfileModal({
             <>
               <span className={"prof-saved" + (done ? " on" : "")}>저장됨</span>
               <button className="btn ghost" onClick={onClose}>닫기</button>
-              <button className="btn primary" onClick={save} disabled={busy}>{busy ? "저장 중…" : "저장"}</button>
+              <button className="btn primary" onClick={save} disabled={busy || (isNew && sameNameAndBirth.length > 0)}>{busy ? "저장 중…" : isNew ? "등록" : "저장"}</button>
             </>
           ) : (
             <button className="btn ghost" onClick={onClose}>닫기</button>
@@ -544,20 +670,20 @@ function fmtWhen(ts: number): string {
   const dt = new Date(ts);
   return dt.getFullYear() + ". " + (dt.getMonth() + 1) + ". " + dt.getDate() + ".";
 }
-function StudentNotes({ studentId, canEdit }: { studentId: string; canEdit: boolean }) {
+function StudentNotes({ studentId, canEdit, kind = "", placeholder = "특이사항 추가 (예: 단어시험 만점, 레벨업 검토)", emptyText = "아직 누적된 특이사항이 없어요.", confirmText = "이 특이사항을 삭제할까요?" }: { studentId: string; canEdit: boolean; kind?: string; placeholder?: string; emptyText?: string; confirmText?: string }) {
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
-  const load = () => notesApi.list(studentId).then(setNotes).catch(() => {});
-  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [studentId]);
+  const load = () => notesApi.list(studentId, kind).then(setNotes).catch(() => {});
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [studentId, kind]);
   async function add() {
     const b = body.trim();
     if (!b || busy) return;
     setBusy(true);
-    try { await notesApi.add(studentId, b); setBody(""); await load(); } catch { /* ignore */ } finally { setBusy(false); }
+    try { await notesApi.add(studentId, b, kind); setBody(""); await load(); } catch { /* ignore */ } finally { setBusy(false); }
   }
   async function remove(id: string) {
-    if (!window.confirm("이 특이사항을 삭제할까요?")) return;
+    if (!window.confirm(confirmText)) return;
     await notesApi.remove(id).catch(() => {});
     void load();
   }
@@ -565,12 +691,12 @@ function StudentNotes({ studentId, canEdit }: { studentId: string; canEdit: bool
     <div className="prof-notes">
       {canEdit && (
         <div className="prof-notes-add">
-          <input className="inline-input" value={body} onChange={(e) => setBody(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="특이사항 추가 (예: 단어시험 만점, 레벨업 검토)" />
+          <input className="inline-input" value={body} onChange={(e) => setBody(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder={placeholder} />
           <button className="btn primary sm" onClick={add} disabled={!body.trim() || busy}>{busy ? "추가 중…" : "추가"}</button>
         </div>
       )}
       {notes.length === 0 ? (
-        <p className="prof-memo-ro" style={{ marginTop: canEdit ? 4 : 0 }}>아직 누적된 특이사항이 없어요.</p>
+        <p className="prof-memo-ro" style={{ marginTop: canEdit ? 4 : 0 }}>{emptyText}</p>
       ) : (
         <div className="prof-notes-tl">
           {notes.map((n) => (
@@ -585,6 +711,37 @@ function StudentNotes({ studentId, canEdit }: { studentId: string; canEdit: bool
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* 연계된 회의록 — 이 학생에 연결된 회의록(학부모 상담 등)을 보여주고, 펼치면 요약을 읽어요. */
+function StudentMeetings({ studentId }: { studentId: string }) {
+  const [list, setList] = useState<MeetingListItem[]>([]);
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [detail, setDetail] = useState<MeetingDetail | null>(null);
+  useEffect(() => { meetingApi.byStudent(studentId).then(setList).catch(() => {}); }, [studentId]);
+  function toggle(mid: number) {
+    if (openId === mid) { setOpenId(null); setDetail(null); return; }
+    setOpenId(mid); setDetail(null);
+    meetingApi.get(mid).then(setDetail).catch(() => {});
+  }
+  if (list.length === 0) return null;
+  return (
+    <div className="prof-mtg">
+      <div className="prof-mtg-t">연계된 회의록</div>
+      {list.map((mt) => (
+        <div className="prof-mtg-item" key={mt.id}>
+          <button className="prof-mtg-row" onClick={() => toggle(mt.id)}>
+            <span className="prof-mtg-date">{mt.meetingDate}</span>
+            <span className="prof-mtg-title">{mt.title}</span>
+            {mt.category && <span className="prof-mtg-cat">{mt.category}</span>}
+          </button>
+          {openId === mt.id && (
+            <div className="prof-mtg-sum">{detail ? (detail.summary || detail.rawText || "요약이 없어요.") : "불러오는 중…"}</div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -646,7 +803,7 @@ function SlotEditor({ ro, slots, onChange }: { ro: boolean; slots: Slot[]; onCha
             {DOW.map((d) => <option key={d}>{d}</option>)}
           </select>
           <input type="time" value={s.time} onChange={(e) => update(i, { time: e.target.value })} />
-          <input type="number" min={10} step={10} value={s.duration} onChange={(e) => update(i, { duration: Number(e.target.value) || 0 })} title="수업시간(분)" />
+          <input type="number" min={10} step={10} inputMode="numeric" value={s.duration} onChange={(e) => update(i, { duration: Number(e.target.value) || 0 })} onWheel={(e) => e.currentTarget.blur()} title="수업시간(분)" />
           <button type="button" className="slot-x" onClick={() => remove(i)} aria-label="삭제">✕</button>
         </div>
       ))}

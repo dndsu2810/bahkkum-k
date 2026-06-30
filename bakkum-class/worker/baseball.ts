@@ -253,7 +253,6 @@ export async function handleBaseball(env: Env, request: Request, p: string, me: 
   if (p === "/api/baseball/rules" && m === "POST") {
     const b = (await request.json().catch(() => ({}))) as { rules?: BaseballRule[]; cfg?: Partial<BaseballConfig> };
     if (Array.isArray(b.rules)) {
-      await env.DB.prepare("DELETE FROM class_math_baseball_rules").run();
       const now = Date.now();
       const stmts = b.rules
         .filter((r) => r && r.label && r.label.trim())
@@ -262,7 +261,11 @@ export async function handleBaseball(env: Env, request: Request, p: string, me: 
             .prepare("INSERT INTO class_math_baseball_rules(id,kind,label,points,trigger_key,threshold,enabled,sort,updated_at) VALUES(?,?,?,?,?,?,?,?,?)")
             .bind(String(r.id || newId()), r.kind === "ball" ? "ball" : "strike", String(r.label).trim(), Math.max(1, Number(r.points) || 1), String(r.trigger || "manual"), Number(r.threshold) || 50, r.enabled === false ? 0 : 1, Number(r.sort) || i, now)
         );
-      if (stmts.length) await env.DB.batch(stmts);
+      // 데이터 보호: 유효 규칙이 하나라도 있을 때만 교체. 빈 저장은 기존 규칙을 지우지 않음.
+      //  삭제+삽입을 한 배치로 묶어 원자적으로 처리(중간 실패 시 빈 상태로 남지 않게).
+      if (stmts.length) {
+        await env.DB.batch([env.DB.prepare("DELETE FROM class_math_baseball_rules"), ...stmts]);
+      }
     }
     if (b.cfg && typeof b.cfg === "object") {
       const merged: BaseballConfig = { ...DEFAULT_BASEBALL_CONFIG, ...(await loadConfig(env)), ...b.cfg };

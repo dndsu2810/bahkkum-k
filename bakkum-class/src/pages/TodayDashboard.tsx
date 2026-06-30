@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useStore } from "../store";
 import type { AttRecord, Attitude, AttStatus, HwLog, Makeup, Student } from "../types";
 import { DOW, fmtFull, fmtMDDow, parseD, timeToMin, todayStr, uid, ymd } from "../lib/dates";
-import { activeStudents, attendsOn, effectiveLessons, nextLessonDate, studentById } from "../lib/logic";
-import { loadCheckout, saveCheckout, pruneCheckout, notifyCheckoutOnce } from "../lib/checkoutState";
+import { activeStudents, attendsOn, effectiveLessons, lessonDurationFor, nextLessonDate, studentById } from "../lib/logic";
+import { loadCheckout, saveCheckout, pruneCheckout, fetchCheckout, setCheckout } from "../lib/checkoutState";
 import { useDashOrder, isInteractiveTarget } from "../lib/dashOrder";
 import { applyMakeup, findBoKey } from "../lib/attendanceLogic";
 import { holidayName } from "../lib/holidays";
@@ -11,11 +11,13 @@ import { awardPoints, pushAttendanceNotion, pushHomeworkNotion, attendancePoints
 import { GradeBadge, Empty } from "../components/ui";
 import { MathMonthlyModal } from "../components/modals";
 import { TodayTests, SupLearn } from "../components/TodayTests";
+import { ClassNoteBox } from "../components/ClassNoteBox";
 import { Icon } from "../icons";
 import { getRoster, type RosterStudent } from "../lib/rosterApi";
 import { useApprovedChanges, arrivalOf, findSlotConflicts } from "../lib/changeReqLive";
 import { ConflictPopup, ApprovedBanner } from "../components/ChangeReqLive";
 import { QueuePanel } from "../components/QueuePanel";
+import { AlimBoard } from "../components/AlimBoard";
 
 interface LessonOnDate {
   student: Student;
@@ -73,6 +75,13 @@ export function TodayDashboard() {
   const [tagDraft, setTagDraft] = useState<Record<string, string[]>>({});
   const [pctDraft, setPctDraft] = useState<Record<string, string>>({});
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({}); // 결석 사유 입력 임시값(blur 시 저장)
+  const [schedDraft, setSchedDraft] = useState<Record<string, string>>({}); // 숙제별 '다시 검사할 날' 임시값
+  const [schedOpen, setSchedOpen] = useState<string | null>(null); // 검사일 패널이 열린 숙제 id
+  // 내준 숙제 인라인 수정 — 한 번에 한 건만 편집(내용·마감일·영역).
+  const [editHw, setEditHw] = useState<string | null>(null);
+  const [editBook, setEditBook] = useState("");
+  const [editDue, setEditDue] = useState("");
+  const [editTags, setEditTags] = useState<string[]>([]);
   const [gradeTab, setGradeTab] = useState<"all" | "cho" | "jung">("all");
   // 예정에 없어도 검색해서 추가하는 등원 학생(이 화면에서만) — 영어 '오늘 등원'과 동일.
   const [extraIds, setExtraIds] = useState<Set<string>>(new Set());
@@ -84,17 +93,28 @@ export function TodayDashboard() {
   // 카드 표시 순서 — 시간순으로 시작, 드래그로 재정렬(날짜별 저장).
   const { sortItems, move } = useDashOrder("math", day);
   const [dragKey, setDragKey] = useState<string | null>(null);
-  useEffect(() => { setOutKeys(loadCheckout("math", day)); }, [day]); // 날짜 바꾸면 그날 하원 상태로 교체
+  // 하원 상태는 서버 공유 — 모든 강사 기기가 같은 상태. 마운트·날짜변경·15초·포커스에 동기화.
+  useEffect(() => {
+    let alive = true;
+    setOutKeys(loadCheckout("math", day)); // 즉시 로컬 캐시 표시
+    const sync = () => fetchCheckout("math", day).then((s) => { if (alive) setOutKeys(s); }).catch(() => {});
+    void sync();
+    const iv = window.setInterval(sync, 15000);
+    const onFocus = () => void sync();
+    window.addEventListener("focus", onFocus);
+    return () => { alive = false; window.clearInterval(iv); window.removeEventListener("focus", onFocus); };
+  }, [day]);
   useEffect(() => { pruneCheckout(todayStr()); }, []); // 오래된 날짜 키 정리
   const toggleOpen = (key: string) => setOpenKeys((p) => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; });
-  const toggleOut = (key: string, student?: { id: string; name: string }) => {
+  const toggleOut = (key: string) => {
     const willOut = !outKeys.has(key);
     const next = new Set(outKeys); willOut ? next.add(key) : next.delete(key);
     setOutKeys(next);
     saveCheckout("math", day, next);
+    void setCheckout("math", day, next); // 서버에 전체 목록 저장 — 새로고침/다른 기기에도 그대로 복원
     if (willOut) {
       setOpenKeys((p) => { const n = new Set(p); n.delete(key); return n; }); // 하원하면 접기
-      if (student) notifyCheckoutOnce(student.id, student.name, day); // 학생에게 '하원해도 좋아요' 알림
+      // 수학 하원은 학생에게 알림을 보내지 않는다(원장 요청). 카드 접기 정렬용으로만 사용.
     }
   };
   const focusCard = (key: string) => {
@@ -118,16 +138,17 @@ export function TodayDashboard() {
         if (l.day === dow) lessons.push({ student: s, time: l.time, duration: l.duration });
       });
     });
-  // 1회성 이동 반영(수학): 이 날에서 다른 날로 빠진 학생 제거 + 이 날로 옮겨온 학생 추가.
+  // 1회성 변경 반영(수학): 빠진 시각(fromDate=오늘) 제거 + 옮겨온/바뀐 시각(toDate=오늘) 추가.
+  //  → 다른 날로 옮긴 경우뿐 아니라 '같은 날 시간만 바꾼' 1회 변경(예: 오늘 5시→7시)도 새 시각으로 반영된다.
   if (!holiday && approvedChanges.length) {
-    const movedOut = new Set(
-      approvedChanges.filter((c) => c.subject === "math" && c.fromDate === day && (c.toDate || c.changeDate) !== day).map((c) => c.studentId)
-    );
-    for (let i = lessons.length - 1; i >= 0; i--) if (movedOut.has(lessons[i].student.id)) lessons.splice(i, 1);
-    for (const c of approvedChanges.filter((c) => c.subject === "math" && (c.toDate || c.changeDate) === day && c.fromDate && c.fromDate !== day)) {
+    for (const c of approvedChanges.filter((c) => c.subject === "math" && c.fromDate === day)) {
+      const i = lessons.findIndex((l) => l.student.id === c.studentId && (!c.fromTime || l.time === c.fromTime));
+      if (i >= 0) lessons.splice(i, 1);
+    }
+    for (const c of approvedChanges.filter((c) => c.subject === "math" && (c.toDate || c.changeDate) === day && c.toTime)) {
       const s = studentById(data.students, c.studentId);
       if (s && !lessons.some((l) => l.student.id === s.id && l.time === c.toTime)) {
-        lessons.push({ student: s, time: c.toTime, duration: 60 });
+        lessons.push({ student: s, time: c.toTime, duration: lessonDurationFor(s, c.fromTime || c.toTime) });
       }
     }
   }
@@ -141,6 +162,11 @@ export function TodayDashboard() {
   const effDate = (h: HwLog) => h.recheckDate || h.date;
   // 오늘 검사 대상 숙제들 (마감일=오늘 또는 지연 후 다시검사일=오늘) — 여러 개 가능
   const todayHwsOf = (sid: string): HwLog[] => data.homeworkLog.filter((h) => h.studentId === sid && effDate(h) === day);
+  // 미뤄둔(지연 예정) 숙제 — 다시검사일이 오늘 이후라 오늘 목록엔 안 뜨는 것들. 검사 일정 변경용으로 따로 보여줌.
+  const delayedHwsOf = (sid: string): HwLog[] =>
+    data.homeworkLog
+      .filter((h) => h.studentId === sid && h.status !== "done" && !!h.recheckDate && (h.recheckDate as string) > day)
+      .sort((a, b) => ((a.recheckDate || "") < (b.recheckDate || "") ? -1 : 1));
   // 학생의 다음 수업일 (내주기 마감일 기본값)
   const nextDueOf = (s: Student): string => nextLessonDate(s, day);
   // 내준(예정) 숙제들 = 마감일이 오늘 이후 — 여러 개 가능
@@ -397,34 +423,46 @@ export function TodayDashboard() {
     });
     if (synced) pushCheck(synced);
   }
-  // 지연: 다시 검사할 날짜를 지정 → 그날 다시 뜸. 노션 '숙제 현황'에 N차 밀림.
-  function delayHw(hwId: string) {
-    const cur = data.homeworkLog.find((x) => x.id === hwId);
-    if (!cur) return;
-    const s = studentById(data.students, cur.studentId);
-    const def = (s && nextLessonDate(s, day)) || day;
-    const input = window.prompt("이 숙제를 다시 검사할 날짜 (YYYY-MM-DD)", def);
-    if (input === null) return;
-    const date = input.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      toast("YYYY-MM-DD 형식으로 입력해주세요.");
-      return;
-    }
+  // 검사일 패널을 열며 기본 날짜(다음 수업일)를 채워둠.
+  function openSched(hwId: string, def: string) {
+    setSchedOpen((cur) => (cur === hwId ? null : hwId));
+    setSchedDraft((m) => (m[hwId] ? m : { ...m, [hwId]: def }));
+  }
+  // 지연: 숙제를 못 해서 다시 검사할 날짜로 미룸 → 밀림 +1. 노션 '숙제 현황'에 N차 밀림.
+  function delayHwTo(hwId: string, date: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast("다시 검사할 날짜를 골라주세요."); return; }
+    const s = studentById(data.students, data.homeworkLog.find((x) => x.id === hwId)?.studentId || "");
     let synced: HwLog | null = null;
     mutate((d) => {
       const h = d.homeworkLog.find((x) => x.id === hwId);
-      if (h) {
-        h.status = "late";
-        h.delayCount = (h.delayCount || 0) + 1;
-        h.recheckDate = date;
-      }
+      if (h) { h.status = "late"; h.delayCount = (h.delayCount || 0) + 1; h.recheckDate = date; }
       synced = d.homeworkLog.find((x) => x.id === hwId) ?? null;
     });
+    setSchedOpen(null);
     if (synced) {
       const r: HwLog = synced;
       pushCheck(r);
       toast(`${s?.name ?? ""} · ${r.delayCount}차 밀림 · ${fmtMDDow(date)} 다시 검사`);
     }
+  }
+  // 검사일만 변경: 밀림 횟수는 그대로 두고 검사 날짜만 옮김(일정 조정·날짜 수정용).
+  function rescheduleHw(hwId: string, date: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast("바꿀 날짜를 골라주세요."); return; }
+    mutate((d) => {
+      const h = d.homeworkLog.find((x) => x.id === hwId);
+      if (h) h.recheckDate = date;
+    });
+    setSchedOpen(null);
+    toast(`검사일을 ${fmtMDDow(date)}로 바꿨어요`);
+  }
+  // 오늘 검사: 미뤄둔 숙제를 오늘 검사 목록으로 가져옴(밀림 횟수 유지).
+  function bringHwToday(hwId: string) {
+    mutate((d) => {
+      const h = d.homeworkLog.find((x) => x.id === hwId);
+      if (h) h.recheckDate = day;
+    });
+    setSchedOpen(null);
+    toast("오늘 검사 목록으로 가져왔어요");
   }
 
   /* ---------- 내주기 줄 (다음 수업일 숙제) ---------- */
@@ -458,6 +496,31 @@ export function TodayDashboard() {
     mutate((d) => {
       d.homeworkLog = d.homeworkLog.filter((x) => x.id !== hwId);
     });
+  }
+  // 내준 숙제 수정 시작 — 현재 값을 편집칸에 채움.
+  function startEditHw(hw: HwLog) {
+    setEditHw(hw.id);
+    setEditBook(hw.book);
+    setEditDue(hw.date);
+    setEditTags(hw.tags);
+  }
+  // 내준 숙제 수정 저장 — 내용·영역·마감일을 바꾸고 노션도 갱신(같은 날짜면 같은 행 수정).
+  function saveHwEdit(hwId: string) {
+    const book = editBook.trim();
+    if (!book) { toast("숙제 내용을 입력해주세요."); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(editDue)) { toast("마감일을 골라주세요."); return; }
+    let synced: HwLog | null = null;
+    mutate((d) => {
+      const h = d.homeworkLog.find((x) => x.id === hwId);
+      if (h) { h.book = book; h.tags = editTags; h.date = editDue; }
+      synced = d.homeworkLog.find((x) => x.id === hwId) ?? null;
+    });
+    setEditHw(null);
+    if (synced) {
+      const r: HwLog = synced;
+      pushHomeworkNotion(r.studentId, { date: r.date, book: r.book, tags: r.tags, completion: r.completion, done: r.status === "done", memo: r.memo });
+      toast("숙제를 수정했어요");
+    }
   }
   function markNoHw(s: Student) {
     mutate((d) => {
@@ -523,7 +586,7 @@ export function TodayDashboard() {
     if (entries.some((e) => e.student.id === sid)) continue;
     const s = studentById(data.students, sid);
     if (!s) continue;
-    const synth: LessonOnDate = { student: s, time: "", duration: 60 };
+    const synth: LessonOnDate = { student: s, time: "", duration: lessonDurationFor(s) };
     entries.push({ key: keyOf(synth), student: s, time: "", lesson: synth, makeups: [], extra: true });
   }
   entries.sort((a, b) => timeToMin(a.time || "99:99") - timeToMin(b.time || "99:99"));
@@ -555,6 +618,9 @@ export function TodayDashboard() {
 
       <ApprovedBanner changes={approvedChanges} subject="math" date={day} />
       <ConflictPopup conflicts={conflicts} date={day} />
+
+      {/* 알림장 공지 (전체·반별·여러 명 + 마감일) */}
+      <AlimBoard date={day} />
 
       {/* 번호표 대기열 (수학) */}
       <QueuePanel subject="math" />
@@ -627,11 +693,13 @@ export function TodayDashboard() {
                 const st = lesson ? data.attendance[keyOf(lesson)]?.status : undefined;
                 const checkHws = todayHwsOf(s.id);
                 const assignedHws = assignedHwsOf(s.id);
+                const delayedHws = delayedHwsOf(s.id);
                 const none = isNone(s.id);
                 const mkAllDone = e.makeups.length > 0 && e.makeups.every((m) => m.status === "done");
                 const attOk = lesson ? !!st : mkAllDone;
                 const done = attOk && checkHws.every((h) => h.status === "done") && (assignedHws.length > 0 || none);
                 const lateMin = lesson ? data.attendance[keyOf(lesson)]?.lateMinutes : undefined;
+                const schedDef = (nextLessonDate(s, day) || day); // 검사일 기본값(다음 수업일)
                 const open = openKeys.has(e.key);
                 const out = outKeys.has(e.key);
                 const bks = ingBooksOf(s.id);
@@ -660,7 +728,7 @@ export function TodayDashboard() {
                       {!!s.birthdate && s.birthdate.slice(5) === day.slice(5) && <span className="badge b-pink" title="오늘 생일">🎂</span>}
                       {done && <span className="eng-dot ok" title="출결·숙제 완료" />}
                     </span>
-                    <button className={"eng-dash-out" + (out ? " on" : "")} onClick={() => toggleOut(e.key, { id: e.student.id, name: e.student.name })} title={out ? "다시 등원으로 (맨 위로)" : "하원 — 카드를 맨 아래로 접어요"}>{out ? "등원" : "하원"}</button>
+                    <button className={"eng-dash-out" + (out ? " on" : "")} onClick={() => toggleOut(e.key)} title={out ? "다시 등원으로 (맨 위로)" : "하원 — 카드를 맨 아래로 접어요"}>{out ? "등원" : "하원"}</button>
                   </div>
                   {/* 접혀 있을 땐 블러로 살짝 보이고, 펼치면 입력 (중고등영어 카드와 동일) */}
                   <div className={"eng-dash-peek math-card-body" + (open ? " open" : "")}>
@@ -749,7 +817,8 @@ export function TodayDashboard() {
                       checkHws.map((hw) => {
                         const pctVal = pctDraft[hw.id] ?? String(hw.completion);
                         return (
-                          <div className="today-hwitem" key={hw.id}>
+                          <div className="today-hwrow" key={hw.id}>
+                          <div className="today-hwitem">
                             <span className="today-hwitem-name" title={hw.book}>
                               <span className="today-hwitem-title">{hw.book || "숙제"}{hw.tags.length ? <span className="muted"> · {hw.tags.join(", ")}</span> : null}</span>
                               {hw.carriedFrom ? <span className="badge b-blue" title={fmtMDDow(hw.carriedFrom) + " 결석으로 이월"}>결석 이월</span> : null}
@@ -778,12 +847,41 @@ export function TodayDashboard() {
                               <Icon name="check" />{hw.status === "done" ? ((hw.delayCount || 0) > 0 ? "지연 검사완료됨" : "검사완료됨") : ((hw.delayCount || 0) > 0 ? "지연검사완료" : "검사완료")}
                             </button>
                             {hw.status === "done" && <span className="hw-donenote">검사가 완료되었어요</span>}
-                            <button className="btn ghost sm" onClick={() => delayHw(hw.id)} title="지연 — 다시 검사할 날짜 지정">지연</button>
+                            <button className={"btn ghost sm" + (schedOpen === hw.id ? " on" : "")} onClick={() => openSched(hw.id, schedDef)} title="지연·검사일 변경"><Icon name="cal" /> 검사일</button>
+                          </div>
+                          {schedOpen === hw.id && (
+                            <div className="today-sched">
+                              <span className="today-sched-lbl">다시 검사할 날</span>
+                              <button type="button" className="today-sched-quick" onClick={() => setSchedDraft((m) => ({ ...m, [hw.id]: schedDef }))} title="다음 수업일로">다음 수업일</button>
+                              <input className="today-due-input" type="date" aria-label="다시 검사할 날짜" value={schedDraft[hw.id] ?? schedDef} onChange={(ev) => setSchedDraft((m) => ({ ...m, [hw.id]: ev.target.value }))} />
+                              <button type="button" className="btn sm" onClick={() => delayHwTo(hw.id, schedDraft[hw.id] ?? schedDef)} title="숙제를 못 해서 미뤄요 (밀림 +1)">지연으로 미루기{(hw.delayCount || 0) > 0 ? " (밀림 +1)" : ""}</button>
+                              <button type="button" className="btn ghost sm" onClick={() => rescheduleHw(hw.id, schedDraft[hw.id] ?? schedDef)} title="밀림 횟수는 그대로 두고 검사 날짜만 옮겨요">검사일만 변경</button>
+                            </div>
+                          )}
                           </div>
                         );
                       })
                     )}
                   </div>
+
+                  {/* 지연 예정 숙제 — 미뤄둬서 오늘 목록엔 없지만 검사일을 바꾸거나 오늘 검사할 수 있게. */}
+                  {delayedHws.length > 0 && (
+                    <div className="eng-field today-hwsec">
+                      <div className="eng-label">지연 예정 숙제 <span className="muted">검사일을 바꾸거나 오늘 검사할 수 있어요</span></div>
+                      {delayedHws.map((hw) => (
+                        <div className="today-hwitem" key={hw.id}>
+                          <span className="today-hwitem-name" title={hw.book}>
+                            <span className="today-hwitem-title">{hw.book || "숙제"}{hw.tags.length ? <span className="muted"> · {hw.tags.join(", ")}</span> : null}</span>
+                            {hw.delayCount ? <span className="badge b-orange">{hw.delayCount}차 밀림</span> : null}
+                            <span className="muted"> · {fmtMDDow(hw.recheckDate as string)} 검사 예정</span>
+                          </span>
+                          <input className="today-due-input" type="date" aria-label="검사 예정일" value={schedDraft[hw.id] ?? (hw.recheckDate as string)} onChange={(ev) => setSchedDraft((m) => ({ ...m, [hw.id]: ev.target.value }))} />
+                          <button type="button" className="btn sm" onClick={() => rescheduleHw(hw.id, schedDraft[hw.id] ?? (hw.recheckDate as string))}>날짜 변경</button>
+                          <button type="button" className="btn ghost sm" onClick={() => bringHwToday(hw.id)} title="오늘 검사 목록으로 가져와요"><Icon name="undo" /> 오늘 검사</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* ✏️ 내줄 숙제 (여러 개 가능) */}
                   <div className="eng-field today-hwsec assign">
@@ -796,13 +894,29 @@ export function TodayDashboard() {
                     ) : (
                       <>
                         {assignedHws.map((hw) => (
-                          <div className="today-hwitem assigned" key={hw.id}>
-                            <span className="today-hwitem-name">
-                              <b>{hw.book}</b>{hw.tags.length ? <span className="muted"> · {hw.tags.join(", ")}</span> : null}
-                              <span className="muted"> · 마감 {fmtMDDow(hw.date)}</span>
-                            </span>
-                            <button className="btn ghost sm" onClick={() => removeHw(hw.id)} title="삭제"><Icon name="trash" /></button>
-                          </div>
+                          editHw === hw.id ? (
+                            <div className="today-hwitem assigned editing" key={hw.id}>
+                              <input className="today-assign-input" aria-label="숙제 내용" value={editBook} onChange={(e) => setEditBook(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveHwEdit(hw.id); }} placeholder="숙제 내용" />
+                              <input className="today-due-input" type="date" aria-label="마감일" value={editDue} onChange={(e) => setEditDue(e.target.value)} />
+                              <span className="today-tagchips">
+                                {AREA_TAGS.map((t) => {
+                                  const on = editTags.includes(t);
+                                  return <button key={t} className={on ? "on" : ""} onClick={() => setEditTags(on ? editTags.filter((x) => x !== t) : [...editTags, t])}>{t}</button>;
+                                })}
+                              </span>
+                              <button className="btn sm" onClick={() => saveHwEdit(hw.id)}>저장</button>
+                              <button className="btn ghost sm" onClick={() => setEditHw(null)}>취소</button>
+                            </div>
+                          ) : (
+                            <div className="today-hwitem assigned" key={hw.id}>
+                              <span className="today-hwitem-name">
+                                <b>{hw.book}</b>{hw.tags.length ? <span className="muted"> · {hw.tags.join(", ")}</span> : null}
+                                <span className="muted"> · 마감 {fmtMDDow(hw.date)}</span>
+                              </span>
+                              <button className="btn ghost sm" onClick={() => startEditHw(hw)} title="수정"><Icon name="edit" /></button>
+                              <button className="btn ghost sm" onClick={() => removeHw(hw.id)} title="삭제"><Icon name="trash" /></button>
+                            </div>
+                          )
                         ))}
                         {ingBooksOf(s.id).length > 0 && (
                           <div className="today-bookchips">
@@ -855,6 +969,9 @@ export function TodayDashboard() {
 
                   {/* 1:1 보충학습 — 오늘·대시보드 공용 (월말리포트 자동 반영) */}
                   <SupLearn student={s} day={day} />
+
+                  {/* 알림장 — 학생 화면에 오늘 숙제와 함께 보여줄 메모 */}
+                  <ClassNoteBox studentId={s.id} date={day} />
                   </div>
                   <button className="eng-dash-more" onClick={() => toggleOpen(e.key)} aria-expanded={open}>
                     {open ? "접기" : "자세히 보기 / 입력하기"}

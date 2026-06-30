@@ -17,6 +17,7 @@ async function jpost<T = { ok?: boolean; id?: string; error?: string }>(url: str
 export interface Notice {
   id: string;
   text: string;
+  detail: string; // 세부 내용 — 배너 클릭 시 팝업. 비면 text만 보여줌.
   level: "info" | "warn";
   active: boolean;
   startDate: string;
@@ -69,7 +70,7 @@ export const feedbackApi = {
   notices: () => jget<{ notices: Notice[] }>("/api/notice").then((j) => j.notices),
   /** 전체 공지(원장). */
   noticesAll: () => jget<{ notices: Notice[] }>("/api/notice/all").then((j) => j.notices),
-  saveNotice: (n: { id?: string; text: string; level: "info" | "warn"; active: boolean; audience?: NoticeAudience; startDate?: string; endDate?: string }) =>
+  saveNotice: (n: { id?: string; text: string; detail?: string; level: "info" | "warn"; active: boolean; audience?: NoticeAudience; startDate?: string; endDate?: string }) =>
     jpost("/api/notice", n),
   removeNotice: (id: string) => jpost("/api/notice/delete", { id }),
 

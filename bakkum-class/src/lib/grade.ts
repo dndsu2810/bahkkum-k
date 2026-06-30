@@ -20,6 +20,16 @@ export function parseGrade(g: string): { div: "초" | "중" | "고"; n: number }
   if (s.startsWith("고")) return { div: "고", n: 0 };
   return null;
 }
+/** 수학 반 — 초등 저학년(low)/초등 고학년(high)/중고등(mid). 학년으로 자동 분류하되 직접 지정(override)이 우선.
+ *  초1~3 = 저학년, 초4~6 = 고학년(학년 정보 없으면 저학년으로). 중·고 = 중고등. */
+export type MathBand = "low" | "high" | "mid";
+export function mathBandOf(grade: string, override?: "" | "low" | "high"): MathBand {
+  if (override === "low" || override === "high") return override;
+  const p = parseGrade(grade);
+  if (p?.div === "초") return p.n >= 4 ? "high" : "low";
+  return "mid";
+}
+
 /** 구분+세부학년 → 저장 문자열. n>0이면 "초6", 아니면 구분 라벨("초등"). */
 export function makeGrade(div: string, n: number): string {
   if (!div) return "";
